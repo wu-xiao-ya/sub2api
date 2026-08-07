@@ -1207,7 +1207,11 @@ func (s *OpenAIGatewayService) listSchedulableAccounts(ctx context.Context, grou
 		if err != nil {
 			return accounts, err
 		}
-		return s.filterOpenAIAccountsBySchedulingThreshold(ctx, accounts), nil
+		accounts = s.filterOpenAIAccountsBySchedulingThreshold(ctx, accounts)
+		if platform == PlatformGrok {
+			accounts = s.filterGrokFreeQuotaAccountsForOpenAI(ctx, accounts)
+		}
+		return accounts, nil
 	}
 	var accounts []Account
 	var err error
@@ -1221,7 +1225,11 @@ func (s *OpenAIGatewayService) listSchedulableAccounts(ctx context.Context, grou
 	if err != nil {
 		return nil, fmt.Errorf("query accounts failed: %w", err)
 	}
-	return s.filterOpenAIAccountsBySchedulingThreshold(ctx, accounts), nil
+	accounts = s.filterOpenAIAccountsBySchedulingThreshold(ctx, accounts)
+	if platform == PlatformGrok {
+		accounts = s.filterGrokFreeQuotaAccountsForOpenAI(ctx, accounts)
+	}
+	return accounts, nil
 }
 
 func (s *OpenAIGatewayService) tryAcquireAccountSlot(ctx context.Context, accountID int64, maxConcurrency int) (*AcquireResult, error) {
@@ -1338,7 +1346,22 @@ func (s *OpenAIGatewayService) getSchedulableAccount(ctx context.Context, accoun
 	if s.isOpenAIAccountBlockedBySchedulingThreshold(ctx, account) {
 		return nil, nil
 	}
+	// Legacy sticky (advanced scheduler off) must still free-gate Grok OAuth.
+	if account.IsGrok() {
+		if gated := s.filterGrokFreeQuotaAccountsForOpenAI(ctx, []Account{*account}); len(gated) == 0 {
+			return nil, nil
+		}
+	}
 	return account, nil
+}
+
+// filterGrokFreeQuotaAccountsForOpenAI applies the same local free soft-gate as
+// GatewayService / advanced scheduler, for OpenAI-compatible legacy selection.
+func (s *OpenAIGatewayService) filterGrokFreeQuotaAccountsForOpenAI(ctx context.Context, accounts []Account) []Account {
+	if s == nil {
+		return accounts
+	}
+	return filterGrokFreeQuotaAccountsCore(ctx, s.cfg, s.usageLogRepo, &openaiGrokFreeQuotaGateCache, accounts)
 }
 
 func (s *OpenAIGatewayService) filterOpenAIAccountsBySchedulingThreshold(ctx context.Context, accounts []Account) []Account {
