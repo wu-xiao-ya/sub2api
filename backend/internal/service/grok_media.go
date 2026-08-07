@@ -293,9 +293,13 @@ func (s *OpenAIGatewayService) BindGrokMediaVideoRequestAccount(
 	if cacheKey == "" || accountID <= 0 {
 		return fmt.Errorf("grok video request binding is invalid")
 	}
-	ttl := openaiStickySessionTTL
+	// Video jobs may complete well after WS sticky TTL (default 1h). Bind at least
+	// as long as the pending-billing snapshot so late status/content polls resolve.
+	ttl := grokVideoPendingBillingTTL(s.cfg)
 	if s.cfg != nil && s.cfg.Gateway.OpenAIWS.StickySessionTTLSeconds > 0 {
-		ttl = time.Duration(s.cfg.Gateway.OpenAIWS.StickySessionTTLSeconds) * time.Second
+		if sticky := time.Duration(s.cfg.Gateway.OpenAIWS.StickySessionTTLSeconds) * time.Second; sticky > ttl {
+			ttl = sticky
+		}
 	}
 	return s.cache.SetSessionAccountID(ctx, derefGroupID(groupID), cacheKey, accountID, ttl)
 }
@@ -419,35 +423,77 @@ func (s *OpenAIGatewayService) ClaimGrokVideoBilling(
 	return s.cache.ClaimGrokVideoBilled(ctx, key, grokVideoBilledClaimTTL(s.cfg))
 }
 
-// IsGrokVideoStatusBillable reports whether a status response body has a downloadable
-// video URL (upstream success). Empty/pending/failed responses are not billable.
-func IsGrokVideoStatusBillable(statusBody []byte) bool {
-	return strings.TrimSpace(extractGrokVideoStatusContentURL(statusBody)) != ""
+// ReleaseGrokVideoBilling clears a claim after a failed durable RecordUsage so a
+// later status/content poll can retry billing.
+func (s *OpenAIGatewayService) ReleaseGrokVideoBilling(
+	ctx context.Context,
+	requestID string,
+	userID, apiKeyID int64,
+) error {
+	if s == nil || s.cache == nil {
+		return fmt.Errorf("grok video billing claim cache is unavailable")
+	}
+	key := grokVideoPendingBillingKey(requestID, userID, apiKeyID)
+	if key == "" {
+		return fmt.Errorf("grok video billing claim key is invalid")
+	}
+	return s.cache.ReleaseGrokVideoBilled(ctx, key)
 }
 
-// extractGrokVideoStatusContentURL returns the first usable video URL from a status body.
+// StableGrokVideoBillingRequestID is the durable usage_logs / dedup key for one
+// async video task (not the per-poll gateway request id).
+func StableGrokVideoBillingRequestID(taskRequestID string) string {
+	taskRequestID = strings.TrimSpace(taskRequestID)
+	if taskRequestID == "" {
+		return ""
+	}
+	if strings.HasPrefix(taskRequestID, "grok-video:") {
+		return taskRequestID
+	}
+	return "grok-video:" + taskRequestID
+}
+
+// Official xAI async video status success shape (docs.x.ai Video Generation):
+//
+//	{"status":"done","model":"grok-imagine-video-1.5","video":{"url":"...","duration":8,"respect_moderation":true}}
+//
+// Request may include resolution ("480p"|"720p"|"1080p"); completed status does not
+// document a resolution field — bill resolution from the create-time request snapshot.
+
+// IsGrokVideoStatusBillable matches official success: status == "done" AND non-empty video.url.
+// pending / expired / failed, or done without a video URL, are not billable.
+func IsGrokVideoStatusBillable(statusBody []byte) bool {
+	if len(statusBody) == 0 || !gjson.ValidBytes(statusBody) {
+		return false
+	}
+	if !isOfficialGrokVideoStatusDone(statusBody) {
+		return false
+	}
+	return strings.TrimSpace(gjson.GetBytes(statusBody, "video.url").String()) != ""
+}
+
+func isOfficialGrokVideoStatusDone(statusBody []byte) bool {
+	// Official enum: pending | done | expired | failed.
+	return strings.EqualFold(strings.TrimSpace(gjson.GetBytes(statusBody, "status").String()), "done")
+}
+
+// extractGrokVideoStatusContentURL returns official video.url when present.
+// Kept for content/proxy helpers that still accept rewritten proxy paths after rewrite.
 func extractGrokVideoStatusContentURL(body []byte) string {
 	if len(body) == 0 || !gjson.ValidBytes(body) {
 		return ""
 	}
-	for _, path := range []string{
-		"video.url",
-		"url",
-		"download_url",
-		"video_url",
-		"data.video.url",
-		"data.url",
-		"data.download_url",
-	} {
-		if u := strings.TrimSpace(gjson.GetBytes(body, path).String()); u != "" {
-			return u
-		}
+	if u := strings.TrimSpace(gjson.GetBytes(body, "video.url").String()); u != "" {
+		return u
 	}
 	return ""
 }
 
-// ExtractGrokVideoBillingFromStatusBody builds usage units from an upstream status
-// payload. Prefers status fields; falls back to create-time pending snapshot.
+// ExtractGrokVideoBillingFromStatusBody builds usage units from an official done status.
+// Field priority (official docs):
+//   - duration: video.duration (seconds)
+//   - model: top-level model
+//   - resolution: not in status response → create-time pending snapshot → default 480p
 func ExtractGrokVideoBillingFromStatusBody(statusBody []byte, pending *GrokVideoPendingBilling, requestID string) *OpenAIForwardResult {
 	if !IsGrokVideoStatusBillable(statusBody) {
 		return nil
@@ -459,20 +505,14 @@ func ExtractGrokVideoBillingFromStatusBody(statusBody []byte, pending *GrokVideo
 	durationSeconds := 0
 
 	if gjson.ValidBytes(statusBody) {
-		model = firstNonEmpty(
-			strings.TrimSpace(gjson.GetBytes(statusBody, "model").String()),
-			strings.TrimSpace(gjson.GetBytes(statusBody, "video.model").String()),
-			strings.TrimSpace(gjson.GetBytes(statusBody, "data.model").String()),
-		)
-		resolution = firstNonEmpty(
-			strings.TrimSpace(gjson.GetBytes(statusBody, "resolution").String()),
-			strings.TrimSpace(gjson.GetBytes(statusBody, "video.resolution").String()),
-			strings.TrimSpace(gjson.GetBytes(statusBody, "data.resolution").String()),
-		)
-		for _, path := range []string{"duration", "video.duration", "duration_seconds", "video.duration_seconds", "data.duration"} {
-			if v := gjson.GetBytes(statusBody, path); v.Exists() && v.Type == gjson.Number {
-				durationSeconds = int(v.Int())
-				break
+		// Official: top-level model.
+		model = strings.TrimSpace(gjson.GetBytes(statusBody, "model").String())
+		// Official: video.duration (number of seconds).
+		if v := gjson.GetBytes(statusBody, "video.duration"); v.Exists() && v.Type == gjson.Number {
+			durationSeconds = int(v.Int())
+			if durationSeconds == 0 && v.Float() > 0 {
+				// Sub-second values are unexpected for this API; still accept truncated int path above.
+				durationSeconds = int(v.Float())
 			}
 		}
 	}
@@ -486,22 +526,20 @@ func ExtractGrokVideoBillingFromStatusBody(statusBody []byte, pending *GrokVideo
 		if upstreamModel == "" {
 			upstreamModel = pending.UpstreamModel
 		}
-		if resolution == "" {
-			resolution = pending.VideoResolution
-		}
+		// Official status has no resolution — always take create request when available.
+		resolution = pending.VideoResolution
 		if durationSeconds <= 0 {
 			durationSeconds = pending.VideoDurationSeconds
 		}
 	}
 	if model == "" {
-		// Still bill once URL exists; pricing resolver uses model family defaults.
+		// Official default video model family when status omits model.
 		model = "grok-imagine-video"
 	}
 	if billingModel == "" {
 		billingModel = model
 	}
-	// Leave empty resolution / zero duration for the handler to merge create-time
-	// pending snapshot before applying defaults.
+	// Resolution is request-only per docs; empty → handler applies official default 480p.
 	if resolution != "" {
 		resolution = NormalizeVideoBillingResolutionOrDefault(resolution)
 	}
@@ -520,8 +558,6 @@ func ExtractGrokVideoBillingFromStatusBody(statusBody []byte, pending *GrokVideo
 		VideoCount:           1,
 		VideoResolution:      resolution,
 		VideoDurationSeconds: durationSeconds,
-		// Keep legacy media-unit counter for existing usage displays.
-		ImageCount: 1,
 	}
 }
 
@@ -789,11 +825,24 @@ func (s *OpenAIGatewayService) forwardGrokMediaVideoContent(
 	if err := writeGrokMediaContentResponse(c, contentResp); err != nil {
 		return nil, err
 	}
-	return &OpenAIForwardResult{
+	// Content download is an alternate completion observation: when status body is
+	// official done+video.url, attach billable units so the handler can claim once
+	// (same path as status polling). Pending snapshot is merged in the handler.
+	result := &OpenAIForwardResult{
 		RequestID:       contentRequestID,
 		ResponseHeaders: contentResp.Header.Clone(),
 		Duration:        time.Since(startTime),
-	}, nil
+	}
+	if billed := ExtractGrokVideoBillingFromStatusBody(statusBody, nil, requestID); billed != nil {
+		result.ResponseID = firstNonEmpty(billed.ResponseID, strings.TrimSpace(requestID))
+		result.Model = billed.Model
+		result.BillingModel = billed.BillingModel
+		result.UpstreamModel = billed.UpstreamModel
+		result.VideoCount = billed.VideoCount
+		result.VideoResolution = billed.VideoResolution
+		result.VideoDurationSeconds = billed.VideoDurationSeconds
+	}
+	return result, nil
 }
 
 func grokMediaSignedVideoContentURL(body []byte, requestID string) (string, error) {
@@ -1041,7 +1090,6 @@ func grokMediaUsageFromResponse(endpoint GrokMediaEndpoint, requestInfo GrokMedi
 				meta.VideoCount = billed.VideoCount
 				meta.VideoResolution = billed.VideoResolution
 				meta.VideoDurationSeconds = billed.VideoDurationSeconds
-				meta.ImageCount = billed.ImageCount
 			}
 		}
 	}
@@ -1086,6 +1134,22 @@ func (s *OpenAIGatewayService) handleGrokMediaErrorResponse(
 		upstreamDetail = truncateString(string(body), maxBytes)
 	}
 	setOpsUpstreamError(c, resp.StatusCode, upstreamMsg, upstreamDetail)
+	if isGrokContentPolicyRejection(resp.StatusCode, body) {
+		clientMsg := grokContentPolicyClientMessage(body)
+		appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
+			Platform:           account.Platform,
+			AccountID:          account.ID,
+			AccountName:        account.Name,
+			UpstreamStatusCode: resp.StatusCode,
+			UpstreamRequestID:  requestIDHeader,
+			Kind:               "http_error",
+			Message:            clientMsg,
+			Detail:             upstreamDetail,
+		})
+		MarkResponseCommitted(c)
+		writeGrokMediaErrorResponse(c, http.StatusForbidden, "invalid_request_error", clientMsg)
+		return nil, fmt.Errorf("grok content policy rejection: %s", clientMsg)
+	}
 
 	if status, errType, errMsg, matched := applyErrorPassthroughRule(
 		c,
@@ -1118,7 +1182,7 @@ func (s *OpenAIGatewayService) handleGrokMediaErrorResponse(
 	}
 
 	kind := "http_error"
-	if s.shouldFailoverUpstreamError(resp.StatusCode) {
+	if s.shouldFailoverGrokUpstreamError(resp.StatusCode, body) {
 		kind = "failover"
 	}
 	appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
