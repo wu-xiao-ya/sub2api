@@ -369,7 +369,6 @@ func (s *SettingService) SetOnUpdateCallback(callback func()) {
 	s.onUpdate = callback
 }
 
-
 // SubscribeChannelMonitorRuntime registers a listener that is invoked after
 // settings are successfully persisted (and process caches refreshed).
 // Used by ChannelMonitorRunner / ChannelMonitorV2Aggregator for immediate
@@ -408,7 +407,7 @@ func (s *SettingService) notifyChannelMonitorRuntimeListeners() {
 		func(fn func()) {
 			defer func() {
 				if recovered := recover(); recovered != nil {
-					// keep settings path healthy
+					_ = recovered // keep settings path healthy
 				}
 			}()
 			fn()
