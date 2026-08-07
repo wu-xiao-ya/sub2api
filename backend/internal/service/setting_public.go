@@ -604,11 +604,13 @@ type PublicSettingsInjectionPayload struct {
 	ChannelMonitorEnabled                bool   `json:"channel_monitor_enabled"`
 	ChannelMonitorMode                   string `json:"channel_monitor_mode"`
 	ChannelMonitorDefaultIntervalSeconds int    `json:"channel_monitor_default_interval_seconds"`
-	ChannelMonitorHideThroughput         bool   `json:"channel_monitor_hide_throughput"`
-	AvailableChannelsEnabled             bool   `json:"available_channels_enabled"`
-	AffiliateEnabled                     bool   `json:"affiliate_enabled"`
-	RiskControlEnabled                   bool   `json:"risk_control_enabled"`
-	AllowUserViewErrorRequests           bool   `json:"allow_user_view_error_requests"`
+	// ChannelMonitorHideThroughput is public so the user UI can hide RPM/TPM
+	// without waiting for API redaction alone.
+	ChannelMonitorHideThroughput bool `json:"channel_monitor_hide_throughput"`
+	AvailableChannelsEnabled     bool `json:"available_channels_enabled"`
+	AffiliateEnabled             bool `json:"affiliate_enabled"`
+	RiskControlEnabled           bool `json:"risk_control_enabled"`
+	AllowUserViewErrorRequests   bool `json:"allow_user_view_error_requests"`
 }
 
 // GetPublicSettingsForInjection returns public settings in a format suitable for HTML injection.
