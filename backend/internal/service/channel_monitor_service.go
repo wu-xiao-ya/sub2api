@@ -62,6 +62,12 @@ type ChannelMonitorRepository interface {
 	UpdateAggregationWatermark(ctx context.Context, date time.Time) error
 }
 
+// channelMonitorRuntimeReader is the optional settings view used by the
+// passive V2 aggregator and the legacy active monitor.
+type channelMonitorRuntimeReader interface {
+	GetChannelMonitorRuntime(ctx context.Context) ChannelMonitorRuntime
+}
+
 // ChannelMonitorService 渠道监控管理服务。
 type ChannelMonitorService struct {
 	repo                         ChannelMonitorRepository
@@ -77,6 +83,7 @@ type ChannelMonitorService struct {
 	settingService               *SettingService
 	channelService               *ChannelService
 	billingService               *BillingService
+	settings                     channelMonitorRuntimeReader
 	trafficObservationMu         sync.Mutex
 	trafficObservationWrites     map[string]time.Time
 	// scheduler 由 wire 通过 SetScheduler 注入；CRUD 后调用对应钩子即时同步任务。
@@ -99,6 +106,27 @@ func NewChannelMonitorService(repo ChannelMonitorRepository, encryptor SecretEnc
 		encryptor:                encryptor,
 		trafficObservationWrites: make(map[string]time.Time),
 	}
+}
+
+// SetRuntimeReader injects the settings view used by the optional passive V2
+// aggregation layer. It does not disable the existing active monitor.
+func (s *ChannelMonitorService) SetRuntimeReader(r channelMonitorRuntimeReader) {
+	if s != nil {
+		s.settings = r
+	}
+}
+
+func (s *ChannelMonitorService) probeRuntime(ctx context.Context) ChannelMonitorRuntime {
+	if s == nil {
+		return ChannelMonitorRuntime{Enabled: true}
+	}
+	if s.settings != nil {
+		return s.settings.GetChannelMonitorRuntime(ctx)
+	}
+	if s.settingService != nil {
+		return s.settingService.GetChannelMonitorRuntime(ctx)
+	}
+	return ChannelMonitorRuntime{Enabled: true}
 }
 
 // ---------- CRUD ----------
