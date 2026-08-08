@@ -191,7 +191,7 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 		SettingKeyChannelMonitorDefaultIntervalSeconds:     "60",
 		SettingKeyChannelMonitorAccountProbeSettings:       `{"enabled":true,"confirm_attempts":1,"degraded_threshold_ms":6000,"max_candidates":5,"parallelism":5,"allow_image_fanout":false}`,
 		SettingKeyChannelMonitorTrafficObservationSettings: `{"enabled":false,"fallback_idle_seconds":1800,"aggregation_window_seconds":300,"minimum_samples":1}`,
-		SettingKeyChannelMonitorHideThroughput:             "false",
+		SettingKeyChannelMonitorHideThroughput:             "true",
 
 		// Grok: safe defaults — no cross-vendor model rewrite unless operators enable it.
 		SettingKeyGrokDefaultTextModel:           "grok-4.5",
@@ -776,7 +776,7 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 	result.ChannelMonitorTrafficObservationSettings = parseChannelMonitorTrafficObservationSettings(
 		settings[SettingKeyChannelMonitorTrafficObservationSettings],
 	)
-	result.ChannelMonitorHideThroughput = settings[SettingKeyChannelMonitorHideThroughput] == "true"
+	result.ChannelMonitorHideThroughput = !isFalseSettingValue(settings[SettingKeyChannelMonitorHideThroughput])
 	result.APIEndpointProbeInterval = parseAPIEndpointProbeInterval(
 		settings[SettingKeyAPIEndpointProbeInterval],
 	)
