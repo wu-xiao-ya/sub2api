@@ -247,11 +247,7 @@ func RegisterGatewayRoutes(
 				c.JSON(http.StatusNotFound, gin.H{"error": gin.H{"type": "not_found_error", "message": "Voice API is not supported for this platform"}})
 				return
 			}
-			endpoint := "custom-voices/" + c.Param("voice_id")
-			if strings.HasSuffix(strings.TrimRight(c.Request.URL.Path, "/"), "/audio") {
-				endpoint += "/audio"
-			}
-			h.OpenAIGateway.GrokVoice(c, endpoint)
+			h.OpenAIGateway.GrokVoice(c, grokCustomVoiceEndpoint(c))
 		}
 		gateway.GET("/custom-voices", voiceHandler("custom-voices"))
 		gateway.GET("/custom-voices/:voice_id/audio", customVoicePathHandler)
@@ -376,11 +372,7 @@ func RegisterGatewayRoutes(
 			c.JSON(http.StatusNotFound, gin.H{"error": gin.H{"type": "not_found_error", "message": "Voice API is not supported for this platform"}})
 			return
 		}
-		endpoint := "custom-voices/" + c.Param("voice_id")
-		if strings.HasSuffix(strings.TrimRight(c.Request.URL.Path, "/"), "/audio") {
-			endpoint += "/audio"
-		}
-		h.OpenAIGateway.GrokVoice(c, endpoint)
+		h.OpenAIGateway.GrokVoice(c, grokCustomVoiceEndpoint(c))
 	}
 	r.GET("/custom-voices", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), compositeTarget, requireGroupAnthropic, rootVoiceHandler("custom-voices"))
 	r.GET("/custom-voices/:voice_id/audio", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), compositeTarget, requireGroupAnthropic, rootCustomVoicePathHandler)
@@ -437,6 +429,16 @@ func RegisterGatewayRoutes(
 		antigravityV1Beta.POST("/models/*modelAction", h.Gateway.GeminiV1BetaModels)
 	}
 
+}
+
+// grokCustomVoiceEndpoint derives the upstream Voice endpoint from the route
+// template, so a voice whose ID is literally "audio" remains addressable.
+func grokCustomVoiceEndpoint(c *gin.Context) string {
+	endpoint := "custom-voices/" + c.Param("voice_id")
+	if strings.HasSuffix(c.FullPath(), "/:voice_id/audio") {
+		endpoint += "/audio"
+	}
+	return endpoint
 }
 
 // getGroupPlatform extracts the group platform from the API Key stored in context.
