@@ -1163,10 +1163,8 @@ type TestAccountRequest struct {
 	Mode    string `json:"mode"`
 	// Optional media for Grok (and future) real generation tests.
 	// ImageDataURL / AudioDataURL are data:<mime>;base64,... payloads.
-	// VideoUploadURL is a public HTTPS PUT URL for ZDR video output.
-	ImageDataURL   string `json:"image_data_url"`
-	AudioDataURL   string `json:"audio_data_url"`
-	VideoUploadURL string `json:"video_upload_url"`
+	ImageDataURL string `json:"image_data_url"`
+	AudioDataURL string `json:"audio_data_url"`
 }
 
 type SyncFromCRSRequest struct {
@@ -1197,9 +1195,8 @@ func (h *AccountHandler) Test(c *gin.Context) {
 	_ = c.ShouldBindJSON(&req)
 
 	opts := service.AccountTestOptions{
-		ImageDataURL:   req.ImageDataURL,
-		AudioDataURL:   req.AudioDataURL,
-		VideoUploadURL: req.VideoUploadURL,
+		ImageDataURL: req.ImageDataURL,
+		AudioDataURL: req.AudioDataURL,
 	}
 
 	// Use AccountTestService to test the account with SSE streaming
