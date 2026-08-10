@@ -6,6 +6,7 @@
 import { apiClient } from '../client'
 import type {
   Account,
+  AccountPoolGroup,
   CreateAccountRequest,
   UpdateAccountRequest,
   PaginatedResponse,
@@ -40,6 +41,7 @@ export async function list(
     type?: string
     status?: string
     group?: string
+    pool_group?: string
     search?: string
     privacy_mode?: string
     lite?: string
@@ -76,6 +78,7 @@ export async function listWithEtag(
     type?: string
     status?: string
     group?: string
+    pool_group?: string
     search?: string
     privacy_mode?: string
     lite?: string
@@ -192,6 +195,41 @@ export async function duplicate(id: number): Promise<Account> {
  */
 export async function update(id: number, updates: UpdateAccountRequest): Promise<Account> {
   const { data } = await apiClient.put<Account>(`/admin/accounts/${id}`, updates)
+  return data
+}
+
+export async function listPoolGroups(): Promise<AccountPoolGroup[]> {
+  const { data } = await apiClient.get<AccountPoolGroup[]>('/admin/accounts/pool-groups')
+  return data
+}
+
+export async function createPoolGroup(payload: {
+  name: string
+  upstream_key?: string
+  description?: string
+  sort_order?: number
+  status?: 'active' | 'inactive'
+}): Promise<AccountPoolGroup> {
+  const { data } = await apiClient.post<AccountPoolGroup>('/admin/accounts/pool-groups', payload)
+  return data
+}
+
+export async function updatePoolGroup(
+  id: number,
+  payload: {
+    name?: string
+    upstream_key?: string
+    description?: string
+    sort_order?: number
+    status?: 'active' | 'inactive'
+  }
+): Promise<AccountPoolGroup> {
+  const { data } = await apiClient.put<AccountPoolGroup>(`/admin/accounts/pool-groups/${id}`, payload)
+  return data
+}
+
+export async function deletePoolGroup(id: number): Promise<{ message: string }> {
+  const { data } = await apiClient.delete<{ message: string }>(`/admin/accounts/pool-groups/${id}`)
   return data
 }
 
@@ -619,6 +657,7 @@ export async function exportData(options?: {
     type?: string
     status?: string
     group?: string
+    pool_group?: string
     privacy_mode?: string
     search?: string
     sort_by?: string
@@ -630,11 +669,12 @@ export async function exportData(options?: {
   if (options?.ids && options.ids.length > 0) {
     params.ids = options.ids.join(',')
   } else if (options?.filters) {
-    const { platform, type, status, group, privacy_mode, search, sort_by, sort_order } = options.filters
+    const { platform, type, status, group, pool_group, privacy_mode, search, sort_by, sort_order } = options.filters
     if (platform) params.platform = platform
     if (type) params.type = type
     if (status) params.status = status
     if (group) params.group = group
+    if (pool_group) params.pool_group = pool_group
     if (privacy_mode) params.privacy_mode = privacy_mode
     if (search) params.search = search
     if (sort_by) params.sort_by = sort_by
@@ -889,6 +929,10 @@ export const accountsAPI = {
   create,
   duplicate,
   update,
+  listPoolGroups,
+  createPoolGroup,
+  updatePoolGroup,
+  deletePoolGroup,
   checkMixedChannelRisk,
   delete: deleteAccount,
   toggleStatus,

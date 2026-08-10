@@ -1635,6 +1635,29 @@ func TestForwardGrokResponsesRetriesInvalidEncryptedContentOnce(t *testing.T) {
 	require.False(t, hasTerminalStatus)
 }
 
+func TestIsGrokInvalidEncryptedContentResponseAcceptsRelayWrapper(t *testing.T) {
+	t.Parallel()
+
+	wrapped := []byte(`{
+		"error": {
+			"message": "Could not decrypt the provided encrypted_content. Ensure the value is the unmodified encrypted_content from a previous response.",
+			"type": "bad_response_status_code",
+			"code": "bad_response_status_code"
+		}
+	}`)
+	require.True(t, isGrokInvalidEncryptedContentResponse(http.StatusBadRequest, wrapped))
+
+	unrelated := []byte(`{
+		"error": {
+			"message": "The request body is invalid.",
+			"type": "bad_response_status_code",
+			"code": "bad_response_status_code"
+		}
+	}`)
+	require.False(t, isGrokInvalidEncryptedContentResponse(http.StatusBadRequest, unrelated))
+	require.False(t, isGrokInvalidEncryptedContentResponse(http.StatusUnprocessableEntity, wrapped))
+}
+
 func TestForwardGrokResponsesInvalidEncryptedContentRecoveryDoesNotOvermatch(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
@@ -2925,6 +2948,90 @@ func TestPatchGrokResponsesBody_MultipleReasoningContentNull(t *testing.T) {
 
 	require.False(t, items[0].Get("content").Exists())
 	require.False(t, items[2].Get("content").Exists())
+}
+
+func TestPatchGrokResponsesBody_NormalizesUnsupportedModelInputVariants(t *testing.T) {
+	t.Parallel()
+
+	body := []byte(`{
+		"model": "grok-latest",
+		"input": [
+			{"type":"item_reference","id":"msg_old"},
+			{"type":"custom_tool_call","call_id":"custom_1","name":"apply_patch","input":"patch text"},
+			{"type":"custom_tool_call_output","call_id":"custom_1","output":{"ok":true}},
+			{"type":"computer_call","call_id":"computer_1","action":{"type":"screenshot"}},
+			{"type":"computer_call_output","call_id":"computer_1","output":{"type":"computer_screenshot","image_url":"data:image/png;base64,aGVsbG8="}},
+			{"type":"image_generation_call","id":"image_1","result":"data:image/png;base64,aGVsbG8="},
+			{"type":"tool_search_output","call_id":"search_1","tools":[{"name":"shell"}]},
+			{"type":"compaction","id":"compact_1","encrypted_content":"opaque"},
+			{"type":"web_search_call","id":"web_1","status":"completed","action":{"type":"search","query":"test"}},
+			{"type":"message","role":"user","content":[{"type":"input_text","text":"continue"}]}
+		]
+	}`)
+
+	patched, err := patchGrokResponsesBody(body, "grok-4.5")
+	require.NoError(t, err)
+	require.True(t, json.Valid(patched))
+
+	items := gjson.GetBytes(patched, "input").Array()
+	require.Len(t, items, 7)
+	require.Equal(t, "function_call", items[0].Get("type").String())
+	require.Equal(t, "custom_1", items[0].Get("call_id").String())
+	require.Equal(t, "apply_patch", items[0].Get("name").String())
+	require.JSONEq(t, `{"input":"patch text"}`, items[0].Get("arguments").String())
+
+	require.Equal(t, "function_call_output", items[1].Get("type").String())
+	require.Equal(t, "custom_1", items[1].Get("call_id").String())
+	require.JSONEq(t, `{"ok":true}`, items[1].Get("output").String())
+
+	require.Equal(t, "message", items[2].Get("type").String())
+	require.Equal(t, "data:image/png;base64,aGVsbG8=", items[2].Get("content.1.image_url").String())
+	require.Equal(t, "message", items[3].Get("type").String())
+	require.Equal(t, "data:image/png;base64,aGVsbG8=", items[3].Get("content.1.image_url").String())
+	require.Equal(t, "message", items[4].Get("type").String())
+	require.Contains(t, items[4].Get("content.1.text").String(), `"shell"`)
+
+	require.Equal(t, "web_search_call", items[5].Get("type").String())
+	require.Equal(t, "message", items[6].Get("type").String())
+
+	for _, item := range items {
+		switch item.Get("type").String() {
+		case "item_reference", "custom_tool_call", "custom_tool_call_output",
+			"computer_call", "computer_call_output", "image_generation_call",
+			"tool_search_output", "compaction":
+			t.Fatalf("unsupported Grok ModelInput item survived normalization: %s", item.Raw)
+		}
+	}
+}
+
+func TestPatchGrokResponsesBody_LeavesSupportedModelInputUntouched(t *testing.T) {
+	t.Parallel()
+
+	body := []byte(`{
+		"model": "grok-latest",
+		"input": [
+			{"type":"function_call","call_id":"call_1","name":"probe","arguments":"{}"},
+			{"type":"function_call_output","call_id":"call_1","output":"ok"},
+			{"type":"local_shell_call_output","call_id":"shell_1","output":"ok"},
+			{"type":"mcp_call_output","call_id":"mcp_1","output":"ok"},
+			{"type":"file_search_call","id":"file_1","status":"completed","queries":["test"],"results":[]},
+			{"type":"code_interpreter_call","id":"code_1","status":"completed","code":"print(1)","outputs":[]},
+			{"type":"message","role":"user","content":[{"type":"input_text","text":"continue"}]}
+		]
+	}`)
+
+	patched, err := patchGrokResponsesBody(body, "grok-4.5")
+	require.NoError(t, err)
+
+	items := gjson.GetBytes(patched, "input").Array()
+	require.Len(t, items, 7)
+	require.Equal(t, "function_call", items[0].Get("type").String())
+	require.Equal(t, "function_call_output", items[1].Get("type").String())
+	require.Equal(t, "local_shell_call_output", items[2].Get("type").String())
+	require.Equal(t, "mcp_call_output", items[3].Get("type").String())
+	require.Equal(t, "file_search_call", items[4].Get("type").String())
+	require.Equal(t, "code_interpreter_call", items[5].Get("type").String())
+	require.Equal(t, "message", items[6].Get("type").String())
 }
 
 func TestIsGrokImageGenerationModel(t *testing.T) {

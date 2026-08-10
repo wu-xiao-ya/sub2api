@@ -112,6 +112,7 @@ type OpenAICodexPATCreateRequest struct {
 	Name                    string         `json:"name"`
 	Notes                   *string        `json:"notes"`
 	GroupIDs                []int64        `json:"group_ids"`
+	PoolGroupID             *int64         `json:"pool_group_id"`
 	ProxyID                 *int64         `json:"proxy_id"`
 	Concurrency             *int           `json:"concurrency"`
 	Priority                *int           `json:"priority"`
@@ -243,6 +244,7 @@ func (h *OpenAIOAuthHandler) CreateAccountFromOAuth(c *gin.Context) {
 		Concurrency int     `json:"concurrency"`
 		Priority    int     `json:"priority"`
 		GroupIDs    []int64 `json:"group_ids"`
+		PoolGroupID *int64  `json:"pool_group_id"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.BadRequest(c, "Invalid request: "+err.Error())
@@ -287,6 +289,7 @@ func (h *OpenAIOAuthHandler) CreateAccountFromOAuth(c *gin.Context) {
 		Concurrency: req.Concurrency,
 		Priority:    req.Priority,
 		GroupIDs:    req.GroupIDs,
+		PoolGroupID: req.PoolGroupID,
 	})
 	if err != nil {
 		response.ErrorFrom(c, err)
@@ -380,6 +383,7 @@ func (h *OpenAIOAuthHandler) CreateAccountFromCodexPAT(c *gin.Context) {
 		RateMultiplier:        req.RateMultiplier,
 		LoadFactor:            req.LoadFactor,
 		GroupIDs:              req.GroupIDs,
+		PoolGroupID:           req.PoolGroupID,
 		ExpiresAt:             req.ExpiresAt,
 		AutoPauseOnExpired:    req.AutoPauseOnExpired,
 		SkipDefaultGroupBind:  skipDefaultGroupBind,

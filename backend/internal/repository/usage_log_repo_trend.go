@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/usagestats"
+	"github.com/lib/pq"
 )
 
 // TrendDataPoint represents a single point in trend data
@@ -511,26 +512,89 @@ func (r *usageLogRepository) getModelStatsWithFiltersBySource(ctx context.Contex
 
 // GetGroupStatsWithFilters returns group usage statistics with optional filters
 func (r *usageLogRepository) GetGroupStatsWithFilters(ctx context.Context, startTime, endTime time.Time, userID, apiKeyID, accountID, groupID int64, requestType *int16, stream *bool, billingType *int8) (results []usagestats.GroupStat, err error) {
-	return r.getGroupStatsWithFilters(ctx, startTime, endTime, userID, apiKeyID, accountID, groupID, "", requestType, stream, billingType, "")
+	return r.getGroupStatsWithFilters(ctx, startTime, endTime, userID, apiKeyID, accountID, groupID, "", requestType, stream, billingType, "", nil, nil)
 }
 
 func (r *usageLogRepository) GetGroupStatsWithUsageFilters(ctx context.Context, startTime, endTime time.Time, filters UsageLogFilters) (results []usagestats.GroupStat, err error) {
-	return r.getGroupStatsWithFilters(ctx, startTime, endTime, filters.UserID, filters.APIKeyID, filters.AccountID, filters.GroupID, filters.Model, filters.RequestType, filters.Stream, filters.BillingType, filters.BillingMode)
+	return r.getGroupStatsWithFilters(ctx, startTime, endTime, filters.UserID, filters.APIKeyID, filters.AccountID, filters.GroupID, filters.Model, filters.RequestType, filters.Stream, filters.BillingType, filters.BillingMode, filters.ExcludeUserIDs, filters.ExcludeUserEmails)
 }
 
-func (r *usageLogRepository) getGroupStatsWithFilters(ctx context.Context, startTime, endTime time.Time, userID, apiKeyID, accountID, groupID int64, model string, requestType *int16, stream *bool, billingType *int8, billingMode string) (results []usagestats.GroupStat, err error) {
+func (r *usageLogRepository) getGroupStatsWithFilters(ctx context.Context, startTime, endTime time.Time, userID, apiKeyID, accountID, groupID int64, model string, requestType *int16, stream *bool, billingType *int8, billingMode string, excludeUserIDs []int64, excludeUserEmails []string) (results []usagestats.GroupStat, err error) {
 	query := `
-		SELECT
-			COALESCE(ul.group_id, 0) as group_id,
-			COALESCE(g.name, '') as group_name,
-			COUNT(*) as requests,
-			COALESCE(SUM(ul.input_tokens + ul.output_tokens + ul.cache_creation_tokens + ul.cache_read_tokens), 0) as total_tokens,
-			COALESCE(SUM(ul.total_cost), 0) as cost,
-			COALESCE(SUM(ul.actual_cost), 0) as actual_cost,
-			COALESCE(SUM(COALESCE(ul.account_stats_cost, ul.total_cost) * COALESCE(ul.account_rate_multiplier, 1)), 0) as account_cost
-		FROM usage_logs ul
-		LEFT JOIN groups g ON g.id = ul.group_id
-		WHERE ul.created_at >= $1 AND ul.created_at < $2
+		WITH runtime_settings AS (
+			SELECT COALESCE(
+				(
+					SELECT CASE
+						WHEN TRIM(value) ~ '^[0-9]+(\.[0-9]+)?$'
+						THEN TRIM(value)::double precision
+						ELSE NULL
+					END
+					FROM settings
+					WHERE key = 'image_upstream_cost_per_image'
+					LIMIT 1
+				),
+				0.001::double precision
+			) AS image_upstream_cost_per_image,
+			COALESCE(
+				(
+					SELECT CASE
+						WHEN jsonb_typeof(value::jsonb) = 'object' THEN value::jsonb
+						ELSE '{}'::jsonb
+					END
+					FROM settings
+					WHERE key = 'image_upstream_cost_by_account'
+					LIMIT 1
+				),
+				'{}'::jsonb
+			) AS image_upstream_cost_by_account
+		),
+		usage_by_account_bucket AS (
+			SELECT
+				ul.group_id,
+				ul.account_id,
+				date_trunc('hour', ul.created_at)
+					+ floor(EXTRACT(MINUTE FROM ul.created_at) / 5)::int * INTERVAL '5 minutes' AS rate_bucket,
+				COUNT(*) AS requests,
+				COALESCE(SUM(ul.input_tokens + ul.output_tokens + ul.cache_creation_tokens + ul.cache_read_tokens), 0) AS total_tokens,
+				COALESCE(SUM(ul.total_cost), 0) AS cost,
+				COALESCE(SUM(ul.actual_cost), 0) AS actual_cost,
+				COALESCE(SUM(
+					CASE
+						WHEN COALESCE(ul.billing_mode, '') = 'image'
+							OR (
+								COALESCE(ul.billing_mode, '') = ''
+								AND COALESCE(ul.image_count, 0) > 0
+							)
+						THEN GREATEST(COALESCE(ul.image_count, 0), 0) * COALESCE(
+							CASE
+								WHEN (rs.image_upstream_cost_by_account ->> ul.account_id::text) ~ '^[0-9]+(\.[0-9]+)?$'
+									THEN (rs.image_upstream_cost_by_account ->> ul.account_id::text)::double precision
+							END,
+							rs.image_upstream_cost_per_image
+						)
+						ELSE COALESCE(ul.account_stats_cost, ul.total_cost)
+					END
+				), 0) AS standard_cost,
+				COALESCE(SUM(
+					CASE
+						WHEN COALESCE(ul.billing_mode, '') = 'image'
+							OR (
+								COALESCE(ul.billing_mode, '') = ''
+								AND COALESCE(ul.image_count, 0) > 0
+							)
+						THEN GREATEST(COALESCE(ul.image_count, 0), 0) * COALESCE(
+							CASE
+								WHEN (rs.image_upstream_cost_by_account ->> ul.account_id::text) ~ '^[0-9]+(\.[0-9]+)?$'
+									THEN (rs.image_upstream_cost_by_account ->> ul.account_id::text)::double precision
+							END,
+							rs.image_upstream_cost_per_image
+						)
+						ELSE COALESCE(ul.account_stats_cost, ul.total_cost)
+					END * COALESCE(ul.account_rate_multiplier, 1)
+				), 0) AS legacy_account_cost
+			FROM usage_logs ul
+			CROSS JOIN runtime_settings rs
+			WHERE ul.created_at >= $1 AND ul.created_at < $2
 	`
 
 	args := []any{startTime, endTime}
@@ -550,6 +614,17 @@ func (r *usageLogRepository) getGroupStatsWithFilters(ctx context.Context, start
 		query += fmt.Sprintf(" AND ul.group_id = $%d", len(args)+1)
 		args = append(args, groupID)
 	}
+	if len(excludeUserIDs) > 0 {
+		query += fmt.Sprintf(" AND NOT (ul.user_id = ANY($%d))", len(args)+1)
+		args = append(args, pq.Array(excludeUserIDs))
+	}
+	if len(excludeUserEmails) > 0 {
+		query += fmt.Sprintf(
+			" AND NOT EXISTS (SELECT 1 FROM users excluded_users WHERE excluded_users.id = ul.user_id AND LOWER(excluded_users.email) = ANY($%d))",
+			len(args)+1,
+		)
+		args = append(args, pq.Array(excludeUserEmails))
+	}
 	if strings.TrimSpace(model) != "" {
 		modelExpr := resolveModelDimensionExpressionWithAlias(usagestats.ModelSourceRequested, "ul")
 		query += fmt.Sprintf(" AND %s = $%d", modelExpr, len(args)+1)
@@ -561,7 +636,45 @@ func (r *usageLogRepository) getGroupStatsWithFilters(ctx context.Context, start
 		args = append(args, int16(*billingType))
 	}
 	query, args = appendUsageLogBillingModeQueryFilter(query, args, billingMode, "ul")
-	query += " GROUP BY ul.group_id, g.name ORDER BY total_tokens DESC"
+	query += `
+			GROUP BY ul.group_id, ul.account_id, rate_bucket
+		),
+		rated_usage AS (
+			SELECT
+				ub.group_id,
+				ub.requests,
+				ub.total_tokens,
+				ub.cost,
+				ub.actual_cost,
+				CASE
+					WHEN upstream_rate.effective_rate_multiplier IS NULL
+					THEN ub.legacy_account_cost
+					ELSE ub.standard_cost * upstream_rate.effective_rate_multiplier
+				END AS account_cost
+			FROM usage_by_account_bucket ub
+			LEFT JOIN LATERAL (
+				SELECT s.effective_rate_multiplier
+				FROM account_upstream_rate_snapshots s
+				WHERE s.account_id = ub.account_id
+					AND s.group_id = COALESCE(ub.group_id, 0)
+					AND s.observed_at <= ub.rate_bucket
+				ORDER BY s.observed_at DESC, s.id DESC
+				LIMIT 1
+			) upstream_rate ON TRUE
+		)
+		SELECT
+			COALESCE(ru.group_id, 0) AS group_id,
+			COALESCE(g.name, '') AS group_name,
+			COALESCE(SUM(ru.requests), 0)::bigint AS requests,
+			COALESCE(SUM(ru.total_tokens), 0)::bigint AS total_tokens,
+			COALESCE(SUM(ru.cost), 0) AS cost,
+			COALESCE(SUM(ru.actual_cost), 0) AS actual_cost,
+			COALESCE(SUM(ru.account_cost), 0) AS account_cost
+		FROM rated_usage ru
+		LEFT JOIN groups g ON g.id = ru.group_id
+		GROUP BY ru.group_id, g.name
+		ORDER BY total_tokens DESC
+	`
 
 	rows, err := r.sql.QueryContext(ctx, query, args...)
 	if err != nil {

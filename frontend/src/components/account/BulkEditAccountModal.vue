@@ -581,6 +581,35 @@
         </div>
       </div>
 
+      <!-- Account Pool Group -->
+      <div class="border-t border-gray-200 pt-4 dark:border-dark-600">
+        <div class="mb-3 flex items-center justify-between">
+          <label
+            id="bulk-edit-pool-group-label"
+            class="input-label mb-0"
+            for="bulk-edit-pool-group-enabled"
+          >
+            {{ t('admin.accounts.accountPoolGroup.label') }}
+          </label>
+          <input
+            v-model="enablePoolGroup"
+            id="bulk-edit-pool-group-enabled"
+            type="checkbox"
+            aria-controls="bulk-edit-pool-group"
+            class="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+          />
+        </div>
+        <div id="bulk-edit-pool-group" :class="!enablePoolGroup && 'pointer-events-none opacity-50'">
+          <Select
+            v-model="poolGroupId"
+            :options="poolGroupOptions"
+            searchable="auto"
+            aria-labelledby="bulk-edit-pool-group-label"
+          />
+          <p class="input-hint">{{ t('admin.accounts.bulkEdit.poolGroupNotice') }}</p>
+        </div>
+      </div>
+
       <!-- Concurrency & Priority -->
       <div class="grid grid-cols-2 gap-4 border-t border-gray-200 pt-4 dark:border-dark-600 lg:grid-cols-4">
         <div>
@@ -1244,7 +1273,7 @@ import { ref, watch, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import { adminAPI } from '@/api/admin'
-import type { Proxy as ProxyConfig, AdminGroup, AccountPlatform, AccountType, OpenAICompactMode } from '@/types'
+import type { Proxy as ProxyConfig, AdminGroup, AccountPoolGroup, AccountPlatform, AccountType, OpenAICompactMode } from '@/types'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import Select from '@/components/common/Select.vue'
@@ -1289,6 +1318,7 @@ interface Props {
   }
   proxies: ProxyConfig[]
   groups: AdminGroup[]
+  poolGroups: AccountPoolGroup[]
 }
 
 const props = defineProps<Props>()
@@ -1397,6 +1427,7 @@ const enablePriority = ref(false)
 const enableRateMultiplier = ref(false)
 const enableStatus = ref(false)
 const enableGroups = ref(false)
+const enablePoolGroup = ref(false)
 const enableOpenAIPassthrough = ref(false)
 const enableOpenAIWSMode = ref(false)
 const enableOpenAIAPIKeyWSMode = ref(false)
@@ -1428,6 +1459,7 @@ const priority = ref(1)
 const rateMultiplier = ref(1)
 const status = ref<'active' | 'inactive'>('active')
 const groupIds = ref<number[]>([])
+const poolGroupId = ref<number | null>(null)
 const openaiPassthroughEnabled = ref(false)
 const openaiOAuthResponsesWebSocketV2Mode = ref<OpenAIWSMode>(OPENAI_WS_MODE_OFF)
 const openaiAPIKeyResponsesWebSocketV2Mode = ref<OpenAIWSMode>(OPENAI_WS_MODE_OFF)
@@ -1445,6 +1477,14 @@ const umqModeOptions = computed(() => [
   { value: '', label: t('admin.accounts.quotaControl.rpmLimit.umqModeOff') },
   { value: 'throttle', label: t('admin.accounts.quotaControl.rpmLimit.umqModeThrottle') },
   { value: 'serialize', label: t('admin.accounts.quotaControl.rpmLimit.umqModeSerialize') },
+])
+
+const poolGroupOptions = computed(() => [
+  { value: null, label: t('admin.accounts.accountPoolGroup.none') },
+  ...props.poolGroups.map(group => ({
+    value: group.id,
+    label: group.upstream_key ? `${group.name} · ${group.upstream_key}` : group.name
+  }))
 ])
 
 // Common HTTP error codes
@@ -1620,6 +1660,10 @@ const buildUpdatePayload = (): Record<string, unknown> | null => {
 
   if (enableGroups.value) {
     updates.group_ids = groupIds.value
+  }
+
+  if (enablePoolGroup.value) {
+    updates.pool_group_id = poolGroupId.value === null ? 0 : poolGroupId.value
   }
 
   if (enableBaseUrl.value) {
@@ -1817,6 +1861,7 @@ const handleSubmit = async () => {
     enableRateMultiplier.value ||
     enableStatus.value ||
     enableGroups.value ||
+    enablePoolGroup.value ||
     enableOpenAIWSMode.value ||
     enableOpenAIAPIKeyWSMode.value ||
     enableUpstreamBillingAutoProbe.value ||
@@ -1945,6 +1990,7 @@ watch(
       enableRateMultiplier.value = false
       enableStatus.value = false
       enableGroups.value = false
+      enablePoolGroup.value = false
       enableOpenAIPassthrough.value = false
       enableOpenAIWSMode.value = false
       enableOpenAIAPIKeyWSMode.value = false
@@ -1973,6 +2019,7 @@ watch(
       rateMultiplier.value = 1
       status.value = 'active'
       groupIds.value = []
+      poolGroupId.value = null
       openaiOAuthResponsesWebSocketV2Mode.value = OPENAI_WS_MODE_OFF
       openaiAPIKeyResponsesWebSocketV2Mode.value = OPENAI_WS_MODE_OFF
       upstreamBillingAutoProbeMode.value = 'enabled'

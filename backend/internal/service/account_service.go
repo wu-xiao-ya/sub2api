@@ -143,6 +143,7 @@ type AdminAccountRepository interface {
 type AccountBulkUpdate struct {
 	Name           *string
 	ProxyID        *int64
+	PoolGroupID    *int64
 	Concurrency    *int
 	Priority       *int
 	RateMultiplier *float64

@@ -218,6 +218,8 @@ import {
   PROVIDER_GROK,
   API_MODE_CHAT_COMPLETIONS,
   API_MODE_RESPONSES,
+  API_MODE_MODELS,
+  API_MODE_IMAGES,
   DEFAULT_GROK_ENDPOINT,
   DEFAULT_GROK_MODEL,
   DEFAULT_INTERVAL_SECONDS,
@@ -363,10 +365,23 @@ const apiModeOptions = computed<{ value: APIMode; label: string; hint: string }[
     label: t('admin.channelMonitor.form.apiModeResponses'),
     hint: t('admin.channelMonitor.form.apiModeResponsesHint'),
   },
+  {
+    value: API_MODE_MODELS,
+    label: t('admin.channelMonitor.form.apiModeModels'),
+    hint: t('admin.channelMonitor.form.apiModeModelsHint'),
+  },
+  {
+    value: API_MODE_IMAGES,
+    label: t('admin.channelMonitor.form.apiModeImages'),
+    hint: t('admin.channelMonitor.form.apiModeImagesHint'),
+  },
 ])
 
 function normalizeAPIMode(mode: APIMode | undefined | null): APIMode {
-  return mode === API_MODE_RESPONSES ? API_MODE_RESPONSES : API_MODE_CHAT_COMPLETIONS
+  if (mode === API_MODE_RESPONSES) return API_MODE_RESPONSES
+  if (mode === API_MODE_MODELS) return API_MODE_MODELS
+  if (mode === API_MODE_IMAGES) return API_MODE_IMAGES
+  return API_MODE_CHAT_COMPLETIONS
 }
 
 function apiModeButtonClass(mode: APIMode): string {
@@ -381,7 +396,11 @@ function templateOptionLabel(tpl: ChannelMonitorTemplate): string {
   if (tpl.provider !== PROVIDER_OPENAI) return tpl.name
   const labelKey = normalizeAPIMode(tpl.api_mode) === API_MODE_RESPONSES
     ? 'admin.channelMonitor.form.apiModeResponses'
-    : 'admin.channelMonitor.form.apiModeChatCompletions'
+    : normalizeAPIMode(tpl.api_mode) === API_MODE_MODELS
+      ? 'admin.channelMonitor.form.apiModeModels'
+      : normalizeAPIMode(tpl.api_mode) === API_MODE_IMAGES
+        ? 'admin.channelMonitor.form.apiModeImages'
+        : 'admin.channelMonitor.form.apiModeChatCompletions'
   return `${tpl.name} · ${t(labelKey)}`
 }
 

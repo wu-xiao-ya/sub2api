@@ -27,6 +27,7 @@ type CodexSessionImportRequest struct {
 	Name                    string         `json:"name"`
 	Notes                   *string        `json:"notes"`
 	GroupIDs                []int64        `json:"group_ids"`
+	PoolGroupID             *int64         `json:"pool_group_id"`
 	ProxyID                 *int64         `json:"proxy_id"`
 	Concurrency             *int           `json:"concurrency"`
 	Priority                *int           `json:"priority"`
@@ -162,7 +163,7 @@ func (h *AccountHandler) importCodexSessions(ctx context.Context, req CodexSessi
 		Items: make([]CodexSessionImportItem, 0, len(entries)),
 	}
 
-	existingAccounts, err := h.listAccountsFiltered(ctx, service.PlatformOpenAI, service.AccountTypeOAuth, "", "", 0, "", "created_at", "desc")
+	existingAccounts, err := h.listAccountsFiltered(ctx, service.PlatformOpenAI, service.AccountTypeOAuth, "", "", 0, "", 0, "created_at", "desc")
 	if err != nil {
 		return result, err
 	}
@@ -282,6 +283,7 @@ func (h *AccountHandler) importCodexSessions(ctx context.Context, req CodexSessi
 				Priority:           req.Priority,
 				RateMultiplier:     req.RateMultiplier,
 				LoadFactor:         req.LoadFactor,
+				PoolGroupID:        req.PoolGroupID,
 				ExpiresAt:          effectiveExpiresAt,
 				AutoPauseOnExpired: autoPauseOnExpired,
 			}
@@ -340,6 +342,7 @@ func (h *AccountHandler) importCodexSessions(ctx context.Context, req CodexSessi
 			RateMultiplier:        req.RateMultiplier,
 			LoadFactor:            req.LoadFactor,
 			GroupIDs:              req.GroupIDs,
+			PoolGroupID:           req.PoolGroupID,
 			ExpiresAt:             effectiveExpiresAt,
 			AutoPauseOnExpired:    autoPauseOnExpired,
 			SkipDefaultGroupBind:  skipDefaultGroupBind,

@@ -12,12 +12,13 @@ import (
 
 // stubMonitorSvc 实现 monitorRunnerSvc，用于隔离 runner 与真实 service/repo。
 type stubMonitorSvc struct {
-	enabled    []*ChannelMonitor
-	runCount   atomic.Int64
-	runCalled  chan int64 // 每次 RunCheck 触发时 push 一次（缓冲足够大避免阻塞）
-	runErr     error
-	listErr    error
-	runHoldFor time.Duration // RunCheck 内额外阻塞的时长，用来测试 Stop 等待行为
+	enabled     []*ChannelMonitor
+	runCount    atomic.Int64
+	runCalled   chan int64 // 每次 RunCheck 触发时 push 一次（缓冲足够大避免阻塞）
+	groupCalled chan []int64
+	runErr      error
+	listErr     error
+	runHoldFor  time.Duration // RunCheck 内额外阻塞的时长，用来测试 Stop 等待行为
 }
 
 func (s *stubMonitorSvc) ListEnabledMonitors(_ context.Context) ([]*ChannelMonitor, error) {
@@ -42,6 +43,18 @@ func (s *stubMonitorSvc) RunCheck(ctx context.Context, id int64) ([]*CheckResult
 		}
 	}
 	return nil, s.runErr
+}
+
+func (s *stubMonitorSvc) RunGroupCheck(_ context.Context, ids []int64) (*MonitorGroupCheckSummary, error) {
+	s.runCount.Add(1)
+	if s.groupCalled != nil {
+		copied := append([]int64(nil), ids...)
+		select {
+		case s.groupCalled <- copied:
+		default:
+		}
+	}
+	return &MonitorGroupCheckSummary{CandidateCount: len(ids)}, s.runErr
 }
 
 func newRunnerForTest(svc monitorRunnerSvc) *ChannelMonitorRunner {
@@ -199,6 +212,46 @@ func TestStart_LoadsAllEnabledMonitors(t *testing.T) {
 	waitFor(t, 2*time.Second, "all 3 tasks scheduled", func() bool { return runnerTaskCount(r) == 3 })
 
 	stoppedWithin(t, r, 3*time.Second)
+}
+
+func TestStart_GroupsNamedLinesIntoOneConcurrentTask(t *testing.T) {
+	svc := &stubMonitorSvc{
+		groupCalled: make(chan []int64, 1),
+		enabled: []*ChannelMonitor{
+			{ID: 11, Name: "plus-1", Provider: MonitorProviderOpenAI, APIMode: MonitorAPIModeChatCompletions, PrimaryModel: "gpt-5", GroupName: "Plus", Enabled: true, IntervalSeconds: 60},
+			{ID: 12, Name: "plus-2", Provider: MonitorProviderOpenAI, APIMode: MonitorAPIModeChatCompletions, PrimaryModel: "gpt-5", GroupName: "Plus", Enabled: true, IntervalSeconds: 60},
+			{ID: 13, Name: "plus-3", Provider: MonitorProviderOpenAI, APIMode: MonitorAPIModeChatCompletions, PrimaryModel: "gpt-5", GroupName: "Plus", Enabled: true, IntervalSeconds: 60},
+			{ID: 14, Name: "plus-4", Provider: MonitorProviderOpenAI, APIMode: MonitorAPIModeChatCompletions, PrimaryModel: "gpt-5", GroupName: "Plus", Enabled: true, IntervalSeconds: 60},
+			{ID: 15, Name: "plus-5", Provider: MonitorProviderOpenAI, APIMode: MonitorAPIModeChatCompletions, PrimaryModel: "gpt-5", GroupName: "Plus", Enabled: true, IntervalSeconds: 60},
+		},
+	}
+	r := newRunnerForTest(svc)
+	r.Start()
+
+	waitFor(t, 2*time.Second, "one grouped task scheduled", func() bool { return runnerTaskCount(r) == 1 })
+	task := runnerTaskPtr(r, 11)
+	if task == nil {
+		t.Fatal("expected group leader task")
+	}
+	if got := len(task.monitorIDs); got != 5 {
+		t.Fatalf("expected 5 candidate IDs in task, got %d", got)
+	}
+
+	select {
+	case ids := <-svc.groupCalled:
+		if len(ids) != 5 {
+			t.Fatalf("expected group check to receive 5 candidates, got %#v", ids)
+		}
+		for i, id := range ids {
+			if want := int64(11 + i); id != want {
+				t.Fatalf("group candidate %d = %d, want %d", i, id, want)
+			}
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("expected grouped task to fire immediately")
+	}
+
+	r.Stop()
 }
 
 // TestStop_DrainsAllGoroutines 验证 Stop 会等待所有调度 goroutine 退出（无游离）。

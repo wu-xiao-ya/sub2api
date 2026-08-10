@@ -219,6 +219,7 @@ func (h *GrokOAuthHandler) CreateAccountFromOAuth(c *gin.Context) {
 		Concurrency int     `json:"concurrency"`
 		Priority    int     `json:"priority"`
 		GroupIDs    []int64 `json:"group_ids"`
+		PoolGroupID *int64  `json:"pool_group_id"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.BadRequest(c, "Invalid request: "+err.Error())
@@ -254,6 +255,7 @@ func (h *GrokOAuthHandler) CreateAccountFromOAuth(c *gin.Context) {
 		Concurrency: req.Concurrency,
 		Priority:    req.Priority,
 		GroupIDs:    req.GroupIDs,
+		PoolGroupID: req.PoolGroupID,
 	})
 	if err != nil {
 		response.ErrorFrom(c, err)
@@ -270,6 +272,7 @@ type GrokSSOToOAuthRequest struct {
 	Notes              *string        `json:"notes"`
 	ProxyID            *int64         `json:"proxy_id"`
 	GroupIDs           []int64        `json:"group_ids"`
+	PoolGroupID        *int64         `json:"pool_group_id"`
 	Credentials        map[string]any `json:"credentials"`
 	Extra              map[string]any `json:"extra"`
 	Concurrency        int            `json:"concurrency"`
@@ -389,6 +392,7 @@ func (h *GrokOAuthHandler) createAccountFromSSOToken(ctx context.Context, req Gr
 		Priority:           req.Priority,
 		RateMultiplier:     req.RateMultiplier,
 		GroupIDs:           append([]int64(nil), req.GroupIDs...),
+		PoolGroupID:        req.PoolGroupID,
 		ExpiresAt:          expiresAt,
 		AutoPauseOnExpired: autoPauseOnExpired,
 	})

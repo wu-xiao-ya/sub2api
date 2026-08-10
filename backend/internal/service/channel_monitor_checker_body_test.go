@@ -19,8 +19,13 @@ import (
 func swapMonitorHTTPClient(t *testing.T) {
 	t.Helper()
 	orig := monitorHTTPClient
+	origImage := monitorImageHTTPClient
 	monitorHTTPClient = &http.Client{Timeout: 5 * time.Second}
-	t.Cleanup(func() { monitorHTTPClient = orig })
+	monitorImageHTTPClient = &http.Client{Timeout: 5 * time.Second}
+	t.Cleanup(func() {
+		monitorHTTPClient = orig
+		monitorImageHTTPClient = origImage
+	})
 }
 
 // captureHandler 把每次收到的请求 body 和 headers 存起来，测试断言用。
@@ -136,6 +141,9 @@ func answerFromOpenAIRequest(body map[string]any) string {
 var challengeQuestionRegex = regexp.MustCompile(`Q: (\d+) ([+-]) (\d+) = \?\nA:$`)
 
 func answerFromChallengePrompt(prompt string) string {
+	if prompt == monitorLowCostChallengePrompt {
+		return "1"
+	}
 	m := challengeQuestionRegex.FindStringSubmatch(prompt)
 	if len(m) != 4 {
 		return "0"
@@ -192,6 +200,30 @@ func TestRunCheckForModel_OpenAI_DefaultChatRequest(t *testing.T) {
 	}
 	if h.lastHeaders.Get("Authorization") != "Bearer sk-openai" {
 		t.Errorf("expected bearer auth header, got %q", h.lastHeaders.Get("Authorization"))
+	}
+}
+
+func TestRunCheckForModel_LowCostCapsOutputAndUsesMinimalChallenge(t *testing.T) {
+	h := &openAICaptureHandler{}
+	endpoint := setupFakeOpenAI(t, h)
+
+	res := runCheckForModel(context.Background(), MonitorProviderOpenAI, endpoint, "sk-openai", "gpt-test", &CheckOptions{
+		LowCost: true,
+	})
+
+	if res.Status != MonitorStatusOperational {
+		t.Fatalf("low-cost request should pass challenge, got status=%s message=%q", res.Status, res.Message)
+	}
+	if h.lastBody["max_tokens"] != float64(monitorLowCostMaxTokens) {
+		t.Fatalf("expected max_tokens=%d, got %#v", monitorLowCostMaxTokens, h.lastBody["max_tokens"])
+	}
+	messages, ok := h.lastBody["messages"].([]any)
+	if !ok || len(messages) != 1 {
+		t.Fatalf("expected one minimal challenge message, got %#v", h.lastBody["messages"])
+	}
+	message, _ := messages[0].(map[string]any)
+	if message["content"] != monitorLowCostChallengePrompt {
+		t.Fatalf("unexpected low-cost prompt: %#v", message["content"])
 	}
 }
 

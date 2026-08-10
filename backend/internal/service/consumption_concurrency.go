@@ -2,7 +2,7 @@ package service
 
 const (
 	ConsumptionConcurrencyDefault = 10
-	ConsumptionConcurrencyStep    = 4
+	ConsumptionConcurrencyStep    = 5
 )
 
 // ConsumptionConcurrencyTier returns the highest lifetime-consumption tier

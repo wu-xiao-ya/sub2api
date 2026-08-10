@@ -7,6 +7,7 @@
             v-model:searchQuery="params.search"
             :filters="params"
             :groups="groups"
+            :pool-groups="poolGroups"
             @update:filters="(newFilters) => Object.assign(params, newFilters)"
             @change="debouncedReload"
             @update:searchQuery="debouncedReload"
@@ -130,6 +131,12 @@
                         <Icon name="lock" size="sm" />
                       </span>
                       <span class="flex-1 text-left">{{ t('admin.tlsFingerprintProfiles.title') }}</span>
+                    </button>
+                    <button class="account-tools-menu-item" @click="openPoolGroupManager">
+                      <span class="account-tools-menu-icon bg-cyan-50 text-cyan-600 dark:bg-cyan-900/30 dark:text-cyan-300">
+                        <Icon name="database" size="sm" />
+                      </span>
+                      <span class="flex-1 text-left">{{ t('admin.accounts.accountPoolGroup.manage') }}</span>
                     </button>
 
                     <div class="my-2 border-t border-gray-100 dark:border-dark-700"></div>
@@ -299,6 +306,15 @@
           <template #cell-groups="{ row }">
             <AccountGroupsCell :groups="row.groups" :max-display="4" />
           </template>
+          <template #cell-pool_group="{ row }">
+            <div v-if="row.pool_group" class="flex min-w-[8rem] flex-col">
+              <span class="text-sm font-medium text-gray-800 dark:text-gray-100">{{ row.pool_group.name }}</span>
+              <span v-if="row.pool_group.upstream_key" class="text-xs text-gray-500 dark:text-gray-400">
+                {{ row.pool_group.upstream_key }}
+              </span>
+            </div>
+            <span v-else class="text-sm text-gray-400 dark:text-dark-500">-</span>
+          </template>
           <template #header-usage="{ column }">
             <div class="flex items-center">
               <span>{{ column.label }}</span>
@@ -428,8 +444,8 @@
       </template>
       <template #pagination><Pagination v-if="pagination.total > 0" :page="pagination.page" :total="pagination.total" :page-size="pagination.page_size" @update:page="handlePageChange" @update:pageSize="handlePageSizeChange" /></template>
     </TablePageLayout>
-    <CreateAccountModal :show="showCreate" :proxies="proxies" :groups="groups" @close="showCreate = false" @created="reload" />
-    <EditAccountModal :show="showEdit" :account="edAcc" :proxies="proxies" :groups="groups" @close="showEdit = false" @updated="handleAccountUpdated" />
+    <CreateAccountModal :show="showCreate" :proxies="proxies" :groups="groups" :pool-groups="poolGroups" @close="showCreate = false" @created="reload" />
+    <EditAccountModal :show="showEdit" :account="edAcc" :proxies="proxies" :groups="groups" :pool-groups="poolGroups" @close="showEdit = false" @updated="handleAccountUpdated" />
     <ReAuthAccountModal :show="showReAuth" :account="reAuthAcc" @close="closeReAuthModal" @reauthorized="handleAccountUpdated" />
     <AccountTestModal :show="showTest" :account="testingAcc" @close="closeTestModal" />
     <AccountStatsModal :show="showStats" :account="statsAcc" @close="closeStatsModal" />
@@ -445,6 +461,7 @@
       :target="bulkEditTarget ?? undefined"
       :proxies="proxies"
       :groups="groups"
+      :pool-groups="poolGroups"
       @close="showBulkEdit = false"
       @updated="handleBulkUpdated"
     />
@@ -459,6 +476,12 @@
     </ConfirmDialog>
     <ErrorPassthroughRulesModal :show="showErrorPassthrough" @close="showErrorPassthrough = false" />
     <TLSFingerprintProfilesModal :show="showTLSFingerprintProfiles" @close="showTLSFingerprintProfiles = false" />
+    <AccountPoolGroupManagerModal
+      :show="showPoolGroupManager"
+      :groups="poolGroups"
+      @close="showPoolGroupManager = false"
+      @changed="handlePoolGroupsChanged"
+    />
     <TotpStepUpDialog :controller="accountExportStepUp" />
   </AppLayout>
 </template>
@@ -491,6 +514,7 @@ import ReAuthAccountModal from '@/components/admin/account/ReAuthAccountModal.vu
 import AccountTestModal from '@/components/admin/account/AccountTestModal.vue'
 import AccountStatsModal from '@/components/admin/account/AccountStatsModal.vue'
 import ScheduledTestsPanel from '@/components/admin/account/ScheduledTestsPanel.vue'
+import AccountPoolGroupManagerModal from '@/components/admin/account/AccountPoolGroupManagerModal.vue'
 import type { SelectOption } from '@/components/common/Select.vue'
 import AccountStatusIndicator from '@/components/account/AccountStatusIndicator.vue'
 import AccountUsageCell from '@/components/account/AccountUsageCell.vue'
@@ -507,7 +531,7 @@ import { formatDateTime, formatRelativeTime } from '@/utils/format'
 import { proxyExpiryBadgeClass, proxyExpiryLabelKey } from '@/utils/proxyExpiry'
 import { extractApiErrorMessage } from '@/utils/apiError'
 import { sanitizeUrl } from '@/utils/url'
-import type { Account, AccountPlatform, AccountSchedulerGroupScore, AccountType, Proxy as AccountProxy, AdminGroup, WindowStats, ClaudeModel, UpstreamBillingProbeSnapshot } from '@/types'
+import type { Account, AccountPlatform, AccountPoolGroup, AccountSchedulerGroupScore, AccountType, Proxy as AccountProxy, AdminGroup, WindowStats, ClaudeModel, UpstreamBillingProbeSnapshot } from '@/types'
 
 const { t } = useI18n()
 const appStore = useAppStore()
@@ -515,6 +539,7 @@ const authStore = useAuthStore()
 
 const proxies = ref<AccountProxy[]>([])
 const groups = ref<AdminGroup[]>([])
+const poolGroups = ref<AccountPoolGroup[]>([])
 const accountTableRef = ref<HTMLElement | null>(null)
 const dataTableRef = ref<InstanceType<typeof DataTable> | null>(null)
 type AccountBulkEditTarget =
@@ -531,6 +556,7 @@ type AccountBulkEditTarget =
         type?: string
         status?: string
         group?: string
+        pool_group?: string
         search?: string
         privacy_mode?: string
         sort_by?: string
@@ -572,6 +598,7 @@ const showTest = ref(false)
 const showStats = ref(false)
 const showErrorPassthrough = ref(false)
 const showTLSFingerprintProfiles = ref(false)
+const showPoolGroupManager = ref(false)
 const edAcc = ref<Account | null>(null)
 const tempUnschedAcc = ref<Account | null>(null)
 const deletingAcc = ref<Account | null>(null)
@@ -887,6 +914,7 @@ const {
     status: '',
     privacy_mode: '',
     group: '',
+    pool_group: '',
     search: '',
     include_scheduler_score: shouldIncludeSchedulerScore() ? '1' : '0',
     sort_by: sortState.sort_by,
@@ -1049,7 +1077,8 @@ const isAnyModalOpen = computed(() => {
     showStats.value ||
     showSchedulePanel.value ||
     showErrorPassthrough.value ||
-    showTLSFingerprintProfiles.value
+    showTLSFingerprintProfiles.value ||
+    showPoolGroupManager.value
   )
 })
 
@@ -1371,6 +1400,7 @@ const allColumns = computed(() => {
     c.push({ key: 'groups', label: t('admin.accounts.columns.groups'), sortable: false })
   }
   c.push(
+    { key: 'pool_group', label: t('admin.accounts.columns.poolGroup'), sortable: false },
     { key: 'usage', label: t('admin.accounts.columns.usageWindows'), sortable: false },
     { key: 'proxy', label: t('admin.accounts.columns.proxy'), sortable: false },
     { key: 'priority', label: t('admin.accounts.columns.priority'), sortable: true },
@@ -1521,6 +1551,17 @@ const handleBulkProbeUpstreamBilling = async () => {
     accountIDs.forEach(id => probingUpstreamBilling.delete(id))
   }
 }
+const openPoolGroupManager = () => {
+  showAccountToolsDropdown.value = false
+  showPoolGroupManager.value = true
+}
+const reloadPoolGroups = async () => {
+  poolGroups.value = await adminAPI.accounts.listPoolGroups()
+}
+const handlePoolGroupsChanged = async () => {
+  await reloadPoolGroups()
+  await reload()
+}
 const updateSchedulableInList = (accountIds: number[], schedulable: boolean) => {
   if (accountIds.length === 0) return
   const idSet = new Set(accountIds)
@@ -1631,6 +1672,7 @@ const buildBulkEditFilterSnapshot = () => {
     type: typeof rawParams.type === 'string' ? rawParams.type : '',
     status: typeof rawParams.status === 'string' ? rawParams.status : '',
     group: typeof rawParams.group === 'string' ? rawParams.group : '',
+    pool_group: typeof rawParams.pool_group === 'string' ? rawParams.pool_group : '',
     search: typeof rawParams.search === 'string' ? rawParams.search : '',
     privacy_mode: typeof rawParams.privacy_mode === 'string' ? rawParams.privacy_mode : '',
     sort_by: typeof rawParams.sort_by === 'string' ? rawParams.sort_by : '',
@@ -1682,6 +1724,7 @@ const buildAccountQueryFilters = () => ({
   type: params.type || '',
   status: params.status || '',
   group: params.group || '',
+  pool_group: params.pool_group || '',
   privacy_mode: params.privacy_mode || '',
   search: params.search || '',
   sort_by: sortState.sort_by,
@@ -1715,6 +1758,13 @@ const accountMatchesCurrentFilters = (account: Account) => {
     if (filters.group === ACCOUNT_UNGROUPED_GROUP_QUERY_VALUE) {
       if (groupIds.length > 0) return false
     } else if (!groupIds.includes(Number(filters.group))) {
+      return false
+    }
+  }
+  if (filters.pool_group) {
+    if (filters.pool_group === ACCOUNT_UNGROUPED_GROUP_QUERY_VALUE) {
+      if (account.pool_group_id != null || account.pool_group) return false
+    } else if (account.pool_group_id !== Number(filters.pool_group)) {
       return false
     }
   }
@@ -2053,11 +2103,16 @@ onMounted(async () => {
   load()
   loadUpstreamBillingProbeGlobalState()
   try {
-    const [p, g] = await Promise.all([adminAPI.proxies.getAll(), adminAPI.groups.getAll()])
+    const [p, g, pg] = await Promise.all([
+      adminAPI.proxies.getAll(),
+      adminAPI.groups.getAll(),
+      adminAPI.accounts.listPoolGroups()
+    ])
     proxies.value = p
     groups.value = g
+    poolGroups.value = pg
   } catch (error) {
-    console.error('Failed to load proxies/groups:', error)
+    console.error('Failed to load proxies/groups/pool groups:', error)
   }
   window.addEventListener('scroll', handleScroll, true)
   document.addEventListener('click', handleClickOutside)

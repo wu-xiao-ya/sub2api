@@ -550,6 +550,46 @@ func (h *OpsHandler) ResolveUpstreamError(c *gin.Context) {
 	h.UpdateErrorResolution(c)
 }
 
+// GetUpstreamErrorAttribution aggregates intermittent upstream failures by
+// business group and selected account.
+// GET /api/v1/admin/ops/upstream-errors/attribution
+func (h *OpsHandler) GetUpstreamErrorAttribution(c *gin.Context) {
+	if h.opsService == nil {
+		response.Error(c, http.StatusServiceUnavailable, "Ops service not available")
+		return
+	}
+	if err := h.opsService.RequireMonitoringEnabled(c.Request.Context()); err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	startTime, endTime, err := parseOpsTimeRange(c, "1h")
+	if err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+	filter := &service.OpsDashboardFilter{
+		StartTime: startTime,
+		EndTime:   endTime,
+		Platform:  strings.TrimSpace(c.Query("platform")),
+	}
+	if v := strings.TrimSpace(c.Query("group_id")); v != "" {
+		id, err := strconv.ParseInt(v, 10, 64)
+		if err != nil || id <= 0 {
+			response.BadRequest(c, "Invalid group_id")
+			return
+		}
+		filter.GroupID = &id
+	}
+
+	result, err := h.opsService.GetUpstreamErrorAttribution(c.Request.Context(), filter)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, result)
+}
+
 // ==================== Existing endpoints ====================
 
 // ListRequestDetails returns a request-level list (success + error) for drill-down.

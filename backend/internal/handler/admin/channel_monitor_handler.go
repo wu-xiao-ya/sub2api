@@ -3,6 +3,7 @@ package admin
 import (
 	"context"
 	"log/slog"
+	"net/http"
 	"strconv"
 	"strings"
 	"time"
@@ -40,7 +41,7 @@ func NewChannelMonitorHandler(monitorService *service.ChannelMonitorService) *Ch
 type channelMonitorCreateRequest struct {
 	Name             string            `json:"name" binding:"required,max=100"`
 	Provider         string            `json:"provider" binding:"required,oneof=openai anthropic gemini grok"`
-	APIMode          string            `json:"api_mode" binding:"omitempty,oneof=chat_completions responses"`
+	APIMode          string            `json:"api_mode" binding:"omitempty,oneof=chat_completions responses models images"`
 	Endpoint         string            `json:"endpoint" binding:"required,max=500"`
 	APIKey           string            `json:"api_key" binding:"required,max=2000"`
 	PrimaryModel     string            `json:"primary_model" binding:"max=200"`
@@ -58,7 +59,7 @@ type channelMonitorCreateRequest struct {
 type channelMonitorUpdateRequest struct {
 	Name             *string            `json:"name" binding:"omitempty,max=100"`
 	Provider         *string            `json:"provider" binding:"omitempty,oneof=openai anthropic gemini grok"`
-	APIMode          *string            `json:"api_mode" binding:"omitempty,oneof=chat_completions responses"`
+	APIMode          *string            `json:"api_mode" binding:"omitempty,oneof=chat_completions responses models images"`
 	Endpoint         *string            `json:"endpoint" binding:"omitempty,max=500"`
 	APIKey           *string            `json:"api_key" binding:"omitempty,max=2000"`
 	PrimaryModel     *string            `json:"primary_model" binding:"omitempty,max=200"`
@@ -273,9 +274,10 @@ func buildListItemResponse(m *service.ChannelMonitor, summary service.MonitorSta
 	resp.ExtraModelsStatus = make([]dto.ChannelMonitorExtraModelStatus, 0, len(summary.ExtraModels))
 	for _, e := range summary.ExtraModels {
 		resp.ExtraModelsStatus = append(resp.ExtraModelsStatus, dto.ChannelMonitorExtraModelStatus{
-			Model:     e.Model,
-			Status:    e.Status,
-			LatencyMs: e.LatencyMs,
+			Model:          e.Model,
+			Status:         e.Status,
+			LatencyMs:      e.LatencyMs,
+			Availability7d: e.Availability7d,
 		})
 	}
 	return resp
@@ -479,6 +481,21 @@ func (h *ChannelMonitorHandler) History(c *gin.Context) {
 		out = append(out, historyEntryToResponse(e))
 	}
 	response.Success(c, gin.H{"items": out})
+}
+
+// Image GET /api/v1/admin/channel-monitors/:id/image
+func (h *ChannelMonitorHandler) Image(c *gin.Context) {
+	id, ok := ParseChannelMonitorID(c)
+	if !ok {
+		return
+	}
+	image, err := h.monitorService.GetLatestImage(c.Request.Context(), id)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	c.Header("Cache-Control", "no-store")
+	c.Data(http.StatusOK, image.ContentType, image.Data)
 }
 
 // parseHistoryLimit 解析 history 接口的 limit query。

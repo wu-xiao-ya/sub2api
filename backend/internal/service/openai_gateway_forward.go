@@ -898,6 +898,8 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 		var usage *OpenAIUsage
 		var firstTokenMs *int
 		responseID := ""
+		terminalEvent := ""
+		incompleteReason := ""
 		imageCount := 0
 		var imageOutputSizes []string
 		if reqStream {
@@ -908,6 +910,8 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 			usage = streamResult.usage
 			firstTokenMs = streamResult.firstTokenMs
 			responseID = strings.TrimSpace(streamResult.responseID)
+			terminalEvent = streamResult.terminalEvent
+			incompleteReason = streamResult.incompleteReason
 			imageCount = streamResult.imageCount
 			imageOutputSizes = streamResult.imageOutputSizes
 		} else {
@@ -935,18 +939,20 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 		}
 
 		forwardResult := &OpenAIForwardResult{
-			RequestID:       resp.Header.Get("x-request-id"),
-			ResponseID:      responseID,
-			Usage:           *usage,
-			Model:           originalModel,
-			BillingModel:    billingModel,
-			UpstreamModel:   upstreamModel,
-			ServiceTier:     serviceTier,
-			ReasoningEffort: reasoningEffort,
-			Stream:          reqStream,
-			OpenAIWSMode:    false,
-			Duration:        time.Since(startTime),
-			FirstTokenMs:    firstTokenMs,
+			RequestID:                resp.Header.Get("x-request-id"),
+			ResponseID:               responseID,
+			Usage:                    *usage,
+			Model:                    originalModel,
+			BillingModel:             billingModel,
+			UpstreamModel:            upstreamModel,
+			ServiceTier:              serviceTier,
+			ReasoningEffort:          reasoningEffort,
+			Stream:                   reqStream,
+			OpenAIWSMode:             false,
+			UpstreamTerminalEvent:    terminalEvent,
+			UpstreamIncompleteReason: incompleteReason,
+			Duration:                 time.Since(startTime),
+			FirstTokenMs:             firstTokenMs,
 		}
 		if imageCount > 0 {
 			forwardResult.ImageCount = imageCount

@@ -203,6 +203,33 @@ export interface OpsErrorDistributionResponse {
   items: OpsErrorDistributionItem[]
 }
 
+export interface OpsUpstreamAttributionItem {
+  group_id?: number | null
+  group_name: string
+  account_id?: number | null
+  account_name: string
+  total: number
+  overload: number
+  rate_limit: number
+  server_error: number
+  transport: number
+  stream_failure: number
+  average_upstream_latency_ms?: number | null
+  last_error_at: string
+  last_status_code: number
+  last_message: string
+  last_endpoint: string
+}
+
+export interface OpsUpstreamAttributionResponse {
+  start_time: string
+  end_time: string
+  platform: string
+  group_id?: number | null
+  total: number
+  items: OpsUpstreamAttributionItem[]
+}
+
 export interface OpsDashboardSnapshotV2Response {
   generated_at: string
   overview: OpsDashboardOverview
@@ -1068,6 +1095,24 @@ export async function getErrorDistribution(
   return data
 }
 
+export async function getUpstreamErrorAttribution(
+  params: {
+  time_range?: '5m' | '30m' | '1h' | '6h' | '24h'
+  start_time?: string
+  end_time?: string
+  platform?: string
+  group_id?: number | null
+  mode?: OpsQueryMode
+  },
+  options: OpsRequestOptions = {}
+): Promise<OpsUpstreamAttributionResponse> {
+  const { data } = await apiClient.get<OpsUpstreamAttributionResponse>('/admin/ops/upstream-errors/attribution', {
+    params,
+    signal: options.signal
+  })
+  return data
+}
+
 export async function getOpenAITokenStats(
   params: OpsOpenAITokenStatsParams,
   options: OpsRequestOptions = {}
@@ -1312,6 +1357,7 @@ export const opsAPI = {
   getLatencyHistogram,
   getErrorTrend,
   getErrorDistribution,
+  getUpstreamErrorAttribution,
   getOpenAITokenStats,
   getConcurrencyStats,
   getUserConcurrencyStats,

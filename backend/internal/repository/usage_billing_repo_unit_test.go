@@ -37,7 +37,7 @@ func TestApplyConsumptionConcurrencyReward_CrossesFirstTier(t *testing.T) {
 		WithArgs(int64(42)).
 		WillReturnRows(sqlmock.NewRows([]string{"lifetime_consumption_usd", "consumption_concurrency_tier"}).AddRow(49.5, 0))
 	mock.ExpectExec(updateConsumptionRewardSQL).
-		WithArgs(50.25, 1, 4, int64(42)).
+		WithArgs(50.25, 1, 5, int64(42)).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectCommit()
 
@@ -45,7 +45,7 @@ func TestApplyConsumptionConcurrencyReward_CrossesFirstTier(t *testing.T) {
 	err = (&usageBillingRepository{}).applyConsumptionConcurrencyReward(ctx, tx, 42, 0.75, result)
 	require.NoError(t, err)
 	require.True(t, result.ConsumptionConcurrencyChanged)
-	require.Equal(t, 4, result.ConsumptionConcurrencyDelta)
+	require.Equal(t, 5, result.ConsumptionConcurrencyDelta)
 	require.Equal(t, 1, result.ConsumptionConcurrencyTier)
 	require.InDelta(t, 50.25, result.ConsumptionLifetimeUSD, 0.000001)
 	require.NoError(t, tx.Commit())
@@ -65,7 +65,7 @@ func TestApplyConsumptionConcurrencyReward_CrossesMultipleTiersOnce(t *testing.T
 		WithArgs(int64(42)).
 		WillReturnRows(sqlmock.NewRows([]string{"lifetime_consumption_usd", "consumption_concurrency_tier"}).AddRow(40.0, 0))
 	mock.ExpectExec(updateConsumptionRewardSQL).
-		WithArgs(540.0, 4, 16, int64(42)).
+		WithArgs(540.0, 4, 20, int64(42)).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectCommit()
 
@@ -73,7 +73,7 @@ func TestApplyConsumptionConcurrencyReward_CrossesMultipleTiersOnce(t *testing.T
 	err = (&usageBillingRepository{}).applyConsumptionConcurrencyReward(ctx, tx, 42, 500, result)
 	require.NoError(t, err)
 	require.True(t, result.ConsumptionConcurrencyChanged)
-	require.Equal(t, 16, result.ConsumptionConcurrencyDelta)
+	require.Equal(t, 20, result.ConsumptionConcurrencyDelta)
 	require.Equal(t, 4, result.ConsumptionConcurrencyTier)
 	require.NoError(t, tx.Commit())
 	require.NoError(t, mock.ExpectationsWereMet())

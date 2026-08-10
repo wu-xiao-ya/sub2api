@@ -402,7 +402,7 @@ func (h *DashboardHandler) GetGroupStats(c *gin.Context) {
 		}
 	}
 
-	stats, hit, err := h.getGroupStatsCached(c.Request.Context(), startTime, endTime, userID, apiKeyID, accountID, groupID, requestType, stream, billingType)
+	stats, hit, err := h.getGroupStatsCached(c.Request.Context(), startTime, endTime, userID, apiKeyID, accountID, groupID, requestType, stream, billingType, nil, nil)
 	if err != nil {
 		response.Error(c, 500, "Failed to get group statistics")
 		return

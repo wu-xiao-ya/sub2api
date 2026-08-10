@@ -384,6 +384,14 @@ const (
 	// for probing remote Sub2API API-key billing metadata.
 	SettingKeyUpstreamBillingProbeSettings = "upstream_billing_probe_settings"
 
+	// SettingKeyImageUpstreamCostPerImage stores the configurable upstream cost
+	// used by cost/profit reporting for one generated image.
+	SettingKeyImageUpstreamCostPerImage = "image_upstream_cost_per_image"
+
+	// SettingKeyImageUpstreamCostByAccount stores account-specific image
+	// upstream-cost overrides as a JSON object keyed by account ID.
+	SettingKeyImageUpstreamCostByAccount = "image_upstream_cost_by_account"
+
 	// =========================
 	// Overload Cooldown (529)
 	// =========================

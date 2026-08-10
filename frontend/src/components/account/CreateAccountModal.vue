@@ -3142,6 +3142,15 @@
           :mixed-scheduling="mixedScheduling"
           data-tour="account-form-groups"
         />
+        <div>
+          <label class="input-label">{{ t('admin.accounts.accountPoolGroup.label') }}</label>
+          <Select
+            v-model="form.pool_group_id"
+            :options="poolGroupOptions"
+            searchable="auto"
+          />
+          <p class="input-hint">{{ t('admin.accounts.accountPoolGroup.hint') }}</p>
+        </div>
       </div>
 
     </form>
@@ -3523,6 +3532,7 @@ import { useGrokOAuth } from '@/composables/useGrokOAuth'
 import type {
   Proxy,
   AdminGroup,
+  AccountPoolGroup,
   AccountPlatform,
   AccountType,
   CheckMixedChannelResponse,
@@ -3613,6 +3623,7 @@ interface Props {
   show: boolean
   proxies: Proxy[]
   groups: AdminGroup[]
+  poolGroups: AccountPoolGroup[]
 }
 
 const props = defineProps<Props>()
@@ -4068,8 +4079,17 @@ const form = reactive({
   priority: 1,
   rate_multiplier: 1,
   group_ids: [] as number[],
+  pool_group_id: null as number | null,
   expires_at: null as number | null
 })
+
+const poolGroupOptions = computed(() => [
+  { value: null, label: t('admin.accounts.accountPoolGroup.none') },
+  ...props.poolGroups.map(group => ({
+    value: group.id,
+    label: group.upstream_key ? `${group.name} · ${group.upstream_key}` : group.name
+  }))
+])
 
 // Helper to check if current type needs OAuth flow
 const isOAuthFlow = computed(() => {
@@ -4618,6 +4638,7 @@ const resetForm = () => {
   form.priority = 1
   form.rate_multiplier = 1
   form.group_ids = []
+  form.pool_group_id = null
   form.expires_at = null
   accountCategory.value = 'oauth-based'
   addMethod.value = 'oauth'
@@ -5122,6 +5143,7 @@ const handleSubmit = async () => {
   await doCreateAccount({
     ...form,
     group_ids: form.group_ids,
+    pool_group_id: form.pool_group_id,
     extra,
     upstream_billing_probe_enabled:
       form.platform === 'openai' ? upstreamBillingAutoProbeEnabled.value : undefined,
@@ -5252,6 +5274,7 @@ const createAccountAndFinish = async (
     priority: form.priority,
     rate_multiplier: form.rate_multiplier,
     group_ids: form.group_ids,
+    pool_group_id: form.pool_group_id,
     expires_at: form.expires_at,
     auto_pause_on_expired: autoPauseOnExpired.value
   })
@@ -5316,6 +5339,7 @@ const handleGrokValidateRT = async (refreshTokenInput: string) => {
           priority: form.priority,
           rate_multiplier: form.rate_multiplier,
           group_ids: form.group_ids,
+          pool_group_id: form.pool_group_id,
           expires_at: form.expires_at,
           auto_pause_on_expired: autoPauseOnExpired.value
         })
@@ -5378,6 +5402,7 @@ const handleGrokImportSSO = async (ssoInput: string) => {
       notes: form.notes || undefined,
       proxy_id: form.proxy_id,
       group_ids: form.group_ids,
+      pool_group_id: form.pool_group_id,
       credentials,
       concurrency: form.concurrency,
       load_factor: form.load_factor ?? undefined,
@@ -5482,6 +5507,7 @@ const handleOpenAIExchange = async (authCode: string) => {
         priority: form.priority,
         rate_multiplier: form.rate_multiplier,
         group_ids: form.group_ids,
+        pool_group_id: form.pool_group_id,
         expires_at: form.expires_at,
         auto_pause_on_expired: autoPauseOnExpired.value
       })
@@ -5587,6 +5613,7 @@ const handleOpenAIImportCodexSession = async (content: string) => {
       priority: form.priority,
       rate_multiplier: form.rate_multiplier,
       group_ids: form.group_ids,
+      pool_group_id: form.pool_group_id,
       expires_at: form.expires_at,
       auto_pause_on_expired: autoPauseOnExpired.value,
       credential_extras: Object.keys(credentialExtras).length > 0 ? credentialExtras : undefined,
@@ -5665,6 +5692,7 @@ const handleOpenAIImportCodexPAT = async (accessToken: string) => {
       priority: form.priority,
       rate_multiplier: form.rate_multiplier,
       group_ids: form.group_ids,
+      pool_group_id: form.pool_group_id,
       expires_at: form.expires_at,
       auto_pause_on_expired: autoPauseOnExpired.value,
       credential_extras: Object.keys(credentialExtras).length > 0 ? credentialExtras : undefined,
@@ -5763,6 +5791,7 @@ const handleOpenAIBatchRT = async (refreshTokenInput: string, clientId?: string)
             priority: form.priority,
             rate_multiplier: form.rate_multiplier,
             group_ids: form.group_ids,
+            pool_group_id: form.pool_group_id,
             expires_at: form.expires_at,
             auto_pause_on_expired: autoPauseOnExpired.value
           })
@@ -5862,6 +5891,7 @@ const handleAntigravityValidateRT = async (refreshTokenInput: string) => {
           priority: form.priority,
           rate_multiplier: form.rate_multiplier,
           group_ids: form.group_ids,
+          pool_group_id: form.pool_group_id,
           expires_at: form.expires_at,
           auto_pause_on_expired: autoPauseOnExpired.value
         })
@@ -6243,6 +6273,7 @@ const handleCookieAuth = async (sessionKey: string) => {
           priority: form.priority,
           rate_multiplier: form.rate_multiplier,
           group_ids: form.group_ids,
+          pool_group_id: form.pool_group_id,
           expires_at: form.expires_at,
           auto_pause_on_expired: autoPauseOnExpired.value
         })

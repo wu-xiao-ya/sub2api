@@ -21,6 +21,7 @@ export default {
       input: 'Input',
       output: 'Output',
       cacheToday: 'Cache (Today)',
+      cacheHitRate: 'Cache Hit Rate',
       performance: 'Performance',
       avgResponse: 'Avg Response',
       averageTime: 'Average Time',
@@ -77,7 +78,20 @@ export default {
       groupPricingDesc: 'Configure batch discount and hold ratio',
       systemSettings: 'System Settings',
       configureSystem: 'Configure system settings',
-      failedToLoad: 'Failed to load dashboard statistics'
+      failedToLoad: 'Failed to load dashboard statistics',
+      costProfit: {
+        actualRevenue: 'Actual revenue',
+        upstreamCost: 'Upstream cost',
+        upstreamMultiplier: 'Upstream multiplier',
+        excludedUsers: 'Report blacklist',
+        excludedUsersPlaceholder: 'User IDs or emails, comma-separated',
+        fromUpstreamRate: 'Calculated from upstream pricing and multiplier',
+        standardCost: 'Standard cost',
+        profit: 'Profit',
+        margin: 'Profit margin',
+        periodHint: 'For the selected time range',
+        byGroup: 'Cost and profit by group'
+      }
     },
 
     backup: {
@@ -125,6 +139,8 @@ export default {
         retainDaysHint: 'Backup files auto-delete after this many days, 0 = never expire',
         retainCount: 'Max Retain Count',
         retainCountHint: 'Maximum number of backups to keep, 0 = unlimited',
+        uploadRateLimit: 'Upload Limit (KB/s)',
+        uploadRateLimitHint: 'Only limits server uploads to object storage. Downloads use a presigned direct link and do not pass through this server.',
         saved: 'Schedule configuration saved'
       },
       operations: {

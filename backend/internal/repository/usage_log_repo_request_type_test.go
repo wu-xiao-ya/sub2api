@@ -13,6 +13,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/usagestats"
 	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/lib/pq"
 	"github.com/stretchr/testify/require"
 )
 
@@ -637,6 +638,51 @@ func TestUsageLogRepositoryGetGroupStatsAccountCostColumn(t *testing.T) {
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestUsageLogRepositoryGetGroupStatsUsesTimeAwareUpstreamRateSnapshots(t *testing.T) {
+	db, mock := newSQLMock(t)
+	repo := &usageLogRepository{sql: db}
+
+	start := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
+	end := start.Add(time.Hour)
+
+	mock.ExpectQuery(`(?s)WITH runtime_settings.*usage_by_account_bucket.*INTERVAL '5 minutes'.*account_upstream_rate_snapshots.*s\.observed_at <= ub\.rate_bucket`).
+		WithArgs(start, end).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"group_id", "group_name", "requests", "total_tokens",
+			"cost", "actual_cost", "account_cost",
+		}).AddRow(int64(7), "特惠GPT", int64(3), int64(300), 1.0, 0.8, 0.07))
+
+	results, err := repo.GetGroupStatsWithFilters(context.Background(), start, end, 0, 0, 0, 0, nil, nil, nil)
+
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+	require.Equal(t, int64(7), results[0].GroupID)
+	require.InDelta(t, 0.07, results[0].AccountCost, 1e-12)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestUsageLogRepositoryGetGroupStatsUsesConfiguredImageUpstreamCost(t *testing.T) {
+	db, mock := newSQLMock(t)
+	repo := &usageLogRepository{sql: db}
+
+	start := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
+	end := start.Add(time.Hour)
+
+	mock.ExpectQuery(`(?s)image_upstream_cost_per_image.*image_upstream_cost_by_account.*COALESCE\(ul\.billing_mode, ''\) = 'image'.*GREATEST\(COALESCE\(ul\.image_count, 0\), 0\) \* COALESCE`).
+		WithArgs(start, end).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"group_id", "group_name", "requests", "total_tokens",
+			"cost", "actual_cost", "account_cost",
+		}).AddRow(int64(7), "特惠GPT", int64(2), int64(0), 0.2, 0.2, 0.00014))
+
+	results, err := repo.GetGroupStatsWithFilters(context.Background(), start, end, 0, 0, 0, 0, nil, nil, nil)
+
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+	require.InDelta(t, 0.00014, results[0].AccountCost, 1e-12)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestUsageLogRepositoryGetGroupStatsWithUsageFiltersAppliesRequestedModelFilter(t *testing.T) {
 	db, mock := newSQLMock(t)
 	repo := &usageLogRepository{sql: db}
@@ -656,6 +702,30 @@ func TestUsageLogRepositoryGetGroupStatsWithUsageFiltersAppliesRequestedModelFil
 	require.NoError(t, err)
 	require.Len(t, results, 1)
 	require.Equal(t, int64(1), results[0].GroupID)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestUsageLogRepositoryGetGroupStatsWithUsageFiltersExcludesUsers(t *testing.T) {
+	db, mock := newSQLMock(t)
+	repo := &usageLogRepository{sql: db}
+
+	start := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	end := start.Add(24 * time.Hour)
+	filters := usagestats.UsageLogFilters{
+		ExcludeUserIDs:    []int64{42},
+		ExcludeUserEmails: []string{"blocked@example.com"},
+	}
+
+	mock.ExpectQuery("NOT \\(ul\\.user_id = ANY\\(\\$3\\)\\).*LOWER\\(excluded_users\\.email\\) = ANY\\(\\$4\\)").
+		WithArgs(start, end, pq.Array([]int64{42}), pq.Array([]string{"blocked@example.com"})).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"group_id", "group_name", "requests", "total_tokens",
+			"cost", "actual_cost", "account_cost",
+		}).AddRow(int64(1), "default", int64(1), int64(30), 0.1, 0.08, 0.07))
+
+	results, err := repo.GetGroupStatsWithUsageFilters(context.Background(), start, end, filters)
+	require.NoError(t, err)
+	require.Len(t, results, 1)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 

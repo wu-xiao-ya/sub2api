@@ -25,6 +25,7 @@ export default {
       input: '输入',
       output: '输出',
       cacheToday: '今日缓存',
+      cacheHitRate: '缓存命中率',
       performance: '性能指标',
       avgResponse: '平均响应',
       averageTime: '平均时间',
@@ -77,7 +78,20 @@ export default {
       groupPricingDesc: '设置批量折扣和冻结比例',
       systemSettings: '系统设置',
       configureSystem: '配置系统设置',
-      failedToLoad: '加载仪表盘数据失败'
+      failedToLoad: '加载仪表盘数据失败',
+      costProfit: {
+        actualRevenue: '实际收入',
+        upstreamCost: '上游成本',
+        upstreamMultiplier: '上游倍率',
+        excludedUsers: '统计黑名单',
+        excludedUsersPlaceholder: '用户 ID 或邮箱，逗号分隔',
+        fromUpstreamRate: '按上游定价与倍率计算',
+        standardCost: '标准计费',
+        profit: '利润',
+        margin: '利润率',
+        periodHint: '按当前时间范围统计',
+        byGroup: '分组成本与利润'
+      }
     },
 
     backup: {
@@ -125,6 +139,8 @@ export default {
         retainDaysHint: '备份文件超过此天数后自动删除，0 = 永不过期',
         retainCount: '最大保留份数',
         retainCountHint: '最多保留的备份数量，0 = 不限制',
+        uploadRateLimit: '上传限速（KB/s）',
+        uploadRateLimitHint: '仅限制服务器上传备份到对象存储；下载使用预签名直链，不经过本站服务器。',
         saved: '定时备份配置已保存'
       },
       operations: {

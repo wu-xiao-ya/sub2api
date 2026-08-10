@@ -51,6 +51,16 @@
           <!-- Language Switcher -->
           <LocaleSwitcher />
 
+          <!-- Public API Key usage lookup -->
+          <router-link
+            to="/key-usage"
+            class="inline-flex h-9 items-center gap-1.5 rounded-lg px-2.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:text-dark-400 dark:hover:bg-dark-800 dark:hover:text-white"
+            :title="t('home.keyUsage')"
+          >
+            <Icon name="chart" size="sm" />
+            <span class="hidden text-xs font-medium sm:inline">{{ t('home.keyUsage') }}</span>
+          </router-link>
+
           <!-- Doc Link -->
           <a
             v-if="docUrl"

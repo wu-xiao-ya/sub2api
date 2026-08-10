@@ -42,6 +42,8 @@ type dashboardModelGroupCacheKey struct {
 	RequestType *int16 `json:"request_type"`
 	Stream      *bool  `json:"stream"`
 	BillingType *int8  `json:"billing_type"`
+	ExcludeUserIDs    []int64  `json:"exclude_user_ids,omitempty"`
+	ExcludeUserEmails []string `json:"exclude_user_emails,omitempty"`
 }
 
 type dashboardEntityTrendCacheKey struct {
@@ -146,6 +148,8 @@ func (h *DashboardHandler) getGroupStatsCached(
 	requestType *int16,
 	stream *bool,
 	billingType *int8,
+	excludeUserIDs []int64,
+	excludeUserEmails []string,
 ) ([]usagestats.GroupStat, bool, error) {
 	key := mustMarshalDashboardCacheKey(dashboardModelGroupCacheKey{
 		StartTime:   startTime.UTC().Format(time.RFC3339),
@@ -157,9 +161,11 @@ func (h *DashboardHandler) getGroupStatsCached(
 		RequestType: requestType,
 		Stream:      stream,
 		BillingType: billingType,
+		ExcludeUserIDs:    excludeUserIDs,
+		ExcludeUserEmails: excludeUserEmails,
 	})
 	entry, hit, err := dashboardGroupStatsCache.GetOrLoad(key, func() (any, error) {
-		return h.dashboardService.GetGroupStatsWithFilters(ctx, startTime, endTime, userID, apiKeyID, accountID, groupID, requestType, stream, billingType)
+		return h.dashboardService.GetGroupStatsWithExcludedUsers(ctx, startTime, endTime, userID, apiKeyID, accountID, groupID, requestType, stream, billingType, excludeUserIDs, excludeUserEmails)
 	})
 	if err != nil {
 		return nil, hit, err

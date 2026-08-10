@@ -13,7 +13,8 @@ import type {
   UserUsageTrendPoint,
   UserSpendingRankingResponse,
   UserBreakdownItem,
-  UsageRequestType
+  UsageRequestType,
+  CostProfitSummary
 } from '@/types'
 
 /**
@@ -130,6 +131,8 @@ export interface DashboardSnapshotV2Params extends TrendParams {
   include_group_stats?: boolean
   include_users_trend?: boolean
   users_trend_limit?: number
+  // Report-only blacklist. Accepts comma-separated user IDs or email addresses.
+  exclude_users?: string
 }
 
 export interface DashboardSnapshotV2Stats extends DashboardStats {
@@ -145,6 +148,7 @@ export interface DashboardSnapshotV2Response {
   trend?: TrendDataPoint[]
   models?: ModelStat[]
   groups?: GroupStat[]
+  cost_profit?: CostProfitSummary
   users_trend?: UserUsageTrendPoint[]
 }
 

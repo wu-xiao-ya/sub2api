@@ -84,6 +84,14 @@
         />
       </div>
 
+      <div v-if="opsEnabled && !(loading && !hasLoadedOnce)" class="grid grid-cols-1 gap-6">
+        <OpsUpstreamAttributionCard
+          :data="upstreamAttribution"
+          :loading="loadingUpstreamAttribution"
+          @select-group="handleThroughputSelectGroup"
+        />
+      </div>
+
       <!-- Row: OpenAI Token Stats -->
       <div v-if="opsEnabled && showOpenAITokenStats && !(loading && !hasLoadedOnce)" class="grid grid-cols-1 gap-6">
         <OpsOpenAITokenStatsCard
@@ -150,6 +158,7 @@ import {
   type OpsErrorTrendResponse,
   type OpsLatencyHistogramResponse,
   type OpsThroughputTrendResponse,
+  type OpsUpstreamAttributionResponse,
   type OpsMetricThresholds
 } from '@/api/admin/ops'
 import { useAdminSettingsStore, useAppStore } from '@/stores'
@@ -162,6 +171,7 @@ import OpsErrorDetailsModal from './components/OpsErrorDetailsModal.vue'
 import OpsErrorTrendChart from './components/OpsErrorTrendChart.vue'
 import OpsLatencyChart from './components/OpsLatencyChart.vue'
 import OpsThroughputTrendChart from './components/OpsThroughputTrendChart.vue'
+import OpsUpstreamAttributionCard from './components/OpsUpstreamAttributionCard.vue'
 import OpsSwitchRateTrendChart from './components/OpsSwitchRateTrendChart.vue'
 import OpsAlertEventsCard from './components/OpsAlertEventsCard.vue'
 import OpsOpenAITokenStatsCard from './components/OpsOpenAITokenStatsCard.vue'
@@ -361,6 +371,9 @@ const loadingErrorTrend = ref(false)
 
 const errorDistribution = ref<OpsErrorDistributionResponse | null>(null)
 const loadingErrorDistribution = ref(false)
+
+const upstreamAttribution = ref<OpsUpstreamAttributionResponse | null>(null)
+const loadingUpstreamAttribution = ref(false)
 
 const selectedErrorId = ref<number | null>(null)
 const showErrorModal = ref(false)
@@ -676,11 +689,30 @@ async function refreshErrorDistributionWithCancel(fetchSeq: number, signal: Abor
   }
 }
 
+async function refreshUpstreamAttributionWithCancel(fetchSeq: number, signal: AbortSignal) {
+  if (!opsEnabled.value) return
+  loadingUpstreamAttribution.value = true
+  try {
+    const data = await opsAPI.getUpstreamErrorAttribution(buildApiParams(), { signal })
+    if (fetchSeq !== dashboardFetchSeq) return
+    upstreamAttribution.value = data
+  } catch (err: any) {
+    if (fetchSeq !== dashboardFetchSeq || isCanceledRequest(err)) return
+    upstreamAttribution.value = null
+    appStore.showError(err?.message || t('admin.ops.failedToLoadErrorDistribution'))
+  } finally {
+    if (fetchSeq === dashboardFetchSeq) {
+      loadingUpstreamAttribution.value = false
+    }
+  }
+}
+
 async function refreshDeferredPanels(fetchSeq: number, signal: AbortSignal) {
   if (!opsEnabled.value) return
   await Promise.all([
     refreshLatencyHistogramWithCancel(fetchSeq, signal),
-    refreshErrorDistributionWithCancel(fetchSeq, signal)
+    refreshErrorDistributionWithCancel(fetchSeq, signal),
+    refreshUpstreamAttributionWithCancel(fetchSeq, signal)
   ])
 }
 

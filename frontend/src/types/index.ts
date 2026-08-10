@@ -907,6 +907,17 @@ export interface UpstreamBillingProbeResult {
   error?: string
 }
 
+export interface AccountPoolGroup {
+  id: number
+  name: string
+  upstream_key: string
+  description: string
+  sort_order: number
+  status: 'active' | 'inactive'
+  created_at: string
+  updated_at: string
+}
+
 export interface Account {
   id: number
   name: string
@@ -929,6 +940,7 @@ export interface Account {
   proxy_id: number | null
   proxy_fallback_origin_id?: number | null
   proxy_fallback_origin_name?: string | null
+  pool_group_id?: number | null
   concurrency: number
   load_factor?: number | null
   current_concurrency?: number // Real-time concurrency count from Redis
@@ -949,6 +961,7 @@ export interface Account {
   created_at: string
   updated_at: string
   proxy?: Proxy
+  pool_group?: AccountPoolGroup | null
   group_ids?: number[] // Groups this account belongs to
   groups?: Group[] // Preloaded group objects
 
@@ -1200,6 +1213,7 @@ export interface CreateAccountRequest {
   credentials: Record<string, unknown>
   extra?: Record<string, unknown>
   proxy_id?: number | null
+  pool_group_id?: number | null
   concurrency?: number
   load_factor?: number | null
   priority?: number
@@ -1218,6 +1232,7 @@ export interface UpdateAccountRequest {
   credentials?: Record<string, unknown>
   extra?: Record<string, unknown>
   proxy_id?: number | null
+  pool_group_id?: number | null
   concurrency?: number
   load_factor?: number | null
   priority?: number
@@ -1281,10 +1296,20 @@ export interface AdminDataPayload {
   type?: string
   version?: number
   exported_at: string
+  pool_groups?: AdminDataAccountPoolGroup[]
   proxies: AdminDataProxy[]
   accounts: AdminDataAccount[]
   // 导出时被排除的 spark 影子账号数量(影子不持凭据、其调度配置不在备份范围)。
   skipped_shadows?: number
+}
+
+export interface AdminDataAccountPoolGroup {
+  pool_group_key?: string
+  name: string
+  upstream_key?: string
+  description?: string
+  sort_order?: number
+  status?: 'active' | 'inactive'
 }
 
 export interface AdminDataProxy {
@@ -1306,6 +1331,7 @@ export interface AdminDataAccount {
   credentials: Record<string, unknown>
   extra?: Record<string, unknown>
   proxy_key?: string | null
+  pool_group_key?: string | null
   concurrency: number
   priority: number
   rate_multiplier?: number | null
@@ -1314,13 +1340,16 @@ export interface AdminDataAccount {
 }
 
 export interface AdminDataImportError {
-  kind: 'proxy' | 'account'
+  kind: 'pool_group' | 'proxy' | 'account'
   name?: string
   proxy_key?: string
   message: string
 }
 
 export interface AdminDataImportResult {
+  pool_group_created?: number
+  pool_group_reused?: number
+  pool_group_failed?: number
   proxy_created: number
   proxy_reused: number
   proxy_failed: number
@@ -1335,6 +1364,7 @@ export interface CodexSessionImportRequest {
   name?: string
   notes?: string | null
   group_ids?: number[]
+  pool_group_id?: number | null
   proxy_id?: number | null
   concurrency?: number
   priority?: number
@@ -1354,6 +1384,7 @@ export interface OpenAICodexPATCreateRequest {
   name?: string
   notes?: string | null
   group_ids?: number[]
+  pool_group_id?: number | null
   proxy_id?: number | null
   concurrency?: number
   priority?: number
@@ -1675,6 +1706,21 @@ export interface GroupStat {
   cost: number // 标准计费
   actual_cost: number // 实际扣除
   account_cost?: number // 账号成本（仅管理员接口返回）
+  upstream_cost?: number // 上游成本（由上游定价快照和账号倍率计算）
+  upstream_multiplier?: number // 上游成本 / 标准计费
+  profit?: number // 实际扣除 - 上游成本
+  profit_margin?: number // 利润率，0-1 比例
+}
+
+export interface CostProfitSummary {
+  requests: number
+  total_tokens: number
+  standard_cost: number
+  actual_cost: number
+  upstream_cost: number
+  upstream_multiplier: number
+  profit: number
+  profit_margin: number
 }
 
 export interface UserBreakdownItem {

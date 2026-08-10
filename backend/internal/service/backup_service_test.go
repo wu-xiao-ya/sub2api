@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -159,23 +160,29 @@ func (d *blockingDumper) Restore(_ context.Context, data io.Reader) error {
 }
 
 type mockObjectStore struct {
-	objects map[string][]byte
-	mu      sync.Mutex
+	objects                 map[string][]byte
+	mu                      sync.Mutex
+	lastUploadContentLength int64
+	uploadErr               error
 }
 
 func newMockObjectStore() *mockObjectStore {
 	return &mockObjectStore{objects: make(map[string][]byte)}
 }
 
-func (m *mockObjectStore) Upload(_ context.Context, key string, body io.Reader, _ string) (int64, error) {
-	data, err := io.ReadAll(body)
+func (m *mockObjectStore) Upload(_ context.Context, key string, input BackupUploadInput) (int64, error) {
+	if m.uploadErr != nil {
+		return 0, m.uploadErr
+	}
+	data, err := io.ReadAll(input.Body)
 	if err != nil {
 		return 0, err
 	}
 	m.mu.Lock()
 	m.objects[key] = data
+	m.lastUploadContentLength = input.ContentLength
 	m.mu.Unlock()
-	return int64(len(data)), nil
+	return input.ContentLength, nil
 }
 
 func (m *mockObjectStore) Download(_ context.Context, key string) (io.ReadCloser, error) {
@@ -203,7 +210,23 @@ func (m *mockObjectStore) HeadBucket(_ context.Context) error {
 	return nil
 }
 
-func newTestBackupService(repo *mockSettingRepo, dumper DBDumper, store *mockObjectStore) *BackupService {
+type tempFileTrackingObjectStore struct {
+	*mockObjectStore
+	uploadSourcePath         string
+	uploadRateBytesPerSecond int64
+}
+
+func (m *tempFileTrackingObjectStore) Upload(ctx context.Context, key string, input BackupUploadInput) (int64, error) {
+	if limitedReader, ok := input.Body.(*rateLimitedReader); ok {
+		if file, ok := limitedReader.reader.(*os.File); ok {
+			m.uploadSourcePath = file.Name()
+		}
+		m.uploadRateBytesPerSecond = limitedReader.bytesPerSecond
+	}
+	return m.mockObjectStore.Upload(ctx, key, input)
+}
+
+func newTestBackupService(repo *mockSettingRepo, dumper DBDumper, store BackupObjectStore) *BackupService {
 	cfg := &config.Config{
 		Database: config.DatabaseConfig{
 			Host:   "localhost",
@@ -402,7 +425,55 @@ func TestBackupService_CreateBackup_Streaming(t *testing.T) {
 	// 验证 S3 上确实有文件
 	store.mu.Lock()
 	require.Len(t, store.objects, 1)
+	require.Greater(t, store.lastUploadContentLength, int64(0))
+	require.Equal(t, int64(len(store.objects[record.S3Key])), store.lastUploadContentLength)
 	store.mu.Unlock()
+}
+
+func TestBackupService_CreateBackup_RemovesTemporaryFile(t *testing.T) {
+	repo := newMockSettingRepo()
+	seedS3Config(t, repo)
+
+	store := &tempFileTrackingObjectStore{mockObjectStore: newMockObjectStore()}
+	svc := newTestBackupService(repo, &mockDumper{dumpData: []byte("temporary backup data")}, store)
+
+	record, err := svc.CreateBackup(context.Background(), "manual", 14)
+	require.NoError(t, err)
+	require.Equal(t, "completed", record.Status)
+	require.NotEmpty(t, store.uploadSourcePath)
+	require.NoFileExists(t, store.uploadSourcePath)
+}
+
+func TestBackupService_CreateBackup_RemovesTemporaryFileAfterUploadFailure(t *testing.T) {
+	repo := newMockSettingRepo()
+	seedS3Config(t, repo)
+
+	store := &tempFileTrackingObjectStore{mockObjectStore: newMockObjectStore()}
+	store.uploadErr = fmt.Errorf("object storage unavailable")
+	svc := newTestBackupService(repo, &mockDumper{dumpData: []byte("temporary backup data")}, store)
+
+	record, err := svc.CreateBackup(context.Background(), "manual", 14)
+	require.Error(t, err)
+	require.Equal(t, "failed", record.Status)
+	require.NotEmpty(t, store.uploadSourcePath)
+	require.NoFileExists(t, store.uploadSourcePath)
+}
+
+func TestBackupService_CreateBackup_UsesConfiguredUploadRateLimit(t *testing.T) {
+	repo := newMockSettingRepo()
+	seedS3Config(t, repo)
+	scheduleConfig, err := json.Marshal(BackupScheduleConfig{
+		UploadRateLimitKBps: minBackupUploadRateLimitKBps,
+	})
+	require.NoError(t, err)
+	require.NoError(t, repo.Set(context.Background(), settingKeyBackupSchedule, string(scheduleConfig)))
+
+	store := &tempFileTrackingObjectStore{mockObjectStore: newMockObjectStore()}
+	svc := newTestBackupService(repo, &mockDumper{dumpData: []byte("rate limited backup data")}, store)
+
+	_, err = svc.CreateBackup(context.Background(), "manual", 14)
+	require.NoError(t, err)
+	require.Equal(t, int64(minBackupUploadRateLimitKBps*1024), store.uploadRateBytesPerSecond)
 }
 
 func TestBackupService_CreateBackup_DumpFailure(t *testing.T) {
@@ -591,6 +662,41 @@ func TestBackupService_Schedule_CronValidation(t *testing.T) {
 		CronExpr: "invalid",
 	})
 	require.Error(t, err)
+}
+
+func TestBackupService_GetSchedule_NormalizesLegacyUploadRateLimit(t *testing.T) {
+	repo := newMockSettingRepo()
+	svc := newTestBackupService(repo, &mockDumper{}, newMockObjectStore())
+
+	legacyConfig, err := json.Marshal(BackupScheduleConfig{
+		Enabled:     false,
+		CronExpr:    "0 2 * * *",
+		RetainDays:  14,
+		RetainCount: 10,
+	})
+	require.NoError(t, err)
+	require.NoError(t, repo.Set(context.Background(), settingKeyBackupSchedule, string(legacyConfig)))
+
+	schedule, err := svc.GetSchedule(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, defaultBackupUploadRateLimitKBps, schedule.UploadRateLimitKBps)
+}
+
+func TestBackupService_UpdateSchedule_NormalizesUploadRateLimit(t *testing.T) {
+	repo := newMockSettingRepo()
+	svc := newTestBackupService(repo, &mockDumper{}, newMockObjectStore())
+
+	schedule, err := svc.UpdateSchedule(context.Background(), BackupScheduleConfig{
+		UploadRateLimitKBps: maxBackupUploadRateLimitKBps + 1,
+	})
+	require.NoError(t, err)
+	require.Equal(t, maxBackupUploadRateLimitKBps, schedule.UploadRateLimitKBps)
+
+	schedule, err = svc.UpdateSchedule(context.Background(), BackupScheduleConfig{
+		UploadRateLimitKBps: minBackupUploadRateLimitKBps - 1,
+	})
+	require.NoError(t, err)
+	require.Equal(t, minBackupUploadRateLimitKBps, schedule.UploadRateLimitKBps)
 }
 
 func TestBackupService_LoadS3Config_Corrupted(t *testing.T) {

@@ -8,7 +8,7 @@ import { apiClient } from '../client'
 export type Provider = 'openai' | 'anthropic' | 'gemini' | 'grok'
 export type MonitorStatus = 'operational' | 'degraded' | 'failed' | 'error'
 export type BodyOverrideMode = 'off' | 'merge' | 'replace'
-export type APIMode = 'chat_completions' | 'responses'
+export type APIMode = 'chat_completions' | 'responses' | 'models' | 'images'
 
 export interface ChannelMonitor {
   id: number
@@ -53,6 +53,7 @@ export interface ExtraModelStatus {
   model: string
   status: MonitorStatus | ''
   latency_ms: number | null
+  availability_7d?: number
 }
 
 export interface ListParams {
@@ -259,7 +260,12 @@ export async function del(id: number): Promise<void> {
  * Returns the latest check results for primary + extra models.
  */
 export async function runNow(id: number): Promise<RunNowResponse> {
-  const { data } = await apiClient.post<RunNowResponse>(`/admin/channel-monitors/${id}/run`)
+  // Image monitors may legitimately take longer than the global 30s API timeout.
+  const { data } = await apiClient.post<RunNowResponse>(
+    `/admin/channel-monitors/${id}/run`,
+    undefined,
+    { timeout: 120000 }
+  )
   return data
 }
 
@@ -277,6 +283,16 @@ export async function listHistory(
   return data
 }
 
+/**
+ * Fetch the one most recent successful generated image for a monitor.
+ */
+export async function getLatestImage(id: number): Promise<Blob> {
+  const { data } = await apiClient.get<Blob>(`/admin/channel-monitors/${id}/image`, {
+    responseType: 'blob',
+  })
+  return data
+}
+
 export const channelMonitorAPI = {
   list,
   get,
@@ -286,6 +302,7 @@ export const channelMonitorAPI = {
   del,
   runNow,
   listHistory,
+  getLatestImage,
 }
 
 export default channelMonitorAPI

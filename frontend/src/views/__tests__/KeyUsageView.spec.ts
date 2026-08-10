@@ -29,6 +29,10 @@ const messages: Record<string, string> = {
   'keyUsage.detailInfo': 'Detail Information',
   'keyUsage.tokenStats': 'Token Statistics',
   'keyUsage.dailyDetail': 'Daily Detail',
+  'keyUsage.modelStats': 'Model Usage Statistics',
+  'keyUsage.usedModels': 'Models Used by This Key',
+  'keyUsage.modelCount': '{count} models',
+  'keyUsage.model': 'Model',
   'keyUsage.date': 'Date',
   'keyUsage.requests': 'Requests',
   'keyUsage.inputTokens': 'Input Tokens',
@@ -157,6 +161,28 @@ describe('KeyUsageView daily detail', () => {
             actual_cost: 0.12,
           },
         ],
+        model_stats: [
+          {
+            model: 'gpt-5.6-luna',
+            requests: 3,
+            input_tokens: 300,
+            output_tokens: 120,
+            cache_creation_tokens: 20,
+            cache_read_tokens: 80,
+            total_tokens: 520,
+            actual_cost: 0.08,
+          },
+          {
+            model: 'grok-4.3',
+            requests: 8,
+            input_tokens: 800,
+            output_tokens: 240,
+            cache_creation_tokens: 0,
+            cache_read_tokens: 160,
+            total_tokens: 1200,
+            actual_cost: 0.15,
+          },
+        ],
       }),
     }))
   })
@@ -203,6 +229,13 @@ describe('KeyUsageView daily detail', () => {
     expect(text).toContain('30')
     expect(text).toContain('10')
     expect(text).toContain('$0.12')
+    expect(text).toContain('Models Used by This Key')
+    expect(text).toContain('grok-4.3')
+    expect(text).toContain('gpt-5.6-luna')
+
+    const modelSummary = wrapper.get('[data-testid="model-summary"]')
+    expect(modelSummary.text().indexOf('grok-4.3')).toBeLessThan(modelSummary.text().indexOf('gpt-5.6-luna'))
+    expect(wrapper.findAll('a')).toHaveLength(0)
 
     wrapper.unmount()
   })

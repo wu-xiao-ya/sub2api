@@ -226,8 +226,12 @@ func isGrokInvalidEncryptedContentResponse(statusCode int, body []byte) bool {
 	if strings.EqualFold(code, "invalid_encrypted_content") {
 		return true
 	}
-	// Keep the official xAI flat-code gate so unrelated 400s are not retried.
-	if !strings.EqualFold(code, "invalid-argument") && code != "" {
+	// API-key relays can wrap xAI's invalid-argument response in the generic
+	// bad_response_status_code envelope. Keep the code allowlist narrow, then
+	// require the explicit decrypt + encrypted_content message below.
+	if code != "" &&
+		!strings.EqualFold(code, "invalid-argument") &&
+		!strings.EqualFold(code, "bad_response_status_code") {
 		return false
 	}
 	// Nested OpenAI-style envelopes may omit top-level code; require decrypt text.
@@ -399,6 +403,10 @@ func patchGrokResponsesBody(body []byte, upstreamModel string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	out, err = sanitizeGrokResponsesModelInput(out)
+	if err != nil {
+		return nil, err
+	}
 	out, err = sanitizeGrokResponsesTools(out)
 	if err != nil {
 		return nil, err
@@ -566,6 +574,203 @@ func grokResponsesToolDedupKey(tool gjson.Result) string {
 		}
 	}
 	return "json:" + normalizeCompatSeedJSON(json.RawMessage(tool.Raw))
+}
+
+// sanitizeGrokResponsesModelInput normalizes Responses input item variants
+// that OpenAI/Codex can emit but xAI's Responses ModelInput does not accept.
+// Keep supported items untouched and preserve useful tool/image output as
+// standard function calls or message content instead of dropping all history.
+func sanitizeGrokResponsesModelInput(body []byte) ([]byte, error) {
+	if !bytes.Contains(body, []byte(`"input"`)) {
+		return body, nil
+	}
+
+	var payload map[string]any
+	decoder := json.NewDecoder(bytes.NewReader(body))
+	decoder.UseNumber()
+	if err := decoder.Decode(&payload); err != nil {
+		return nil, err
+	}
+	input, ok := payload["input"].([]any)
+	if !ok {
+		return body, nil
+	}
+
+	changed := false
+	normalized := make([]any, 0, len(input))
+	for _, rawItem := range input {
+		item, ok := rawItem.(map[string]any)
+		if !ok {
+			normalized = append(normalized, rawItem)
+			continue
+		}
+
+		itemType := strings.TrimSpace(jsonStringValue(item["type"]))
+		switch itemType {
+		case "item_reference", "computer_call", "compaction":
+			// References contain no replayable content, computer actions are
+			// represented by their outputs, and encrypted compaction payloads
+			// cannot be consumed by another provider.
+			changed = true
+			continue
+		case "custom_tool_call":
+			normalized = append(normalized, normalizeGrokCustomToolCall(item))
+			changed = true
+		case "custom_tool_call_output":
+			normalized = append(normalized, map[string]any{
+				"type":    "function_call_output",
+				"call_id": firstNonEmpty(jsonStringValue(item["call_id"]), jsonStringValue(item["id"])),
+				"output":  grokCompatJSONString(item["output"]),
+			})
+			changed = true
+		case "computer_call_output":
+			if message := grokCompatOutputMessage("Computer tool output from earlier in the conversation.", item["output"]); message != nil {
+				normalized = append(normalized, message)
+			}
+			changed = true
+		case "image_generation_call":
+			if message := grokCompatImageGenerationMessage(item); message != nil {
+				normalized = append(normalized, message)
+			}
+			changed = true
+		case "tool_search_output":
+			output := item["output"]
+			if output == nil {
+				output = item["tools"]
+			}
+			if message := grokCompatOutputMessage("Tool search output from earlier in the conversation.", output); message != nil {
+				normalized = append(normalized, message)
+			}
+			changed = true
+		default:
+			normalized = append(normalized, rawItem)
+		}
+	}
+
+	if !changed {
+		return body, nil
+	}
+	payload["input"] = normalized
+	return marshalOpenAIUpstreamJSON(payload)
+}
+
+func normalizeGrokCustomToolCall(item map[string]any) map[string]any {
+	callID := firstNonEmpty(jsonStringValue(item["call_id"]), jsonStringValue(item["id"]))
+	name := strings.TrimSpace(jsonStringValue(item["name"]))
+	if name == "" {
+		name = "custom_tool"
+	}
+	return map[string]any{
+		"type":      "function_call",
+		"call_id":   callID,
+		"name":      name,
+		"arguments": grokCompatArguments(item["input"]),
+	}
+}
+
+func grokCompatArguments(value any) string {
+	if text, ok := value.(string); ok {
+		text = strings.TrimSpace(text)
+		if text == "" {
+			return "{}"
+		}
+		if json.Valid([]byte(text)) {
+			return text
+		}
+		encoded, _ := json.Marshal(map[string]any{"input": text})
+		return string(encoded)
+	}
+	return grokCompatJSONString(value)
+}
+
+func grokCompatJSONString(value any) string {
+	if value == nil {
+		return ""
+	}
+	if text, ok := value.(string); ok {
+		return text
+	}
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		return fmt.Sprint(value)
+	}
+	return string(encoded)
+}
+
+func grokCompatOutputMessage(label string, value any) map[string]any {
+	content := make([]any, 0, 2)
+	if strings.TrimSpace(label) != "" {
+		content = append(content, map[string]any{"type": "input_text", "text": label})
+	}
+
+	if imageURL := grokCompatImageURL(value); imageURL != "" {
+		content = append(content, map[string]any{"type": "input_image", "image_url": imageURL})
+	} else if text := strings.TrimSpace(grokCompatJSONString(value)); text != "" {
+		content = append(content, map[string]any{"type": "input_text", "text": text})
+	}
+	if len(content) == 0 {
+		return nil
+	}
+	return map[string]any{
+		"type":    "message",
+		"role":    "user",
+		"content": content,
+	}
+}
+
+func grokCompatImageGenerationMessage(item map[string]any) map[string]any {
+	result := item["result"]
+	if result == nil {
+		result = item["output"]
+	}
+	return grokCompatOutputMessage("Image generated earlier in the conversation.", result)
+}
+
+func grokCompatImageURL(value any) string {
+	switch typed := value.(type) {
+	case string:
+		text := strings.TrimSpace(typed)
+		switch {
+		case strings.HasPrefix(text, "data:image/"),
+			strings.HasPrefix(text, "https://"),
+			strings.HasPrefix(text, "http://"):
+			return text
+		case text != "" && isLikelyBase64Payload(text):
+			return "data:image/png;base64," + text
+		}
+	case map[string]any:
+		for _, key := range []string{"image_url", "url"} {
+			if imageURL := strings.TrimSpace(jsonStringValue(typed[key])); imageURL != "" {
+				return imageURL
+			}
+		}
+		if nested, ok := typed["output"]; ok {
+			return grokCompatImageURL(nested)
+		}
+	}
+	return ""
+}
+
+func isLikelyBase64Payload(value string) bool {
+	if len(value) < 16 || len(value)%4 != 0 {
+		return false
+	}
+	for _, r := range value {
+		switch {
+		case r >= 'A' && r <= 'Z',
+			r >= 'a' && r <= 'z',
+			r >= '0' && r <= '9',
+			r == '+', r == '/', r == '=', r == '\r', r == '\n':
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+func jsonStringValue(value any) string {
+	text, _ := value.(string)
+	return text
 }
 
 // sanitizeGrokReasoningNullContent 删除 reasoning 项中的 "content": null。

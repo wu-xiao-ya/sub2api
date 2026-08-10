@@ -185,6 +185,7 @@ type Account struct {
 	ProxyID                 *int64          `json:"proxy_id"`
 	ProxyFallbackOriginID   *int64          `json:"proxy_fallback_origin_id"`
 	ProxyFallbackOriginName *string         `json:"proxy_fallback_origin_name,omitempty"`
+	PoolGroupID             *int64          `json:"pool_group_id,omitempty"`
 	Concurrency             int             `json:"concurrency"`
 	LoadFactor              *int            `json:"load_factor,omitempty"`
 	Priority                int             `json:"priority"`
@@ -283,11 +284,23 @@ type Account struct {
 	ParentSubscriptionExpiresAt string `json:"parent_subscription_expires_at,omitempty"`
 	ParentChatGPTAccountID      string `json:"parent_chatgpt_account_id,omitempty"`
 
-	Proxy         *Proxy         `json:"proxy,omitempty"`
-	AccountGroups []AccountGroup `json:"account_groups,omitempty"`
+	Proxy         *Proxy            `json:"proxy,omitempty"`
+	PoolGroup     *AccountPoolGroup `json:"pool_group,omitempty"`
+	AccountGroups []AccountGroup    `json:"account_groups,omitempty"`
 
 	GroupIDs []int64  `json:"group_ids,omitempty"`
 	Groups   []*Group `json:"groups,omitempty"`
+}
+
+type AccountPoolGroup struct {
+	ID          int64     `json:"id"`
+	Name        string    `json:"name"`
+	UpstreamKey string    `json:"upstream_key"`
+	Description string    `json:"description"`
+	SortOrder   int       `json:"sort_order"`
+	Status      string    `json:"status"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
 }
 
 type AccountGroup struct {

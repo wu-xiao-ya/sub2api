@@ -96,7 +96,7 @@
         </div>
 
         <!-- Row 2: Token Stats -->
-        <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <div class="grid grid-cols-2 gap-4 lg:grid-cols-5">
           <!-- Today Tokens -->
           <div class="card p-4">
             <div class="flex items-center gap-3">
@@ -164,6 +164,42 @@
                     :title="t('admin.dashboard.standard')"
                     >${{ formatCost(stats.total_cost) }}</span
                   >
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Cache Hit Rate -->
+          <div class="card p-4">
+            <div class="flex items-center gap-3">
+              <div class="rounded-lg bg-cyan-100 p-2 dark:bg-cyan-900/30">
+                <Icon name="refresh" size="md" class="text-cyan-600 dark:text-cyan-400" :stroke-width="2" />
+              </div>
+              <div>
+                <p class="text-xs font-medium text-gray-500 dark:text-gray-400">
+                  {{ t('admin.dashboard.cacheHitRate') }}
+                </p>
+                <p
+                  data-testid="admin-cache-hit-rate"
+                  class="text-xl font-bold text-cyan-600 dark:text-cyan-400"
+                >
+                  {{
+                    formatCacheHitRate(
+                      stats.today_input_tokens,
+                      stats.today_cache_creation_tokens,
+                      stats.today_cache_read_tokens
+                    )
+                  }}
+                </p>
+                <p class="text-xs text-gray-500 dark:text-gray-400">
+                  {{ t('common.total') }}:
+                  {{
+                    formatCacheHitRate(
+                      stats.total_input_tokens,
+                      stats.total_cache_creation_tokens,
+                      stats.total_cache_read_tokens
+                    )
+                  }}
                 </p>
               </div>
             </div>
@@ -279,6 +315,23 @@
                   @change="onDateRangeChange"
                 />
               </div>
+              <div class="flex min-w-0 flex-1 items-center gap-2">
+                <label
+                  for="dashboard-cost-profit-excluded-users"
+                  class="whitespace-nowrap text-sm font-medium text-gray-700 dark:text-gray-300"
+                >
+                  {{ t('admin.dashboard.costProfit.excludedUsers') }}
+                </label>
+                <input
+                  id="dashboard-cost-profit-excluded-users"
+                  v-model="excludedUsers"
+                  type="text"
+                  class="input min-w-0 flex-1"
+                  :placeholder="t('admin.dashboard.costProfit.excludedUsersPlaceholder')"
+                  @change="applyExcludedUsers"
+                  @keyup.enter="applyExcludedUsers"
+                />
+              </div>
               <button @click="loadDashboardStats" :disabled="chartsLoading" class="btn btn-secondary">
                 {{ t('common.refresh') }}
               </button>
@@ -293,6 +346,127 @@
                     @change="loadChartData"
                   />
                 </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Cost and Profit -->
+          <div v-if="costProfit && groupStats.length" class="space-y-4">
+            <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
+              <div class="card p-4">
+                <p class="text-xs font-medium text-gray-500 dark:text-gray-400">
+                  {{ t('admin.dashboard.costProfit.actualRevenue') }}
+                </p>
+                <p class="mt-1 text-xl font-bold text-emerald-600 dark:text-emerald-400">
+                  ${{ formatCost(costProfit.actual_cost) }}
+                </p>
+                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  {{ formatNumber(costProfit.requests) }} {{ t('admin.dashboard.requests') }}
+                </p>
+              </div>
+              <div class="card p-4">
+                <p class="text-xs font-medium text-gray-500 dark:text-gray-400">
+                  {{ t('admin.dashboard.costProfit.upstreamCost') }}
+                </p>
+                <p class="mt-1 text-xl font-bold text-orange-600 dark:text-orange-400">
+                  ${{ formatCost(costProfit.upstream_cost) }}
+                </p>
+                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  {{ t('admin.dashboard.costProfit.fromUpstreamRate') }}
+                  · {{ formatMultiplier(costProfit.upstream_multiplier) }}
+                </p>
+              </div>
+              <div class="card p-4">
+                <p class="text-xs font-medium text-gray-500 dark:text-gray-400">
+                  {{ t('admin.dashboard.costProfit.profit') }}
+                </p>
+                <p
+                  class="mt-1 text-xl font-bold"
+                  :class="
+                    costProfit.profit >= 0
+                      ? 'text-blue-600 dark:text-blue-400'
+                      : 'text-red-600 dark:text-red-400'
+                  "
+                >
+                  ${{ formatCost(costProfit.profit) }}
+                </p>
+                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  {{ t('admin.dashboard.costProfit.standardCost') }}:
+                  ${{ formatCost(costProfit.standard_cost) }}
+                </p>
+              </div>
+              <div class="card p-4">
+                <p class="text-xs font-medium text-gray-500 dark:text-gray-400">
+                  {{ t('admin.dashboard.costProfit.margin') }}
+                </p>
+                <p
+                  class="mt-1 text-xl font-bold"
+                  :class="
+                    costProfit.profit_margin >= 0
+                      ? 'text-blue-600 dark:text-blue-400'
+                      : 'text-red-600 dark:text-red-400'
+                  "
+                >
+                  {{ formatPercent(costProfit.profit_margin) }}
+                </p>
+                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  {{ t('admin.dashboard.costProfit.periodHint') }}
+                </p>
+              </div>
+            </div>
+
+            <div class="card overflow-hidden">
+              <div class="border-b border-gray-200 px-4 py-3 dark:border-dark-700">
+                <h3 class="text-sm font-semibold text-gray-900 dark:text-white">
+                  {{ t('admin.dashboard.costProfit.byGroup') }}
+                </h3>
+              </div>
+              <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200 text-sm dark:divide-dark-700">
+                  <thead class="bg-gray-50 text-xs uppercase text-gray-500 dark:bg-dark-800/60 dark:text-gray-400">
+                    <tr>
+                      <th class="px-4 py-3 text-left font-medium">{{ t('admin.dashboard.group') }}</th>
+                      <th class="px-4 py-3 text-right font-medium">{{ t('admin.dashboard.requests') }}</th>
+                      <th class="px-4 py-3 text-right font-medium">{{ t('admin.dashboard.costProfit.actualRevenue') }}</th>
+                      <th class="px-4 py-3 text-right font-medium">{{ t('admin.dashboard.costProfit.upstreamCost') }}</th>
+                      <th class="px-4 py-3 text-right font-medium">{{ t('admin.dashboard.costProfit.upstreamMultiplier') }}</th>
+                      <th class="px-4 py-3 text-right font-medium">{{ t('admin.dashboard.costProfit.profit') }}</th>
+                      <th class="px-4 py-3 text-right font-medium">{{ t('admin.dashboard.costProfit.margin') }}</th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-gray-100 dark:divide-dark-800">
+                    <tr v-for="group in groupStats" :key="group.group_id">
+                      <td class="whitespace-nowrap px-4 py-3 font-medium text-gray-900 dark:text-white">
+                        {{ group.group_name || t('admin.dashboard.noGroup') }}
+                      </td>
+                      <td class="whitespace-nowrap px-4 py-3 text-right text-gray-600 dark:text-gray-300">
+                        {{ formatNumber(group.requests) }}
+                      </td>
+                      <td class="whitespace-nowrap px-4 py-3 text-right text-emerald-600 dark:text-emerald-400">
+                        ${{ formatCost(group.actual_cost) }}
+                      </td>
+                      <td class="whitespace-nowrap px-4 py-3 text-right text-orange-600 dark:text-orange-400">
+                        ${{ formatCost(group.upstream_cost ?? group.account_cost) }}
+                      </td>
+                      <td class="whitespace-nowrap px-4 py-3 text-right text-gray-600 dark:text-gray-300">
+                        {{ formatMultiplier(group.upstream_multiplier) }}
+                      </td>
+                      <td
+                        class="whitespace-nowrap px-4 py-3 text-right font-medium"
+                        :class="
+                          (group.profit ?? 0) >= 0
+                            ? 'text-blue-600 dark:text-blue-400'
+                            : 'text-red-600 dark:text-red-400'
+                        "
+                      >
+                        ${{ formatCost(group.profit) }}
+                      </td>
+                      <td class="whitespace-nowrap px-4 py-3 text-right text-gray-600 dark:text-gray-300">
+                        {{ formatPercent(group.profit_margin) }}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
             </div>
           </div>
@@ -352,6 +526,8 @@ import type {
   DashboardStats,
   TrendDataPoint,
   ModelStat,
+  GroupStat,
+  CostProfitSummary,
   UserUsageTrendPoint,
   UserSpendingRankingItem
 } from '@/types'
@@ -363,6 +539,7 @@ import Select from '@/components/common/Select.vue'
 import ModelDistributionChart from '@/components/charts/ModelDistributionChart.vue'
 import TokenUsageTrend from '@/components/charts/TokenUsageTrend.vue'
 import { useBatchImageAccess } from '@/composables/useBatchImageAccess'
+import { calculateCacheHitRate } from '@/utils/cacheMetrics'
 
 import {
   Chart as ChartJS,
@@ -400,8 +577,11 @@ const rankingError = ref(false)
 // Chart data
 const trendData = ref<TrendDataPoint[]>([])
 const modelStats = ref<ModelStat[]>([])
+const groupStats = ref<GroupStat[]>([])
+const costProfit = ref<CostProfitSummary | null>(null)
 const userTrend = ref<UserUsageTrendPoint[]>([])
 const rankingItems = ref<UserSpendingRankingItem[]>([])
+const excludedUsers = ref('')
 const rankingTotalActualCost = ref(0)
 const rankingTotalRequests = ref(0)
 const rankingTotalTokens = ref(0)
@@ -409,6 +589,7 @@ let chartLoadSeq = 0
 let usersTrendLoadSeq = 0
 let rankingLoadSeq = 0
 const rankingLimit = 12
+const excludedUsersStorageKey = 'sub2api.admin.dashboard.costProfitExcludedUsers'
 
 // Helper function to format date in local timezone
 const formatLocalDate = (date: Date): string => {
@@ -604,12 +785,41 @@ const formatCost = (value: number | null | undefined): string => {
   return safeValue.toFixed(4)
 }
 
+const formatPercent = (value: number | null | undefined): string => {
+  return `${(toFiniteNumber(value) * 100).toFixed(1)}%`
+}
+
+const formatMultiplier = (value: number | null | undefined): string => {
+  return `${toFiniteNumber(value).toFixed(4)}x`
+}
+
+const applyExcludedUsers = () => {
+  excludedUsers.value = excludedUsers.value
+    .split(/[;,，；\s]+/)
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .join(', ')
+  try {
+    localStorage.setItem(excludedUsersStorageKey, excludedUsers.value)
+  } catch {
+    // Ignore storage failures; the filter still applies to the current request.
+  }
+  void loadChartData()
+}
+
 const formatDuration = (ms: number): string => {
   if (ms >= 1000) {
     return `${(ms / 1000).toFixed(2)}s`
   }
   return `${Math.round(ms)}ms`
 }
+
+const formatCacheHitRate = (
+  inputTokens: number,
+  cacheCreationTokens: number,
+  cacheReadTokens: number
+): string =>
+  `${calculateCacheHitRate(inputTokens, cacheCreationTokens, cacheReadTokens).toFixed(1)}%`
 
 const goToUserUsage = (item: UserSpendingRankingItem) => {
   void router.push({
@@ -658,8 +868,9 @@ const loadDashboardSnapshot = async (includeStats: boolean) => {
       include_stats: includeStats,
       include_trend: true,
       include_model_stats: true,
-      include_group_stats: false,
-      include_users_trend: false
+      include_group_stats: true,
+      include_users_trend: false,
+      exclude_users: excludedUsers.value
     })
     if (currentSeq !== chartLoadSeq) return
     if (includeStats && response.stats) {
@@ -667,6 +878,8 @@ const loadDashboardSnapshot = async (includeStats: boolean) => {
     }
     trendData.value = response.trend || []
     modelStats.value = response.models || []
+    groupStats.value = response.groups || []
+    costProfit.value = response.cost_profit || null
   } catch (error) {
     if (currentSeq !== chartLoadSeq) return
     appStore.showError(t('admin.dashboard.failedToLoad'))
@@ -750,6 +963,11 @@ const loadChartData = async () => {
 
 onMounted(() => {
   void refreshBatchImageAccess()
+  try {
+    excludedUsers.value = localStorage.getItem(excludedUsersStorageKey) || ''
+  } catch {
+    excludedUsers.value = ''
+  }
   loadDashboardStats()
 })
 </script>

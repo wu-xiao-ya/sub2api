@@ -25,7 +25,7 @@ func TestConsumptionConcurrencyTier(t *testing.T) {
 }
 
 func TestConsumptionConcurrencyBonus(t *testing.T) {
-	if got := ConsumptionConcurrencyBonus(4); got != 16 {
-		t.Fatalf("ConsumptionConcurrencyBonus(4) = %d, want 16", got)
+	if got := ConsumptionConcurrencyBonus(4); got != 20 {
+		t.Fatalf("ConsumptionConcurrencyBonus(4) = %d, want 20", got)
 	}
 }

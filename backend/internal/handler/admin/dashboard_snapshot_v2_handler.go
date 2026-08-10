@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/usagestats"
@@ -33,6 +35,7 @@ type dashboardSnapshotV2Response struct {
 	Trend      []usagestats.TrendDataPoint      `json:"trend,omitempty"`
 	Models     []usagestats.ModelStat           `json:"models,omitempty"`
 	Groups     []usagestats.GroupStat           `json:"groups,omitempty"`
+	CostProfit *usagestats.CostProfitSummary    `json:"cost_profit,omitempty"`
 	UsersTrend []usagestats.UserUsageTrendPoint `json:"users_trend,omitempty"`
 }
 
@@ -45,6 +48,8 @@ type dashboardSnapshotV2Filters struct {
 	RequestType *int16
 	Stream      *bool
 	BillingType *int8
+	ExcludeUserIDs    []int64
+	ExcludeUserEmails []string
 }
 
 type dashboardSnapshotV2CacheKey struct {
@@ -59,6 +64,8 @@ type dashboardSnapshotV2CacheKey struct {
 	RequestType       *int16 `json:"request_type"`
 	Stream            *bool  `json:"stream"`
 	BillingType       *int8  `json:"billing_type"`
+	ExcludeUserIDs    []int64  `json:"exclude_user_ids,omitempty"`
+	ExcludeUserEmails []string `json:"exclude_user_emails,omitempty"`
 	IncludeStats      bool   `json:"include_stats"`
 	IncludeTrend      bool   `json:"include_trend"`
 	IncludeModels     bool   `json:"include_models"`
@@ -104,6 +111,8 @@ func (h *DashboardHandler) GetSnapshotV2(c *gin.Context) {
 		RequestType:       filters.RequestType,
 		Stream:            filters.Stream,
 		BillingType:       filters.BillingType,
+		ExcludeUserIDs:    filters.ExcludeUserIDs,
+		ExcludeUserEmails: filters.ExcludeUserEmails,
 		IncludeStats:      includeStats,
 		IncludeTrend:      includeTrend,
 		IncludeModels:     includeModels,
@@ -223,11 +232,15 @@ func (h *DashboardHandler) buildSnapshotV2Response(
 			filters.RequestType,
 			filters.Stream,
 			filters.BillingType,
+			filters.ExcludeUserIDs,
+			filters.ExcludeUserEmails,
 		)
 		if err != nil {
 			return nil, errors.New("failed to get group statistics")
 		}
+		summary := usagestats.ApplyCostProfitMetrics(groups)
 		resp.Groups = groups
+		resp.CostProfit = &summary
 	}
 
 	if includeUsersTrend {
@@ -245,6 +258,12 @@ func parseDashboardSnapshotV2Filters(c *gin.Context) (*dashboardSnapshotV2Filter
 	filters := &dashboardSnapshotV2Filters{
 		Model: strings.TrimSpace(c.Query("model")),
 	}
+	excludeUserIDs, excludeUserEmails, err := parseDashboardExcludedUsers(c)
+	if err != nil {
+		return nil, err
+	}
+	filters.ExcludeUserIDs = excludeUserIDs
+	filters.ExcludeUserEmails = excludeUserEmails
 
 	if userIDStr := strings.TrimSpace(c.Query("user_id")); userIDStr != "" {
 		id, err := strconv.ParseInt(userIDStr, 10, 64)
@@ -300,4 +319,54 @@ func parseDashboardSnapshotV2Filters(c *gin.Context) (*dashboardSnapshotV2Filter
 	}
 
 	return filters, nil
+}
+
+const maxDashboardExcludedUsers = 100
+
+func parseDashboardExcludedUsers(c *gin.Context) ([]int64, []string, error) {
+	rawValues := append([]string{}, c.QueryArray("exclude_users")...)
+	rawValues = append(rawValues, c.QueryArray("exclude_user_ids")...)
+	if len(rawValues) == 0 {
+		return nil, nil, nil
+	}
+
+	tokens := make([]string, 0, len(rawValues))
+	for _, raw := range rawValues {
+		tokens = append(tokens, strings.FieldsFunc(raw, func(r rune) bool {
+			return r == ',' || r == ';' || unicode.IsSpace(r)
+		})...)
+	}
+	if len(tokens) > maxDashboardExcludedUsers {
+		return nil, nil, errors.New("too many excluded users")
+	}
+
+	idSet := make(map[int64]struct{})
+	emailSet := make(map[string]struct{})
+	for _, token := range tokens {
+		token = strings.TrimSpace(token)
+		if token == "" {
+			continue
+		}
+		if id, err := strconv.ParseInt(token, 10, 64); err == nil && id > 0 {
+			idSet[id] = struct{}{}
+			continue
+		}
+		if !strings.Contains(token, "@") {
+			return nil, nil, errors.New("excluded users must be numeric IDs or email addresses")
+		}
+		emailSet[strings.ToLower(token)] = struct{}{}
+	}
+
+	excludeUserIDs := make([]int64, 0, len(idSet))
+	for id := range idSet {
+		excludeUserIDs = append(excludeUserIDs, id)
+	}
+	sort.Slice(excludeUserIDs, func(i, j int) bool { return excludeUserIDs[i] < excludeUserIDs[j] })
+
+	excludeUserEmails := make([]string, 0, len(emailSet))
+	for email := range emailSet {
+		excludeUserEmails = append(excludeUserEmails, email)
+	}
+	sort.Strings(excludeUserEmails)
+	return excludeUserIDs, excludeUserEmails, nil
 }

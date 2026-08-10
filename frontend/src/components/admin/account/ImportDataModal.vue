@@ -257,6 +257,7 @@ const mergeDataPayloads = (payloads: AdminDataPayload[]): AdminDataPayload => {
     type: payloads.find((item) => typeof item.type === 'string')?.type,
     version: payloads.find((item) => typeof item.version === 'number')?.version,
     exported_at: new Date().toISOString(),
+    pool_groups: payloads.flatMap((item) => item.pool_groups || []),
     proxies: payloads.flatMap((item) => item.proxies),
     accounts: payloads.flatMap((item) => item.accounts),
     skipped_shadows: payloads.reduce((sum, item) => {

@@ -56,6 +56,12 @@ type AdminService interface {
 	BatchSetGroupRPMOverrides(ctx context.Context, groupID int64, entries []GroupRPMOverrideInput) error
 	UpdateGroupSortOrders(ctx context.Context, updates []GroupSortOrderUpdate) error
 
+	// Account pool group management
+	ListAccountPoolGroups(ctx context.Context) ([]AccountPoolGroup, error)
+	CreateAccountPoolGroup(ctx context.Context, input *CreateAccountPoolGroupInput) (*AccountPoolGroup, error)
+	UpdateAccountPoolGroup(ctx context.Context, id int64, input *UpdateAccountPoolGroupInput) (*AccountPoolGroup, error)
+	DeleteAccountPoolGroup(ctx context.Context, id int64) error
+
 	// API Key management (admin)
 	AdminUpdateAPIKeyGroupID(ctx context.Context, keyID int64, groupID *int64) (*AdminUpdateAPIKeyGroupIDResult, error)
 	AdminResetAPIKeyRateLimitUsage(ctx context.Context, keyID int64) (*APIKey, error)
@@ -64,10 +70,10 @@ type AdminService interface {
 	ReplaceUserGroup(ctx context.Context, userID, oldGroupID, newGroupID int64) (*ReplaceUserGroupResult, error)
 
 	// Account management
-	ListAccounts(ctx context.Context, page, pageSize int, platform, accountType, status, search string, groupID int64, privacyMode string, sortBy, sortOrder string) ([]Account, int64, error)
+	ListAccounts(ctx context.Context, page, pageSize int, platform, accountType, status, search string, groupID int64, privacyMode string, poolGroupID int64, sortBy, sortOrder string) ([]Account, int64, error)
 	// ListAccountsForSchedulerScoreFilter 返回符合过滤条件的全部账号（不分页），
 	// 作为账号列表页计算 OpenAI 调度分数的过滤范围池。
-	ListAccountsForSchedulerScoreFilter(ctx context.Context, platform, accountType, status, search string, groupID int64, privacyMode string) ([]Account, error)
+	ListAccountsForSchedulerScoreFilter(ctx context.Context, platform, accountType, status, search string, groupID int64, privacyMode string, poolGroupID int64) ([]Account, error)
 	// ListOpenAISchedulableAccountsForSchedulerScore 返回指定分组（nil 为未分组）内
 	// 可调度的 OpenAI 账号，用于按组计算调度分数。
 	ListOpenAISchedulableAccountsForSchedulerScore(ctx context.Context, groupID *int64) ([]Account, error)
@@ -326,6 +332,7 @@ type CreateAccountInput struct {
 	Priority           int
 	RateMultiplier     *float64 // 账号计费倍率（>=0，允许 0）
 	LoadFactor         *int
+	PoolGroupID        *int64
 	GroupIDs           []int64
 	ExpiresAt          *int64
 	AutoPauseOnExpired *bool
@@ -357,6 +364,7 @@ type UpdateAccountInput struct {
 	Priority              *int     // 使用指针区分"未提供"和"设置为0"
 	RateMultiplier        *float64 // 账号计费倍率（>=0，允许 0）
 	LoadFactor            *int
+	PoolGroupID           *int64
 	Status                string
 	GroupIDs              *[]int64
 	ExpiresAt             *int64
@@ -374,6 +382,7 @@ type BulkUpdateAccountsInput struct {
 	Priority       *int
 	RateMultiplier *float64 // 账号计费倍率（>=0，允许 0）
 	LoadFactor     *int
+	PoolGroupID    *int64
 	Status         string
 	Schedulable    *bool
 	GroupIDs       *[]int64
@@ -390,6 +399,7 @@ type BulkUpdateAccountFilters struct {
 	Type        string
 	Status      string
 	Group       string
+	PoolGroup   string
 	Search      string
 	PrivacyMode string
 }
@@ -600,6 +610,7 @@ type adminServiceImpl struct {
 	userRepo             UserRepository
 	groupRepo            GroupRepository
 	groupDuplicateRepo   GroupDuplicateRepository
+	accountPoolGroupRepo AccountPoolGroupRepository
 	accountRepo          AccountRepository
 	accountDuplicateRepo AccountDuplicateRepository
 	proxyRepo            ProxyRepository
@@ -632,6 +643,7 @@ type userGroupRateBatchReader interface {
 func NewAdminService(
 	userRepo UserRepository,
 	groupRepo AdminGroupRepository,
+	accountPoolGroupRepo AccountPoolGroupRepository,
 	accountRepo AdminAccountRepository,
 	proxyRepo ProxyRepository,
 	apiKeyRepo APIKeyRepository,
@@ -654,6 +666,7 @@ func NewAdminService(
 		userRepo:             userRepo,
 		groupRepo:            groupRepo,
 		groupDuplicateRepo:   groupRepo,
+		accountPoolGroupRepo: accountPoolGroupRepo,
 		accountRepo:          accountRepo,
 		accountDuplicateRepo: accountRepo,
 		proxyRepo:            proxyRepo,

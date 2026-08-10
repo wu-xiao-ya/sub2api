@@ -53,6 +53,7 @@
               :running="runningId === row.id"
               :duplicating="duplicatingIds.has(row.id)"
               @run="handleRunNow"
+              @view-image="handleViewImage"
               @duplicate="handleDuplicate"
               @edit="openEditDialog"
               @delete="handleDelete"
@@ -101,6 +102,14 @@
       @close="showRunResult = false"
     />
 
+    <MonitorImagePreviewDialog
+      :show="showImagePreview"
+      :loading="imageLoading"
+      :image-url="imageUrl"
+      :monitor-name="imageMonitorName"
+      @close="closeImagePreview"
+    />
+
     <ConfirmDialog
       :show="showDeleteDialog"
       :title="t('common.delete')"
@@ -140,6 +149,7 @@ import MonitorFiltersBar from '@/components/admin/monitor/MonitorFiltersBar.vue'
 import MonitorFormDialog from '@/components/admin/monitor/MonitorFormDialog.vue'
 import MonitorTemplateManagerDialog from '@/components/admin/monitor/MonitorTemplateManagerDialog.vue'
 import MonitorRunResultDialog from '@/components/admin/monitor/MonitorRunResultDialog.vue'
+import MonitorImagePreviewDialog from '@/components/admin/monitor/MonitorImagePreviewDialog.vue'
 import MonitorPrimaryModelCell from '@/components/admin/monitor/MonitorPrimaryModelCell.vue'
 import MonitorActionsCell from '@/components/admin/monitor/MonitorActionsCell.vue'
 import { getPersistedPageSize } from '@/composables/usePersistedPageSize'
@@ -169,6 +179,10 @@ const showDeleteDialog = ref(false)
 const deleting = ref<ChannelMonitor | null>(null)
 const showRunResult = ref(false)
 const runResults = ref<CheckResult[]>([])
+const showImagePreview = ref(false)
+const imageLoading = ref(false)
+const imageUrl = ref<string | null>(null)
+const imageMonitorName = ref('')
 const duplicatingIds = reactive(new Set<number>())
 
 let abortController: AbortController | null = null
@@ -281,6 +295,39 @@ async function handleRunNow(row: ChannelMonitor) {
   }
 }
 
+function revokeImageUrl() {
+  if (imageUrl.value) {
+    URL.revokeObjectURL(imageUrl.value)
+    imageUrl.value = null
+  }
+}
+
+function closeImagePreview() {
+  showImagePreview.value = false
+  imageLoading.value = false
+  revokeImageUrl()
+  imageMonitorName.value = ''
+}
+
+async function handleViewImage(row: ChannelMonitor) {
+  if (imageLoading.value) return
+  revokeImageUrl()
+  imageMonitorName.value = row.name
+  showImagePreview.value = true
+  imageLoading.value = true
+  try {
+    const blob = await adminAPI.channelMonitor.getLatestImage(row.id)
+    imageUrl.value = URL.createObjectURL(blob)
+  } catch (err: unknown) {
+    const status = (err as { response?: { status?: number } })?.response?.status
+    if (status !== 404) {
+      appStore.showError(extractApiErrorMessage(err, t('admin.channelMonitor.imageLoadFailed')))
+    }
+  } finally {
+    imageLoading.value = false
+  }
+}
+
 async function handleDuplicate(row: ChannelMonitor) {
   if (row.api_key_decrypt_failed) {
     appStore.showError(t('admin.channelMonitor.duplicateKeyUnavailable'))
@@ -322,5 +369,6 @@ onMounted(reload)
 onUnmounted(() => {
   if (searchTimeout) clearTimeout(searchTimeout)
   abortController?.abort()
+  revokeImageUrl()
 })
 </script>

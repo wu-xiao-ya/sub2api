@@ -114,6 +114,7 @@ type CreateAccountRequest struct {
 	Credentials             map[string]any `json:"credentials" binding:"required"`
 	Extra                   map[string]any `json:"extra"`
 	ProxyID                 *int64         `json:"proxy_id"`
+	PoolGroupID             *int64         `json:"pool_group_id"`
 	Concurrency             int            `json:"concurrency"`
 	Priority                int            `json:"priority"`
 	RateMultiplier          *float64       `json:"rate_multiplier"`
@@ -134,6 +135,7 @@ type UpdateAccountRequest struct {
 	Credentials             map[string]any `json:"credentials"`
 	Extra                   map[string]any `json:"extra"`
 	ProxyID                 *int64         `json:"proxy_id"`
+	PoolGroupID             *int64         `json:"pool_group_id"`
 	Concurrency             *int           `json:"concurrency"`
 	Priority                *int           `json:"priority"`
 	RateMultiplier          *float64       `json:"rate_multiplier"`
@@ -151,6 +153,7 @@ type BulkUpdateAccountsRequest struct {
 	Filters                 *BulkUpdateAccountFilters `json:"filters"`
 	Name                    string                    `json:"name"`
 	ProxyID                 *int64                    `json:"proxy_id"`
+	PoolGroupID             *int64                    `json:"pool_group_id"`
 	Concurrency             *int                      `json:"concurrency"`
 	Priority                *int                      `json:"priority"`
 	RateMultiplier          *float64                  `json:"rate_multiplier"`
@@ -169,8 +172,25 @@ type BulkUpdateAccountFilters struct {
 	Type        string `json:"type"`
 	Status      string `json:"status"`
 	Group       string `json:"group"`
+	PoolGroup   string `json:"pool_group"`
 	Search      string `json:"search"`
 	PrivacyMode string `json:"privacy_mode"`
+}
+
+type CreateAccountPoolGroupRequest struct {
+	Name        string `json:"name" binding:"required"`
+	UpstreamKey string `json:"upstream_key"`
+	Description string `json:"description"`
+	SortOrder   int    `json:"sort_order"`
+	Status      string `json:"status"`
+}
+
+type UpdateAccountPoolGroupRequest struct {
+	Name        string  `json:"name"`
+	UpstreamKey *string `json:"upstream_key"`
+	Description *string `json:"description"`
+	SortOrder   *int    `json:"sort_order"`
+	Status      string  `json:"status"`
 }
 
 // CheckMixedChannelRequest represents check mixed channel risk request
@@ -206,7 +226,25 @@ type AccountSchedulerGroupScore struct {
 	AccountSchedulerScore
 }
 
-const accountListGroupUngroupedQueryValue = "ungrouped"
+const (
+	accountListGroupUngroupedQueryValue     = "ungrouped"
+	accountListPoolGroupUngroupedQueryValue = "ungrouped"
+)
+
+func parseAccountPoolGroupFilter(raw string) (int64, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return 0, nil
+	}
+	if raw == accountListPoolGroupUngroupedQueryValue {
+		return service.AccountListPoolGroupUngrouped, nil
+	}
+	poolGroupID, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil || poolGroupID < 0 {
+		return 0, infraerrors.BadRequest("INVALID_POOL_GROUP_FILTER", "invalid account pool group filter")
+	}
+	return poolGroupID, nil
+}
 
 func (h *AccountHandler) buildAccountResponseWithRuntime(ctx context.Context, account *service.Account) AccountWithConcurrency {
 	item := AccountWithConcurrency{
@@ -466,13 +504,14 @@ func (h *AccountHandler) listAccountSchedulerScoreFilterPool(
 	platform, accountType, status, search string,
 	groupID int64,
 	privacyMode string,
+	poolGroupID int64,
 ) []service.Account {
 	if h.adminService == nil || (platform != "" && platform != service.PlatformOpenAI) {
 		return nil
 	}
 	// 池只用于 OpenAI 分数计算（非 OpenAI 账号会在打分时被丢弃），
 	// 无论列表页平台过滤为何，查询一律限定 openai，避免无过滤时全表扫描。
-	accounts, err := h.adminService.ListAccountsForSchedulerScoreFilter(ctx, service.PlatformOpenAI, accountType, status, search, groupID, privacyMode)
+	accounts, err := h.adminService.ListAccountsForSchedulerScoreFilter(ctx, service.PlatformOpenAI, accountType, status, search, groupID, privacyMode, poolGroupID)
 	if err != nil {
 		slog.Warn("openai_scheduler_filter_score_pool_failed", "error", err)
 		return nil
@@ -518,7 +557,13 @@ func (h *AccountHandler) List(c *gin.Context) {
 		}
 	}
 
-	accounts, total, err := h.adminService.ListAccounts(c.Request.Context(), page, pageSize, platform, accountType, status, search, groupID, privacyMode, sortBy, sortOrder)
+	poolGroupID, err := parseAccountPoolGroupFilter(c.Query("pool_group"))
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	accounts, total, err := h.adminService.ListAccounts(c.Request.Context(), page, pageSize, platform, accountType, status, search, groupID, privacyMode, poolGroupID, sortBy, sortOrder)
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return
@@ -545,7 +590,7 @@ func (h *AccountHandler) List(c *gin.Context) {
 		}
 	}
 	if includeSchedulerScore && pageHasOpenAIAccounts {
-		schedulerFilterPool := h.listAccountSchedulerScoreFilterPool(c.Request.Context(), platform, accountType, status, search, groupID, privacyMode)
+		schedulerFilterPool := h.listAccountSchedulerScoreFilterPool(c.Request.Context(), platform, accountType, status, search, groupID, privacyMode, poolGroupID)
 		schedulerScores, schedulerGroupScores = h.buildOpenAIAccountSchedulerScores(c.Request.Context(), accounts, schedulerFilterPool)
 	}
 
@@ -658,7 +703,7 @@ func (h *AccountHandler) List(c *gin.Context) {
 
 	h.enrichShadowParents(c.Request.Context(), result)
 
-	etag := buildAccountsListETag(result, total, page, pageSize, platform, accountType, status, search, lite)
+	etag := buildAccountsListETag(result, total, page, pageSize, platform, accountType, status, search, poolGroupID, lite)
 	if etag != "" {
 		c.Header("ETag", etag)
 		c.Header("Vary", "If-None-Match")
@@ -676,6 +721,7 @@ func buildAccountsListETag(
 	total int64,
 	page, pageSize int,
 	platform, accountType, status, search string,
+	poolGroupID int64,
 	lite bool,
 ) string {
 	payload := struct {
@@ -686,6 +732,7 @@ func buildAccountsListETag(
 		AccountType string                   `json:"type"`
 		Status      string                   `json:"status"`
 		Search      string                   `json:"search"`
+		PoolGroupID int64                    `json:"pool_group_id"`
 		Lite        bool                     `json:"lite"`
 		Items       []AccountWithConcurrency `json:"items"`
 	}{
@@ -696,6 +743,7 @@ func buildAccountsListETag(
 		AccountType: accountType,
 		Status:      status,
 		Search:      search,
+		PoolGroupID: poolGroupID,
 		Lite:        lite,
 		Items:       items,
 	}
@@ -705,6 +753,85 @@ func buildAccountsListETag(
 	}
 	sum := sha256.Sum256(raw)
 	return "\"" + hex.EncodeToString(sum[:]) + "\""
+}
+
+// ListPoolGroups returns all account pool groups for the account management UI.
+// GET /api/v1/admin/accounts/pool-groups
+func (h *AccountHandler) ListPoolGroups(c *gin.Context) {
+	groups, err := h.adminService.ListAccountPoolGroups(c.Request.Context())
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	out := make([]dto.AccountPoolGroup, 0, len(groups))
+	for i := range groups {
+		out = append(out, *dto.AccountPoolGroupFromService(&groups[i]))
+	}
+	response.Success(c, out)
+}
+
+// CreatePoolGroup creates an account pool group.
+// POST /api/v1/admin/accounts/pool-groups
+func (h *AccountHandler) CreatePoolGroup(c *gin.Context) {
+	var req CreateAccountPoolGroupRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+	group, err := h.adminService.CreateAccountPoolGroup(c.Request.Context(), &service.CreateAccountPoolGroupInput{
+		Name:        req.Name,
+		UpstreamKey: req.UpstreamKey,
+		Description: req.Description,
+		SortOrder:   req.SortOrder,
+		Status:      req.Status,
+	})
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, dto.AccountPoolGroupFromService(group))
+}
+
+// UpdatePoolGroup updates an account pool group.
+// PUT /api/v1/admin/accounts/pool-groups/:id
+func (h *AccountHandler) UpdatePoolGroup(c *gin.Context) {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil || id <= 0 {
+		response.BadRequest(c, "Invalid account pool group ID")
+		return
+	}
+	var req UpdateAccountPoolGroupRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+	group, err := h.adminService.UpdateAccountPoolGroup(c.Request.Context(), id, &service.UpdateAccountPoolGroupInput{
+		Name:        req.Name,
+		UpstreamKey: req.UpstreamKey,
+		Description: req.Description,
+		SortOrder:   req.SortOrder,
+		Status:      req.Status,
+	})
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, dto.AccountPoolGroupFromService(group))
+}
+
+// DeletePoolGroup soft-deletes an account pool group and clears account bindings.
+// DELETE /api/v1/admin/accounts/pool-groups/:id
+func (h *AccountHandler) DeletePoolGroup(c *gin.Context) {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil || id <= 0 {
+		response.BadRequest(c, "Invalid account pool group ID")
+		return
+	}
+	if err := h.adminService.DeleteAccountPoolGroup(c.Request.Context(), id); err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, gin.H{"message": "Account pool group deleted successfully"})
 }
 
 func ifNoneMatchMatched(ifNoneMatch, etag string) bool {
@@ -823,6 +950,7 @@ func (h *AccountHandler) Create(c *gin.Context) {
 			Credentials:           req.Credentials,
 			Extra:                 req.Extra,
 			ProxyID:               req.ProxyID,
+			PoolGroupID:           req.PoolGroupID,
 			Concurrency:           req.Concurrency,
 			Priority:              req.Priority,
 			RateMultiplier:        req.RateMultiplier,
@@ -950,6 +1078,7 @@ func (h *AccountHandler) Update(c *gin.Context) {
 		Credentials:           req.Credentials,
 		Extra:                 req.Extra,
 		ProxyID:               req.ProxyID,
+		PoolGroupID:           req.PoolGroupID,
 		Concurrency:           req.Concurrency, // 指针类型，nil 表示未提供
 		Priority:              req.Priority,    // 指针类型，nil 表示未提供
 		RateMultiplier:        req.RateMultiplier,
@@ -1906,6 +2035,7 @@ func (h *AccountHandler) BulkUpdate(c *gin.Context) {
 		req.Priority != nil ||
 		req.RateMultiplier != nil ||
 		req.LoadFactor != nil ||
+		req.PoolGroupID != nil ||
 		req.Status != "" ||
 		req.Schedulable != nil ||
 		req.GroupIDs != nil ||
@@ -1923,6 +2053,7 @@ func (h *AccountHandler) BulkUpdate(c *gin.Context) {
 		Filters:               toServiceBulkUpdateAccountFilters(req.Filters),
 		Name:                  req.Name,
 		ProxyID:               req.ProxyID,
+		PoolGroupID:           req.PoolGroupID,
 		Concurrency:           req.Concurrency,
 		Priority:              req.Priority,
 		RateMultiplier:        req.RateMultiplier,
@@ -1966,6 +2097,7 @@ func toServiceBulkUpdateAccountFilters(filters *BulkUpdateAccountFilters) *servi
 		Type:        filters.Type,
 		Status:      filters.Status,
 		Group:       filters.Group,
+		PoolGroup:   filters.PoolGroup,
 		Search:      filters.Search,
 		PrivacyMode: filters.PrivacyMode,
 	}
@@ -2723,7 +2855,7 @@ func (h *AccountHandler) BatchRefreshTier(c *gin.Context) {
 	accounts := make([]*service.Account, 0)
 
 	if len(req.AccountIDs) == 0 {
-		allAccounts, _, err := h.adminService.ListAccounts(ctx, 1, 10000, "gemini", "oauth", "", "", 0, "", "name", "asc")
+		allAccounts, _, err := h.adminService.ListAccounts(ctx, 1, 10000, "gemini", "oauth", "", "", 0, "", 0, "name", "asc")
 		if err != nil {
 			response.ErrorFrom(c, err)
 			return

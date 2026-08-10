@@ -251,6 +251,8 @@ import {
   PROVIDER_GROK,
   API_MODE_CHAT_COMPLETIONS,
   API_MODE_RESPONSES,
+  API_MODE_MODELS,
+  API_MODE_IMAGES,
 } from '@/constants/channelMonitor'
 
 const props = defineProps<{ show: boolean }>()
@@ -493,6 +495,16 @@ const apiModeOptions = computed<{ value: APIMode; label: string; hint: string }[
     label: t('admin.channelMonitor.form.apiModeResponses'),
     hint: t('admin.channelMonitor.form.apiModeResponsesHint'),
   },
+  {
+    value: API_MODE_MODELS,
+    label: t('admin.channelMonitor.form.apiModeModels'),
+    hint: t('admin.channelMonitor.form.apiModeModelsHint'),
+  },
+  {
+    value: API_MODE_IMAGES,
+    label: t('admin.channelMonitor.form.apiModeImages'),
+    hint: t('admin.channelMonitor.form.apiModeImagesHint'),
+  },
 ])
 
 watch(() => form.provider, (provider) => {
@@ -502,7 +514,10 @@ watch(() => form.provider, (provider) => {
 })
 
 function normalizeAPIMode(mode: APIMode | undefined | null): APIMode {
-  return mode === API_MODE_RESPONSES ? API_MODE_RESPONSES : API_MODE_CHAT_COMPLETIONS
+  if (mode === API_MODE_RESPONSES) return API_MODE_RESPONSES
+  if (mode === API_MODE_MODELS) return API_MODE_MODELS
+  if (mode === API_MODE_IMAGES) return API_MODE_IMAGES
+  return API_MODE_CHAT_COMPLETIONS
 }
 
 function apiModeButtonClass(mode: APIMode): string {
@@ -514,15 +529,28 @@ function apiModeButtonClass(mode: APIMode): string {
 }
 
 function apiModeLabel(mode: APIMode): string {
-  return normalizeAPIMode(mode) === API_MODE_RESPONSES
-    ? t('admin.channelMonitor.form.apiModeResponses')
-    : t('admin.channelMonitor.form.apiModeChatCompletions')
+  switch (normalizeAPIMode(mode)) {
+    case API_MODE_RESPONSES:
+      return t('admin.channelMonitor.form.apiModeResponses')
+    case API_MODE_MODELS:
+      return t('admin.channelMonitor.form.apiModeModels')
+    case API_MODE_IMAGES:
+      return t('admin.channelMonitor.form.apiModeImages')
+    default:
+      return t('admin.channelMonitor.form.apiModeChatCompletions')
+  }
 }
 
 function apiModeBadgeClass(mode: APIMode): string {
-  if (normalizeAPIMode(mode) === API_MODE_RESPONSES) {
-    return 'bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300'
+  switch (normalizeAPIMode(mode)) {
+    case API_MODE_RESPONSES:
+      return 'bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300'
+    case API_MODE_MODELS:
+      return 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300'
+    case API_MODE_IMAGES:
+      return 'bg-pink-100 text-pink-700 dark:bg-pink-500/15 dark:text-pink-300'
+    default:
+      return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300'
   }
-  return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300'
 }
 </script>

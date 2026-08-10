@@ -13,6 +13,7 @@ import { useRoutePrefetch } from '@/composables/useRoutePrefetch'
 import { getSetupStatus } from '@/api/setup'
 import { resolveCompletedSetupRedirectPath } from './setupRedirect'
 import { resolveRouteDocumentTitle } from './title'
+import { getAppBasePath } from '@/utils/appPath'
 
 /**
  * Route definitions with lazy loading
@@ -707,7 +708,7 @@ const routes: RouteRecordRaw[] = [
  * Create router instance
  */
 const router = createRouter({
-  history: createWebHistory(import.meta.env.BASE_URL),
+  history: createWebHistory(getAppBasePath()),
   routes,
   scrollBehavior(_to, _from, savedPosition) {
     // Scroll to saved position when using browser back/forward

@@ -29,6 +29,7 @@ type Account struct {
 	ProxyID                 *int64
 	ProxyFallbackOriginID   *int64
 	ProxyFallbackOriginName *string // 仅展示用
+	PoolGroupID             *int64
 	Concurrency             int
 	Priority                int
 	// RateMultiplier 账号计费倍率（>=0，允许 0 表示该账号计费为 0）。
@@ -60,6 +61,7 @@ type Account struct {
 	QuotaDimension  string // 用量维度："" / "global" / "spark"
 
 	Proxy         *Proxy
+	PoolGroup     *AccountPoolGroup
 	AccountGroups []AccountGroup
 	GroupIDs      []int64
 	Groups        []*Group

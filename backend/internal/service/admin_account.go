@@ -20,18 +20,35 @@ import (
 )
 
 // Account management implementations
-func (s *adminServiceImpl) ListAccounts(ctx context.Context, page, pageSize int, platform, accountType, status, search string, groupID int64, privacyMode string, sortBy, sortOrder string) ([]Account, int64, error) {
+func (s *adminServiceImpl) ListAccounts(ctx context.Context, page, pageSize int, platform, accountType, status, search string, groupID int64, privacyMode string, poolGroupID int64, sortBy, sortOrder string) ([]Account, int64, error) {
 	params := pagination.PaginationParams{Page: page, PageSize: pageSize, SortBy: sortBy, SortOrder: sortOrder}
-	accounts, result, err := s.accountRepo.ListWithFilters(ctx, params, platform, accountType, status, search, groupID, privacyMode)
+	var (
+		accounts []Account
+		result   *pagination.PaginationResult
+		err      error
+	)
+	if filteredRepo, ok := s.accountRepo.(AccountPoolGroupFilteredLister); ok {
+		accounts, result, err = filteredRepo.ListWithPoolGroupFilters(ctx, params, platform, accountType, status, search, groupID, privacyMode, poolGroupID)
+	} else if poolGroupID != 0 {
+		return nil, 0, errors.New("account repository does not support account pool group filtering")
+	} else {
+		accounts, result, err = s.accountRepo.ListWithFilters(ctx, params, platform, accountType, status, search, groupID, privacyMode)
+	}
 	if err != nil {
 		return nil, 0, err
 	}
 	return accounts, result.Total, nil
 }
 
-func (s *adminServiceImpl) ListAccountsForSchedulerScoreFilter(ctx context.Context, platform, accountType, status, search string, groupID int64, privacyMode string) ([]Account, error) {
+func (s *adminServiceImpl) ListAccountsForSchedulerScoreFilter(ctx context.Context, platform, accountType, status, search string, groupID int64, privacyMode string, poolGroupID int64) ([]Account, error) {
 	if s == nil || s.accountRepo == nil {
 		return nil, nil
+	}
+	if filteredRepo, ok := s.accountRepo.(AccountPoolGroupFilteredLister); ok {
+		return filteredRepo.ListAllWithPoolGroupFilters(ctx, platform, accountType, status, search, groupID, privacyMode, poolGroupID)
+	}
+	if poolGroupID != 0 {
+		return nil, errors.New("account repository does not support account pool group filtering")
 	}
 	return s.accountRepo.ListAllWithFilters(ctx, platform, accountType, status, search, groupID, privacyMode)
 }
@@ -299,6 +316,7 @@ func (s *adminServiceImpl) DuplicateAccount(ctx context.Context, id int64, actor
 		Priority:              source.Priority,
 		RateMultiplier:        cloneAccountValuePointer(source.RateMultiplier),
 		LoadFactor:            cloneAccountValuePointer(source.LoadFactor),
+		PoolGroupID:           cloneAccountValuePointer(source.PoolGroupID),
 		GroupIDs:              groupIDs,
 		ExpiresAt:             expiresAt,
 		AutoPauseOnExpired:    &autoPauseOnExpired,
@@ -542,6 +560,9 @@ func (s *adminServiceImpl) CreateAccount(ctx context.Context, input *CreateAccou
 			return nil, err
 		}
 	}
+	if err := s.validateAccountPoolGroupID(ctx, input.PoolGroupID); err != nil {
+		return nil, err
+	}
 
 	// 校验并规范化请求头覆写配置（header 名小写化、格式检查）
 	if err := NormalizeHeaderOverrideCredentials(input.Credentials); err != nil {
@@ -552,6 +573,7 @@ func (s *adminServiceImpl) CreateAccount(ctx context.Context, input *CreateAccou
 	if err != nil {
 		return nil, err
 	}
+	account.PoolGroupID = normalizeAccountPoolGroupID(input.PoolGroupID)
 	if err := s.accountRepo.Create(ctx, account); err != nil {
 		return nil, err
 	}
@@ -756,6 +778,13 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 			account.LoadFactor = input.LoadFactor
 		}
 	}
+	if input.PoolGroupID != nil {
+		if err := s.validateAccountPoolGroupID(ctx, input.PoolGroupID); err != nil {
+			return nil, err
+		}
+		account.PoolGroupID = normalizeAccountPoolGroupID(input.PoolGroupID)
+		account.PoolGroup = nil
+	}
 	if input.Status != "" {
 		account.Status = input.Status
 	}
@@ -876,6 +905,9 @@ func (s *adminServiceImpl) BulkUpdateAccounts(ctx context.Context, input *BulkUp
 		if err := s.validateGroupIDsExist(ctx, *input.GroupIDs); err != nil {
 			return nil, err
 		}
+	}
+	if err := s.validateAccountPoolGroupID(ctx, input.PoolGroupID); err != nil {
+		return nil, err
 	}
 
 	needMixedChannelCheck := input.GroupIDs != nil && !input.SkipMixedChannelCheck
@@ -1020,6 +1052,13 @@ func (s *adminServiceImpl) BulkUpdateAccounts(ctx context.Context, input *BulkUp
 			repoUpdates.LoadFactor = input.LoadFactor
 		}
 	}
+	if input.PoolGroupID != nil {
+		repoUpdates.PoolGroupID = normalizeAccountPoolGroupID(input.PoolGroupID)
+		if repoUpdates.PoolGroupID == nil {
+			clearPoolGroupID := int64(0)
+			repoUpdates.PoolGroupID = &clearPoolGroupID
+		}
+	}
 	if input.Status != "" {
 		repoUpdates.Status = &input.Status
 	}
@@ -1112,6 +1151,19 @@ func (s *adminServiceImpl) resolveBulkUpdateTargetIDs(ctx context.Context, filte
 		groupID = parsedGroupID
 	}
 
+	poolGroupID := int64(0)
+	switch strings.TrimSpace(filters.PoolGroup) {
+	case "":
+	case "ungrouped":
+		poolGroupID = AccountListPoolGroupUngrouped
+	default:
+		parsedPoolGroupID, err := strconv.ParseInt(strings.TrimSpace(filters.PoolGroup), 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("invalid account pool group filter: %w", err)
+		}
+		poolGroupID = parsedPoolGroupID
+	}
+
 	const pageSize = 500
 	page := 1
 	accountIDs := make([]int64, 0, pageSize)
@@ -1127,6 +1179,7 @@ func (s *adminServiceImpl) resolveBulkUpdateTargetIDs(ctx context.Context, filte
 			filters.Search,
 			groupID,
 			filters.PrivacyMode,
+			poolGroupID,
 			"",
 			"",
 		)

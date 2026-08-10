@@ -1592,6 +1592,16 @@ type UsageCleanupConfig struct {
 	WorkerIntervalSeconds int `mapstructure:"worker_interval_seconds"`
 	// TaskTimeoutSeconds: 单次任务最大执行时长（秒）
 	TaskTimeoutSeconds int `mapstructure:"task_timeout_seconds"`
+	// ArchiveEnabled: 是否自动将超过保留期的 usage_logs 明细归档为小时汇总后删除
+	ArchiveEnabled bool `mapstructure:"archive_enabled"`
+	// ArchiveRetentionDays: 明细保留天数；早于该窗口的完整小时桶会被归档
+	ArchiveRetentionDays int `mapstructure:"archive_retention_days"`
+	// ArchiveIntervalSeconds: 自动归档执行间隔（秒）
+	ArchiveIntervalSeconds int `mapstructure:"archive_interval_seconds"`
+	// ArchiveWindowHours: 每个归档窗口跨度（小时）
+	ArchiveWindowHours int `mapstructure:"archive_window_hours"`
+	// ArchiveMaxWindowsPerRun: 单次归档最多处理多少个窗口，避免历史回填拖垮服务
+	ArchiveMaxWindowsPerRun int `mapstructure:"archive_max_windows_per_run"`
 }
 
 func NormalizeRunMode(value string) string {
@@ -2147,6 +2157,11 @@ func setDefaults() {
 	viper.SetDefault("usage_cleanup.batch_size", 5000)
 	viper.SetDefault("usage_cleanup.worker_interval_seconds", 10)
 	viper.SetDefault("usage_cleanup.task_timeout_seconds", 1800)
+	viper.SetDefault("usage_cleanup.archive_enabled", true)
+	viper.SetDefault("usage_cleanup.archive_retention_days", 15)
+	viper.SetDefault("usage_cleanup.archive_interval_seconds", 3600)
+	viper.SetDefault("usage_cleanup.archive_window_hours", 1)
+	viper.SetDefault("usage_cleanup.archive_max_windows_per_run", 1)
 
 	// Idempotency
 	viper.SetDefault("idempotency.observe_only", true)
@@ -2960,6 +2975,20 @@ func (c *Config) Validate() error {
 		if c.UsageCleanup.TaskTimeoutSeconds <= 0 {
 			return fmt.Errorf("usage_cleanup.task_timeout_seconds must be positive")
 		}
+		if c.UsageCleanup.ArchiveEnabled {
+			if c.UsageCleanup.ArchiveRetentionDays <= 0 {
+				return fmt.Errorf("usage_cleanup.archive_retention_days must be positive")
+			}
+			if c.UsageCleanup.ArchiveIntervalSeconds <= 0 {
+				return fmt.Errorf("usage_cleanup.archive_interval_seconds must be positive")
+			}
+			if c.UsageCleanup.ArchiveWindowHours <= 0 {
+				return fmt.Errorf("usage_cleanup.archive_window_hours must be positive")
+			}
+			if c.UsageCleanup.ArchiveMaxWindowsPerRun <= 0 {
+				return fmt.Errorf("usage_cleanup.archive_max_windows_per_run must be positive")
+			}
+		}
 	} else {
 		if c.UsageCleanup.MaxRangeDays < 0 {
 			return fmt.Errorf("usage_cleanup.max_range_days must be non-negative")
@@ -2972,6 +3001,18 @@ func (c *Config) Validate() error {
 		}
 		if c.UsageCleanup.TaskTimeoutSeconds < 0 {
 			return fmt.Errorf("usage_cleanup.task_timeout_seconds must be non-negative")
+		}
+		if c.UsageCleanup.ArchiveRetentionDays < 0 {
+			return fmt.Errorf("usage_cleanup.archive_retention_days must be non-negative")
+		}
+		if c.UsageCleanup.ArchiveIntervalSeconds < 0 {
+			return fmt.Errorf("usage_cleanup.archive_interval_seconds must be non-negative")
+		}
+		if c.UsageCleanup.ArchiveWindowHours < 0 {
+			return fmt.Errorf("usage_cleanup.archive_window_hours must be non-negative")
+		}
+		if c.UsageCleanup.ArchiveMaxWindowsPerRun < 0 {
+			return fmt.Errorf("usage_cleanup.archive_max_windows_per_run must be non-negative")
 		}
 	}
 	if c.Idempotency.DefaultTTLSeconds <= 0 {

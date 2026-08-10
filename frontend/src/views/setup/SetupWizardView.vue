@@ -494,6 +494,7 @@ import { ref, reactive, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { testDatabase, testRedis, install, type InstallRequest } from '@/api/setup'
 import { buildGatewayUrl } from '@/api/client'
+import { buildAppPath } from '@/utils/appPath'
 import Select from '@/components/common/Select.vue'
 import Toggle from '@/components/common/Toggle.vue'
 import Icon from '@/components/icons/Icon.vue'
@@ -657,7 +658,7 @@ async function waitForServiceRestart() {
           serviceReady.value = true
           // Redirect to login page after a short delay
           setTimeout(() => {
-            window.location.href = '/login'
+            window.location.href = buildAppPath('/login')
           }, 1500)
           return
         }

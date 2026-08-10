@@ -146,6 +146,47 @@ func (r *channelMonitorRepository) Delete(ctx context.Context, id int64) error {
 	return nil
 }
 
+func (r *channelMonitorRepository) UpsertLatestImage(ctx context.Context, image *service.ChannelMonitorLatestImage) error {
+	if image == nil || image.MonitorID <= 0 || len(image.Data) == 0 {
+		return fmt.Errorf("latest image payload is empty")
+	}
+	const q = `
+		INSERT INTO channel_monitor_latest_images (
+		    monitor_id, content_type, image_data, generated_at, updated_at
+		)
+		VALUES ($1, $2, $3, $4, NOW())
+		ON CONFLICT (monitor_id) DO UPDATE SET
+		    content_type = EXCLUDED.content_type,
+		    image_data = EXCLUDED.image_data,
+		    generated_at = EXCLUDED.generated_at,
+		    updated_at = NOW()
+	`
+	if _, err := r.db.ExecContext(
+		ctx, q, image.MonitorID, image.ContentType, image.Data, image.GeneratedAt,
+	); err != nil {
+		return fmt.Errorf("upsert latest image: %w", err)
+	}
+	return nil
+}
+
+func (r *channelMonitorRepository) GetLatestImage(ctx context.Context, monitorID int64) (*service.ChannelMonitorLatestImage, error) {
+	const q = `
+		SELECT monitor_id, content_type, image_data, generated_at
+		FROM channel_monitor_latest_images
+		WHERE monitor_id = $1
+	`
+	image := &service.ChannelMonitorLatestImage{}
+	if err := r.db.QueryRowContext(ctx, q, monitorID).Scan(
+		&image.MonitorID, &image.ContentType, &image.Data, &image.GeneratedAt,
+	); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, service.ErrChannelMonitorLatestImageNotFound
+		}
+		return nil, fmt.Errorf("get latest image: %w", err)
+	}
+	return image, nil
+}
+
 func (r *channelMonitorRepository) List(ctx context.Context, params service.ChannelMonitorListParams) ([]*service.ChannelMonitor, int64, error) {
 	q := r.client.ChannelMonitor.Query()
 	if params.Provider != "" {

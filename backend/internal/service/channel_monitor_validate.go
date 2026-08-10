@@ -30,6 +30,16 @@ func validateAPIMode(provider, apiMode string) error {
 			return nil
 		}
 		return ErrChannelMonitorInvalidAPIMode
+	case MonitorAPIModeModels:
+		if provider == MonitorProviderOpenAI {
+			return nil
+		}
+		return ErrChannelMonitorInvalidAPIMode
+	case MonitorAPIModeImages:
+		if provider == MonitorProviderOpenAI {
+			return nil
+		}
+		return ErrChannelMonitorInvalidAPIMode
 	default:
 		return ErrChannelMonitorInvalidAPIMode
 	}

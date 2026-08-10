@@ -46,6 +46,13 @@ function injectBranding(html: string, config: { site_name?: string; site_logo?: 
   return brandedHtml
 }
 
+function normalizeBasePath(value: string): string {
+  const raw = value.trim()
+  if (!raw || raw === '/') return '/'
+  const withLeadingSlash = raw.startsWith('/') ? raw : `/${raw}`
+  return `${withLeadingSlash.replace(/\/+$/, '')}/`
+}
+
 /**
  * Vite 插件：开发模式下注入公开配置到 index.html
  * 与生产模式的后端注入行为保持一致，消除闪烁
@@ -91,6 +98,7 @@ export default defineConfig(({ mode }) => {
       }),
       injectPublicSettings(backendUrl)
     ],
+    base: normalizeBasePath(env.VITE_BASE_PATH || '/'),
   resolve: {
     alias: {
       '@': resolve(__dirname, 'src'),

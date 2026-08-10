@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/handler/admin"
@@ -44,6 +46,7 @@ type channelMonitorUserListItem struct {
 	ID                   int64                                `json:"id"`
 	Name                 string                               `json:"name"`
 	Provider             string                               `json:"provider"`
+	APIMode              string                               `json:"api_mode"`
 	GroupName            string                               `json:"group_name"`
 	PrimaryModel         string                               `json:"primary_model"`
 	PrimaryStatus        string                               `json:"primary_status"`
@@ -85,9 +88,10 @@ func userMonitorViewToItem(v *service.UserMonitorView) channelMonitorUserListIte
 	extras := make([]dto.ChannelMonitorExtraModelStatus, 0, len(v.ExtraModels))
 	for _, e := range v.ExtraModels {
 		extras = append(extras, dto.ChannelMonitorExtraModelStatus{
-			Model:     e.Model,
-			Status:    e.Status,
-			LatencyMs: e.LatencyMs,
+			Model:          e.Model,
+			Status:         e.Status,
+			LatencyMs:      e.LatencyMs,
+			Availability7d: e.Availability7d,
 		})
 	}
 	timeline := make([]channelMonitorUserTimelinePoint, 0, len(v.Timeline))
@@ -103,6 +107,7 @@ func userMonitorViewToItem(v *service.UserMonitorView) channelMonitorUserListIte
 		ID:                   v.ID,
 		Name:                 v.Name,
 		Provider:             v.Provider,
+		APIMode:              v.APIMode,
 		GroupName:            v.GroupName,
 		PrimaryModel:         v.PrimaryModel,
 		PrimaryStatus:        v.PrimaryStatus,
@@ -173,4 +178,24 @@ func (h *ChannelMonitorUserHandler) GetStatus(c *gin.Context) {
 		return
 	}
 	response.Success(c, userMonitorDetailToResponse(detail))
+}
+
+// Image GET /api/v1/channel-monitors/:id/image
+func (h *ChannelMonitorUserHandler) Image(c *gin.Context) {
+	if !h.featureEnabled(c) {
+		response.ErrorFrom(c, service.ErrChannelMonitorNotFound)
+		return
+	}
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil || id <= 0 {
+		response.ErrorFrom(c, service.ErrChannelMonitorNotFound)
+		return
+	}
+	image, err := h.monitorService.GetLatestImageForUser(c.Request.Context(), id)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	c.Header("Cache-Control", "no-store")
+	c.Data(http.StatusOK, image.ContentType, image.Data)
 }

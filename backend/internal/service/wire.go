@@ -827,8 +827,16 @@ func ProvidePaymentOrderExpiryService(paymentSvc *PaymentService, lockCache Lead
 func ProvideChannelMonitorService(
 	repo ChannelMonitorRepository,
 	encryptor SecretEncryptor,
+	accountRepo AccountRepository,
+	httpUpstream HTTPUpstream,
+	cfg *config.Config,
+	tlsFPProfileService *TLSFingerprintProfileService,
 ) *ChannelMonitorService {
-	return NewChannelMonitorService(repo, encryptor)
+	svc := NewChannelMonitorService(repo, encryptor)
+	if probeRepo, ok := accountRepo.(channelMonitorAccountProbeRepository); ok {
+		svc.SetAccountProbeDependencies(probeRepo, httpUpstream, cfg, tlsFPProfileService)
+	}
+	return svc
 }
 
 // ProvideChannelMonitorRunner 创建并启动渠道监控调度器。

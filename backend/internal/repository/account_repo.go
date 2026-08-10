@@ -15,6 +15,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -158,6 +159,9 @@ func createAccountRecord(ctx context.Context, client *dbent.Client, account *ser
 	created, err := builder.Save(ctx)
 	if err != nil {
 		return translatePersistenceError(err, service.ErrAccountNotFound, nil)
+	}
+	if err := setAccountPoolGroupID(ctx, client, created.ID, account.PoolGroupID); err != nil {
+		return err
 	}
 
 	account.ID = created.ID
@@ -538,7 +542,34 @@ func (r *accountRepository) updateLockedAccount(ctx context.Context, client *dbe
 	builder.SetQuotaDimension(dbaccount.QuotaDimension(account.QuotaDimensionOrDefault()))
 	builder.SetNillableParentAccountID(account.ParentAccountID)
 
-	return builder.Save(ctx)
+	updated, err := builder.Save(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if err := setAccountPoolGroupID(ctx, client, account.ID, account.PoolGroupID); err != nil {
+		return nil, err
+	}
+	return updated, nil
+}
+
+func setAccountPoolGroupID(ctx context.Context, exec sqlExecutor, accountID int64, poolGroupID *int64) error {
+	if accountID <= 0 || exec == nil {
+		return nil
+	}
+	if poolGroupID == nil || *poolGroupID <= 0 {
+		_, err := exec.ExecContext(ctx, `
+			UPDATE accounts
+			SET pool_group_id = NULL
+			WHERE id = $1 AND deleted_at IS NULL
+		`, accountID)
+		return err
+	}
+	_, err := exec.ExecContext(ctx, `
+		UPDATE accounts
+		SET pool_group_id = $2
+		WHERE id = $1 AND deleted_at IS NULL
+	`, accountID, *poolGroupID)
+	return err
 }
 
 func lockAndMergeAccountProbeExtra(ctx context.Context, client *dbent.Client, account *service.Account, explicitProbeEnabled *bool) (map[string]any, error) {
@@ -721,7 +752,7 @@ func (r *accountRepository) List(ctx context.Context, params pagination.Paginati
 	return r.ListWithFilters(ctx, params, "", "", "", "", 0, "")
 }
 
-func (r *accountRepository) accountListFilteredQuery(platform, accountType, status, search string, groupID int64, privacyMode string) *dbent.AccountQuery {
+func (r *accountRepository) accountListFilteredQuery(platform, accountType, status, search string, groupID int64, privacyMode string, poolGroupID int64) *dbent.AccountQuery {
 	q := r.client.Account.Query()
 
 	if platform != "" {
@@ -799,6 +830,15 @@ func (r *accountRepository) accountListFilteredQuery(platform, accountType, stat
 	} else if groupID > 0 {
 		q = q.Where(dbaccount.HasAccountGroupsWith(dbaccountgroup.GroupIDEQ(groupID)))
 	}
+	if poolGroupID == service.AccountListPoolGroupUngrouped {
+		q = q.Where(dbpredicate.Account(func(s *entsql.Selector) {
+			s.Where(entsql.IsNull(s.C("pool_group_id")))
+		}))
+	} else if poolGroupID > 0 {
+		q = q.Where(dbpredicate.Account(func(s *entsql.Selector) {
+			s.Where(entsql.EQ(s.C("pool_group_id"), poolGroupID))
+		}))
+	}
 	if privacyMode != "" {
 		q = q.Where(dbpredicate.Account(func(s *entsql.Selector) {
 			path := sqljson.Path("privacy_mode")
@@ -818,7 +858,11 @@ func (r *accountRepository) accountListFilteredQuery(platform, accountType, stat
 }
 
 func (r *accountRepository) ListWithFilters(ctx context.Context, params pagination.PaginationParams, platform, accountType, status, search string, groupID int64, privacyMode string) ([]service.Account, *pagination.PaginationResult, error) {
-	q := r.accountListFilteredQuery(platform, accountType, status, search, groupID, privacyMode)
+	return r.ListWithPoolGroupFilters(ctx, params, platform, accountType, status, search, groupID, privacyMode, 0)
+}
+
+func (r *accountRepository) ListWithPoolGroupFilters(ctx context.Context, params pagination.PaginationParams, platform, accountType, status, search string, groupID int64, privacyMode string, poolGroupID int64) ([]service.Account, *pagination.PaginationResult, error) {
+	q := r.accountListFilteredQuery(platform, accountType, status, search, groupID, privacyMode, poolGroupID)
 	// Clone before Count so interceptor-appended predicates (SoftDeleteMixin's
 	// deleted_at IS NULL) don't accumulate on the shared builder and pollute the
 	// subsequent list query. Same pattern used in group_repo/promo_code_repo/user_repo
@@ -848,7 +892,11 @@ func (r *accountRepository) ListWithFilters(ctx context.Context, params paginati
 }
 
 func (r *accountRepository) ListAllWithFilters(ctx context.Context, platform, accountType, status, search string, groupID int64, privacyMode string) ([]service.Account, error) {
-	accounts, err := r.accountListFilteredQuery(platform, accountType, status, search, groupID, privacyMode).All(ctx)
+	return r.ListAllWithPoolGroupFilters(ctx, platform, accountType, status, search, groupID, privacyMode, 0)
+}
+
+func (r *accountRepository) ListAllWithPoolGroupFilters(ctx context.Context, platform, accountType, status, search string, groupID int64, privacyMode string, poolGroupID int64) ([]service.Account, error) {
+	accounts, err := r.accountListFilteredQuery(platform, accountType, status, search, groupID, privacyMode, poolGroupID).All(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -1843,6 +1891,32 @@ func (r *accountRepository) ListSchedulableByGroupIDAndPlatform(ctx context.Cont
 	})
 }
 
+func (r *accountRepository) ListSchedulableByGroupNameAndPlatform(ctx context.Context, groupName, platform string) ([]service.Account, error) {
+	groupName = strings.TrimSpace(groupName)
+	platform = strings.TrimSpace(platform)
+	if groupName == "" || platform == "" {
+		return []service.Account{}, nil
+	}
+	group, err := r.client.Group.Query().
+		Where(
+			dbgroup.NameEQ(groupName),
+			dbgroup.PlatformEQ(platform),
+			dbgroup.DeletedAtIsNil(),
+		).
+		Only(ctx)
+	if err != nil {
+		if dbent.IsNotFound(err) {
+			return []service.Account{}, nil
+		}
+		return nil, err
+	}
+	return r.queryAccountsByGroup(ctx, group.ID, accountGroupQueryOptions{
+		status:      service.StatusActive,
+		schedulable: true,
+		platforms:   []string{platform},
+	})
+}
+
 func (r *accountRepository) ListSchedulableByPlatforms(ctx context.Context, platforms []string) ([]service.Account, error) {
 	if len(platforms) == 0 {
 		return nil, nil
@@ -2533,7 +2607,77 @@ func (r *accountRepository) updateUpstreamBillingProbeSnapshotInTx(
 	if affected == 0 {
 		return service.ErrUpstreamBillingProbeIdentityChanged
 	}
+	if err := r.insertUpstreamBillingRateSnapshots(ctx, client, account, snapshot); err != nil {
+		return err
+	}
 	return enqueueSchedulerOutbox(ctx, client, service.SchedulerOutboxEventAccountChanged, &account.ID, nil, nil)
+}
+
+func (r *accountRepository) insertUpstreamBillingRateSnapshots(
+	ctx context.Context,
+	client *dbent.Client,
+	account *service.Account,
+	snapshot *service.UpstreamBillingProbeSnapshot,
+) error {
+	if account == nil || snapshot == nil || snapshot.Status != service.UpstreamBillingProbeStatusOK {
+		return nil
+	}
+
+	rate, observedAt, capturedAt, ok := upstreamBillingRateSnapshotValues(snapshot)
+	if !ok {
+		return nil
+	}
+
+	groupIDs := append([]int64(nil), account.GroupIDs...)
+	if len(groupIDs) == 0 {
+		groupIDs = []int64{0}
+	}
+
+	_, err := client.ExecContext(ctx, `
+		INSERT INTO account_upstream_rate_snapshots (
+			account_id,
+			group_id,
+			effective_rate_multiplier,
+			observed_at,
+			captured_at,
+			source
+		)
+		SELECT $1, group_id, $2, $3, $4, 'probe'
+		FROM unnest($5::bigint[]) AS group_id
+		ON CONFLICT (account_id, group_id, observed_at)
+		DO UPDATE SET
+			effective_rate_multiplier = EXCLUDED.effective_rate_multiplier,
+			captured_at = EXCLUDED.captured_at,
+			source = EXCLUDED.source
+	`, account.ID, rate, observedAt, capturedAt, pq.Array(groupIDs))
+	return err
+}
+
+func upstreamBillingRateSnapshotValues(snapshot *service.UpstreamBillingProbeSnapshot) (float64, time.Time, time.Time, bool) {
+	if snapshot == nil || snapshot.Data == nil {
+		return 0, time.Time{}, time.Time{}, false
+	}
+	rate, ok := snapshot.Data["effective_rate_multiplier"].(float64)
+	if !ok || rate < 0 || math.IsNaN(rate) || math.IsInf(rate, 0) {
+		return 0, time.Time{}, time.Time{}, false
+	}
+
+	observedAt := time.Time{}
+	if raw, ok := snapshot.Data["observed_at"].(string); ok {
+		observedAt, _ = time.Parse(time.RFC3339Nano, raw)
+	}
+	if observedAt.IsZero() && snapshot.ReceivedAt != nil {
+		observedAt = *snapshot.ReceivedAt
+	}
+	if observedAt.IsZero() {
+		return 0, time.Time{}, time.Time{}, false
+	}
+
+	capturedAt := observedAt
+	if snapshot.ReceivedAt != nil && !snapshot.ReceivedAt.IsZero() {
+		capturedAt = *snapshot.ReceivedAt
+	}
+	return rate, observedAt.UTC(), capturedAt.UTC(), true
 }
 
 func lockAndMatchProbeProxyIdentity(ctx context.Context, client *dbent.Client, account *service.Account) (bool, error) {
@@ -2626,6 +2770,16 @@ func (r *accountRepository) BulkUpdate(ctx context.Context, ids []int64, updates
 		} else {
 			setClauses = append(setClauses, "proxy_id = $"+itoa(idx))
 			args = append(args, *updates.ProxyID)
+			idx++
+		}
+	}
+	if updates.PoolGroupID != nil {
+		// 0 表示清除账号池组。
+		if *updates.PoolGroupID <= 0 {
+			setClauses = append(setClauses, "pool_group_id = NULL")
+		} else {
+			setClauses = append(setClauses, "pool_group_id = $"+itoa(idx))
+			args = append(args, *updates.PoolGroupID)
 			idx++
 		}
 	}
@@ -2871,6 +3025,10 @@ func (r *accountRepository) accountsToService(ctx context.Context, accounts []*d
 	if err != nil {
 		return nil, err
 	}
+	poolGroupIDsByAccount, poolGroupsByAccount, err := r.loadAccountPoolGroups(ctx, accountIDs)
+	if err != nil {
+		return nil, err
+	}
 
 	outAccounts := make([]service.Account, 0, len(accounts))
 	for _, acc := range accounts {
@@ -2898,6 +3056,12 @@ func (r *accountRepository) accountsToService(ctx context.Context, accounts []*d
 		}
 		if ags, ok := accountGroupsByAccount[acc.ID]; ok {
 			out.AccountGroups = ags
+		}
+		if poolGroupID, ok := poolGroupIDsByAccount[acc.ID]; ok {
+			out.PoolGroupID = &poolGroupID
+		}
+		if poolGroup, ok := poolGroupsByAccount[acc.ID]; ok {
+			out.PoolGroup = poolGroup
 		}
 		outAccounts = append(outAccounts, *out)
 	}
@@ -3018,6 +3182,82 @@ func (r *accountRepository) loadGroups(ctx context.Context, groupIDs []int64) (m
 		}
 	}
 	return groupMap, nil
+}
+
+func (r *accountRepository) loadAccountPoolGroups(ctx context.Context, accountIDs []int64) (map[int64]int64, map[int64]*service.AccountPoolGroup, error) {
+	poolGroupIDsByAccount := make(map[int64]int64)
+	poolGroupsByAccount := make(map[int64]*service.AccountPoolGroup)
+
+	accountIDs = uniquePositiveInt64s(accountIDs)
+	if len(accountIDs) == 0 || r.sql == nil {
+		return poolGroupIDsByAccount, poolGroupsByAccount, nil
+	}
+
+	for start := 0; start < len(accountIDs); start += postgresParameterBatchSize {
+		end := start + postgresParameterBatchSize
+		if end > len(accountIDs) {
+			end = len(accountIDs)
+		}
+		rows, err := r.sql.QueryContext(ctx, `
+			SELECT
+				a.id,
+				a.pool_group_id,
+				pg.id,
+				pg.name,
+				pg.upstream_key,
+				pg.description,
+				pg.sort_order,
+				pg.status,
+				pg.created_at,
+				pg.updated_at
+			FROM accounts a
+			LEFT JOIN account_pool_groups pg
+			  ON pg.id = a.pool_group_id
+			 AND pg.deleted_at IS NULL
+			WHERE a.id = ANY($1)
+			  AND a.deleted_at IS NULL
+		`, pq.Array(accountIDs[start:end]))
+		if err != nil {
+			return nil, nil, err
+		}
+		for rows.Next() {
+			var accountID int64
+			var poolGroupID sql.NullInt64
+			var groupID sql.NullInt64
+			var name, upstreamKey, description, status sql.NullString
+			var sortOrder sql.NullInt64
+			var createdAt, updatedAt sql.NullTime
+			if err := rows.Scan(&accountID, &poolGroupID, &groupID, &name, &upstreamKey, &description, &sortOrder, &status, &createdAt, &updatedAt); err != nil {
+				_ = rows.Close()
+				return nil, nil, err
+			}
+			if poolGroupID.Valid {
+				poolGroupIDsByAccount[accountID] = poolGroupID.Int64
+			}
+			if groupID.Valid {
+				group := &service.AccountPoolGroup{
+					ID:          groupID.Int64,
+					Name:        name.String,
+					UpstreamKey: upstreamKey.String,
+					Description: description.String,
+					SortOrder:   int(sortOrder.Int64),
+					Status:      status.String,
+					CreatedAt:   createdAt.Time,
+					UpdatedAt:   updatedAt.Time,
+				}
+				poolGroupsByAccount[accountID] = group
+			}
+		}
+		if err := rows.Err(); err != nil {
+			_ = rows.Close()
+			return nil, nil, err
+		}
+		if err := rows.Close(); err != nil {
+			return nil, nil, err
+		}
+	}
+
+	return poolGroupIDsByAccount, poolGroupsByAccount, nil
 }
 
 func uniquePositiveInt64s(ids []int64) []int64 {

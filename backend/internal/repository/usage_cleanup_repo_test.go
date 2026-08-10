@@ -439,6 +439,69 @@ func TestUsageCleanupRepositoryDeleteUsageLogsBatchQueryError(t *testing.T) {
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestUsageCleanupRepositoryFindNextUsageLogArchiveWindow(t *testing.T) {
+	db, mock := newSQLMock(t)
+	repo := &usageCleanupRepository{sql: db}
+
+	cutoff := time.Date(2024, 2, 1, 12, 0, 0, 0, time.UTC)
+	bucket := time.Date(2024, 1, 1, 10, 0, 0, 0, time.UTC)
+
+	mock.ExpectQuery("date_trunc\\('hour', MIN\\(created_at\\)\\)").
+		WithArgs(cutoff).
+		WillReturnRows(sqlmock.NewRows([]string{"bucket_start"}).AddRow(bucket))
+
+	window, err := repo.FindNextUsageLogArchiveWindow(context.Background(), cutoff, time.Hour)
+	require.NoError(t, err)
+	require.NotNil(t, window)
+	require.True(t, window.StartTime.Equal(bucket))
+	require.True(t, window.EndTime.Equal(bucket.Add(time.Hour)))
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestUsageCleanupRepositoryFindNextUsageLogArchiveWindowEmpty(t *testing.T) {
+	db, mock := newSQLMock(t)
+	repo := &usageCleanupRepository{sql: db}
+
+	cutoff := time.Date(2024, 2, 1, 12, 0, 0, 0, time.UTC)
+	mock.ExpectQuery("date_trunc\\('hour', MIN\\(created_at\\)\\)").
+		WithArgs(cutoff).
+		WillReturnRows(sqlmock.NewRows([]string{"bucket_start"}).AddRow(nil))
+
+	window, err := repo.FindNextUsageLogArchiveWindow(context.Background(), cutoff, time.Hour)
+	require.NoError(t, err)
+	require.Nil(t, window)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestUsageCleanupRepositoryArchiveUsageLogsWindow(t *testing.T) {
+	db, mock := newSQLMock(t)
+	repo := &usageCleanupRepository{sql: db}
+
+	start := time.Date(2024, 1, 1, 10, 0, 0, 0, time.UTC)
+	end := start.Add(time.Hour)
+
+	mock.ExpectBegin()
+	mock.ExpectQuery("(?s)WITH aggregated AS.*INSERT INTO usage_log_hourly_archives.*DELETE FROM usage_logs").
+		WithArgs(start, end).
+		WillReturnRows(sqlmock.NewRows([]string{"summary_rows", "deleted_rows"}).AddRow(int64(4), int64(99)))
+	mock.ExpectCommit()
+
+	result, err := repo.ArchiveUsageLogsWindow(context.Background(), start, end)
+	require.NoError(t, err)
+	require.Equal(t, int64(4), result.SummaryRows)
+	require.Equal(t, int64(99), result.DeletedRows)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestUsageCleanupRepositoryArchiveUsageLogsWindowInvalidRange(t *testing.T) {
+	db, _ := newSQLMock(t)
+	repo := &usageCleanupRepository{sql: db}
+
+	start := time.Date(2024, 1, 1, 10, 0, 0, 0, time.UTC)
+	_, err := repo.ArchiveUsageLogsWindow(context.Background(), start, start)
+	require.Error(t, err)
+}
+
 func TestBuildUsageCleanupWhere(t *testing.T) {
 	start := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
 	end := start.Add(24 * time.Hour)

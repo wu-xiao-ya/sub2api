@@ -1691,6 +1691,39 @@ func TestOpenAIStreamingNormalizesTerminalOutputToEmptyArray(t *testing.T) {
 	require.Len(t, output.Array(), 0)
 }
 
+func TestOpenAIStreamingCapturesIncompleteTerminalReason(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	svc := &OpenAIGatewayService{cfg: &config.Config{
+		Gateway: config.GatewayConfig{
+			StreamDataIntervalTimeout: 0,
+			StreamKeepaliveInterval:   0,
+			MaxLineSize:               defaultMaxLineSize,
+		},
+	}}
+
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", nil)
+	resp := &http.Response{
+		StatusCode: http.StatusOK,
+		Body: io.NopCloser(strings.NewReader(strings.Join([]string{
+			`data: {"type":"response.output_text.delta","delta":"partial"}`,
+			"",
+			`data: {"type":"response.incomplete","response":{"id":"resp_short","status":"incomplete","incomplete_details":{"reason":"max_output_tokens"},"usage":{"input_tokens":12000,"output_tokens":40}}}`,
+			"",
+		}, "\n"))),
+		Header: http.Header{"X-Request-Id": []string{"rid-short-output"}},
+	}
+
+	result, err := svc.handleStreamingResponse(c.Request.Context(), resp, c, &Account{ID: 1, Platform: PlatformOpenAI}, time.Now(), "model", "model")
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.Equal(t, "response.incomplete", result.terminalEvent)
+	require.Equal(t, "max_output_tokens", result.incompleteReason)
+	require.Equal(t, 12000, result.usage.InputTokens)
+	require.Equal(t, 40, result.usage.OutputTokens)
+}
+
 func TestOpenAIStreamingPolicyResponseFailedBeforeOutputPassesThrough(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	cfg := &config.Config{

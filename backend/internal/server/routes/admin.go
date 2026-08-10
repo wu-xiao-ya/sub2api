@@ -242,6 +242,7 @@ func registerOpsRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 
 		// Upstream errors (independent upstream failures)
 		ops.GET("/upstream-errors", h.Admin.Ops.ListUpstreamErrors)
+		ops.GET("/upstream-errors/attribution", h.Admin.Ops.GetUpstreamErrorAttribution)
 		ops.GET("/upstream-errors/:id", h.Admin.Ops.GetUpstreamError)
 		ops.PUT("/upstream-errors/:id/resolve", h.Admin.Ops.ResolveUpstreamError)
 
@@ -341,6 +342,10 @@ func registerAccountRoutes(admin *gin.RouterGroup, h *handler.Handlers, stepUpAu
 		accounts.GET("/upstream-billing-probe/settings", h.Admin.Account.GetUpstreamBillingProbeSettings)
 		accounts.PUT("/upstream-billing-probe/settings", h.Admin.Account.UpdateUpstreamBillingProbeSettings)
 		accounts.POST("/upstream-billing-probe/batch", h.Admin.Account.ProbeUpstreamBillingBatch)
+		accounts.GET("/pool-groups", h.Admin.Account.ListPoolGroups)
+		accounts.POST("/pool-groups", h.Admin.Account.CreatePoolGroup)
+		accounts.PUT("/pool-groups/:id", h.Admin.Account.UpdatePoolGroup)
+		accounts.DELETE("/pool-groups/:id", h.Admin.Account.DeletePoolGroup)
 		accounts.GET("/:id", h.Admin.Account.GetByID)
 		accounts.POST("", h.Admin.Account.Create)
 		accounts.POST("/:id/duplicate", h.Admin.Account.Duplicate)
@@ -512,6 +517,8 @@ func registerSettingsRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 	{
 		adminSettings.GET("", h.Admin.Setting.GetSettings)
 		adminSettings.PUT("", h.Admin.Setting.UpdateSettings)
+		adminSettings.GET("/image-upstream-cost", h.Admin.Setting.GetImageUpstreamCost)
+		adminSettings.PUT("/image-upstream-cost", h.Admin.Setting.UpdateImageUpstreamCost)
 		adminSettings.POST("/test-smtp", h.Admin.Setting.TestSMTPConnection)
 		adminSettings.POST("/send-test-email", h.Admin.Setting.SendTestEmail)
 		adminSettings.GET("/email-templates", h.Admin.Setting.ListEmailTemplates)
@@ -719,6 +726,7 @@ func registerChannelMonitorRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		monitors.DELETE("/:id", h.Admin.ChannelMonitor.Delete)
 		monitors.POST("/:id/run", h.Admin.ChannelMonitor.Run)
 		monitors.GET("/:id/history", h.Admin.ChannelMonitor.History)
+		monitors.GET("/:id/image", h.Admin.ChannelMonitor.Image)
 	}
 
 	templates := admin.Group("/channel-monitor-templates")

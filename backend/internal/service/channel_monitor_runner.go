@@ -31,6 +31,12 @@ type monitorRunnerSvc interface {
 	RunCheck(ctx context.Context, id int64) ([]*CheckResult, error)
 }
 
+// groupedMonitorRunnerSvc is intentionally optional so lightweight legacy test
+// doubles only need the original single-line methods.
+type groupedMonitorRunnerSvc interface {
+	RunGroupCheck(ctx context.Context, ids []int64) (*MonitorGroupCheckSummary, error)
+}
+
 // ChannelMonitorRunner 渠道监控调度器。
 //
 // 设计：
@@ -58,6 +64,11 @@ type ChannelMonitorRunner struct {
 	started bool
 	stopped bool
 
+	// refreshMu serializes asynchronous full reloads requested after monitor
+	// CRUD. A group may gain/lose lines or be renamed, so updating just one task
+	// is not enough to keep grouping correct.
+	refreshMu sync.Mutex
+
 	// inFlight 跟踪正在执行的 monitor.ID。fire 调度前会检查避免重复提交，
 	// 防止单次检测耗时 > interval 时同一 monitor 被并发执行。
 	inFlight   map[int64]struct{}
@@ -66,11 +77,12 @@ type ChannelMonitorRunner struct {
 
 // scheduledMonitor 单个监控的运行时上下文。
 type scheduledMonitor struct {
-	id       int64
-	name     string
-	interval time.Duration
-	jitter   time.Duration // 每轮 ± [0, jitter] 的均匀随机偏移；0 = 固定间隔
-	cancel   context.CancelFunc
+	id         int64
+	name       string
+	monitorIDs []int64
+	interval   time.Duration
+	jitter     time.Duration // 每轮 ± [0, jitter] 的均匀随机偏移；0 = 固定间隔
+	cancel     context.CancelFunc
 }
 
 // nextDelay 计算下一次触发的等待时长：interval ± [0, jitter] 的均匀随机偏移。
@@ -111,7 +123,7 @@ func newChannelMonitorRunner(svc monitorRunnerSvc, settingService *SettingServic
 	}
 }
 
-// Start 加载所有 enabled monitor 并为每个建立独立定时任务。
+// Start 加载所有 enabled monitor，并按同组线路建立独立定时任务。
 // 调用方需保证只调一次（wire ProvideChannelMonitorRunner 内只调一次）。
 func (r *ChannelMonitorRunner) Start() {
 	if r == nil || r.svc == nil {
@@ -132,13 +144,43 @@ func (r *ChannelMonitorRunner) Start() {
 		slog.Error("channel_monitor: load enabled monitors failed at startup", "error", err)
 		return
 	}
-	for _, m := range enabled {
-		r.Schedule(m)
-	}
-	slog.Info("channel_monitor: runner started", "scheduled_tasks", len(enabled))
+	r.replaceGroupedTasks(enabled)
+	slog.Info("channel_monitor: runner started",
+		"enabled_monitors", len(enabled),
+		"scheduled_tasks", r.taskCount())
 }
 
-// Schedule 为指定监控创建（或重置）独立定时任务。
+// Reconcile reloads all enabled monitors and rebuilds grouped tasks. It runs
+// asynchronously because it is called in create/update/delete request paths.
+func (r *ChannelMonitorRunner) Reconcile() {
+	if r == nil || r.svc == nil {
+		return
+	}
+	r.mu.Lock()
+	runnable := r.started && !r.stopped
+	r.mu.Unlock()
+	if !runnable {
+		return
+	}
+	go r.reloadGroupedTasks()
+}
+
+func (r *ChannelMonitorRunner) reloadGroupedTasks() {
+	r.refreshMu.Lock()
+	defer r.refreshMu.Unlock()
+
+	ctx, cancel := context.WithTimeout(context.Background(), monitorStartupLoadTimeout)
+	defer cancel()
+	enabled, err := r.svc.ListEnabledMonitors(ctx)
+	if err != nil {
+		slog.Warn("channel_monitor: reload enabled monitors failed", "error", err)
+		return
+	}
+	r.replaceGroupedTasks(enabled)
+}
+
+// Schedule preserves legacy direct scheduling behavior for one monitor.
+// Production CRUD uses Reconcile so named groups are rebuilt from all members.
 //   - m.Enabled=false → 等同于 Unschedule(m.ID)
 //   - 已存在的任务会先被取消再重建（适用于 IntervalSeconds 变更场景）
 //   - 新任务立即触发首次检测，之后按 IntervalSeconds 周期触发
@@ -183,17 +225,110 @@ func (r *ChannelMonitorRunner) Schedule(m *ChannelMonitor) {
 	}
 	ctx, cancel := context.WithCancel(r.parentCtx)
 	task := &scheduledMonitor{
-		id:       m.ID,
-		name:     m.Name,
-		interval: interval,
-		jitter:   jitter,
-		cancel:   cancel,
+		id:         m.ID,
+		name:       m.Name,
+		monitorIDs: []int64{m.ID},
+		interval:   interval,
+		jitter:     jitter,
+		cancel:     cancel,
 	}
 	r.tasks[m.ID] = task
 	r.wg.Add(1)
 	r.mu.Unlock()
 
 	go r.runScheduled(ctx, task)
+}
+
+// replaceGroupedTasks atomically replaces all scheduled tasks from one enabled
+// monitor snapshot. A named group becomes one task containing up to five
+// compatible monitor IDs; empty groups and image monitors remain individual.
+func (r *ChannelMonitorRunner) replaceGroupedTasks(monitors []*ChannelMonitor) {
+	specs := buildGroupedScheduledMonitors(monitors)
+
+	r.mu.Lock()
+	if r.stopped {
+		r.mu.Unlock()
+		return
+	}
+	for _, task := range r.tasks {
+		task.cancel()
+	}
+	r.tasks = make(map[int64]*scheduledMonitor, len(specs))
+
+	starts := make([]struct {
+		ctx  context.Context
+		task *scheduledMonitor
+	}, 0, len(specs))
+	for _, spec := range specs {
+		ctx, cancel := context.WithCancel(r.parentCtx)
+		task := &scheduledMonitor{
+			id:         spec.id,
+			name:       spec.name,
+			monitorIDs: append([]int64(nil), spec.monitorIDs...),
+			interval:   spec.interval,
+			jitter:     spec.jitter,
+			cancel:     cancel,
+		}
+		r.tasks[task.id] = task
+		r.wg.Add(1)
+		starts = append(starts, struct {
+			ctx  context.Context
+			task *scheduledMonitor
+		}{ctx: ctx, task: task})
+	}
+	r.mu.Unlock()
+
+	for _, start := range starts {
+		go r.runScheduled(start.ctx, start.task)
+	}
+}
+
+type scheduledMonitorSpec struct {
+	id         int64
+	name       string
+	monitorIDs []int64
+	interval   time.Duration
+	jitter     time.Duration
+}
+
+func buildGroupedScheduledMonitors(monitors []*ChannelMonitor) []scheduledMonitorSpec {
+	groups := groupMonitorCandidates(monitors)
+	out := make([]scheduledMonitorSpec, 0, len(groups))
+	for _, group := range groups {
+		group = limitMonitorCandidates(group)
+		if len(group) == 0 {
+			continue
+		}
+		leader := group[0]
+		interval := time.Duration(leader.IntervalSeconds) * time.Second
+		if interval <= 0 {
+			slog.Error("channel_monitor: skip grouped schedule for invalid interval",
+				"monitor_id", leader.ID, "interval_seconds", leader.IntervalSeconds)
+			continue
+		}
+		jitter := time.Duration(leader.JitterSeconds) * time.Second
+		if jitter < 0 {
+			jitter = 0
+		}
+		ids := make([]int64, 0, len(group))
+		for _, m := range group {
+			ids = append(ids, m.ID)
+		}
+		out = append(out, scheduledMonitorSpec{
+			id:         leader.ID,
+			name:       monitorGroupDisplayName(leader),
+			monitorIDs: ids,
+			interval:   interval,
+			jitter:     jitter,
+		})
+	}
+	return out
+}
+
+func (r *ChannelMonitorRunner) taskCount() int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return len(r.tasks)
 }
 
 // Unschedule 取消指定监控的定时任务（若存在）。
@@ -265,7 +400,7 @@ func (r *ChannelMonitorRunner) fire(ctx context.Context, task *scheduledMonitor)
 		return
 	}
 	if _, ok := r.pool.TrySubmit(func() {
-		r.runOne(task.id, task.name)
+		r.runOne(task)
 	}); !ok {
 		// 池满：丢弃本次检测，但必须释放已占用的 inFlight 槽，否则该 monitor 会被永久卡住。
 		r.releaseInFlight(task.id)
@@ -293,23 +428,47 @@ func (r *ChannelMonitorRunner) releaseInFlight(id int64) {
 	r.inFlightMu.Unlock()
 }
 
-// runOne 执行单个监控的检测。所有错误只记日志，不熔断。
+// runOne executes one scheduled task. Named groups with multiple lines use the
+// low-cost concurrent probe path; single-line tasks retain the original check.
 // 任务结束时（含 panic recover）必须释放 in-flight 槽。
-func (r *ChannelMonitorRunner) runOne(id int64, name string) {
+func (r *ChannelMonitorRunner) runOne(task *scheduledMonitor) {
+	if task == nil {
+		return
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), monitorRequestTimeout+monitorPingTimeout+monitorRunOneBuffer)
 	defer cancel()
 
-	defer r.releaseInFlight(id)
+	defer r.releaseInFlight(task.id)
 
 	defer func() {
 		if rec := recover(); rec != nil {
 			slog.Error("channel_monitor: runner panic",
-				"monitor_id", id, "name", name, "panic", rec)
+				"monitor_id", task.id, "name", task.name, "panic", rec)
 		}
 	}()
 
-	if _, err := r.svc.RunCheck(ctx, id); err != nil {
+	if len(task.monitorIDs) > 1 {
+		if groupedSvc, ok := r.svc.(groupedMonitorRunnerSvc); ok {
+			summary, err := groupedSvc.RunGroupCheck(ctx, task.monitorIDs)
+			if err != nil {
+				slog.Warn("channel_monitor: grouped run check failed",
+					"monitor_id", task.id, "name", task.name, "error", err)
+				return
+			}
+			if summary != nil {
+				slog.Debug("channel_monitor: grouped run selected best line",
+					"group", summary.GroupName,
+					"best_monitor_id", summary.BestMonitorID,
+					"best_status", summary.BestStatus)
+			}
+			return
+		}
+		slog.Warn("channel_monitor: grouped runner service unavailable, falling back to leader",
+			"monitor_id", task.id, "name", task.name)
+	}
+
+	if _, err := r.svc.RunCheck(ctx, task.id); err != nil {
 		slog.Warn("channel_monitor: run check failed",
-			"monitor_id", id, "name", name, "error", err)
+			"monitor_id", task.id, "name", task.name, "error", err)
 	}
 }

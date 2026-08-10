@@ -27,6 +27,9 @@ vendor/
 
 # Go 编译缓存
 backend/.gocache/
+backend/.go-cache/
+.go-cache*/
+.go-tmp*/
 
 # ===================
 # Node.js / Vue 前端
@@ -143,3 +146,25 @@ docs/*
 frontend/coverage/
 aicodex
 output/
+
+# ===================
+# 当前实例的构建与部署产物
+# ===================
+__pycache__/
+*.pyc
+
+# Linux production binaries and their temporary transfer archives are rebuilt
+# from source on release and must not enter the source repository.
+backend/sub2api-*-linux-amd64
+backend/sub2api-*-linux-amd64.*
+backend/sub2api-*.tar.gz
+backend/channel-monitor-*-latest.png
+sub2api-*-linux-amd64
+sub2api-*.tar.gz
+sub2api-*-upload.tar.gz
+
+# Historical one-off deployment recipes belong to local rollout history, not
+# the maintained source tree.
+Dockerfile.step*
+backend/Dockerfile.hk-step*
+deploy-sub2api-step*.sh

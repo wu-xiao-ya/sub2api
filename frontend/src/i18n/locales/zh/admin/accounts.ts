@@ -90,6 +90,8 @@ export default {
       allStatus: '全部状态',
       allGroups: '全部分组',
       ungroupedGroup: '未分配分组',
+      allPoolGroups: '全部账号池组',
+      ungroupedPoolGroup: '未归池账号',
       oauthType: 'OAuth',
       // Schedulable toggle
       schedulable: '参与调度',
@@ -98,6 +100,33 @@ export default {
       schedulableDisabled: '调度已关闭',
       failedToToggleSchedulable: '切换调度状态失败',
       groupCountTotal: '共 {count} 个分组',
+      accountPoolGroup: {
+        label: '账号池组',
+        hint: '用于把来自同一上游或同一上游内不同池子的账号归类；暂不改变调度规则。',
+        none: '不归入账号池组',
+        manage: '账号池组管理'
+      },
+      poolGroupManager: {
+        title: '账号池组管理',
+        listTitle: '池组列表',
+        listHint: '同一上游可以建多个池组，用上游标识区分来源。',
+        empty: '还没有账号池组',
+        noUpstreamKey: '未填写上游标识',
+        name: '池组名称',
+        namePlaceholder: '例如：AIHub Pro 1 号池',
+        nameRequired: '请填写池组名称',
+        upstreamKey: '上游标识',
+        upstreamKeyPlaceholder: '例如：aihub、fengl、official-openai',
+        upstreamKeyHint: '可选，用于标记账号来源；同一上游下可以有多个池组。',
+        description: '描述',
+        descriptionPlaceholder: '记录该池子的来源、用途或注意事项',
+        sortOrder: '排序',
+        created: '账号池组已创建',
+        updated: '账号池组已更新',
+        deleted: '账号池组已删除',
+        failed: '账号池组操作失败',
+        deleteConfirm: '确定删除账号池组“{name}”吗？已绑定账号会自动变为未归池。'
+      },
       columns: {
         name: '名称',
         id: '账号ID',
@@ -115,6 +144,7 @@ export default {
         schedulable: '调度',
         todayStats: '今日统计',
         groups: '分组',
+        poolGroup: '账号池组',
         usageWindows: '用量窗口',
         proxy: '代理',
         lastUsed: '最近使用',
@@ -468,6 +498,7 @@ export default {
         failed: '批量更新失败',
         noSelection: '请选择要编辑的账号',
         noFieldsSelected: '请至少选择一个要更新的字段',
+        poolGroupNotice: '勾选后会批量绑定到所选账号池组；选择“不归入账号池组”会清空绑定。',
         mixedPlatformWarning: '所选账号跨越多个平台（{platforms}）。显示的模型映射预设为合并结果——请确保映射对每个平台都适用。'
       },
       bulkDeleteTitle: '批量删除账号',

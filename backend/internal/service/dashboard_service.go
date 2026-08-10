@@ -166,6 +166,48 @@ func (s *DashboardService) GetGroupStatsWithFilters(ctx context.Context, startTi
 	if err != nil {
 		return nil, fmt.Errorf("get group stats with filters: %w", err)
 	}
+	usagestats.ApplyCostProfitMetrics(stats)
+	return stats, nil
+}
+
+func (s *DashboardService) GetGroupStatsWithExcludedUsers(
+	ctx context.Context,
+	startTime, endTime time.Time,
+	userID, apiKeyID, accountID, groupID int64,
+	requestType *int16,
+	stream *bool,
+	billingType *int8,
+	excludeUserIDs []int64,
+	excludeUserEmails []string,
+) ([]usagestats.GroupStat, error) {
+	if len(excludeUserIDs) == 0 && len(excludeUserEmails) == 0 {
+		return s.GetGroupStatsWithFilters(ctx, startTime, endTime, userID, apiKeyID, accountID, groupID, requestType, stream, billingType)
+	}
+
+	type groupStatsWithUsageFiltersRepo interface {
+		GetGroupStatsWithUsageFilters(ctx context.Context, startTime, endTime time.Time, filters usagestats.UsageLogFilters) ([]usagestats.GroupStat, error)
+	}
+
+	filterRepo, ok := s.usageRepo.(groupStatsWithUsageFiltersRepo)
+	if !ok {
+		return nil, errors.New("group stats exclusion filter is not supported")
+	}
+
+	stats, err := filterRepo.GetGroupStatsWithUsageFilters(ctx, startTime, endTime, usagestats.UsageLogFilters{
+		UserID:           userID,
+		APIKeyID:         apiKeyID,
+		AccountID:        accountID,
+		GroupID:          groupID,
+		RequestType:      requestType,
+		Stream:           stream,
+		BillingType:      billingType,
+		ExcludeUserIDs:   excludeUserIDs,
+		ExcludeUserEmails: excludeUserEmails,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("get group stats with excluded users: %w", err)
+	}
+	usagestats.ApplyCostProfitMetrics(stats)
 	return stats, nil
 }
 

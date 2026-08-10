@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 )
 
 // 渠道监控聚合层：把 latest + availability 拼成 admin/user 视图所需的 summary / detail。
@@ -69,12 +70,59 @@ func (s *ChannelMonitorService) ListUserView(ctx context.Context) ([]*UserMonito
 	latestMap := s.batchLatest(ctx, ids)
 	timelineMap := s.batchTimeline(ctx, ids, primaryByID)
 
-	views := make([]*UserMonitorView, 0, len(monitors))
-	for _, m := range monitors {
+	groups := groupMonitorCandidates(monitors)
+	views := make([]*UserMonitorView, 0, len(groups))
+	for _, group := range groups {
+		m := selectBestMonitorForUserView(group, summaries)
+		if m == nil {
+			continue
+		}
 		primaryLatest := pickLatest(latestMap[m.ID], m.PrimaryModel)
-		views = append(views, buildUserViewFromSummary(m, summaries[m.ID], primaryLatest, timelineMap[m.ID]))
+		view := buildUserViewFromSummary(m, summaries[m.ID], primaryLatest, timelineMap[m.ID])
+		if len(group) > 1 && strings.TrimSpace(m.GroupName) != "" {
+			view.Name = strings.TrimSpace(m.GroupName)
+		}
+		views = append(views, view)
 	}
 	return views, nil
+}
+
+// selectBestMonitorForUserView mirrors grouped probe selection using the latest
+// persisted result. The public page is therefore healthy when at least one
+// line in the named group is healthy, while admin retains per-line history.
+func selectBestMonitorForUserView(
+	monitors []*ChannelMonitor,
+	summaries map[int64]MonitorStatusSummary,
+) *ChannelMonitor {
+	var best *ChannelMonitor
+	for _, candidate := range monitors {
+		if candidate == nil {
+			continue
+		}
+		if best == nil || isBetterMonitorSummary(summaries[candidate.ID], candidate, summaries[best.ID], best) {
+			best = candidate
+		}
+	}
+	return best
+}
+
+func isBetterMonitorSummary(
+	candidateSummary MonitorStatusSummary,
+	candidate *ChannelMonitor,
+	incumbentSummary MonitorStatusSummary,
+	incumbent *ChannelMonitor,
+) bool {
+	candidateRank := monitorStatusRank(candidateSummary.PrimaryStatus)
+	incumbentRank := monitorStatusRank(incumbentSummary.PrimaryStatus)
+	if candidateRank != incumbentRank {
+		return candidateRank > incumbentRank
+	}
+	candidateLatency := monitorLatencySortValue(candidateSummary.PrimaryLatencyMs)
+	incumbentLatency := monitorLatencySortValue(incumbentSummary.PrimaryLatencyMs)
+	if candidateLatency != incumbentLatency {
+		return candidateLatency < incumbentLatency
+	}
+	return candidate.ID < incumbent.ID
 }
 
 // collectMonitorIndexes 把 monitors 列表按 ID 展开为聚合查询所需的三个索引结构。
@@ -215,6 +263,9 @@ func buildStatusSummary(
 			entry.Status = l.Status
 			entry.LatencyMs = l.LatencyMs
 		}
+		if a, ok := availByModel[model]; ok {
+			entry.Availability7d = a.AvailabilityPct
+		}
 		summary.ExtraModels = append(summary.ExtraModels, entry)
 	}
 	return summary
@@ -232,6 +283,7 @@ func buildUserViewFromSummary(
 		ID:               m.ID,
 		Name:             m.Name,
 		Provider:         m.Provider,
+		APIMode:          m.APIMode,
 		GroupName:        m.GroupName,
 		PrimaryModel:     m.PrimaryModel,
 		PrimaryStatus:    summary.PrimaryStatus,

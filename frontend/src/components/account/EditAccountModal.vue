@@ -2530,6 +2530,15 @@
         :mixed-scheduling="mixedScheduling"
         data-tour="account-form-groups"
       />
+      <div>
+        <label class="input-label">{{ t('admin.accounts.accountPoolGroup.label') }}</label>
+        <Select
+          v-model="form.pool_group_id"
+          :options="poolGroupOptions"
+          searchable="auto"
+        />
+        <p class="input-hint">{{ t('admin.accounts.accountPoolGroup.hint') }}</p>
+      </div>
 
     </form>
 
@@ -2595,6 +2604,7 @@ import type {
   Account,
   Proxy,
   AdminGroup,
+  AccountPoolGroup,
   CheckMixedChannelResponse,
   OpenAICompactMode,
   OpenAIResponsesMode,
@@ -2653,6 +2663,7 @@ interface Props {
   account: Account | null
   proxies: Proxy[]
   groups: AdminGroup[]
+  poolGroups: AccountPoolGroup[]
 }
 
 const props = defineProps<Props>()
@@ -3143,8 +3154,17 @@ const form = reactive({
   rate_multiplier: 1,
   status: 'active' as 'active' | 'inactive' | 'error',
   group_ids: [] as number[],
+  pool_group_id: null as number | null,
   expires_at: null as number | null
 })
+
+const poolGroupOptions = computed(() => [
+  { value: null, label: t('admin.accounts.accountPoolGroup.none') },
+  ...props.poolGroups.map(group => ({
+    value: group.id,
+    label: group.upstream_key ? `${group.name} · ${group.upstream_key}` : group.name
+  }))
+])
 
 const statusOptions = computed(() => {
   const options = [
@@ -3234,6 +3254,7 @@ const syncFormFromAccount = (newAccount: Account | null) => {
     ? newAccount.status
     : 'active'
   form.group_ids = newAccount.group_ids || []
+  form.pool_group_id = newAccount.pool_group_id ?? null
   form.expires_at = newAccount.expires_at ?? null
 
   // Load intercept warmup requests setting (applies to all account types)
@@ -4028,6 +4049,9 @@ const handleSubmit = async () => {
     // 后端期望 proxy_id: 0 表示清除代理，而不是 null
     if (updatePayload.proxy_id === null) {
       updatePayload.proxy_id = 0
+    }
+    if (updatePayload.pool_group_id === null) {
+      updatePayload.pool_group_id = 0
     }
     if (form.expires_at === null) {
       updatePayload.expires_at = 0

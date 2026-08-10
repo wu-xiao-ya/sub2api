@@ -19,6 +19,8 @@ export const DEFAULT_GROK_MODEL = 'grok-4.5'
 
 export const API_MODE_CHAT_COMPLETIONS: APIMode = 'chat_completions'
 export const API_MODE_RESPONSES: APIMode = 'responses'
+export const API_MODE_MODELS: APIMode = 'models'
+export const API_MODE_IMAGES: APIMode = 'images'
 
 export const PROVIDERS: readonly Provider[] = [
   PROVIDER_OPENAI,
@@ -30,6 +32,8 @@ export const PROVIDERS: readonly Provider[] = [
 export const API_MODES: readonly APIMode[] = [
   API_MODE_CHAT_COMPLETIONS,
   API_MODE_RESPONSES,
+  API_MODE_MODELS,
+  API_MODE_IMAGES,
 ]
 
 export const STATUS_OPERATIONAL: MonitorStatus = 'operational'

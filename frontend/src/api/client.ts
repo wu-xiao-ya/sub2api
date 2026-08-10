@@ -13,6 +13,7 @@ import {
   shouldMarkUserUIRequest,
 } from './adminUIRequest'
 import { getAPIBaseURL } from './url'
+import { buildAppPath } from '@/utils/appPath'
 export { buildApiUrl, buildGatewayUrl } from './url'
 
 // ==================== Axios Instance Configuration ====================
@@ -153,7 +154,7 @@ apiClient.interceptors.response.use(
         }
 
         if (window.location.pathname.startsWith('/admin/ops')) {
-          window.location.href = '/admin/settings'
+              window.location.href = buildAppPath('/admin/settings')
         }
 
         return Promise.reject({
@@ -267,7 +268,7 @@ apiClient.interceptors.response.use(
             sessionStorage.setItem('auth_expired', '1')
 
             if (!window.location.pathname.includes('/login')) {
-              window.location.href = '/login'
+              window.location.href = buildAppPath('/login')
             }
 
             return Promise.reject({
@@ -298,7 +299,7 @@ apiClient.interceptors.response.use(
         }
         // Only redirect if not already on login page
         if (!window.location.pathname.includes('/login')) {
-          window.location.href = '/login'
+          window.location.href = buildAppPath('/login')
         }
       }
 

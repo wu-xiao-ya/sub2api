@@ -26,6 +26,8 @@ type openaiStreamingResult struct {
 	usage            *OpenAIUsage
 	firstTokenMs     *int
 	responseID       string
+	terminalEvent    string
+	incompleteReason string
 	imageCount       int
 	imageOutputSizes []string
 }
@@ -136,6 +138,8 @@ func (s *OpenAIGatewayService) handleStreamingResponseWithReasoning(ctx context.
 	usage := &OpenAIUsage{}
 	imageCounter := newOpenAIImageOutputCounter()
 	responseID := ""
+	terminalEvent := ""
+	incompleteReason := ""
 	var firstOutputScanGuard atomic.Bool
 	firstOutputScanGuard.Store(guardFirstOutput)
 	scanner := bufio.NewScanner(resp.Body)
@@ -293,6 +297,8 @@ func (s *OpenAIGatewayService) handleStreamingResponseWithReasoning(ctx context.
 			usage:            usage,
 			firstTokenMs:     firstTokenMs,
 			responseID:       responseID,
+			terminalEvent:    terminalEvent,
+			incompleteReason: incompleteReason,
 			imageCount:       imageCounter.Count(),
 			imageOutputSizes: imageCounter.Sizes(),
 		}
@@ -401,6 +407,10 @@ func (s *OpenAIGatewayService) handleStreamingResponseWithReasoning(ctx context.
 			// 初始上游 data 的 type 只解析一次：原始值保持终止事件的精确匹配，规范化值供后续分支复用。
 			if openAIStreamEventIsTerminalWithType(data, eventTypeRaw) {
 				sawTerminalEvent = true
+				terminalEvent = eventType
+				if incompleteReason == "" {
+					incompleteReason = extractOpenAIResponseIncompleteReason(dataBytes)
+				}
 			}
 			if responseID == "" {
 				responseID = extractOpenAIResponseIDFromJSONBytes(dataBytes)
@@ -1259,6 +1269,21 @@ func extractOpenAISSEErrorMessage(payload []byte) string {
 		}
 	}
 	return sanitizeUpstreamErrorMessage(strings.TrimSpace(extractUpstreamErrorMessage(payload)))
+}
+
+func extractOpenAIResponseIncompleteReason(payload []byte) string {
+	if len(payload) == 0 || !gjson.ValidBytes(payload) {
+		return ""
+	}
+	for _, path := range []string{
+		"response.incomplete_details.reason",
+		"incomplete_details.reason",
+	} {
+		if reason := strings.TrimSpace(gjson.GetBytes(payload, path).String()); reason != "" {
+			return reason
+		}
+	}
+	return ""
 }
 
 func sanitizeOpenAIResponseFailedEventForClient(payload []byte, eventType string, clientOutputStarted bool) ([]byte, bool) {

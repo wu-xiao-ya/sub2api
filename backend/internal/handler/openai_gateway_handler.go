@@ -591,6 +591,7 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 			}
 		}
 		if result != nil {
+			logOpenAIResponsesShortCompletion(reqLog, body, result, account)
 			// 排除 spark 影子:其 codex_* 仅由 QueryUsage(/wham/usage bengalfox)更新(外审第7轮 P1)。
 			if account.Type == service.AccountTypeOAuth && !account.IsShadow() {
 				h.gatewayService.UpdateCodexUsageSnapshotFromHeaders(c.Request.Context(), account.ID, result.ResponseHeaders)
@@ -643,6 +644,46 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 		)
 		return
 	}
+}
+
+const (
+	openAIResponsesShortCompletionMaxOutputTokens = 64
+	openAIResponsesShortCompletionMinInputTokens  = 8192
+)
+
+// logOpenAIResponsesShortCompletion records only routing and completion metadata
+// for suspiciously short Responses outputs. It deliberately excludes user input,
+// tools, credentials, and any other request-content fields.
+func logOpenAIResponsesShortCompletion(reqLog *zap.Logger, body []byte, result *service.OpenAIForwardResult, account *service.Account) {
+	if reqLog == nil || result == nil || !result.Stream {
+		return
+	}
+
+	incomplete := strings.TrimSpace(result.UpstreamIncompleteReason)
+	shortLongContext := result.Usage.InputTokens >= openAIResponsesShortCompletionMinInputTokens &&
+		result.Usage.OutputTokens <= openAIResponsesShortCompletionMaxOutputTokens
+	if incomplete == "" && !shortLongContext {
+		return
+	}
+
+	maxOutputTokens := gjson.GetBytes(body, "max_output_tokens")
+	fields := []zap.Field{
+		zap.Int("input_tokens", result.Usage.InputTokens),
+		zap.Int("output_tokens", result.Usage.OutputTokens),
+		zap.String("terminal_event", strings.TrimSpace(result.UpstreamTerminalEvent)),
+		zap.String("incomplete_reason", incomplete),
+		zap.Bool("has_max_output_tokens", maxOutputTokens.Exists()),
+		zap.Bool("has_compaction_trigger", service.HasCompactionTriggerInInput(body)),
+		zap.Int("request_body_bytes", len(body)),
+		zap.String("upstream_model", strings.TrimSpace(result.UpstreamModel)),
+	}
+	if maxOutputTokens.Exists() && maxOutputTokens.Type == gjson.Number {
+		fields = append(fields, zap.Int64("max_output_tokens", maxOutputTokens.Int()))
+	}
+	if account != nil {
+		fields = append(fields, zap.Int64("account_id", account.ID))
+	}
+	reqLog.Info("openai.responses_short_completion", fields...)
 }
 
 func isOpenAIRemoteCompactPath(c *gin.Context) bool {
