@@ -210,6 +210,27 @@ func (_u *ChannelMonitorUpdate) AddJitterSeconds(v int) *ChannelMonitorUpdate {
 	return _u
 }
 
+// SetRequestTimeoutSeconds sets the "request_timeout_seconds" field.
+func (_u *ChannelMonitorUpdate) SetRequestTimeoutSeconds(v int) *ChannelMonitorUpdate {
+	_u.mutation.ResetRequestTimeoutSeconds()
+	_u.mutation.SetRequestTimeoutSeconds(v)
+	return _u
+}
+
+// SetNillableRequestTimeoutSeconds sets the "request_timeout_seconds" field if the given value is not nil.
+func (_u *ChannelMonitorUpdate) SetNillableRequestTimeoutSeconds(v *int) *ChannelMonitorUpdate {
+	if v != nil {
+		_u.SetRequestTimeoutSeconds(*v)
+	}
+	return _u
+}
+
+// AddRequestTimeoutSeconds adds value to the "request_timeout_seconds" field.
+func (_u *ChannelMonitorUpdate) AddRequestTimeoutSeconds(v int) *ChannelMonitorUpdate {
+	_u.mutation.AddRequestTimeoutSeconds(v)
+	return _u
+}
+
 // SetLastCheckedAt sets the "last_checked_at" field.
 func (_u *ChannelMonitorUpdate) SetLastCheckedAt(v time.Time) *ChannelMonitorUpdate {
 	_u.mutation.SetLastCheckedAt(v)
@@ -488,6 +509,11 @@ func (_u *ChannelMonitorUpdate) check() error {
 			return &ValidationError{Name: "jitter_seconds", err: fmt.Errorf(`ent: validator failed for field "ChannelMonitor.jitter_seconds": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.RequestTimeoutSeconds(); ok {
+		if err := channelmonitor.RequestTimeoutSecondsValidator(v); err != nil {
+			return &ValidationError{Name: "request_timeout_seconds", err: fmt.Errorf(`ent: validator failed for field "ChannelMonitor.request_timeout_seconds": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.BodyOverrideMode(); ok {
 		if err := channelmonitor.BodyOverrideModeValidator(v); err != nil {
 			return &ValidationError{Name: "body_override_mode", err: fmt.Errorf(`ent: validator failed for field "ChannelMonitor.body_override_mode": %w`, err)}
@@ -557,6 +583,12 @@ func (_u *ChannelMonitorUpdate) sqlSave(ctx context.Context) (_node int, err err
 	}
 	if value, ok := _u.mutation.AddedJitterSeconds(); ok {
 		_spec.AddField(channelmonitor.FieldJitterSeconds, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.RequestTimeoutSeconds(); ok {
+		_spec.SetField(channelmonitor.FieldRequestTimeoutSeconds, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedRequestTimeoutSeconds(); ok {
+		_spec.AddField(channelmonitor.FieldRequestTimeoutSeconds, field.TypeInt, value)
 	}
 	if value, ok := _u.mutation.LastCheckedAt(); ok {
 		_spec.SetField(channelmonitor.FieldLastCheckedAt, field.TypeTime, value)
@@ -899,6 +931,27 @@ func (_u *ChannelMonitorUpdateOne) AddJitterSeconds(v int) *ChannelMonitorUpdate
 	return _u
 }
 
+// SetRequestTimeoutSeconds sets the "request_timeout_seconds" field.
+func (_u *ChannelMonitorUpdateOne) SetRequestTimeoutSeconds(v int) *ChannelMonitorUpdateOne {
+	_u.mutation.ResetRequestTimeoutSeconds()
+	_u.mutation.SetRequestTimeoutSeconds(v)
+	return _u
+}
+
+// SetNillableRequestTimeoutSeconds sets the "request_timeout_seconds" field if the given value is not nil.
+func (_u *ChannelMonitorUpdateOne) SetNillableRequestTimeoutSeconds(v *int) *ChannelMonitorUpdateOne {
+	if v != nil {
+		_u.SetRequestTimeoutSeconds(*v)
+	}
+	return _u
+}
+
+// AddRequestTimeoutSeconds adds value to the "request_timeout_seconds" field.
+func (_u *ChannelMonitorUpdateOne) AddRequestTimeoutSeconds(v int) *ChannelMonitorUpdateOne {
+	_u.mutation.AddRequestTimeoutSeconds(v)
+	return _u
+}
+
 // SetLastCheckedAt sets the "last_checked_at" field.
 func (_u *ChannelMonitorUpdateOne) SetLastCheckedAt(v time.Time) *ChannelMonitorUpdateOne {
 	_u.mutation.SetLastCheckedAt(v)
@@ -1190,6 +1243,11 @@ func (_u *ChannelMonitorUpdateOne) check() error {
 			return &ValidationError{Name: "jitter_seconds", err: fmt.Errorf(`ent: validator failed for field "ChannelMonitor.jitter_seconds": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.RequestTimeoutSeconds(); ok {
+		if err := channelmonitor.RequestTimeoutSecondsValidator(v); err != nil {
+			return &ValidationError{Name: "request_timeout_seconds", err: fmt.Errorf(`ent: validator failed for field "ChannelMonitor.request_timeout_seconds": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.BodyOverrideMode(); ok {
 		if err := channelmonitor.BodyOverrideModeValidator(v); err != nil {
 			return &ValidationError{Name: "body_override_mode", err: fmt.Errorf(`ent: validator failed for field "ChannelMonitor.body_override_mode": %w`, err)}
@@ -1276,6 +1334,12 @@ func (_u *ChannelMonitorUpdateOne) sqlSave(ctx context.Context) (_node *ChannelM
 	}
 	if value, ok := _u.mutation.AddedJitterSeconds(); ok {
 		_spec.AddField(channelmonitor.FieldJitterSeconds, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.RequestTimeoutSeconds(); ok {
+		_spec.SetField(channelmonitor.FieldRequestTimeoutSeconds, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedRequestTimeoutSeconds(); ok {
+		_spec.AddField(channelmonitor.FieldRequestTimeoutSeconds, field.TypeInt, value)
 	}
 	if value, ok := _u.mutation.LastCheckedAt(); ok {
 		_spec.SetField(channelmonitor.FieldLastCheckedAt, field.TypeTime, value)

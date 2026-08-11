@@ -442,6 +442,46 @@ export default {
       deleteConfirm: '确定要删除该公告吗？此操作无法撤销。'
     },
 
+    groupPromotions: {
+      title: '限时活动',
+      description: '按分组配置自动生效和结束的计费优惠',
+      create: '创建活动',
+      edit: '编辑活动',
+      delete: '删除活动',
+      search: '搜索活动名称...',
+      group: '分组',
+      offer: '优惠方式',
+      schedule: '活动时间',
+      state: '状态',
+      activityName: '活动名称',
+      descriptionLabel: '活动说明',
+      mode: '优惠类型',
+      discountFactor: '按原倍率百分比',
+      fixedMultiplier: '指定最高倍率',
+      percentage: '原倍率百分比',
+      fixedRate: '活动倍率',
+      startsAt: '开始时间',
+      endsAt: '结束时间',
+      enabled: '启用活动',
+      preview: '计费预览',
+      status: {
+        upcoming: '未开始',
+        active: '进行中',
+        ended: '已结束',
+        disabled: '已停用'
+      },
+      summaryDiscount: '活动期间按当前实际倍率的 {value}% 计费',
+      summaryFixed: '活动期间最高按 {value}x 计费，不会抬高已有更低的专属倍率',
+      deleteConfirm: '删除活动不会改动已有使用记录，确定继续吗？',
+      saved: '活动已保存',
+      deleted: '活动已删除',
+      failedToLoad: '加载活动失败',
+      failedToSave: '保存活动失败',
+      failedToDelete: '删除活动失败',
+      invalidTime: '结束时间必须晚于开始时间',
+      noGroup: '请选择分组'
+    },
+
     // Promo Codes
     promo: {
       title: '优惠码管理',

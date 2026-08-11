@@ -262,6 +262,48 @@ func (_c *BatchImageJobCreate) SetNillableActualCost(v *float64) *BatchImageJobC
 	return _c
 }
 
+// SetPromotionID sets the "promotion_id" field.
+func (_c *BatchImageJobCreate) SetPromotionID(v int64) *BatchImageJobCreate {
+	_c.mutation.SetPromotionID(v)
+	return _c
+}
+
+// SetNillablePromotionID sets the "promotion_id" field if the given value is not nil.
+func (_c *BatchImageJobCreate) SetNillablePromotionID(v *int64) *BatchImageJobCreate {
+	if v != nil {
+		_c.SetPromotionID(*v)
+	}
+	return _c
+}
+
+// SetPromotionName sets the "promotion_name" field.
+func (_c *BatchImageJobCreate) SetPromotionName(v string) *BatchImageJobCreate {
+	_c.mutation.SetPromotionName(v)
+	return _c
+}
+
+// SetNillablePromotionName sets the "promotion_name" field if the given value is not nil.
+func (_c *BatchImageJobCreate) SetNillablePromotionName(v *string) *BatchImageJobCreate {
+	if v != nil {
+		_c.SetPromotionName(*v)
+	}
+	return _c
+}
+
+// SetPromotionBaseRateMultiplier sets the "promotion_base_rate_multiplier" field.
+func (_c *BatchImageJobCreate) SetPromotionBaseRateMultiplier(v float64) *BatchImageJobCreate {
+	_c.mutation.SetPromotionBaseRateMultiplier(v)
+	return _c
+}
+
+// SetNillablePromotionBaseRateMultiplier sets the "promotion_base_rate_multiplier" field if the given value is not nil.
+func (_c *BatchImageJobCreate) SetNillablePromotionBaseRateMultiplier(v *float64) *BatchImageJobCreate {
+	if v != nil {
+		_c.SetPromotionBaseRateMultiplier(*v)
+	}
+	return _c
+}
+
 // SetCurrency sets the "currency" field.
 func (_c *BatchImageJobCreate) SetCurrency(v string) *BatchImageJobCreate {
 	_c.mutation.SetCurrency(v)
@@ -708,6 +750,11 @@ func (_c *BatchImageJobCreate) check() error {
 	if _, ok := _c.mutation.EstimatedCost(); !ok {
 		return &ValidationError{Name: "estimated_cost", err: errors.New(`ent: missing required field "BatchImageJob.estimated_cost"`)}
 	}
+	if v, ok := _c.mutation.PromotionName(); ok {
+		if err := batchimagejob.PromotionNameValidator(v); err != nil {
+			return &ValidationError{Name: "promotion_name", err: fmt.Errorf(`ent: validator failed for field "BatchImageJob.promotion_name": %w`, err)}
+		}
+	}
 	if _, ok := _c.mutation.Currency(); !ok {
 		return &ValidationError{Name: "currency", err: errors.New(`ent: missing required field "BatchImageJob.currency"`)}
 	}
@@ -859,6 +906,18 @@ func (_c *BatchImageJobCreate) createSpec() (*BatchImageJob, *sqlgraph.CreateSpe
 	if value, ok := _c.mutation.ActualCost(); ok {
 		_spec.SetField(batchimagejob.FieldActualCost, field.TypeFloat64, value)
 		_node.ActualCost = &value
+	}
+	if value, ok := _c.mutation.PromotionID(); ok {
+		_spec.SetField(batchimagejob.FieldPromotionID, field.TypeInt64, value)
+		_node.PromotionID = &value
+	}
+	if value, ok := _c.mutation.PromotionName(); ok {
+		_spec.SetField(batchimagejob.FieldPromotionName, field.TypeString, value)
+		_node.PromotionName = &value
+	}
+	if value, ok := _c.mutation.PromotionBaseRateMultiplier(); ok {
+		_spec.SetField(batchimagejob.FieldPromotionBaseRateMultiplier, field.TypeFloat64, value)
+		_node.PromotionBaseRateMultiplier = &value
 	}
 	if value, ok := _c.mutation.Currency(); ok {
 		_spec.SetField(batchimagejob.FieldCurrency, field.TypeString, value)
@@ -1331,6 +1390,72 @@ func (u *BatchImageJobUpsert) AddActualCost(v float64) *BatchImageJobUpsert {
 // ClearActualCost clears the value of the "actual_cost" field.
 func (u *BatchImageJobUpsert) ClearActualCost() *BatchImageJobUpsert {
 	u.SetNull(batchimagejob.FieldActualCost)
+	return u
+}
+
+// SetPromotionID sets the "promotion_id" field.
+func (u *BatchImageJobUpsert) SetPromotionID(v int64) *BatchImageJobUpsert {
+	u.Set(batchimagejob.FieldPromotionID, v)
+	return u
+}
+
+// UpdatePromotionID sets the "promotion_id" field to the value that was provided on create.
+func (u *BatchImageJobUpsert) UpdatePromotionID() *BatchImageJobUpsert {
+	u.SetExcluded(batchimagejob.FieldPromotionID)
+	return u
+}
+
+// AddPromotionID adds v to the "promotion_id" field.
+func (u *BatchImageJobUpsert) AddPromotionID(v int64) *BatchImageJobUpsert {
+	u.Add(batchimagejob.FieldPromotionID, v)
+	return u
+}
+
+// ClearPromotionID clears the value of the "promotion_id" field.
+func (u *BatchImageJobUpsert) ClearPromotionID() *BatchImageJobUpsert {
+	u.SetNull(batchimagejob.FieldPromotionID)
+	return u
+}
+
+// SetPromotionName sets the "promotion_name" field.
+func (u *BatchImageJobUpsert) SetPromotionName(v string) *BatchImageJobUpsert {
+	u.Set(batchimagejob.FieldPromotionName, v)
+	return u
+}
+
+// UpdatePromotionName sets the "promotion_name" field to the value that was provided on create.
+func (u *BatchImageJobUpsert) UpdatePromotionName() *BatchImageJobUpsert {
+	u.SetExcluded(batchimagejob.FieldPromotionName)
+	return u
+}
+
+// ClearPromotionName clears the value of the "promotion_name" field.
+func (u *BatchImageJobUpsert) ClearPromotionName() *BatchImageJobUpsert {
+	u.SetNull(batchimagejob.FieldPromotionName)
+	return u
+}
+
+// SetPromotionBaseRateMultiplier sets the "promotion_base_rate_multiplier" field.
+func (u *BatchImageJobUpsert) SetPromotionBaseRateMultiplier(v float64) *BatchImageJobUpsert {
+	u.Set(batchimagejob.FieldPromotionBaseRateMultiplier, v)
+	return u
+}
+
+// UpdatePromotionBaseRateMultiplier sets the "promotion_base_rate_multiplier" field to the value that was provided on create.
+func (u *BatchImageJobUpsert) UpdatePromotionBaseRateMultiplier() *BatchImageJobUpsert {
+	u.SetExcluded(batchimagejob.FieldPromotionBaseRateMultiplier)
+	return u
+}
+
+// AddPromotionBaseRateMultiplier adds v to the "promotion_base_rate_multiplier" field.
+func (u *BatchImageJobUpsert) AddPromotionBaseRateMultiplier(v float64) *BatchImageJobUpsert {
+	u.Add(batchimagejob.FieldPromotionBaseRateMultiplier, v)
+	return u
+}
+
+// ClearPromotionBaseRateMultiplier clears the value of the "promotion_base_rate_multiplier" field.
+func (u *BatchImageJobUpsert) ClearPromotionBaseRateMultiplier() *BatchImageJobUpsert {
+	u.SetNull(batchimagejob.FieldPromotionBaseRateMultiplier)
 	return u
 }
 
@@ -2108,6 +2233,83 @@ func (u *BatchImageJobUpsertOne) UpdateActualCost() *BatchImageJobUpsertOne {
 func (u *BatchImageJobUpsertOne) ClearActualCost() *BatchImageJobUpsertOne {
 	return u.Update(func(s *BatchImageJobUpsert) {
 		s.ClearActualCost()
+	})
+}
+
+// SetPromotionID sets the "promotion_id" field.
+func (u *BatchImageJobUpsertOne) SetPromotionID(v int64) *BatchImageJobUpsertOne {
+	return u.Update(func(s *BatchImageJobUpsert) {
+		s.SetPromotionID(v)
+	})
+}
+
+// AddPromotionID adds v to the "promotion_id" field.
+func (u *BatchImageJobUpsertOne) AddPromotionID(v int64) *BatchImageJobUpsertOne {
+	return u.Update(func(s *BatchImageJobUpsert) {
+		s.AddPromotionID(v)
+	})
+}
+
+// UpdatePromotionID sets the "promotion_id" field to the value that was provided on create.
+func (u *BatchImageJobUpsertOne) UpdatePromotionID() *BatchImageJobUpsertOne {
+	return u.Update(func(s *BatchImageJobUpsert) {
+		s.UpdatePromotionID()
+	})
+}
+
+// ClearPromotionID clears the value of the "promotion_id" field.
+func (u *BatchImageJobUpsertOne) ClearPromotionID() *BatchImageJobUpsertOne {
+	return u.Update(func(s *BatchImageJobUpsert) {
+		s.ClearPromotionID()
+	})
+}
+
+// SetPromotionName sets the "promotion_name" field.
+func (u *BatchImageJobUpsertOne) SetPromotionName(v string) *BatchImageJobUpsertOne {
+	return u.Update(func(s *BatchImageJobUpsert) {
+		s.SetPromotionName(v)
+	})
+}
+
+// UpdatePromotionName sets the "promotion_name" field to the value that was provided on create.
+func (u *BatchImageJobUpsertOne) UpdatePromotionName() *BatchImageJobUpsertOne {
+	return u.Update(func(s *BatchImageJobUpsert) {
+		s.UpdatePromotionName()
+	})
+}
+
+// ClearPromotionName clears the value of the "promotion_name" field.
+func (u *BatchImageJobUpsertOne) ClearPromotionName() *BatchImageJobUpsertOne {
+	return u.Update(func(s *BatchImageJobUpsert) {
+		s.ClearPromotionName()
+	})
+}
+
+// SetPromotionBaseRateMultiplier sets the "promotion_base_rate_multiplier" field.
+func (u *BatchImageJobUpsertOne) SetPromotionBaseRateMultiplier(v float64) *BatchImageJobUpsertOne {
+	return u.Update(func(s *BatchImageJobUpsert) {
+		s.SetPromotionBaseRateMultiplier(v)
+	})
+}
+
+// AddPromotionBaseRateMultiplier adds v to the "promotion_base_rate_multiplier" field.
+func (u *BatchImageJobUpsertOne) AddPromotionBaseRateMultiplier(v float64) *BatchImageJobUpsertOne {
+	return u.Update(func(s *BatchImageJobUpsert) {
+		s.AddPromotionBaseRateMultiplier(v)
+	})
+}
+
+// UpdatePromotionBaseRateMultiplier sets the "promotion_base_rate_multiplier" field to the value that was provided on create.
+func (u *BatchImageJobUpsertOne) UpdatePromotionBaseRateMultiplier() *BatchImageJobUpsertOne {
+	return u.Update(func(s *BatchImageJobUpsert) {
+		s.UpdatePromotionBaseRateMultiplier()
+	})
+}
+
+// ClearPromotionBaseRateMultiplier clears the value of the "promotion_base_rate_multiplier" field.
+func (u *BatchImageJobUpsertOne) ClearPromotionBaseRateMultiplier() *BatchImageJobUpsertOne {
+	return u.Update(func(s *BatchImageJobUpsert) {
+		s.ClearPromotionBaseRateMultiplier()
 	})
 }
 
@@ -3106,6 +3308,83 @@ func (u *BatchImageJobUpsertBulk) UpdateActualCost() *BatchImageJobUpsertBulk {
 func (u *BatchImageJobUpsertBulk) ClearActualCost() *BatchImageJobUpsertBulk {
 	return u.Update(func(s *BatchImageJobUpsert) {
 		s.ClearActualCost()
+	})
+}
+
+// SetPromotionID sets the "promotion_id" field.
+func (u *BatchImageJobUpsertBulk) SetPromotionID(v int64) *BatchImageJobUpsertBulk {
+	return u.Update(func(s *BatchImageJobUpsert) {
+		s.SetPromotionID(v)
+	})
+}
+
+// AddPromotionID adds v to the "promotion_id" field.
+func (u *BatchImageJobUpsertBulk) AddPromotionID(v int64) *BatchImageJobUpsertBulk {
+	return u.Update(func(s *BatchImageJobUpsert) {
+		s.AddPromotionID(v)
+	})
+}
+
+// UpdatePromotionID sets the "promotion_id" field to the value that was provided on create.
+func (u *BatchImageJobUpsertBulk) UpdatePromotionID() *BatchImageJobUpsertBulk {
+	return u.Update(func(s *BatchImageJobUpsert) {
+		s.UpdatePromotionID()
+	})
+}
+
+// ClearPromotionID clears the value of the "promotion_id" field.
+func (u *BatchImageJobUpsertBulk) ClearPromotionID() *BatchImageJobUpsertBulk {
+	return u.Update(func(s *BatchImageJobUpsert) {
+		s.ClearPromotionID()
+	})
+}
+
+// SetPromotionName sets the "promotion_name" field.
+func (u *BatchImageJobUpsertBulk) SetPromotionName(v string) *BatchImageJobUpsertBulk {
+	return u.Update(func(s *BatchImageJobUpsert) {
+		s.SetPromotionName(v)
+	})
+}
+
+// UpdatePromotionName sets the "promotion_name" field to the value that was provided on create.
+func (u *BatchImageJobUpsertBulk) UpdatePromotionName() *BatchImageJobUpsertBulk {
+	return u.Update(func(s *BatchImageJobUpsert) {
+		s.UpdatePromotionName()
+	})
+}
+
+// ClearPromotionName clears the value of the "promotion_name" field.
+func (u *BatchImageJobUpsertBulk) ClearPromotionName() *BatchImageJobUpsertBulk {
+	return u.Update(func(s *BatchImageJobUpsert) {
+		s.ClearPromotionName()
+	})
+}
+
+// SetPromotionBaseRateMultiplier sets the "promotion_base_rate_multiplier" field.
+func (u *BatchImageJobUpsertBulk) SetPromotionBaseRateMultiplier(v float64) *BatchImageJobUpsertBulk {
+	return u.Update(func(s *BatchImageJobUpsert) {
+		s.SetPromotionBaseRateMultiplier(v)
+	})
+}
+
+// AddPromotionBaseRateMultiplier adds v to the "promotion_base_rate_multiplier" field.
+func (u *BatchImageJobUpsertBulk) AddPromotionBaseRateMultiplier(v float64) *BatchImageJobUpsertBulk {
+	return u.Update(func(s *BatchImageJobUpsert) {
+		s.AddPromotionBaseRateMultiplier(v)
+	})
+}
+
+// UpdatePromotionBaseRateMultiplier sets the "promotion_base_rate_multiplier" field to the value that was provided on create.
+func (u *BatchImageJobUpsertBulk) UpdatePromotionBaseRateMultiplier() *BatchImageJobUpsertBulk {
+	return u.Update(func(s *BatchImageJobUpsert) {
+		s.UpdatePromotionBaseRateMultiplier()
+	})
+}
+
+// ClearPromotionBaseRateMultiplier clears the value of the "promotion_base_rate_multiplier" field.
+func (u *BatchImageJobUpsertBulk) ClearPromotionBaseRateMultiplier() *BatchImageJobUpsertBulk {
+	return u.Update(func(s *BatchImageJobUpsert) {
+		s.ClearPromotionBaseRateMultiplier()
 	})
 }
 

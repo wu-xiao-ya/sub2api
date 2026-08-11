@@ -42,6 +42,9 @@ func RegisterAdminRoutes(
 		// 公告管理
 		registerAnnouncementRoutes(admin, h)
 
+		// 分组限时活动
+		registerGroupPromotionRoutes(admin, h)
+
 		// OpenAI OAuth
 		registerOpenAIOAuthRoutes(admin, h)
 
@@ -412,6 +415,17 @@ func registerAnnouncementRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		announcements.PUT("/:id", h.Admin.Announcement.Update)
 		announcements.DELETE("/:id", h.Admin.Announcement.Delete)
 		announcements.GET("/:id/read-status", h.Admin.Announcement.ListReadStatus)
+	}
+}
+
+func registerGroupPromotionRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
+	promotions := admin.Group("/group-promotions")
+	{
+		promotions.GET("", h.Admin.GroupPromotion.List)
+		promotions.POST("", h.Admin.GroupPromotion.Create)
+		promotions.GET("/:id", h.Admin.GroupPromotion.GetByID)
+		promotions.PUT("/:id", h.Admin.GroupPromotion.Update)
+		promotions.DELETE("/:id", h.Admin.GroupPromotion.Delete)
 	}
 }
 

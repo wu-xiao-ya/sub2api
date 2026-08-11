@@ -68,7 +68,7 @@
   </div>
 
   <!-- Row 2: Token Stats -->
-  <div class="grid grid-cols-2 gap-4 lg:grid-cols-5">
+  <div class="grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-6">
     <!-- Today Tokens -->
     <div class="card p-4">
       <div class="flex items-center gap-3">
@@ -97,14 +97,14 @@
       </div>
     </div>
 
-    <!-- Cache Hit Rate -->
+    <!-- Today Cache Hit Rate -->
     <div class="card p-4">
       <div class="flex items-center gap-3">
         <div class="rounded-lg bg-cyan-100 p-2 dark:bg-cyan-900/30">
           <Icon name="refresh" size="md" class="text-cyan-600 dark:text-cyan-400" :stroke-width="2" />
         </div>
         <div>
-          <p class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('dashboard.cacheHitRate') }}</p>
+          <p class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('dashboard.todayCacheHitRate') }}</p>
           <p
             data-testid="user-cache-hit-rate"
             class="text-xl font-bold text-cyan-600 dark:text-cyan-400"
@@ -118,7 +118,24 @@
             }}
           </p>
           <p class="text-xs text-gray-500 dark:text-gray-400">
-            {{ t('common.total') }}:
+            {{ t('dashboard.cacheReadTokens') }}: {{ formatTokens(stats?.today_cache_read_tokens || 0) }}
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Historical Cache Hit Rate -->
+    <div class="card p-4">
+      <div class="flex items-center gap-3">
+        <div class="rounded-lg bg-sky-100 p-2 dark:bg-sky-900/30">
+          <Icon name="database" size="md" class="text-sky-600 dark:text-sky-400" :stroke-width="2" />
+        </div>
+        <div>
+          <p class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('dashboard.historicalCacheHitRate') }}</p>
+          <p
+            data-testid="user-historical-cache-hit-rate"
+            class="text-xl font-bold text-sky-600 dark:text-sky-400"
+          >
             {{
               formatCacheHitRate(
                 stats?.total_input_tokens || 0,
@@ -126,6 +143,9 @@
                 stats?.total_cache_read_tokens || 0
               )
             }}
+          </p>
+          <p class="text-xs text-gray-500 dark:text-gray-400">
+            {{ t('dashboard.cacheReadTokens') }}: {{ formatTokens(stats?.total_cache_read_tokens || 0) }}
           </p>
         </div>
       </div>

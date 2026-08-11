@@ -66,6 +66,10 @@ func (ChannelMonitor) Fields() []ent.Field {
 			Default(0).
 			Range(0, 3600).
 			Comment("每次调度在 interval 基础上 ± [0, jitter] 的均匀随机偏移（秒）；0 表示固定间隔。service 层另保证 interval - jitter >= 15"),
+		field.Int("request_timeout_seconds").
+			Default(45).
+			Range(15, 900).
+			Comment("单次上游检测等待上限（秒）；生图监控可单独配置更长等待时间"),
 		field.Time("last_checked_at").
 			Optional().
 			Nillable(),

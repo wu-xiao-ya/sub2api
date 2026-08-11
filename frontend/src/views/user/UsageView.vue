@@ -617,6 +617,12 @@ const escapeCSVValue = (value: unknown): string => {
   return str
 }
 
+const promotionPricePercent = (log: Pick<UsageLog, 'base_rate_multiplier' | 'rate_multiplier'>): string => {
+  const baseRate = log.base_rate_multiplier
+  if (baseRate == null || baseRate <= 0) return ''
+  return (log.rate_multiplier / baseRate * 100).toFixed(2)
+}
+
 const exportToCSV = async () => {
   if (pagination.total === 0) {
     appStore.showWarning(t('usage.noDataToExport'))
@@ -649,6 +655,10 @@ const exportToCSV = async () => {
       'Output Tokens',
       'Cache Read Tokens',
       'Cache Creation Tokens',
+      t('usage.promotion'),
+      t('usage.promotionBaseRate'),
+      t('usage.promotionFinalRate'),
+      t('usage.promotionPricePercent'),
       'Rate Multiplier',
       'Billed Cost',
       'Original Cost',
@@ -668,6 +678,10 @@ const exportToCSV = async () => {
       log.output_tokens,
       log.cache_read_tokens,
       log.cache_creation_tokens,
+      log.promotion_name || '',
+      log.base_rate_multiplier ?? '',
+      log.rate_multiplier,
+      promotionPricePercent(log),
       log.rate_multiplier,
       log.actual_cost.toFixed(8),
       log.total_cost.toFixed(8),
@@ -705,6 +719,7 @@ const allColumns = computed<Column[]>(() => [
   { key: 'endpoint', label: t('usage.endpoint'), sortable: false },
   { key: 'ip_address', label: 'IP', sortable: false },
   { key: 'group', label: t('admin.usage.group'), sortable: false },
+  { key: 'promotion', label: t('usage.promotion'), sortable: false },
   { key: 'stream', label: t('usage.type'), sortable: false },
   { key: 'billing_mode', label: t('admin.usage.billingMode'), sortable: false },
   { key: 'tokens', label: t('usage.tokens'), sortable: false },

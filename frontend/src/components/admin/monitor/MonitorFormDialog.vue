@@ -111,6 +111,12 @@
         <p class="mt-1 text-xs text-gray-400">{{ t('admin.channelMonitor.form.intervalSecondsHint') }}</p>
       </div>
 
+      <div v-if="form.api_mode === API_MODE_IMAGES">
+        <label class="input-label">{{ t('admin.channelMonitor.form.imageRequestTimeoutSeconds') }} <span class="text-red-500">*</span></label>
+        <input v-model.number="form.request_timeout_seconds" type="number" min="15" max="900" required class="input" />
+        <p class="mt-1 text-xs text-gray-400">{{ t('admin.channelMonitor.form.imageRequestTimeoutSecondsHint') }}</p>
+      </div>
+
       <div>
         <label class="input-label">{{ t('admin.channelMonitor.form.jitterSeconds') }}</label>
         <input v-model.number="form.jitter_seconds" type="number" min="0" :max="maxJitterSeconds" class="input" />
@@ -238,6 +244,9 @@ const emit = defineEmits<{
 const { t } = useI18n()
 const appStore = useAppStore()
 const { providerPickerClass } = useChannelMonitorFormat()
+const DEFAULT_IMAGE_MONITOR_INTERVAL_SECONDS = 30 * 60
+const DEFAULT_TEXT_REQUEST_TIMEOUT_SECONDS = 45
+const DEFAULT_IMAGE_REQUEST_TIMEOUT_SECONDS = 5 * 60
 
 // System-configured default interval for new monitors. Falls back to the static
 // constant when public settings haven't loaded yet or store the legacy 0 value.
@@ -268,6 +277,7 @@ interface MonitorForm {
   group_name: string
   interval_seconds: number
   jitter_seconds: number
+  request_timeout_seconds: number
   enabled: boolean
   // 高级设置快照
   template_id: number | null
@@ -287,6 +297,7 @@ const form = reactive<MonitorForm>({
   group_name: '',
   interval_seconds: systemDefaultInterval.value,
   jitter_seconds: 0,
+  request_timeout_seconds: DEFAULT_TEXT_REQUEST_TIMEOUT_SECONDS,
   enabled: true,
   template_id: null,
   extra_headers: {},
@@ -461,6 +472,28 @@ watch(() => form.api_mode, () => {
   }
 }, { flush: 'sync' })
 
+function defaultIntervalForMode(mode: APIMode): number {
+  return mode === API_MODE_IMAGES
+    ? DEFAULT_IMAGE_MONITOR_INTERVAL_SECONDS
+    : systemDefaultInterval.value
+}
+
+function defaultRequestTimeoutForMode(mode: APIMode): number {
+  return mode === API_MODE_IMAGES
+    ? DEFAULT_IMAGE_REQUEST_TIMEOUT_SECONDS
+    : DEFAULT_TEXT_REQUEST_TIMEOUT_SECONDS
+}
+
+watch(() => form.api_mode, (mode, previousMode) => {
+  if (suppressFormWatchers) return
+  if (form.interval_seconds === defaultIntervalForMode(previousMode)) {
+    form.interval_seconds = defaultIntervalForMode(mode)
+  }
+  if (form.request_timeout_seconds === defaultRequestTimeoutForMode(previousMode)) {
+    form.request_timeout_seconds = defaultRequestTimeoutForMode(mode)
+  }
+}, { flush: 'sync' })
+
 function resetForm() {
   suppressFormWatchers = true
   form.name = ''
@@ -471,8 +504,9 @@ function resetForm() {
   form.primary_model = ''
   form.extra_models = []
   form.group_name = ''
-  form.interval_seconds = systemDefaultInterval.value
+  form.interval_seconds = defaultIntervalForMode(form.api_mode)
   form.jitter_seconds = 0
+  form.request_timeout_seconds = defaultRequestTimeoutForMode(form.api_mode)
   form.enabled = true
   form.template_id = null
   form.extra_headers = {}
@@ -491,8 +525,9 @@ function loadFromMonitor(m: ChannelMonitor) {
   form.primary_model = m.primary_model
   form.extra_models = [...(m.extra_models || [])]
   form.group_name = m.group_name || ''
-  form.interval_seconds = m.interval_seconds || systemDefaultInterval.value
+  form.interval_seconds = m.interval_seconds || defaultIntervalForMode(form.api_mode)
   form.jitter_seconds = m.jitter_seconds || 0
+  form.request_timeout_seconds = m.request_timeout_seconds || defaultRequestTimeoutForMode(form.api_mode)
   form.enabled = m.enabled
   form.template_id = m.template_id ?? null
   form.extra_headers = { ...(m.extra_headers || {}) }
@@ -560,6 +595,7 @@ function buildPayload(): CreateParams {
     enabled: form.enabled,
     interval_seconds: form.interval_seconds,
     jitter_seconds: form.jitter_seconds || 0,
+    request_timeout_seconds: form.request_timeout_seconds,
     template_id: form.template_id,
     extra_headers: form.extra_headers,
     body_override_mode: form.body_override_mode,

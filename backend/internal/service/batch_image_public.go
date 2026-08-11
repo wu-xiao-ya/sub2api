@@ -94,15 +94,18 @@ type BatchImagePublicService struct {
 }
 
 type BatchImagePricingSnapshot struct {
-	BaseUnitPrice           float64
-	GroupRateMultiplier     float64
-	AccountRateMultiplier   float64
-	BatchDiscountMultiplier float64
-	HoldMultiplier          float64
-	BillableUnitPrice       float64
-	HoldUnitPrice           float64
-	EstimatedCost           float64
-	HoldAmount              float64
+	BaseUnitPrice               float64
+	GroupRateMultiplier         float64
+	PromotionID                 *int64
+	PromotionName               *string
+	PromotionBaseRateMultiplier *float64
+	AccountRateMultiplier       float64
+	BatchDiscountMultiplier     float64
+	HoldMultiplier              float64
+	BillableUnitPrice           float64
+	HoldUnitPrice               float64
+	EstimatedCost               float64
+	HoldAmount                  float64
 }
 
 type BatchImagePublicBatch struct {
@@ -257,30 +260,33 @@ func (s *BatchImagePublicService) Submit(ctx context.Context, owner BatchImageOw
 	holdID := BatchImageHoldRequestID(batchID)
 	holdAmount := pricingSnapshot.HoldAmount
 	job, err := s.Repo.CreateBatchImageJob(ctx, CreateBatchImageJobParams{
-		BatchID:                 batchID,
-		UserID:                  owner.UserID,
-		APIKeyID:                &apiKeyID,
-		AccountID:               &accountID,
-		Provider:                provider.Name(),
-		Model:                   normalized.Model,
-		TaskName:                normalized.TaskName,
-		ParentBatchID:           parentBatchID,
-		Status:                  BatchImageJobStatusCreated,
-		ItemCount:               len(normalized.Items),
-		EstimatedCost:           pricingSnapshot.EstimatedCost,
-		HoldAmount:              &holdAmount,
-		BaseUnitPrice:           pricingSnapshot.BaseUnitPrice,
-		GroupRateMultiplier:     pricingSnapshot.GroupRateMultiplier,
-		AccountRateMultiplier:   pricingSnapshot.AccountRateMultiplier,
-		BatchDiscountMultiplier: pricingSnapshot.BatchDiscountMultiplier,
-		HoldMultiplier:          pricingSnapshot.HoldMultiplier,
-		BillableUnitPrice:       pricingSnapshot.BillableUnitPrice,
-		HoldUnitPrice:           pricingSnapshot.HoldUnitPrice,
-		PricingSnapshotVersion:  1,
-		Currency:                "USD",
-		HoldID:                  &holdID,
-		IdempotencyKey:          batchImageOptionalStringPtr(idempotencyKey),
-		RequestHash:             batchImageStringPtr(requestHash),
+		BatchID:                     batchID,
+		UserID:                      owner.UserID,
+		APIKeyID:                    &apiKeyID,
+		AccountID:                   &accountID,
+		Provider:                    provider.Name(),
+		Model:                       normalized.Model,
+		TaskName:                    normalized.TaskName,
+		ParentBatchID:               parentBatchID,
+		Status:                      BatchImageJobStatusCreated,
+		ItemCount:                   len(normalized.Items),
+		EstimatedCost:               pricingSnapshot.EstimatedCost,
+		HoldAmount:                  &holdAmount,
+		BaseUnitPrice:               pricingSnapshot.BaseUnitPrice,
+		GroupRateMultiplier:         pricingSnapshot.GroupRateMultiplier,
+		PromotionID:                 pricingSnapshot.PromotionID,
+		PromotionName:               pricingSnapshot.PromotionName,
+		PromotionBaseRateMultiplier: pricingSnapshot.PromotionBaseRateMultiplier,
+		AccountRateMultiplier:       pricingSnapshot.AccountRateMultiplier,
+		BatchDiscountMultiplier:     pricingSnapshot.BatchDiscountMultiplier,
+		HoldMultiplier:              pricingSnapshot.HoldMultiplier,
+		BillableUnitPrice:           pricingSnapshot.BillableUnitPrice,
+		HoldUnitPrice:               pricingSnapshot.HoldUnitPrice,
+		PricingSnapshotVersion:      1,
+		Currency:                    "USD",
+		HoldID:                      &holdID,
+		IdempotencyKey:              batchImageOptionalStringPtr(idempotencyKey),
+		RequestHash:                 batchImageStringPtr(requestHash),
 	})
 	if err != nil {
 		return nil, err
@@ -997,6 +1003,7 @@ func (s *BatchImagePublicService) ensureGroupAllowsBatchImage(ctx context.Contex
 func (s *BatchImagePublicService) resolvePricingSnapshot(ctx context.Context, owner BatchImageOwner, req BatchImageSubmitRequest, provider string, account *Account) (*BatchImagePricingSnapshot, error) {
 	unit := -1.0
 	groupMultiplier := 1.0
+	var promotion *AppliedGroupPromotion
 	discountMultiplier := defaultBatchImageDiscountMultiplier
 	holdMultiplier := defaultBatchImageHoldMultiplier
 	if owner.GroupID != nil && *owner.GroupID > 0 {
@@ -1031,6 +1038,8 @@ func (s *BatchImagePublicService) resolvePricingSnapshot(ctx context.Context, ow
 		if groupMultiplier < 0 {
 			groupMultiplier = 0
 		}
+		promotionBaseRate := groupMultiplier
+		groupMultiplier, promotion = applyCurrentGroupPromotion(ctx, group.ID, promotionBaseRate, time.Now())
 		discountMultiplier = group.BatchImageDiscountMultiplier
 		if discountMultiplier < 0 {
 			discountMultiplier = 0
@@ -1072,16 +1081,30 @@ func (s *BatchImagePublicService) resolvePricingSnapshot(ctx context.Context, ow
 	standardUnitPrice := unit * groupMultiplier * accountMultiplier
 	billableUnitPrice := standardUnitPrice * discountMultiplier
 	holdUnitPrice := standardUnitPrice * holdMultiplier
+	var promotionID *int64
+	var promotionName *string
+	var promotionBaseRateMultiplier *float64
+	if promotion != nil {
+		id := promotion.ID
+		name := promotion.Name
+		base := promotion.BaseRateMultiplier
+		promotionID = &id
+		promotionName = &name
+		promotionBaseRateMultiplier = &base
+	}
 	return &BatchImagePricingSnapshot{
-		BaseUnitPrice:           unit,
-		GroupRateMultiplier:     groupMultiplier,
-		AccountRateMultiplier:   accountMultiplier,
-		BatchDiscountMultiplier: discountMultiplier,
-		HoldMultiplier:          holdMultiplier,
-		BillableUnitPrice:       billableUnitPrice,
-		HoldUnitPrice:           holdUnitPrice,
-		EstimatedCost:           billableUnitPrice * float64(len(req.Items)),
-		HoldAmount:              holdUnitPrice * float64(len(req.Items)),
+		BaseUnitPrice:               unit,
+		GroupRateMultiplier:         groupMultiplier,
+		PromotionID:                 promotionID,
+		PromotionName:               promotionName,
+		PromotionBaseRateMultiplier: promotionBaseRateMultiplier,
+		AccountRateMultiplier:       accountMultiplier,
+		BatchDiscountMultiplier:     discountMultiplier,
+		HoldMultiplier:              holdMultiplier,
+		BillableUnitPrice:           billableUnitPrice,
+		HoldUnitPrice:               holdUnitPrice,
+		EstimatedCost:               billableUnitPrice * float64(len(req.Items)),
+		HoldAmount:                  holdUnitPrice * float64(len(req.Items)),
 	}, nil
 }
 

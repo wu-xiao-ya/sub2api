@@ -418,6 +418,80 @@ func (_u *BatchImageJobUpdate) ClearActualCost() *BatchImageJobUpdate {
 	return _u
 }
 
+// SetPromotionID sets the "promotion_id" field.
+func (_u *BatchImageJobUpdate) SetPromotionID(v int64) *BatchImageJobUpdate {
+	_u.mutation.ResetPromotionID()
+	_u.mutation.SetPromotionID(v)
+	return _u
+}
+
+// SetNillablePromotionID sets the "promotion_id" field if the given value is not nil.
+func (_u *BatchImageJobUpdate) SetNillablePromotionID(v *int64) *BatchImageJobUpdate {
+	if v != nil {
+		_u.SetPromotionID(*v)
+	}
+	return _u
+}
+
+// AddPromotionID adds value to the "promotion_id" field.
+func (_u *BatchImageJobUpdate) AddPromotionID(v int64) *BatchImageJobUpdate {
+	_u.mutation.AddPromotionID(v)
+	return _u
+}
+
+// ClearPromotionID clears the value of the "promotion_id" field.
+func (_u *BatchImageJobUpdate) ClearPromotionID() *BatchImageJobUpdate {
+	_u.mutation.ClearPromotionID()
+	return _u
+}
+
+// SetPromotionName sets the "promotion_name" field.
+func (_u *BatchImageJobUpdate) SetPromotionName(v string) *BatchImageJobUpdate {
+	_u.mutation.SetPromotionName(v)
+	return _u
+}
+
+// SetNillablePromotionName sets the "promotion_name" field if the given value is not nil.
+func (_u *BatchImageJobUpdate) SetNillablePromotionName(v *string) *BatchImageJobUpdate {
+	if v != nil {
+		_u.SetPromotionName(*v)
+	}
+	return _u
+}
+
+// ClearPromotionName clears the value of the "promotion_name" field.
+func (_u *BatchImageJobUpdate) ClearPromotionName() *BatchImageJobUpdate {
+	_u.mutation.ClearPromotionName()
+	return _u
+}
+
+// SetPromotionBaseRateMultiplier sets the "promotion_base_rate_multiplier" field.
+func (_u *BatchImageJobUpdate) SetPromotionBaseRateMultiplier(v float64) *BatchImageJobUpdate {
+	_u.mutation.ResetPromotionBaseRateMultiplier()
+	_u.mutation.SetPromotionBaseRateMultiplier(v)
+	return _u
+}
+
+// SetNillablePromotionBaseRateMultiplier sets the "promotion_base_rate_multiplier" field if the given value is not nil.
+func (_u *BatchImageJobUpdate) SetNillablePromotionBaseRateMultiplier(v *float64) *BatchImageJobUpdate {
+	if v != nil {
+		_u.SetPromotionBaseRateMultiplier(*v)
+	}
+	return _u
+}
+
+// AddPromotionBaseRateMultiplier adds value to the "promotion_base_rate_multiplier" field.
+func (_u *BatchImageJobUpdate) AddPromotionBaseRateMultiplier(v float64) *BatchImageJobUpdate {
+	_u.mutation.AddPromotionBaseRateMultiplier(v)
+	return _u
+}
+
+// ClearPromotionBaseRateMultiplier clears the value of the "promotion_base_rate_multiplier" field.
+func (_u *BatchImageJobUpdate) ClearPromotionBaseRateMultiplier() *BatchImageJobUpdate {
+	_u.mutation.ClearPromotionBaseRateMultiplier()
+	return _u
+}
+
 // SetCurrency sets the "currency" field.
 func (_u *BatchImageJobUpdate) SetCurrency(v string) *BatchImageJobUpdate {
 	_u.mutation.SetCurrency(v)
@@ -868,6 +942,11 @@ func (_u *BatchImageJobUpdate) check() error {
 			return &ValidationError{Name: "gcs_output_uri", err: fmt.Errorf(`ent: validator failed for field "BatchImageJob.gcs_output_uri": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.PromotionName(); ok {
+		if err := batchimagejob.PromotionNameValidator(v); err != nil {
+			return &ValidationError{Name: "promotion_name", err: fmt.Errorf(`ent: validator failed for field "BatchImageJob.promotion_name": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.Currency(); ok {
 		if err := batchimagejob.CurrencyValidator(v); err != nil {
 			return &ValidationError{Name: "currency", err: fmt.Errorf(`ent: validator failed for field "BatchImageJob.currency": %w`, err)}
@@ -1026,6 +1105,30 @@ func (_u *BatchImageJobUpdate) sqlSave(ctx context.Context) (_node int, err erro
 	}
 	if _u.mutation.ActualCostCleared() {
 		_spec.ClearField(batchimagejob.FieldActualCost, field.TypeFloat64)
+	}
+	if value, ok := _u.mutation.PromotionID(); ok {
+		_spec.SetField(batchimagejob.FieldPromotionID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedPromotionID(); ok {
+		_spec.AddField(batchimagejob.FieldPromotionID, field.TypeInt64, value)
+	}
+	if _u.mutation.PromotionIDCleared() {
+		_spec.ClearField(batchimagejob.FieldPromotionID, field.TypeInt64)
+	}
+	if value, ok := _u.mutation.PromotionName(); ok {
+		_spec.SetField(batchimagejob.FieldPromotionName, field.TypeString, value)
+	}
+	if _u.mutation.PromotionNameCleared() {
+		_spec.ClearField(batchimagejob.FieldPromotionName, field.TypeString)
+	}
+	if value, ok := _u.mutation.PromotionBaseRateMultiplier(); ok {
+		_spec.SetField(batchimagejob.FieldPromotionBaseRateMultiplier, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedPromotionBaseRateMultiplier(); ok {
+		_spec.AddField(batchimagejob.FieldPromotionBaseRateMultiplier, field.TypeFloat64, value)
+	}
+	if _u.mutation.PromotionBaseRateMultiplierCleared() {
+		_spec.ClearField(batchimagejob.FieldPromotionBaseRateMultiplier, field.TypeFloat64)
 	}
 	if value, ok := _u.mutation.Currency(); ok {
 		_spec.SetField(batchimagejob.FieldCurrency, field.TypeString, value)
@@ -1545,6 +1648,80 @@ func (_u *BatchImageJobUpdateOne) ClearActualCost() *BatchImageJobUpdateOne {
 	return _u
 }
 
+// SetPromotionID sets the "promotion_id" field.
+func (_u *BatchImageJobUpdateOne) SetPromotionID(v int64) *BatchImageJobUpdateOne {
+	_u.mutation.ResetPromotionID()
+	_u.mutation.SetPromotionID(v)
+	return _u
+}
+
+// SetNillablePromotionID sets the "promotion_id" field if the given value is not nil.
+func (_u *BatchImageJobUpdateOne) SetNillablePromotionID(v *int64) *BatchImageJobUpdateOne {
+	if v != nil {
+		_u.SetPromotionID(*v)
+	}
+	return _u
+}
+
+// AddPromotionID adds value to the "promotion_id" field.
+func (_u *BatchImageJobUpdateOne) AddPromotionID(v int64) *BatchImageJobUpdateOne {
+	_u.mutation.AddPromotionID(v)
+	return _u
+}
+
+// ClearPromotionID clears the value of the "promotion_id" field.
+func (_u *BatchImageJobUpdateOne) ClearPromotionID() *BatchImageJobUpdateOne {
+	_u.mutation.ClearPromotionID()
+	return _u
+}
+
+// SetPromotionName sets the "promotion_name" field.
+func (_u *BatchImageJobUpdateOne) SetPromotionName(v string) *BatchImageJobUpdateOne {
+	_u.mutation.SetPromotionName(v)
+	return _u
+}
+
+// SetNillablePromotionName sets the "promotion_name" field if the given value is not nil.
+func (_u *BatchImageJobUpdateOne) SetNillablePromotionName(v *string) *BatchImageJobUpdateOne {
+	if v != nil {
+		_u.SetPromotionName(*v)
+	}
+	return _u
+}
+
+// ClearPromotionName clears the value of the "promotion_name" field.
+func (_u *BatchImageJobUpdateOne) ClearPromotionName() *BatchImageJobUpdateOne {
+	_u.mutation.ClearPromotionName()
+	return _u
+}
+
+// SetPromotionBaseRateMultiplier sets the "promotion_base_rate_multiplier" field.
+func (_u *BatchImageJobUpdateOne) SetPromotionBaseRateMultiplier(v float64) *BatchImageJobUpdateOne {
+	_u.mutation.ResetPromotionBaseRateMultiplier()
+	_u.mutation.SetPromotionBaseRateMultiplier(v)
+	return _u
+}
+
+// SetNillablePromotionBaseRateMultiplier sets the "promotion_base_rate_multiplier" field if the given value is not nil.
+func (_u *BatchImageJobUpdateOne) SetNillablePromotionBaseRateMultiplier(v *float64) *BatchImageJobUpdateOne {
+	if v != nil {
+		_u.SetPromotionBaseRateMultiplier(*v)
+	}
+	return _u
+}
+
+// AddPromotionBaseRateMultiplier adds value to the "promotion_base_rate_multiplier" field.
+func (_u *BatchImageJobUpdateOne) AddPromotionBaseRateMultiplier(v float64) *BatchImageJobUpdateOne {
+	_u.mutation.AddPromotionBaseRateMultiplier(v)
+	return _u
+}
+
+// ClearPromotionBaseRateMultiplier clears the value of the "promotion_base_rate_multiplier" field.
+func (_u *BatchImageJobUpdateOne) ClearPromotionBaseRateMultiplier() *BatchImageJobUpdateOne {
+	_u.mutation.ClearPromotionBaseRateMultiplier()
+	return _u
+}
+
 // SetCurrency sets the "currency" field.
 func (_u *BatchImageJobUpdateOne) SetCurrency(v string) *BatchImageJobUpdateOne {
 	_u.mutation.SetCurrency(v)
@@ -2008,6 +2185,11 @@ func (_u *BatchImageJobUpdateOne) check() error {
 			return &ValidationError{Name: "gcs_output_uri", err: fmt.Errorf(`ent: validator failed for field "BatchImageJob.gcs_output_uri": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.PromotionName(); ok {
+		if err := batchimagejob.PromotionNameValidator(v); err != nil {
+			return &ValidationError{Name: "promotion_name", err: fmt.Errorf(`ent: validator failed for field "BatchImageJob.promotion_name": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.Currency(); ok {
 		if err := batchimagejob.CurrencyValidator(v); err != nil {
 			return &ValidationError{Name: "currency", err: fmt.Errorf(`ent: validator failed for field "BatchImageJob.currency": %w`, err)}
@@ -2183,6 +2365,30 @@ func (_u *BatchImageJobUpdateOne) sqlSave(ctx context.Context) (_node *BatchImag
 	}
 	if _u.mutation.ActualCostCleared() {
 		_spec.ClearField(batchimagejob.FieldActualCost, field.TypeFloat64)
+	}
+	if value, ok := _u.mutation.PromotionID(); ok {
+		_spec.SetField(batchimagejob.FieldPromotionID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedPromotionID(); ok {
+		_spec.AddField(batchimagejob.FieldPromotionID, field.TypeInt64, value)
+	}
+	if _u.mutation.PromotionIDCleared() {
+		_spec.ClearField(batchimagejob.FieldPromotionID, field.TypeInt64)
+	}
+	if value, ok := _u.mutation.PromotionName(); ok {
+		_spec.SetField(batchimagejob.FieldPromotionName, field.TypeString, value)
+	}
+	if _u.mutation.PromotionNameCleared() {
+		_spec.ClearField(batchimagejob.FieldPromotionName, field.TypeString)
+	}
+	if value, ok := _u.mutation.PromotionBaseRateMultiplier(); ok {
+		_spec.SetField(batchimagejob.FieldPromotionBaseRateMultiplier, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedPromotionBaseRateMultiplier(); ok {
+		_spec.AddField(batchimagejob.FieldPromotionBaseRateMultiplier, field.TypeFloat64, value)
+	}
+	if _u.mutation.PromotionBaseRateMultiplierCleared() {
+		_spec.ClearField(batchimagejob.FieldPromotionBaseRateMultiplier, field.TypeFloat64)
 	}
 	if value, ok := _u.mutation.Currency(); ok {
 		_spec.SetField(batchimagejob.FieldCurrency, field.TypeString, value)

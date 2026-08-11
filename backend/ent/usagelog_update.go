@@ -542,6 +542,80 @@ func (_u *UsageLogUpdate) AddRateMultiplier(v float64) *UsageLogUpdate {
 	return _u
 }
 
+// SetPromotionID sets the "promotion_id" field.
+func (_u *UsageLogUpdate) SetPromotionID(v int64) *UsageLogUpdate {
+	_u.mutation.ResetPromotionID()
+	_u.mutation.SetPromotionID(v)
+	return _u
+}
+
+// SetNillablePromotionID sets the "promotion_id" field if the given value is not nil.
+func (_u *UsageLogUpdate) SetNillablePromotionID(v *int64) *UsageLogUpdate {
+	if v != nil {
+		_u.SetPromotionID(*v)
+	}
+	return _u
+}
+
+// AddPromotionID adds value to the "promotion_id" field.
+func (_u *UsageLogUpdate) AddPromotionID(v int64) *UsageLogUpdate {
+	_u.mutation.AddPromotionID(v)
+	return _u
+}
+
+// ClearPromotionID clears the value of the "promotion_id" field.
+func (_u *UsageLogUpdate) ClearPromotionID() *UsageLogUpdate {
+	_u.mutation.ClearPromotionID()
+	return _u
+}
+
+// SetPromotionName sets the "promotion_name" field.
+func (_u *UsageLogUpdate) SetPromotionName(v string) *UsageLogUpdate {
+	_u.mutation.SetPromotionName(v)
+	return _u
+}
+
+// SetNillablePromotionName sets the "promotion_name" field if the given value is not nil.
+func (_u *UsageLogUpdate) SetNillablePromotionName(v *string) *UsageLogUpdate {
+	if v != nil {
+		_u.SetPromotionName(*v)
+	}
+	return _u
+}
+
+// ClearPromotionName clears the value of the "promotion_name" field.
+func (_u *UsageLogUpdate) ClearPromotionName() *UsageLogUpdate {
+	_u.mutation.ClearPromotionName()
+	return _u
+}
+
+// SetBaseRateMultiplier sets the "base_rate_multiplier" field.
+func (_u *UsageLogUpdate) SetBaseRateMultiplier(v float64) *UsageLogUpdate {
+	_u.mutation.ResetBaseRateMultiplier()
+	_u.mutation.SetBaseRateMultiplier(v)
+	return _u
+}
+
+// SetNillableBaseRateMultiplier sets the "base_rate_multiplier" field if the given value is not nil.
+func (_u *UsageLogUpdate) SetNillableBaseRateMultiplier(v *float64) *UsageLogUpdate {
+	if v != nil {
+		_u.SetBaseRateMultiplier(*v)
+	}
+	return _u
+}
+
+// AddBaseRateMultiplier adds value to the "base_rate_multiplier" field.
+func (_u *UsageLogUpdate) AddBaseRateMultiplier(v float64) *UsageLogUpdate {
+	_u.mutation.AddBaseRateMultiplier(v)
+	return _u
+}
+
+// ClearBaseRateMultiplier clears the value of the "base_rate_multiplier" field.
+func (_u *UsageLogUpdate) ClearBaseRateMultiplier() *UsageLogUpdate {
+	_u.mutation.ClearBaseRateMultiplier()
+	return _u
+}
+
 // SetLongContextBillingApplied sets the "long_context_billing_applied" field.
 func (_u *UsageLogUpdate) SetLongContextBillingApplied(v bool) *UsageLogUpdate {
 	_u.mutation.SetLongContextBillingApplied(v)
@@ -1031,6 +1105,11 @@ func (_u *UsageLogUpdate) check() error {
 			return &ValidationError{Name: "billing_mode", err: fmt.Errorf(`ent: validator failed for field "UsageLog.billing_mode": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.PromotionName(); ok {
+		if err := usagelog.PromotionNameValidator(v); err != nil {
+			return &ValidationError{Name: "promotion_name", err: fmt.Errorf(`ent: validator failed for field "UsageLog.promotion_name": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.UserAgent(); ok {
 		if err := usagelog.UserAgentValidator(v); err != nil {
 			return &ValidationError{Name: "user_agent", err: fmt.Errorf(`ent: validator failed for field "UsageLog.user_agent": %w`, err)}
@@ -1212,6 +1291,30 @@ func (_u *UsageLogUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.AddedRateMultiplier(); ok {
 		_spec.AddField(usagelog.FieldRateMultiplier, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.PromotionID(); ok {
+		_spec.SetField(usagelog.FieldPromotionID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedPromotionID(); ok {
+		_spec.AddField(usagelog.FieldPromotionID, field.TypeInt64, value)
+	}
+	if _u.mutation.PromotionIDCleared() {
+		_spec.ClearField(usagelog.FieldPromotionID, field.TypeInt64)
+	}
+	if value, ok := _u.mutation.PromotionName(); ok {
+		_spec.SetField(usagelog.FieldPromotionName, field.TypeString, value)
+	}
+	if _u.mutation.PromotionNameCleared() {
+		_spec.ClearField(usagelog.FieldPromotionName, field.TypeString)
+	}
+	if value, ok := _u.mutation.BaseRateMultiplier(); ok {
+		_spec.SetField(usagelog.FieldBaseRateMultiplier, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedBaseRateMultiplier(); ok {
+		_spec.AddField(usagelog.FieldBaseRateMultiplier, field.TypeFloat64, value)
+	}
+	if _u.mutation.BaseRateMultiplierCleared() {
+		_spec.ClearField(usagelog.FieldBaseRateMultiplier, field.TypeFloat64)
 	}
 	if value, ok := _u.mutation.LongContextBillingApplied(); ok {
 		_spec.SetField(usagelog.FieldLongContextBillingApplied, field.TypeBool, value)
@@ -1999,6 +2102,80 @@ func (_u *UsageLogUpdateOne) AddRateMultiplier(v float64) *UsageLogUpdateOne {
 	return _u
 }
 
+// SetPromotionID sets the "promotion_id" field.
+func (_u *UsageLogUpdateOne) SetPromotionID(v int64) *UsageLogUpdateOne {
+	_u.mutation.ResetPromotionID()
+	_u.mutation.SetPromotionID(v)
+	return _u
+}
+
+// SetNillablePromotionID sets the "promotion_id" field if the given value is not nil.
+func (_u *UsageLogUpdateOne) SetNillablePromotionID(v *int64) *UsageLogUpdateOne {
+	if v != nil {
+		_u.SetPromotionID(*v)
+	}
+	return _u
+}
+
+// AddPromotionID adds value to the "promotion_id" field.
+func (_u *UsageLogUpdateOne) AddPromotionID(v int64) *UsageLogUpdateOne {
+	_u.mutation.AddPromotionID(v)
+	return _u
+}
+
+// ClearPromotionID clears the value of the "promotion_id" field.
+func (_u *UsageLogUpdateOne) ClearPromotionID() *UsageLogUpdateOne {
+	_u.mutation.ClearPromotionID()
+	return _u
+}
+
+// SetPromotionName sets the "promotion_name" field.
+func (_u *UsageLogUpdateOne) SetPromotionName(v string) *UsageLogUpdateOne {
+	_u.mutation.SetPromotionName(v)
+	return _u
+}
+
+// SetNillablePromotionName sets the "promotion_name" field if the given value is not nil.
+func (_u *UsageLogUpdateOne) SetNillablePromotionName(v *string) *UsageLogUpdateOne {
+	if v != nil {
+		_u.SetPromotionName(*v)
+	}
+	return _u
+}
+
+// ClearPromotionName clears the value of the "promotion_name" field.
+func (_u *UsageLogUpdateOne) ClearPromotionName() *UsageLogUpdateOne {
+	_u.mutation.ClearPromotionName()
+	return _u
+}
+
+// SetBaseRateMultiplier sets the "base_rate_multiplier" field.
+func (_u *UsageLogUpdateOne) SetBaseRateMultiplier(v float64) *UsageLogUpdateOne {
+	_u.mutation.ResetBaseRateMultiplier()
+	_u.mutation.SetBaseRateMultiplier(v)
+	return _u
+}
+
+// SetNillableBaseRateMultiplier sets the "base_rate_multiplier" field if the given value is not nil.
+func (_u *UsageLogUpdateOne) SetNillableBaseRateMultiplier(v *float64) *UsageLogUpdateOne {
+	if v != nil {
+		_u.SetBaseRateMultiplier(*v)
+	}
+	return _u
+}
+
+// AddBaseRateMultiplier adds value to the "base_rate_multiplier" field.
+func (_u *UsageLogUpdateOne) AddBaseRateMultiplier(v float64) *UsageLogUpdateOne {
+	_u.mutation.AddBaseRateMultiplier(v)
+	return _u
+}
+
+// ClearBaseRateMultiplier clears the value of the "base_rate_multiplier" field.
+func (_u *UsageLogUpdateOne) ClearBaseRateMultiplier() *UsageLogUpdateOne {
+	_u.mutation.ClearBaseRateMultiplier()
+	return _u
+}
+
 // SetLongContextBillingApplied sets the "long_context_billing_applied" field.
 func (_u *UsageLogUpdateOne) SetLongContextBillingApplied(v bool) *UsageLogUpdateOne {
 	_u.mutation.SetLongContextBillingApplied(v)
@@ -2501,6 +2678,11 @@ func (_u *UsageLogUpdateOne) check() error {
 			return &ValidationError{Name: "billing_mode", err: fmt.Errorf(`ent: validator failed for field "UsageLog.billing_mode": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.PromotionName(); ok {
+		if err := usagelog.PromotionNameValidator(v); err != nil {
+			return &ValidationError{Name: "promotion_name", err: fmt.Errorf(`ent: validator failed for field "UsageLog.promotion_name": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.UserAgent(); ok {
 		if err := usagelog.UserAgentValidator(v); err != nil {
 			return &ValidationError{Name: "user_agent", err: fmt.Errorf(`ent: validator failed for field "UsageLog.user_agent": %w`, err)}
@@ -2699,6 +2881,30 @@ func (_u *UsageLogUpdateOne) sqlSave(ctx context.Context) (_node *UsageLog, err 
 	}
 	if value, ok := _u.mutation.AddedRateMultiplier(); ok {
 		_spec.AddField(usagelog.FieldRateMultiplier, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.PromotionID(); ok {
+		_spec.SetField(usagelog.FieldPromotionID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedPromotionID(); ok {
+		_spec.AddField(usagelog.FieldPromotionID, field.TypeInt64, value)
+	}
+	if _u.mutation.PromotionIDCleared() {
+		_spec.ClearField(usagelog.FieldPromotionID, field.TypeInt64)
+	}
+	if value, ok := _u.mutation.PromotionName(); ok {
+		_spec.SetField(usagelog.FieldPromotionName, field.TypeString, value)
+	}
+	if _u.mutation.PromotionNameCleared() {
+		_spec.ClearField(usagelog.FieldPromotionName, field.TypeString)
+	}
+	if value, ok := _u.mutation.BaseRateMultiplier(); ok {
+		_spec.SetField(usagelog.FieldBaseRateMultiplier, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedBaseRateMultiplier(); ok {
+		_spec.AddField(usagelog.FieldBaseRateMultiplier, field.TypeFloat64, value)
+	}
+	if _u.mutation.BaseRateMultiplierCleared() {
+		_spec.ClearField(usagelog.FieldBaseRateMultiplier, field.TypeFloat64)
 	}
 	if value, ok := _u.mutation.LongContextBillingApplied(); ok {
 		_spec.SetField(usagelog.FieldLongContextBillingApplied, field.TypeBool, value)

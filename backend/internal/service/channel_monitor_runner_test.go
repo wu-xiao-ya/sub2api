@@ -254,6 +254,39 @@ func TestStart_GroupsNamedLinesIntoOneConcurrentTask(t *testing.T) {
 	r.Stop()
 }
 
+func TestBuildGroupedScheduledMonitorsKeepsImageIndependentWithOwnTimeout(t *testing.T) {
+	specs := buildGroupedScheduledMonitors([]*ChannelMonitor{
+		{
+			ID: 1, Name: "pro-text", Provider: MonitorProviderOpenAI,
+			APIMode: MonitorAPIModeChatCompletions, PrimaryModel: "gpt-5.6-sol",
+			GroupName: "Pro", Enabled: true, IntervalSeconds: 300, RequestTimeoutSeconds: 45,
+		},
+		{
+			ID: 2, Name: "pro-image", Provider: MonitorProviderOpenAI,
+			APIMode: MonitorAPIModeImages, PrimaryModel: "gpt-image-2",
+			GroupName: "Pro", Enabled: true, IntervalSeconds: 1800, RequestTimeoutSeconds: 300,
+		},
+	})
+
+	if len(specs) != 2 {
+		t.Fatalf("expected text and image monitors to remain separate, got %d tasks", len(specs))
+	}
+	for _, spec := range specs {
+		switch spec.id {
+		case 1:
+			if spec.interval != 5*time.Minute || spec.requestTimeout != 45*time.Second {
+				t.Fatalf("unexpected text spec: %#v", spec)
+			}
+		case 2:
+			if spec.interval != 30*time.Minute || spec.requestTimeout != 5*time.Minute {
+				t.Fatalf("unexpected image spec: %#v", spec)
+			}
+		default:
+			t.Fatalf("unexpected monitor task id %d", spec.id)
+		}
+	}
+}
+
 // TestStop_DrainsAllGoroutines 验证 Stop 会等待所有调度 goroutine 退出（无游离）。
 func TestStop_DrainsAllGoroutines(t *testing.T) {
 	svc := &stubMonitorSvc{}

@@ -156,11 +156,18 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 	if apiKey.GroupID != nil && apiKey.Group != nil {
 		multiplier = s.ResolveUserGroupRateMultiplier(ctx, user.ID, *apiKey.GroupID, apiKey.Group.RateMultiplier)
 	}
-	// token 倍率叠加高峰因子（token 计费含图片 token，图片按次倍率不受影响）。高峰因子按请求时刻现算，
-	// 不并入上面的 Resolve，以免污染 user:group 倍率缓存。
 	baseMultiplier := multiplier
-	multiplier, imageMultiplier := computePeakAwareMultipliers(apiKey, baseMultiplier, timezone.Now())
-	videoMultiplier := resolveVideoRateMultiplier(apiKey, baseMultiplier)
+	now := timezone.Now()
+	textBaseMultiplier, imageBaseMultiplier := computePeakAwareMultipliers(apiKey, baseMultiplier, now)
+	videoBaseMultiplier := resolveVideoRateMultiplier(apiKey, baseMultiplier)
+	groupID := int64(0)
+	if apiKey.GroupID != nil {
+		groupID = *apiKey.GroupID
+	}
+	multiplier, textPromotion := applyCurrentGroupPromotion(ctx, groupID, textBaseMultiplier, now)
+	imageMultiplier, imagePromotion := applyCurrentGroupPromotion(ctx, groupID, imageBaseMultiplier, now)
+	videoMultiplier, videoPromotion := applyCurrentGroupPromotion(ctx, groupID, videoBaseMultiplier, now)
+	webSearchMultiplier, webSearchPromotion := applyCurrentGroupPromotion(ctx, groupID, baseMultiplier, now)
 
 	var cost *CostBreakdown
 	var err error
@@ -202,7 +209,7 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		multiplier,
 		imageMultiplier,
 		videoMultiplier,
-		baseMultiplier,
+		webSearchMultiplier,
 		tokens,
 		serviceTier,
 		longContextBillingEnabled,
@@ -253,7 +260,7 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		RequestID:           requestID,
 		Model:               result.Model,
 		RequestedModel:      requestedModel,
-		UpstreamModel:       optionalNonEqualStringPtr(result.UpstreamModel, result.Model),
+		UpstreamModel:       optionalNonEqualStringPtr(result.UpstreamModel, requestedModel),
 		ServiceTier:         result.ServiceTier,
 		ReasoningEffort:     result.ReasoningEffort,
 		InboundEndpoint:     optionalTrimmedStringPtr(input.InboundEndpoint),
@@ -291,10 +298,17 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 	}
 	if isVideoUsage && (cost == nil || cost.BillingMode != string(BillingModeToken)) {
 		usageLog.RateMultiplier = videoMultiplier
+		applyUsageLogPromotionSnapshot(usageLog, videoPromotion)
 	} else if result.ImageCount > 0 && (cost == nil || cost.BillingMode != string(BillingModeToken)) {
 		usageLog.RateMultiplier = imageMultiplier
+		applyUsageLogPromotionSnapshot(usageLog, imagePromotion)
 	} else {
 		usageLog.RateMultiplier = multiplier
+		if result.WebSearchCalls > 0 {
+			applyUsageLogPromotionSnapshot(usageLog, webSearchPromotion)
+		} else {
+			applyUsageLogPromotionSnapshot(usageLog, textPromotion)
+		}
 	}
 	usageLog.AccountRateMultiplier = &accountRateMultiplier
 	usageLog.BillingType = billingType
@@ -379,6 +393,8 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 	}()
 
 	if billingErr != nil {
+		usageLog.ActualCost = 0
+		writeUsageLogBestEffort(ctx, s.usageLogRepo, usageLog, "service.openai_gateway")
 		return billingErr
 	}
 	writeUsageLogBestEffort(ctx, s.usageLogRepo, usageLog, "service.openai_gateway")

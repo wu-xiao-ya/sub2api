@@ -445,6 +445,46 @@ export default {
       deleteConfirm: 'Are you sure you want to delete this announcement? This action cannot be undone.'
     },
 
+    groupPromotions: {
+      title: 'Promotions',
+      description: 'Schedule automatic group billing discounts',
+      create: 'Create Promotion',
+      edit: 'Edit Promotion',
+      delete: 'Delete Promotion',
+      search: 'Search promotions...',
+      group: 'Group',
+      offer: 'Offer',
+      schedule: 'Schedule',
+      state: 'Status',
+      activityName: 'Promotion Name',
+      descriptionLabel: 'Description',
+      mode: 'Discount Type',
+      discountFactor: 'Percent of Current Rate',
+      fixedMultiplier: 'Fixed Maximum Rate',
+      percentage: 'Current Rate Percent',
+      fixedRate: 'Promotion Multiplier',
+      startsAt: 'Starts At',
+      endsAt: 'Ends At',
+      enabled: 'Enable Promotion',
+      preview: 'Billing Preview',
+      status: {
+        upcoming: 'Upcoming',
+        active: 'Active',
+        ended: 'Ended',
+        disabled: 'Disabled'
+      },
+      summaryDiscount: 'Charge {value}% of the current effective rate during this promotion',
+      summaryFixed: 'Charge no more than {value}x during this promotion; lower personal rates are preserved',
+      deleteConfirm: 'Deleting a promotion does not change historical usage records. Continue?',
+      saved: 'Promotion saved',
+      deleted: 'Promotion deleted',
+      failedToLoad: 'Failed to load promotions',
+      failedToSave: 'Failed to save promotion',
+      failedToDelete: 'Failed to delete promotion',
+      invalidTime: 'The end time must be after the start time',
+      noGroup: 'Select a group'
+    },
+
     // Promo Codes
     promo: {
       title: 'Promo Code Management',

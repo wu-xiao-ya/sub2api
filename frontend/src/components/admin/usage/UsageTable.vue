@@ -98,6 +98,18 @@
           <span v-else class="text-sm text-gray-400 dark:text-gray-500">-</span>
         </template>
 
+        <template #cell-promotion="{ row }">
+          <div v-if="row.promotion_name && row.base_rate_multiplier != null" class="min-w-32">
+            <span class="inline-flex max-w-44 truncate rounded px-2 py-0.5 text-xs font-medium bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200" :title="row.promotion_name">
+              {{ row.promotion_name }} · {{ promotionPercent(row) }}%
+            </span>
+            <div class="mt-0.5 whitespace-nowrap text-[11px] text-emerald-700 dark:text-emerald-300">
+              {{ formatMultiplier(row.base_rate_multiplier) }}x → {{ formatMultiplier(row.rate_multiplier) }}x
+            </div>
+          </div>
+          <span v-else class="text-sm text-gray-400 dark:text-gray-500">-</span>
+        </template>
+
         <template #cell-stream="{ row }">
           <span class="inline-flex items-center rounded px-2 py-0.5 text-xs font-medium" :class="getRequestTypeBadgeClass(row)">
             {{ getRequestTypeLabel(row) }}
@@ -428,6 +440,18 @@
             <span class="text-gray-400">{{ t('usage.rate') }}</span>
             <span class="font-semibold text-blue-400">{{ formatMultiplier(tooltipData?.rate_multiplier || 1) }}x</span>
           </div>
+          <template v-if="tooltipData?.promotion_name && tooltipData?.base_rate_multiplier != null">
+            <div class="flex items-center justify-between gap-6">
+              <span class="text-gray-400">{{ t('usage.promotion') }}</span>
+              <span class="max-w-56 truncate font-semibold text-emerald-300">{{ tooltipData.promotion_name }}</span>
+            </div>
+            <div class="flex items-center justify-between gap-6">
+              <span class="text-gray-400">{{ t('usage.promotionRate') }}</span>
+              <span class="font-semibold text-emerald-300">
+                {{ formatMultiplier(tooltipData.base_rate_multiplier) }}x → {{ formatMultiplier(tooltipData.rate_multiplier) }}x ({{ promotionPercent(tooltipData) }}%)
+              </span>
+            </div>
+          </template>
           <div class="flex items-center justify-between gap-6">
             <span class="text-gray-400">{{ t('usage.original') }}</span>
             <span class="font-medium text-white">${{ tooltipData?.total_cost?.toFixed(6) || '0.000000' }}</span>
@@ -503,6 +527,13 @@ function accountBilled(row: { total_cost?: number | null; account_stats_cost?: n
   const base = row.account_stats_cost != null ? row.account_stats_cost : (row.total_cost ?? 0)
   const result = base * (row.account_rate_multiplier ?? 1)
   return Number.isNaN(result) ? 0 : result
+}
+
+function promotionPercent(row: { base_rate_multiplier?: number | null; rate_multiplier?: number | null }): string {
+  const base = row.base_rate_multiplier
+  const rate = row.rate_multiplier
+  if (base == null || base <= 0 || rate == null) return '-'
+  return (rate / base * 100).toFixed(rate / base * 100 >= 10 ? 0 : 1)
 }
 
 

@@ -120,19 +120,22 @@ type BatchImageJob struct {
 	FailCount      int
 	CancelledCount int
 
-	EstimatedCost           float64
-	HoldAmount              *float64
-	ActualCost              *float64
-	BaseUnitPrice           float64
-	GroupRateMultiplier     float64
-	AccountRateMultiplier   float64
-	BatchDiscountMultiplier float64
-	HoldMultiplier          float64
-	BillableUnitPrice       float64
-	HoldUnitPrice           float64
-	PricingSnapshotVersion  int
-	Currency                string
-	HoldID                  *string
+	EstimatedCost               float64
+	HoldAmount                  *float64
+	ActualCost                  *float64
+	BaseUnitPrice               float64
+	GroupRateMultiplier         float64
+	PromotionID                 *int64
+	PromotionName               *string
+	PromotionBaseRateMultiplier *float64
+	AccountRateMultiplier       float64
+	BatchDiscountMultiplier     float64
+	HoldMultiplier              float64
+	BillableUnitPrice           float64
+	HoldUnitPrice               float64
+	PricingSnapshotVersion      int
+	Currency                    string
+	HoldID                      *string
 
 	IdempotencyKey *string
 	RequestHash    *string
@@ -179,19 +182,22 @@ type CreateBatchImageJobParams struct {
 	FailCount      int
 	CancelledCount int
 
-	EstimatedCost           float64
-	HoldAmount              *float64
-	ActualCost              *float64
-	BaseUnitPrice           float64
-	GroupRateMultiplier     float64
-	AccountRateMultiplier   float64
-	BatchDiscountMultiplier float64
-	HoldMultiplier          float64
-	BillableUnitPrice       float64
-	HoldUnitPrice           float64
-	PricingSnapshotVersion  int
-	Currency                string
-	HoldID                  *string
+	EstimatedCost               float64
+	HoldAmount                  *float64
+	ActualCost                  *float64
+	BaseUnitPrice               float64
+	GroupRateMultiplier         float64
+	PromotionID                 *int64
+	PromotionName               *string
+	PromotionBaseRateMultiplier *float64
+	AccountRateMultiplier       float64
+	BatchDiscountMultiplier     float64
+	HoldMultiplier              float64
+	BillableUnitPrice           float64
+	HoldUnitPrice               float64
+	PricingSnapshotVersion      int
+	Currency                    string
+	HoldID                      *string
 
 	IdempotencyKey *string
 	RequestHash    *string

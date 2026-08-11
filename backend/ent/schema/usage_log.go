@@ -100,6 +100,22 @@ func (UsageLog) Fields() []ent.Field {
 		field.Float("rate_multiplier").
 			Default(1).
 			SchemaType(map[string]string{dialect.Postgres: "decimal(10,4)"}),
+		// Promotion snapshots are populated only when an activity actually
+		// lowered this request's effective rate. Historical rows stay NULL.
+		field.Int64("promotion_id").
+			Optional().
+			Nillable().
+			Comment("活动 ID 快照"),
+		field.String("promotion_name").
+			MaxLen(200).
+			Optional().
+			Nillable().
+			Comment("活动名称快照"),
+		field.Float("base_rate_multiplier").
+			Optional().
+			Nillable().
+			SchemaType(map[string]string{dialect.Postgres: "decimal(10,4)"}).
+			Comment("活动前的实际倍率快照"),
 		field.Bool("long_context_billing_applied").
 			Default(false).
 			Comment("Whether long-context pricing changed token prices for this request"),
@@ -215,6 +231,7 @@ func (UsageLog) Indexes() []ent.Index {
 		index.Fields("account_id"),
 		index.Fields("group_id"),
 		index.Fields("subscription_id"),
+		index.Fields("promotion_id"),
 		index.Fields("created_at"),
 		index.Fields("model"),
 		index.Fields("requested_model"),

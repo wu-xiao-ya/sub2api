@@ -151,6 +151,20 @@ func (_c *ChannelMonitorCreate) SetNillableJitterSeconds(v *int) *ChannelMonitor
 	return _c
 }
 
+// SetRequestTimeoutSeconds sets the "request_timeout_seconds" field.
+func (_c *ChannelMonitorCreate) SetRequestTimeoutSeconds(v int) *ChannelMonitorCreate {
+	_c.mutation.SetRequestTimeoutSeconds(v)
+	return _c
+}
+
+// SetNillableRequestTimeoutSeconds sets the "request_timeout_seconds" field if the given value is not nil.
+func (_c *ChannelMonitorCreate) SetNillableRequestTimeoutSeconds(v *int) *ChannelMonitorCreate {
+	if v != nil {
+		_c.SetRequestTimeoutSeconds(*v)
+	}
+	return _c
+}
+
 // SetLastCheckedAt sets the "last_checked_at" field.
 func (_c *ChannelMonitorCreate) SetLastCheckedAt(v time.Time) *ChannelMonitorCreate {
 	_c.mutation.SetLastCheckedAt(v)
@@ -323,6 +337,10 @@ func (_c *ChannelMonitorCreate) defaults() {
 		v := channelmonitor.DefaultJitterSeconds
 		_c.mutation.SetJitterSeconds(v)
 	}
+	if _, ok := _c.mutation.RequestTimeoutSeconds(); !ok {
+		v := channelmonitor.DefaultRequestTimeoutSeconds
+		_c.mutation.SetRequestTimeoutSeconds(v)
+	}
 	if _, ok := _c.mutation.ExtraHeaders(); !ok {
 		v := channelmonitor.DefaultExtraHeaders
 		_c.mutation.SetExtraHeaders(v)
@@ -414,6 +432,14 @@ func (_c *ChannelMonitorCreate) check() error {
 	if v, ok := _c.mutation.JitterSeconds(); ok {
 		if err := channelmonitor.JitterSecondsValidator(v); err != nil {
 			return &ValidationError{Name: "jitter_seconds", err: fmt.Errorf(`ent: validator failed for field "ChannelMonitor.jitter_seconds": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.RequestTimeoutSeconds(); !ok {
+		return &ValidationError{Name: "request_timeout_seconds", err: errors.New(`ent: missing required field "ChannelMonitor.request_timeout_seconds"`)}
+	}
+	if v, ok := _c.mutation.RequestTimeoutSeconds(); ok {
+		if err := channelmonitor.RequestTimeoutSecondsValidator(v); err != nil {
+			return &ValidationError{Name: "request_timeout_seconds", err: fmt.Errorf(`ent: validator failed for field "ChannelMonitor.request_timeout_seconds": %w`, err)}
 		}
 	}
 	if _, ok := _c.mutation.CreatedBy(); !ok {
@@ -508,6 +534,10 @@ func (_c *ChannelMonitorCreate) createSpec() (*ChannelMonitor, *sqlgraph.CreateS
 	if value, ok := _c.mutation.JitterSeconds(); ok {
 		_spec.SetField(channelmonitor.FieldJitterSeconds, field.TypeInt, value)
 		_node.JitterSeconds = value
+	}
+	if value, ok := _c.mutation.RequestTimeoutSeconds(); ok {
+		_spec.SetField(channelmonitor.FieldRequestTimeoutSeconds, field.TypeInt, value)
+		_node.RequestTimeoutSeconds = value
 	}
 	if value, ok := _c.mutation.LastCheckedAt(); ok {
 		_spec.SetField(channelmonitor.FieldLastCheckedAt, field.TypeTime, value)
@@ -789,6 +819,24 @@ func (u *ChannelMonitorUpsert) UpdateJitterSeconds() *ChannelMonitorUpsert {
 // AddJitterSeconds adds v to the "jitter_seconds" field.
 func (u *ChannelMonitorUpsert) AddJitterSeconds(v int) *ChannelMonitorUpsert {
 	u.Add(channelmonitor.FieldJitterSeconds, v)
+	return u
+}
+
+// SetRequestTimeoutSeconds sets the "request_timeout_seconds" field.
+func (u *ChannelMonitorUpsert) SetRequestTimeoutSeconds(v int) *ChannelMonitorUpsert {
+	u.Set(channelmonitor.FieldRequestTimeoutSeconds, v)
+	return u
+}
+
+// UpdateRequestTimeoutSeconds sets the "request_timeout_seconds" field to the value that was provided on create.
+func (u *ChannelMonitorUpsert) UpdateRequestTimeoutSeconds() *ChannelMonitorUpsert {
+	u.SetExcluded(channelmonitor.FieldRequestTimeoutSeconds)
+	return u
+}
+
+// AddRequestTimeoutSeconds adds v to the "request_timeout_seconds" field.
+func (u *ChannelMonitorUpsert) AddRequestTimeoutSeconds(v int) *ChannelMonitorUpsert {
+	u.Add(channelmonitor.FieldRequestTimeoutSeconds, v)
 	return u
 }
 
@@ -1119,6 +1167,27 @@ func (u *ChannelMonitorUpsertOne) AddJitterSeconds(v int) *ChannelMonitorUpsertO
 func (u *ChannelMonitorUpsertOne) UpdateJitterSeconds() *ChannelMonitorUpsertOne {
 	return u.Update(func(s *ChannelMonitorUpsert) {
 		s.UpdateJitterSeconds()
+	})
+}
+
+// SetRequestTimeoutSeconds sets the "request_timeout_seconds" field.
+func (u *ChannelMonitorUpsertOne) SetRequestTimeoutSeconds(v int) *ChannelMonitorUpsertOne {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.SetRequestTimeoutSeconds(v)
+	})
+}
+
+// AddRequestTimeoutSeconds adds v to the "request_timeout_seconds" field.
+func (u *ChannelMonitorUpsertOne) AddRequestTimeoutSeconds(v int) *ChannelMonitorUpsertOne {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.AddRequestTimeoutSeconds(v)
+	})
+}
+
+// UpdateRequestTimeoutSeconds sets the "request_timeout_seconds" field to the value that was provided on create.
+func (u *ChannelMonitorUpsertOne) UpdateRequestTimeoutSeconds() *ChannelMonitorUpsertOne {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.UpdateRequestTimeoutSeconds()
 	})
 }
 
@@ -1631,6 +1700,27 @@ func (u *ChannelMonitorUpsertBulk) AddJitterSeconds(v int) *ChannelMonitorUpsert
 func (u *ChannelMonitorUpsertBulk) UpdateJitterSeconds() *ChannelMonitorUpsertBulk {
 	return u.Update(func(s *ChannelMonitorUpsert) {
 		s.UpdateJitterSeconds()
+	})
+}
+
+// SetRequestTimeoutSeconds sets the "request_timeout_seconds" field.
+func (u *ChannelMonitorUpsertBulk) SetRequestTimeoutSeconds(v int) *ChannelMonitorUpsertBulk {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.SetRequestTimeoutSeconds(v)
+	})
+}
+
+// AddRequestTimeoutSeconds adds v to the "request_timeout_seconds" field.
+func (u *ChannelMonitorUpsertBulk) AddRequestTimeoutSeconds(v int) *ChannelMonitorUpsertBulk {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.AddRequestTimeoutSeconds(v)
+	})
+}
+
+// UpdateRequestTimeoutSeconds sets the "request_timeout_seconds" field to the value that was provided on create.
+func (u *ChannelMonitorUpsertBulk) UpdateRequestTimeoutSeconds() *ChannelMonitorUpsertBulk {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.UpdateRequestTimeoutSeconds()
 	})
 }
 

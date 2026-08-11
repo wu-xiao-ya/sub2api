@@ -48,6 +48,12 @@ func (BatchImageJob) Fields() []ent.Field {
 		field.Float("estimated_cost").SchemaType(map[string]string{dialect.Postgres: "decimal(20,10)"}).Default(0),
 		field.Float("hold_amount").Optional().Nillable().SchemaType(map[string]string{dialect.Postgres: "decimal(20,10)"}),
 		field.Float("actual_cost").Optional().Nillable().SchemaType(map[string]string{dialect.Postgres: "decimal(20,10)"}),
+		// Pricing snapshots below are maintained by the raw batch-image
+		// repository. These promotion fields are included here for Ent schema
+		// parity even though the existing base/group snapshot fields predate it.
+		field.Int64("promotion_id").Optional().Nillable(),
+		field.String("promotion_name").Optional().Nillable().MaxLen(200),
+		field.Float("promotion_base_rate_multiplier").Optional().Nillable().SchemaType(map[string]string{dialect.Postgres: "decimal(10,4)"}),
 		field.String("currency").MaxLen(16).Default("USD"),
 		field.String("hold_id").Optional().Nillable().MaxLen(128),
 		field.String("idempotency_key").Optional().Nillable().MaxLen(255),

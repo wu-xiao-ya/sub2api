@@ -40,7 +40,7 @@ const createStats = (): UserDashboardStats => ({
 })
 
 describe('UserDashboardStats', () => {
-  it('shows today cache hit rate using all prompt tokens', () => {
+  it('shows separate today and historical cache hit rates using all prompt tokens', () => {
     const wrapper = mount(UserDashboardStatsComponent, {
       props: {
         stats: createStats(),
@@ -56,5 +56,6 @@ describe('UserDashboardStats', () => {
     })
 
     expect(wrapper.get('[data-testid="user-cache-hit-rate"]').text()).toBe('75.0%')
+    expect(wrapper.get('[data-testid="user-historical-cache-hit-rate"]').text()).toBe('50.0%')
   })
 })

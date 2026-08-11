@@ -28,8 +28,8 @@ var monitorHTTPClient = newSSRFSafeHTTPClient(
 // Image generation can legitimately queue or render for tens of seconds
 // before it sends response headers, so it must not reuse the text client.
 var monitorImageHTTPClient = newSSRFSafeHTTPClient(
-	monitorImageRequestTimeout,
-	monitorImageResponseHeaderTimeout,
+	time.Duration(monitorMaxRequestTimeoutSeconds)*time.Second,
+	0,
 )
 
 // monitorPingHTTPClient 用于 endpoint origin 的 HEAD ping，超时更短。
@@ -68,6 +68,9 @@ type CheckOptions struct {
 	// BodyOverride 在 merge 模式下做浅合并（key 命中黑名单时静默丢弃），
 	// 在 replace 模式下直接当作完整 body。
 	BodyOverride map[string]any
+	// RequestTimeout is the monitor-specific upstream wait limit. It is only
+	// applied to images mode; text clients retain their lower fixed timeout.
+	RequestTimeout time.Duration
 }
 
 // runCheckForModel 对单个 (provider, model) 做一次完整检测。
@@ -152,8 +155,11 @@ func runImageCheckForModel(
 		CheckedAt: time.Now(),
 	}
 
+	requestCtx, cancel := context.WithTimeout(ctx, imageRequestTimeout(opts))
+	defer cancel()
+
 	start := time.Now()
-	respBytes, statusCode, err := callImageProvider(ctx, endpoint, apiKey, model, opts)
+	respBytes, statusCode, err := callImageProvider(requestCtx, endpoint, apiKey, model, opts)
 	latency := time.Since(start)
 	latencyMs := int(latency / time.Millisecond)
 	res.LatencyMs = &latencyMs
@@ -177,6 +183,17 @@ func runImageCheckForModel(
 	}
 	finalizeOperationalOrDegraded(res, latency, latencyMs)
 	return res, image
+}
+
+func imageRequestTimeout(opts *CheckOptions) time.Duration {
+	if opts != nil && opts.RequestTimeout > 0 {
+		max := time.Duration(monitorMaxRequestTimeoutSeconds) * time.Second
+		if opts.RequestTimeout > max {
+			return max
+		}
+		return opts.RequestTimeout
+	}
+	return monitorDefaultImageRequestTimeout
 }
 
 // finalizeOperationalOrDegraded 负责走到最后一步的 operational/degraded 判定。

@@ -10,6 +10,9 @@ export default {
     totalTokens: '累计 Token',
     cacheToday: '今日缓存',
     cacheHitRate: '缓存命中率',
+    todayCacheHitRate: '今日缓存命中率',
+    historicalCacheHitRate: '历史缓存命中率',
+    cacheReadTokens: '缓存读取',
     performance: '性能指标',
     avgResponse: '平均响应',
     averageTime: '平均时间',
@@ -362,6 +365,11 @@ export default {
     serviceTierFlex: 'Flex',
     serviceTierStandard: 'Standard',
     rate: '倍率',
+    promotion: '活动优惠',
+    promotionRate: '优惠倍率',
+    promotionBaseRate: '活动前倍率',
+    promotionFinalRate: '活动后倍率',
+    promotionPricePercent: '活动计费比例 (%)',
     original: '原始',
     billed: '计费',
     noRecords: '未找到使用记录，请尝试调整筛选条件。',
@@ -413,7 +421,7 @@ export default {
   monitorCommon: {
     status: {
       operational: '正常',
-      degraded: '降级',
+      degraded: '响应偏慢',
       failed: '失败',
       error: '错误',
       unknown: '-'
@@ -471,9 +479,16 @@ export default {
       '30d': '30 天'
     },
     overall: {
-      operational: 'OPERATIONAL',
-      degraded: 'DEGRADED',
-      unavailable: 'UNAVAILABLE'
+      operational: '运行正常',
+      slow_response: '响应偏慢',
+      partial: '部分渠道异常',
+      unavailable: '渠道不可用'
+    },
+    health: {
+      operational: '正常',
+      slow_response: '响应偏慢',
+      partial: '部分模型异常',
+      unavailable: '不可用'
     },
     columns: {
       name: '名称',
@@ -503,8 +518,20 @@ export default {
     title: '可用渠道',
     description: '查看您可访问的渠道与其支持的模型、定价',
     searchPlaceholder: '搜索渠道或模型...',
+    allPlatforms: '全部平台',
+    platformFilter: '筛选平台',
+    channelCount: '{count} 个渠道',
+    groupCount: '{count} 个分组',
+    modelCount: '{count} 个模型',
+    groupUnit: '个分组',
+    modelUnit: '个模型',
+    groupsLabel: '可用分组',
+    modelsLabel: '可用模型',
     empty: '暂无可用渠道',
+    emptyDescription: '暂时没有可供使用的渠道。',
+    noMatching: '没有匹配的渠道',
     noModels: '未配置模型',
+    noGroups: '未开放分组',
     noPricing: '未配置定价',
     exclusive: '专属',
     public: '公开',

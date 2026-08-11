@@ -30,6 +30,8 @@ export interface ChannelMonitor {
   interval_seconds: number
   /** 每次调度在 interval 基础上 ± [0, jitter] 的随机偏移（秒），0 = 固定间隔 */
   jitter_seconds: number
+  /** One upstream check's maximum wait time. Images can use a longer value. */
+  request_timeout_seconds: number
   last_checked_at: string | null
   created_by: number
   created_at: string
@@ -84,6 +86,7 @@ export interface CreateParams {
   enabled?: boolean
   interval_seconds: number
   jitter_seconds?: number
+  request_timeout_seconds?: number
   template_id?: number | null
   extra_headers?: Record<string, string>
   body_override_mode?: BodyOverrideMode
@@ -260,11 +263,11 @@ export async function del(id: number): Promise<void> {
  * Returns the latest check results for primary + extra models.
  */
 export async function runNow(id: number): Promise<RunNowResponse> {
-  // Image monitors may legitimately take longer than the global 30s API timeout.
+  // Image monitors may legitimately wait up to the configured 15-minute cap.
   const { data } = await apiClient.post<RunNowResponse>(
     `/admin/channel-monitors/${id}/run`,
     undefined,
-    { timeout: 120000 }
+    { timeout: 930000 }
   )
   return data
 }

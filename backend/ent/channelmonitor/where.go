@@ -110,6 +110,11 @@ func JitterSeconds(v int) predicate.ChannelMonitor {
 	return predicate.ChannelMonitor(sql.FieldEQ(FieldJitterSeconds, v))
 }
 
+// RequestTimeoutSeconds applies equality check predicate on the "request_timeout_seconds" field. It's identical to RequestTimeoutSecondsEQ.
+func RequestTimeoutSeconds(v int) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldEQ(FieldRequestTimeoutSeconds, v))
+}
+
 // LastCheckedAt applies equality check predicate on the "last_checked_at" field. It's identical to LastCheckedAtEQ.
 func LastCheckedAt(v time.Time) predicate.ChannelMonitor {
 	return predicate.ChannelMonitor(sql.FieldEQ(FieldLastCheckedAt, v))
@@ -718,6 +723,46 @@ func JitterSecondsLT(v int) predicate.ChannelMonitor {
 // JitterSecondsLTE applies the LTE predicate on the "jitter_seconds" field.
 func JitterSecondsLTE(v int) predicate.ChannelMonitor {
 	return predicate.ChannelMonitor(sql.FieldLTE(FieldJitterSeconds, v))
+}
+
+// RequestTimeoutSecondsEQ applies the EQ predicate on the "request_timeout_seconds" field.
+func RequestTimeoutSecondsEQ(v int) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldEQ(FieldRequestTimeoutSeconds, v))
+}
+
+// RequestTimeoutSecondsNEQ applies the NEQ predicate on the "request_timeout_seconds" field.
+func RequestTimeoutSecondsNEQ(v int) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldNEQ(FieldRequestTimeoutSeconds, v))
+}
+
+// RequestTimeoutSecondsIn applies the In predicate on the "request_timeout_seconds" field.
+func RequestTimeoutSecondsIn(vs ...int) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldIn(FieldRequestTimeoutSeconds, vs...))
+}
+
+// RequestTimeoutSecondsNotIn applies the NotIn predicate on the "request_timeout_seconds" field.
+func RequestTimeoutSecondsNotIn(vs ...int) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldNotIn(FieldRequestTimeoutSeconds, vs...))
+}
+
+// RequestTimeoutSecondsGT applies the GT predicate on the "request_timeout_seconds" field.
+func RequestTimeoutSecondsGT(v int) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldGT(FieldRequestTimeoutSeconds, v))
+}
+
+// RequestTimeoutSecondsGTE applies the GTE predicate on the "request_timeout_seconds" field.
+func RequestTimeoutSecondsGTE(v int) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldGTE(FieldRequestTimeoutSeconds, v))
+}
+
+// RequestTimeoutSecondsLT applies the LT predicate on the "request_timeout_seconds" field.
+func RequestTimeoutSecondsLT(v int) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldLT(FieldRequestTimeoutSeconds, v))
+}
+
+// RequestTimeoutSecondsLTE applies the LTE predicate on the "request_timeout_seconds" field.
+func RequestTimeoutSecondsLTE(v int) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldLTE(FieldRequestTimeoutSeconds, v))
 }
 
 // LastCheckedAtEQ applies the EQ predicate on the "last_checked_at" field.

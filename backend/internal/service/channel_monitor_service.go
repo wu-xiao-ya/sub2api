@@ -135,22 +135,23 @@ func (s *ChannelMonitorService) Create(ctx context.Context, p ChannelMonitorCrea
 		return nil, fmt.Errorf("encrypt api key: %w", err)
 	}
 	m := &ChannelMonitor{
-		Name:             strings.TrimSpace(p.Name),
-		Provider:         p.Provider,
-		APIMode:          defaultAPIMode(p.APIMode),
-		Endpoint:         normalizeEndpoint(p.Endpoint),
-		APIKey:           encrypted, // 注意：传入 repository 时该字段为密文
-		PrimaryModel:     normalizeMonitorPrimaryModel(p.Provider, p.PrimaryModel),
-		ExtraModels:      normalizeModels(p.ExtraModels),
-		GroupName:        strings.TrimSpace(p.GroupName),
-		Enabled:          p.Enabled,
-		IntervalSeconds:  p.IntervalSeconds,
-		JitterSeconds:    p.JitterSeconds,
-		CreatedBy:        p.CreatedBy,
-		TemplateID:       p.TemplateID,
-		ExtraHeaders:     emptyHeadersIfNil(p.ExtraHeaders),
-		BodyOverrideMode: defaultBodyMode(p.BodyOverrideMode),
-		BodyOverride:     p.BodyOverride,
+		Name:                  strings.TrimSpace(p.Name),
+		Provider:              p.Provider,
+		APIMode:               defaultAPIMode(p.APIMode),
+		Endpoint:              normalizeEndpoint(p.Endpoint),
+		APIKey:                encrypted, // 注意：传入 repository 时该字段为密文
+		PrimaryModel:          normalizeMonitorPrimaryModel(p.Provider, p.PrimaryModel),
+		ExtraModels:           normalizeModels(p.ExtraModels),
+		GroupName:             strings.TrimSpace(p.GroupName),
+		Enabled:               p.Enabled,
+		IntervalSeconds:       p.IntervalSeconds,
+		JitterSeconds:         p.JitterSeconds,
+		RequestTimeoutSeconds: defaultRequestTimeoutSeconds(p.APIMode, p.RequestTimeoutSeconds),
+		CreatedBy:             p.CreatedBy,
+		TemplateID:            p.TemplateID,
+		ExtraHeaders:          emptyHeadersIfNil(p.ExtraHeaders),
+		BodyOverrideMode:      defaultBodyMode(p.BodyOverrideMode),
+		BodyOverride:          p.BodyOverride,
 	}
 	if err := s.repo.Create(ctx, m); err != nil {
 		return nil, fmt.Errorf("create channel monitor: %w", err)
@@ -198,23 +199,24 @@ func (s *ChannelMonitorService) Duplicate(
 	}
 
 	duplicate := &ChannelMonitor{
-		Name:                 duplicateChannelMonitorName(source.Name),
-		Provider:             source.Provider,
-		APIMode:              source.APIMode,
-		Endpoint:             source.Endpoint,
-		APIKey:               encryptedAPIKey,
-		PrimaryModel:         source.PrimaryModel,
-		ExtraModels:          append([]string{}, source.ExtraModels...),
-		GroupName:            source.GroupName,
-		Enabled:              false,
-		IntervalSeconds:      source.IntervalSeconds,
-		JitterSeconds:        source.JitterSeconds,
-		CreatedBy:            createdBy,
-		TemplateID:           cloneInt64Pointer(source.TemplateID),
-		ExtraHeaders:         cloneChannelMonitorHeaders(source.ExtraHeaders),
-		BodyOverrideMode:     source.BodyOverrideMode,
-		BodyOverride:         bodyOverride,
-		DuplicateOperationID: operationID,
+		Name:                  duplicateChannelMonitorName(source.Name),
+		Provider:              source.Provider,
+		APIMode:               source.APIMode,
+		Endpoint:              source.Endpoint,
+		APIKey:                encryptedAPIKey,
+		PrimaryModel:          source.PrimaryModel,
+		ExtraModels:           append([]string{}, source.ExtraModels...),
+		GroupName:             source.GroupName,
+		Enabled:               false,
+		IntervalSeconds:       source.IntervalSeconds,
+		JitterSeconds:         source.JitterSeconds,
+		RequestTimeoutSeconds: source.RequestTimeoutSeconds,
+		CreatedBy:             createdBy,
+		TemplateID:            cloneInt64Pointer(source.TemplateID),
+		ExtraHeaders:          cloneChannelMonitorHeaders(source.ExtraHeaders),
+		BodyOverrideMode:      source.BodyOverrideMode,
+		BodyOverride:          bodyOverride,
+		DuplicateOperationID:  operationID,
 	}
 	if err := s.repo.Create(ctx, duplicate); err != nil {
 		return nil, fmt.Errorf("duplicate channel monitor: %w", err)
@@ -332,6 +334,9 @@ func validateCreateParams(p ChannelMonitorCreateParams) error {
 		return err
 	}
 	if err := validateJitter(p.JitterSeconds, p.IntervalSeconds); err != nil {
+		return err
+	}
+	if err := validateRequestTimeout(defaultRequestTimeoutSeconds(p.APIMode, p.RequestTimeoutSeconds)); err != nil {
 		return err
 	}
 	if err := validateEndpoint(p.Endpoint); err != nil {
@@ -671,6 +676,7 @@ func (s *ChannelMonitorService) runChecksConcurrent(ctx context.Context, m *Chan
 	// 所有模型共用同一份 CheckOptions（来自监控的快照字段）。
 	opts := &CheckOptions{
 		APIMode:          m.APIMode,
+		RequestTimeout:   monitorRequestTimeoutFor(m),
 		ExtraHeaders:     m.ExtraHeaders,
 		BodyOverrideMode: m.BodyOverrideMode,
 		BodyOverride:     m.BodyOverride,
@@ -982,6 +988,12 @@ func applyMonitorUpdate(existing *ChannelMonitor, p ChannelMonitorUpdateParams) 
 	if p.JitterSeconds != nil {
 		existing.JitterSeconds = *p.JitterSeconds
 	}
+	if p.RequestTimeoutSeconds != nil {
+		if err := validateRequestTimeout(*p.RequestTimeoutSeconds); err != nil {
+			return err
+		}
+		existing.RequestTimeoutSeconds = *p.RequestTimeoutSeconds
+	}
 	if p.IntervalSeconds != nil || p.JitterSeconds != nil {
 		// interval 与 jitter 任一变化都需要重新校验组合约束（interval - jitter >= 下限）。
 		if err := validateJitter(existing.JitterSeconds, existing.IntervalSeconds); err != nil {
@@ -1006,6 +1018,7 @@ func applyMonitorAdvancedUpdate(existing *ChannelMonitor, p ChannelMonitorUpdate
 		existing.ExtraHeaders = emptyHeadersIfNil(*p.ExtraHeaders)
 	}
 	newAPIMode := defaultAPIMode(existing.APIMode)
+	previousAPIMode := newAPIMode
 	if p.APIMode != nil {
 		newAPIMode = defaultAPIMode(*p.APIMode)
 	} else if existing.Provider != MonitorProviderOpenAI {
@@ -1029,6 +1042,10 @@ func applyMonitorAdvancedUpdate(existing *ChannelMonitor, p ChannelMonitorUpdate
 		}
 		existing.BodyOverrideMode = defaultBodyMode(newMode)
 		existing.BodyOverride = newBody
+	}
+	if p.APIMode != nil && p.RequestTimeoutSeconds == nil &&
+		existing.RequestTimeoutSeconds == defaultRequestTimeoutSeconds(previousAPIMode, 0) {
+		existing.RequestTimeoutSeconds = defaultRequestTimeoutSeconds(newAPIMode, 0)
 	}
 	existing.APIMode = newAPIMode
 	return nil

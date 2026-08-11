@@ -10,6 +10,9 @@ export default {
     totalTokens: 'Total Tokens',
     cacheToday: 'Cache (Today)',
     cacheHitRate: 'Cache Hit Rate',
+    todayCacheHitRate: 'Today Cache Hit Rate',
+    historicalCacheHitRate: 'Historical Cache Hit Rate',
+    cacheReadTokens: 'Cache Read',
     performance: 'Performance',
     avgResponse: 'Avg Response',
     averageTime: 'Average time',
@@ -357,6 +360,11 @@ export default {
     serviceTierFlex: 'Flex',
     serviceTierStandard: 'Standard',
     rate: 'Rate',
+    promotion: 'Promotion',
+    promotionRate: 'Promotion Rate',
+    promotionBaseRate: 'Pre-promotion Rate',
+    promotionFinalRate: 'Final Rate',
+    promotionPricePercent: 'Promotion Billing (%)',
     original: 'Original',
     billed: 'Billed',
     noRecords: 'No usage records found. Try adjusting your filters.',
@@ -408,7 +416,7 @@ export default {
   monitorCommon: {
     status: {
       operational: 'Operational',
-      degraded: 'Degraded',
+      degraded: 'Slow response',
       failed: 'Failed',
       error: 'Error',
       unknown: '-'
@@ -466,9 +474,16 @@ export default {
       '30d': '30 days'
     },
     overall: {
-      operational: 'OPERATIONAL',
-      degraded: 'DEGRADED',
-      unavailable: 'UNAVAILABLE'
+      operational: 'Operational',
+      slow_response: 'Slow response',
+      partial: 'Partial channel issue',
+      unavailable: 'Channel unavailable'
+    },
+    health: {
+      operational: 'Operational',
+      slow_response: 'Slow response',
+      partial: 'Some models unavailable',
+      unavailable: 'Unavailable'
     },
     columns: {
       name: 'Name',
@@ -498,8 +513,20 @@ export default {
     title: 'Available Channels',
     description: 'Channels you can access, along with their supported models and pricing',
     searchPlaceholder: 'Search channels or models...',
+    allPlatforms: 'All platforms',
+    platformFilter: 'Filter platform',
+    channelCount: '{count} channels',
+    groupCount: '{count} groups',
+    modelCount: '{count} models',
+    groupUnit: 'groups',
+    modelUnit: 'models',
+    groupsLabel: 'Accessible Groups',
+    modelsLabel: 'Available Models',
     empty: 'No available channels',
+    emptyDescription: 'There are no channels available to this account yet.',
+    noMatching: 'No matching channels',
     noModels: 'No models configured',
+    noGroups: 'No groups available',
     noPricing: 'Pricing not configured',
     exclusive: 'Exclusive',
     public: 'Public',

@@ -366,6 +366,50 @@ export interface AnnouncementUserReadStatus {
   read_at?: string
 }
 
+// ==================== Group Promotion Types ====================
+
+export type GroupPromotionMode = 'discount_factor' | 'fixed_multiplier'
+export type GroupPromotionStatus = 'upcoming' | 'active' | 'ended' | 'disabled'
+
+export interface GroupPromotion {
+  id: number
+  name: string
+  description?: string | null
+  group_id: number
+  mode: GroupPromotionMode
+  value: number
+  starts_at: string
+  ends_at: string
+  enabled: boolean
+  status: GroupPromotionStatus
+  created_by?: number | null
+  updated_by?: number | null
+  created_at: string
+  updated_at: string
+}
+
+export interface CreateGroupPromotionRequest {
+  name: string
+  description?: string | null
+  group_id: number
+  mode: GroupPromotionMode
+  value: number
+  starts_at: number
+  ends_at: number
+  enabled?: boolean
+}
+
+export interface UpdateGroupPromotionRequest {
+  name?: string
+  description?: string | null
+  group_id?: number
+  mode?: GroupPromotionMode
+  value?: number
+  starts_at?: number
+  ends_at?: number
+  enabled?: boolean
+}
+
 // ==================== Proxy Node Types ====================
 
 export interface ProxyNode {
@@ -1459,6 +1503,9 @@ export interface UsageLog {
   total_cost: number
   actual_cost: number
   rate_multiplier: number
+  promotion_id?: number | null
+  promotion_name?: string | null
+  base_rate_multiplier?: number | null
   long_context_billing_applied: boolean
   billing_type: number
 

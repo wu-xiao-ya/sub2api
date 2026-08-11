@@ -63,10 +63,13 @@ type ChannelMonitor struct {
 	Enabled         bool
 	IntervalSeconds int
 	JitterSeconds   int // 每次调度 ± [0, jitter] 的随机偏移（秒），0 = 固定间隔
-	LastCheckedAt   *time.Time
-	CreatedBy       int64
-	CreatedAt       time.Time
-	UpdatedAt       time.Time
+	// RequestTimeoutSeconds is the upper bound for one upstream health check.
+	// Image generation uses this independently from its longer schedule interval.
+	RequestTimeoutSeconds int
+	LastCheckedAt         *time.Time
+	CreatedBy             int64
+	CreatedAt             time.Time
+	UpdatedAt             time.Time
 
 	// 请求自定义快照（来自模板拷贝 or 用户手填，运行时直接读取）
 	TemplateID       *int64            // 仅用于 UI 分组 + 一键应用，运行时不用
@@ -96,37 +99,39 @@ type ChannelMonitorListParams struct {
 
 // ChannelMonitorCreateParams 创建参数。
 type ChannelMonitorCreateParams struct {
-	Name             string
-	Provider         string
-	APIMode          string
-	Endpoint         string
-	APIKey           string
-	PrimaryModel     string
-	ExtraModels      []string
-	GroupName        string
-	Enabled          bool
-	IntervalSeconds  int
-	JitterSeconds    int
-	CreatedBy        int64
-	TemplateID       *int64
-	ExtraHeaders     map[string]string
-	BodyOverrideMode string
-	BodyOverride     map[string]any
+	Name                  string
+	Provider              string
+	APIMode               string
+	Endpoint              string
+	APIKey                string
+	PrimaryModel          string
+	ExtraModels           []string
+	GroupName             string
+	Enabled               bool
+	IntervalSeconds       int
+	JitterSeconds         int
+	RequestTimeoutSeconds int
+	CreatedBy             int64
+	TemplateID            *int64
+	ExtraHeaders          map[string]string
+	BodyOverrideMode      string
+	BodyOverride          map[string]any
 }
 
 // ChannelMonitorUpdateParams 更新参数（指针字段表示"未提供则不更新"）。
 type ChannelMonitorUpdateParams struct {
-	Name            *string
-	Provider        *string
-	APIMode         *string
-	Endpoint        *string
-	APIKey          *string // 空字符串表示不修改；非空字符串覆盖
-	PrimaryModel    *string
-	ExtraModels     *[]string
-	GroupName       *string
-	Enabled         *bool
-	IntervalSeconds *int
-	JitterSeconds   *int
+	Name                  *string
+	Provider              *string
+	APIMode               *string
+	Endpoint              *string
+	APIKey                *string // 空字符串表示不修改；非空字符串覆盖
+	PrimaryModel          *string
+	ExtraModels           *[]string
+	GroupName             *string
+	Enabled               *bool
+	IntervalSeconds       *int
+	JitterSeconds         *int
+	RequestTimeoutSeconds *int
 	// 自定义快照字段：指针为 nil 表示不更新，非 nil 覆盖
 	// TemplateID *(*int64)：用 ** 表达三态：nil=不更新；&nil=清空；&&id=设为 id。
 	// 简化处理：用 ClearTemplate 显式标志 + TemplateID（普通指针）

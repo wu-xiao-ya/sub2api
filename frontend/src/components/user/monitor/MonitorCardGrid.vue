@@ -2,25 +2,24 @@
   <div>
     <div
       v-if="loading && items.length === 0"
-      class="space-y-4"
+      class="grid grid-cols-1 items-start gap-3 lg:grid-cols-2"
     >
       <div
         v-for="i in 4"
         :key="i"
-        class="min-h-[260px] animate-pulse rounded-lg border border-gray-200/80 bg-white/70 p-5 dark:border-dark-700/70 dark:bg-dark-800/60"
+        class="min-h-[230px] animate-pulse rounded-md border border-gray-200/80 bg-white/70 p-4 dark:border-dark-700/70 dark:bg-dark-800/60"
       >
-        <div class="grid gap-5 xl:grid-cols-[18rem_minmax(0,1fr)]">
-          <div class="space-y-3 border-b border-gray-100 pb-4 dark:border-dark-700 xl:border-b-0 xl:border-r xl:pb-0 xl:pr-5">
-            <div class="h-5 w-2/3 rounded bg-gray-200 dark:bg-dark-700"></div>
-            <div class="grid grid-cols-2 gap-2">
-              <div class="h-16 rounded bg-gray-100 dark:bg-dark-900/40"></div>
-              <div class="h-16 rounded bg-gray-100 dark:bg-dark-900/40"></div>
-            </div>
-            <div class="h-14 rounded bg-gray-100 dark:bg-dark-900/40"></div>
+        <div class="flex items-center gap-3">
+          <div class="h-10 w-1.5 rounded-full bg-gray-200 dark:bg-dark-700"></div>
+          <div class="min-w-0 flex-1 space-y-2">
+            <div class="h-4 w-2/3 rounded bg-gray-200 dark:bg-dark-700"></div>
+            <div class="h-3 w-1/3 rounded bg-gray-100 dark:bg-dark-900/40"></div>
           </div>
-          <div class="space-y-2">
-            <div v-for="j in 3" :key="j" class="h-14 rounded bg-gray-100 dark:bg-dark-900/40"></div>
-          </div>
+          <div class="h-8 w-16 rounded bg-gray-100 dark:bg-dark-900/40"></div>
+        </div>
+        <div class="mt-4 h-2 rounded bg-gray-100 dark:bg-dark-900/40"></div>
+        <div class="mt-4 grid grid-cols-2 gap-x-4 gap-y-2">
+          <div v-for="j in 4" :key="j" class="h-7 rounded border-b border-gray-100 bg-gray-50 dark:border-dark-700 dark:bg-dark-900/40"></div>
         </div>
       </div>
     </div>
@@ -31,7 +30,7 @@
       :description="t('channelStatus.empty.description')"
     />
 
-    <div v-else class="space-y-4">
+    <div v-else class="grid grid-cols-1 items-start gap-3 lg:grid-cols-2">
       <MonitorCard
         v-for="item in items"
         :key="item.key"
