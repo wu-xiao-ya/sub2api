@@ -57,17 +57,6 @@ func TestGrokStickyAffinitySeed_ScopesByModel(t *testing.T) {
 	require.Contains(t, a, "grok-affinity:v1:")
 }
 
-func TestGrokFreeUsageRecoveryHints(t *testing.T) {
-	id := int64(9001)
-	coolUntil := time.Now().Add(time.Hour)
-	markGrokFreeUsageRecovery(id, coolUntil)
-	require.True(t, isGrokFreeUsageCooling(id, time.Now()))
-	require.False(t, isGrokFreeUsageProbePreferred(id, time.Now()))
-	// After cool: probe preferred
-	require.True(t, isGrokFreeUsageProbePreferred(id, coolUntil.Add(time.Minute)))
-	require.False(t, isGrokFreeUsageCooling(id, coolUntil.Add(time.Minute)))
-}
-
 func TestExtractGrokModelIDsFromModelsBody(t *testing.T) {
 	body := []byte(`{"object":"list","data":[{"id":"grok-4.5"},{"id":"grok-4.3"},{"id":"grok-4.5"}]}`)
 	ids := extractGrokModelIDsFromModelsBody(body)
@@ -93,9 +82,9 @@ func TestApplyGrokUpstreamFailure_ModelSpecificFreeUsage(t *testing.T) {
 
 	svc.handleGrokAccountUpstreamError(context.Background(), account, 400, nil, body)
 
-	require.Equal(t, 1, repo.tempUnschedCalls)
-	require.Equal(t, "grok free usage exhausted", repo.lastTempUnschedReason)
+	require.Zero(t, repo.tempUnschedCalls, "model-scoped free usage must not cool sibling models")
 	require.True(t, isGrokModelQuotaBlocked(account.ID, "grok-4.5", time.Now()))
+	require.False(t, isGrokModelQuotaBlocked(account.ID, "grok-4.3", time.Now()))
 }
 
 func TestApplyGrokUpstreamFailure_SpendingLimitMarksReauth(t *testing.T) {
