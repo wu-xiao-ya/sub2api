@@ -105,7 +105,6 @@ func (s *OpenAIGatewayService) GenerateExplicitSessionHash(c *gin.Context, body 
 // Priority:
 //  1. Header: session_id
 //  2. Header: conversation_id
-<<<<<<< HEAD
 //  3. Header: x-session-affinity / x-session-id / x-opencode-session (OpenCode)
 //  4. Header: x-conversation-id (CodeBuddy)
 //  5. Header: x-grok-conv-id (Grok groups only)
