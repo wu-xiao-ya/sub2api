@@ -139,6 +139,16 @@ func (a *Account) IsActive() bool {
 	return a.Status == StatusActive
 }
 
+// IsSyntheticUITest identifies an isolated UI-test account that must never
+// reach a provider with placeholder credentials.
+func (a *Account) IsSyntheticUITest() bool {
+	if a == nil || a.Extra == nil {
+		return false
+	}
+	enabled, ok := a.Extra["synthetic_ui_test"].(bool)
+	return ok && enabled
+}
+
 // BillingRateMultiplier 返回账号计费倍率。
 // - nil 表示未配置/旧缓存缺字段，按 1.0 处理
 // - 允许 0，表示该账号计费为 0

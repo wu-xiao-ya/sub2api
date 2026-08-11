@@ -210,10 +210,6 @@ func firstStringValue(values map[string]any, keys ...string) string {
 			if v := strings.TrimSpace(typed); v != "" {
 				return v
 			}
-		default:
-			if v := strings.TrimSpace(stringValue(raw)); v != "" {
-				return v
-			}
 		}
 	}
 	return ""

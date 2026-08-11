@@ -224,14 +224,18 @@ func normalizeOpenAICompatiblePlatform(platform string) string {
 	return PlatformOpenAI
 }
 
-func noAvailableOpenAISelectionError(requestedModel string, compactBlocked bool) error {
+func noAvailableOpenAISelectionError(requestedModel string, compactBlocked bool, details ...string) error {
 	if compactBlocked {
 		return ErrNoAvailableCompactAccounts
 	}
+	message := "no available OpenAI accounts"
 	if requestedModel != "" {
-		return openAINoAvailableSelectionError{message: fmt.Sprintf("no available OpenAI accounts supporting model: %s", requestedModel)}
+		message = fmt.Sprintf("no available OpenAI accounts supporting model: %s", requestedModel)
 	}
-	return openAINoAvailableSelectionError{message: "no available OpenAI accounts"}
+	if len(details) > 0 && strings.TrimSpace(details[0]) != "" {
+		message += " (" + strings.TrimSpace(details[0]) + ")"
+	}
+	return openAINoAvailableSelectionError{message: message}
 }
 
 type openAINoAvailableSelectionError struct {
