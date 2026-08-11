@@ -115,7 +115,7 @@ var grokTextResponsesModelAliases = map[string]string{
 	"grok-3-mini":                  "grok-3-mini",
 	"grok-3-mini-fast":             "grok-3-mini-fast",
 	"grok-build":                   "grok-build-0.1",
-	"grok-build-latest":            "grok-build-0.1",
+	"grok-build-latest":            DefaultTextModel,
 	"grok-build-0.1":               "grok-build-0.1",
 	"grok-composer-2.5-fast":       "grok-composer-2.5-fast",
 	"grok-composer":                "grok-composer-2.5-fast",
@@ -299,12 +299,10 @@ func ResolveDefaultTextModel(model string, defaultText ...string) string {
 func CanonicalImagineVideoModel(model string) string {
 	m := strings.ToLower(StripGrokProviderPrefix(model))
 	switch {
-	case m == "" || m == DefaultImagineVideoModel:
+	case m == "" || m == DefaultImagineVideoModel || m == "grok-imagine-video-preview":
 		return DefaultImagineVideoModel
 	case strings.HasPrefix(m, "grok-imagine-video-1.5") || m == "grok-video-1.5":
 		return DefaultImagineVideo15Model
-	case strings.HasPrefix(m, "grok-imagine-video"):
-		return DefaultImagineVideoModel
 	default:
 		return m
 	}

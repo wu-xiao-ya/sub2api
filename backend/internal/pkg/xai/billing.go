@@ -16,8 +16,10 @@ const (
 	CLITokenAuthValue      = "xai-grok-cli"
 	CLIClientVersionHeader = "x-grok-client-version"
 	// Keep in sync with https://x.ai/cli/stable.
-	CLIClientVersion = "0.2.93"
-	CLIUserAgent     = "grok-pager/" + CLIClientVersion + " grok-shell/" + CLIClientVersion + " (macos; aarch64)"
+	CLIClientVersion = "0.2.114"
+	// billingCLIUserAgent is the legacy pager/shell UA used by billing probes.
+	// Distinct from CLIUserAgent() in cli_identity.go (workspace-style UA).
+	billingCLIUserAgent = "grok-pager/" + CLIClientVersion + " grok-shell/" + CLIClientVersion + " (macos; aarch64)"
 
 	BillingWeeklyPath  = "/billing?format=credits"
 	BillingMonthlyPath = "/billing"
@@ -124,7 +126,7 @@ func ApplyCLIBillingHeaders(req *http.Request, accessToken string) {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set(CLITokenAuthHeader, CLITokenAuthValue)
 	req.Header.Set(CLIClientVersionHeader, CLIClientVersion)
-	req.Header.Set("User-Agent", CLIUserAgent)
+	req.Header.Set("User-Agent", billingCLIUserAgent)
 }
 
 // ParseBillingPayload unmarshals a billing API response body.
