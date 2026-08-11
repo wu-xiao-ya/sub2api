@@ -23,7 +23,7 @@ const (
 	grokComposerImageBridgeVisionModel     = "grok-build-0.1"
 	grokComposerImageBridgeMaxOutputTokens = 512
 	grokUpstreamUserAgent                  = "sub2api-grok/1.0"
-	grokCLIVersion                         = "0.2.93"
+	grokCLIVersion                         = xai.CLIClientVersion
 	grokDefaultResponsesModel              = "grok-4.5"
 	grokRateLimitFallbackCooldown          = 2 * time.Minute
 	grokRateLimitRepeatCooldown            = 10 * time.Minute
@@ -52,9 +52,23 @@ func (s *OpenAIGatewayService) forwardGrokResponses(
 	if isGrokImageGenerationModel(upstreamModel) {
 		return nil, fmt.Errorf("model %s is an image model and is not available on the Responses endpoint; use /v1/images/generations instead", upstreamModel)
 	}
-	patchedBody, err := patchGrokResponsesBody(body, upstreamModel)
+	patchedBody, clientToolMapping, err := patchGrokResponsesBodyWithClientTools(body, upstreamModel)
 	if err != nil {
+		setOpsUpstreamError(c, http.StatusBadRequest, err.Error(), "")
+		c.JSON(http.StatusBadRequest, gin.H{"error": gin.H{
+			"type": "invalid_request_error", "message": err.Error(), "param": "tools",
+		}})
 		return nil, err
+	}
+	setGrokResponsesClientToolMapping(c, clientToolMapping)
+	// OpenAI /responses/compact is not a native xAI endpoint. Convert it into a
+	// normal Grok Responses turn that asks for a structured summary, then map the
+	// reply back to an OpenAI compaction item on the way out.
+	if isOpenAIResponsesCompactPath(c) {
+		patchedBody, err = buildGrokCompactRequestBody(patchedBody)
+		if err != nil {
+			return nil, err
+		}
 	}
 	// Derive the identity from the request xAI will actually see. This makes
 	// Codex Responses Lite additional_tools part of the stable tool prefix.
@@ -134,17 +148,21 @@ func (s *OpenAIGatewayService) forwardGrokResponses(
 		if upstreamMsg == "" {
 			upstreamMsg = fmt.Sprintf("xAI upstream returned status %d", resp.StatusCode)
 		}
+		kind := "http_error"
+		if s.shouldFailoverGrokUpstreamError(resp.StatusCode, respBody) {
+			kind = "failover"
+		}
 		appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
 			Platform:           account.Platform,
 			AccountID:          account.ID,
 			AccountName:        account.Name,
 			UpstreamStatusCode: resp.StatusCode,
 			UpstreamRequestID:  firstNonEmpty(resp.Header.Get("x-request-id"), resp.Header.Get("xai-request-id")),
-			Kind:               "failover",
+			Kind:               kind,
 			Message:            upstreamMsg,
 		})
 		s.handleGrokAccountUpstreamError(ctx, account, resp.StatusCode, resp.Header, respBody)
-		if s.shouldFailoverUpstreamError(resp.StatusCode) {
+		if s.shouldFailoverGrokUpstreamError(resp.StatusCode, respBody) {
 			return nil, &UpstreamFailoverError{
 				StatusCode:             resp.StatusCode,
 				ResponseBody:           respBody,
@@ -161,6 +179,14 @@ func (s *OpenAIGatewayService) forwardGrokResponses(
 	var firstTokenMs *int
 	responseID := ""
 	if reqStream {
+		maxLineSize := defaultMaxLineSize
+		if s.cfg != nil && s.cfg.Gateway.MaxLineSize > 0 {
+			maxLineSize = s.cfg.Gateway.MaxLineSize
+		}
+		resp.Body = newGrokResponsesBillingPingFilterBody(resp.Body, account, maxLineSize)
+		if hasGrokResponsesClientToolMapping(clientToolMapping) {
+			resp.Body = newGrokResponsesClientToolStreamBody(resp.Body, clientToolMapping, maxLineSize)
+		}
 		streamResult, err := s.handleStreamingResponse(ctx, resp, c, account, startTime, originalModel, upstreamModel)
 		if err != nil {
 			return nil, err
@@ -226,12 +252,8 @@ func isGrokInvalidEncryptedContentResponse(statusCode int, body []byte) bool {
 	if strings.EqualFold(code, "invalid_encrypted_content") {
 		return true
 	}
-	// API-key relays can wrap xAI's invalid-argument response in the generic
-	// bad_response_status_code envelope. Keep the code allowlist narrow, then
-	// require the explicit decrypt + encrypted_content message below.
-	if code != "" &&
-		!strings.EqualFold(code, "invalid-argument") &&
-		!strings.EqualFold(code, "bad_response_status_code") {
+	// Keep the official xAI flat-code gate so unrelated 400s are not retried.
+	if !strings.EqualFold(code, "invalid-argument") && code != "" {
 		return false
 	}
 	// Nested OpenAI-style envelopes may omit top-level code; require decrypt text.
@@ -362,6 +384,29 @@ func trimGrokInvalidEncryptedContentRetryBody(body []byte) ([]byte, bool, error)
 }
 
 func patchGrokResponsesBody(body []byte, upstreamModel string) ([]byte, error) {
+	return patchGrokResponsesBodyBase(body, upstreamModel)
+}
+
+func patchGrokResponsesBodyWithClientTools(body []byte, upstreamModel string) ([]byte, apicompat.ResponsesClientToolMapping, error) {
+	if !json.Valid(body) {
+		return nil, apicompat.ResponsesClientToolMapping{}, fmt.Errorf("invalid json request body")
+	}
+	promoted, err := sanitizeGrokResponsesInput(body)
+	if err != nil {
+		return nil, apicompat.ResponsesClientToolMapping{}, err
+	}
+	adapted, mapping, err := adaptGrokResponsesClientTools(promoted)
+	if err != nil {
+		return nil, apicompat.ResponsesClientToolMapping{}, err
+	}
+	patched, err := patchGrokResponsesBodyBase(adapted, upstreamModel)
+	if err != nil {
+		return nil, apicompat.ResponsesClientToolMapping{}, err
+	}
+	return patched, mapping, nil
+}
+
+func patchGrokResponsesBodyBase(body []byte, upstreamModel string) ([]byte, error) {
 	if !json.Valid(body) {
 		return nil, fmt.Errorf("invalid json request body")
 	}
@@ -395,15 +440,15 @@ func patchGrokResponsesBody(body []byte, upstreamModel string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	out, err = convertOpenAICompactInputsForGrok(out)
+	if err != nil {
+		return nil, err
+	}
 	out, err = sanitizeGrokResponsesInput(out)
 	if err != nil {
 		return nil, err
 	}
 	out, err = sanitizeGrokReasoningNullContent(out)
-	if err != nil {
-		return nil, err
-	}
-	out, err = sanitizeGrokResponsesModelInput(out)
 	if err != nil {
 		return nil, err
 	}
@@ -576,203 +621,6 @@ func grokResponsesToolDedupKey(tool gjson.Result) string {
 	return "json:" + normalizeCompatSeedJSON(json.RawMessage(tool.Raw))
 }
 
-// sanitizeGrokResponsesModelInput normalizes Responses input item variants
-// that OpenAI/Codex can emit but xAI's Responses ModelInput does not accept.
-// Keep supported items untouched and preserve useful tool/image output as
-// standard function calls or message content instead of dropping all history.
-func sanitizeGrokResponsesModelInput(body []byte) ([]byte, error) {
-	if !bytes.Contains(body, []byte(`"input"`)) {
-		return body, nil
-	}
-
-	var payload map[string]any
-	decoder := json.NewDecoder(bytes.NewReader(body))
-	decoder.UseNumber()
-	if err := decoder.Decode(&payload); err != nil {
-		return nil, err
-	}
-	input, ok := payload["input"].([]any)
-	if !ok {
-		return body, nil
-	}
-
-	changed := false
-	normalized := make([]any, 0, len(input))
-	for _, rawItem := range input {
-		item, ok := rawItem.(map[string]any)
-		if !ok {
-			normalized = append(normalized, rawItem)
-			continue
-		}
-
-		itemType := strings.TrimSpace(jsonStringValue(item["type"]))
-		switch itemType {
-		case "item_reference", "computer_call", "compaction":
-			// References contain no replayable content, computer actions are
-			// represented by their outputs, and encrypted compaction payloads
-			// cannot be consumed by another provider.
-			changed = true
-			continue
-		case "custom_tool_call":
-			normalized = append(normalized, normalizeGrokCustomToolCall(item))
-			changed = true
-		case "custom_tool_call_output":
-			normalized = append(normalized, map[string]any{
-				"type":    "function_call_output",
-				"call_id": firstNonEmpty(jsonStringValue(item["call_id"]), jsonStringValue(item["id"])),
-				"output":  grokCompatJSONString(item["output"]),
-			})
-			changed = true
-		case "computer_call_output":
-			if message := grokCompatOutputMessage("Computer tool output from earlier in the conversation.", item["output"]); message != nil {
-				normalized = append(normalized, message)
-			}
-			changed = true
-		case "image_generation_call":
-			if message := grokCompatImageGenerationMessage(item); message != nil {
-				normalized = append(normalized, message)
-			}
-			changed = true
-		case "tool_search_output":
-			output := item["output"]
-			if output == nil {
-				output = item["tools"]
-			}
-			if message := grokCompatOutputMessage("Tool search output from earlier in the conversation.", output); message != nil {
-				normalized = append(normalized, message)
-			}
-			changed = true
-		default:
-			normalized = append(normalized, rawItem)
-		}
-	}
-
-	if !changed {
-		return body, nil
-	}
-	payload["input"] = normalized
-	return marshalOpenAIUpstreamJSON(payload)
-}
-
-func normalizeGrokCustomToolCall(item map[string]any) map[string]any {
-	callID := firstNonEmpty(jsonStringValue(item["call_id"]), jsonStringValue(item["id"]))
-	name := strings.TrimSpace(jsonStringValue(item["name"]))
-	if name == "" {
-		name = "custom_tool"
-	}
-	return map[string]any{
-		"type":      "function_call",
-		"call_id":   callID,
-		"name":      name,
-		"arguments": grokCompatArguments(item["input"]),
-	}
-}
-
-func grokCompatArguments(value any) string {
-	if text, ok := value.(string); ok {
-		text = strings.TrimSpace(text)
-		if text == "" {
-			return "{}"
-		}
-		if json.Valid([]byte(text)) {
-			return text
-		}
-		encoded, _ := json.Marshal(map[string]any{"input": text})
-		return string(encoded)
-	}
-	return grokCompatJSONString(value)
-}
-
-func grokCompatJSONString(value any) string {
-	if value == nil {
-		return ""
-	}
-	if text, ok := value.(string); ok {
-		return text
-	}
-	encoded, err := json.Marshal(value)
-	if err != nil {
-		return fmt.Sprint(value)
-	}
-	return string(encoded)
-}
-
-func grokCompatOutputMessage(label string, value any) map[string]any {
-	content := make([]any, 0, 2)
-	if strings.TrimSpace(label) != "" {
-		content = append(content, map[string]any{"type": "input_text", "text": label})
-	}
-
-	if imageURL := grokCompatImageURL(value); imageURL != "" {
-		content = append(content, map[string]any{"type": "input_image", "image_url": imageURL})
-	} else if text := strings.TrimSpace(grokCompatJSONString(value)); text != "" {
-		content = append(content, map[string]any{"type": "input_text", "text": text})
-	}
-	if len(content) == 0 {
-		return nil
-	}
-	return map[string]any{
-		"type":    "message",
-		"role":    "user",
-		"content": content,
-	}
-}
-
-func grokCompatImageGenerationMessage(item map[string]any) map[string]any {
-	result := item["result"]
-	if result == nil {
-		result = item["output"]
-	}
-	return grokCompatOutputMessage("Image generated earlier in the conversation.", result)
-}
-
-func grokCompatImageURL(value any) string {
-	switch typed := value.(type) {
-	case string:
-		text := strings.TrimSpace(typed)
-		switch {
-		case strings.HasPrefix(text, "data:image/"),
-			strings.HasPrefix(text, "https://"),
-			strings.HasPrefix(text, "http://"):
-			return text
-		case text != "" && isLikelyBase64Payload(text):
-			return "data:image/png;base64," + text
-		}
-	case map[string]any:
-		for _, key := range []string{"image_url", "url"} {
-			if imageURL := strings.TrimSpace(jsonStringValue(typed[key])); imageURL != "" {
-				return imageURL
-			}
-		}
-		if nested, ok := typed["output"]; ok {
-			return grokCompatImageURL(nested)
-		}
-	}
-	return ""
-}
-
-func isLikelyBase64Payload(value string) bool {
-	if len(value) < 16 || len(value)%4 != 0 {
-		return false
-	}
-	for _, r := range value {
-		switch {
-		case r >= 'A' && r <= 'Z',
-			r >= 'a' && r <= 'z',
-			r >= '0' && r <= '9',
-			r == '+', r == '/', r == '=', r == '\r', r == '\n':
-		default:
-			return false
-		}
-	}
-	return true
-}
-
-func jsonStringValue(value any) string {
-	text, _ := value.(string)
-	return text
-}
-
 // sanitizeGrokReasoningNullContent 删除 reasoning 项中的 "content": null。
 // xAI 的 untagged enum 反序列化器拒收该字段，返回 422。
 func sanitizeGrokReasoningNullContent(body []byte) ([]byte, error) {
@@ -816,7 +664,13 @@ var grokResponsesSupportedToolTypes = map[string]struct{}{
 
 func sanitizeGrokResponsesTools(body []byte) ([]byte, error) {
 	tools := gjson.GetBytes(body, "tools")
-	if !tools.Exists() || !tools.IsArray() {
+	if !tools.Exists() {
+		if gjson.GetBytes(body, "tool_choice").Exists() {
+			return sjson.DeleteBytes(body, "tool_choice")
+		}
+		return body, nil
+	}
+	if !tools.IsArray() {
 		return body, nil
 	}
 
@@ -1061,17 +915,21 @@ func (s *OpenAIGatewayService) describeGrokComposerImage(
 		if upstreamMsg == "" {
 			upstreamMsg = fmt.Sprintf("xAI image bridge upstream returned status %d", resp.StatusCode)
 		}
+		kind := "http_error"
+		if s.shouldFailoverGrokUpstreamError(resp.StatusCode, respBody) {
+			kind = "failover"
+		}
 		appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
 			Platform:           account.Platform,
 			AccountID:          account.ID,
 			AccountName:        account.Name,
 			UpstreamStatusCode: resp.StatusCode,
 			UpstreamRequestID:  firstNonEmpty(resp.Header.Get("x-request-id"), resp.Header.Get("xai-request-id")),
-			Kind:               "failover",
+			Kind:               kind,
 			Message:            upstreamMsg,
 		})
 		s.handleGrokAccountUpstreamError(ctx, account, resp.StatusCode, resp.Header, respBody)
-		if s.shouldFailoverUpstreamError(resp.StatusCode) {
+		if s.shouldFailoverGrokUpstreamError(resp.StatusCode, respBody) {
 			return "", OpenAIUsage{}, &UpstreamFailoverError{
 				StatusCode:             resp.StatusCode,
 				ResponseBody:           respBody,
@@ -1239,6 +1097,7 @@ func applyGrokCLIHeaders(headers http.Header) {
 	}
 	headers.Set("User-Agent", grokUpstreamUserAgent)
 	headers.Set("X-Grok-Client-Version", grokCLIVersion)
+	headers.Set("X-Grok-Client-Mode", "interactive")
 }
 
 func (s *OpenAIGatewayService) updateGrokUsageSnapshot(ctx context.Context, account *Account, snapshot *xai.QuotaSnapshot) {
@@ -1271,12 +1130,11 @@ func (s *OpenAIGatewayService) updateGrokUsageSnapshot(ctx context.Context, acco
 			grokQuotaSnapshotExtraKey: snapshot,
 		})
 	}
-	// Error responses are reconciled by handleGrokAccountUpstreamError, which
-	// also installs the immediate in-memory scheduling block. Successful
-	// responses can still consume the last available request/token, so persist
-	// that exhausted window here as a real rate limit rather than relying only
-	// on the passive snapshot scheduler check.
-	if hasActiveLimit {
+	// Error responses are reconciled by handleGrokAccountUpstreamError. Pool-mode
+	// API keys retain the snapshot for observability but leave account health to
+	// the upstream pool. Other accounts install the immediate runtime and durable
+	// rate-limit state when the observed window is exhausted.
+	if hasActiveLimit && !account.IsPoolMode() {
 		s.rateLimitGrok(stateCtx, account, resetAt)
 	} else if recovery {
 		clearGrokRateLimitAfterRecovery(stateCtx, s.accountRepo, account)
@@ -1493,21 +1351,60 @@ func (s *OpenAIGatewayService) handleGrokAccountUpstreamError(ctx context.Contex
 	if s == nil || account == nil {
 		return
 	}
+	if isGrokContentPolicyRejection(statusCode, responseBody) {
+		return
+	}
 	now := time.Now()
 	s.updateGrokUsageSnapshot(ctx, account, parseGrokQuotaSnapshot(headers, statusCode, now))
+	if statusCode == http.StatusForbidden && s.applyGrokForbiddenPolicy(ctx, account, responseBody) {
+		return
+	}
+	if account.IsPoolMode() {
+		slog.Info("grok_pool_mode_error_state_skipped", "account_id", account.ID, "status_code", statusCode)
+		return
+	}
 	switch statusCode {
 	case http.StatusUnauthorized:
 		s.tempUnscheduleGrok(ctx, account, 10*time.Minute, "grok credentials unauthorized")
+	case http.StatusPaymentRequired:
+		// 402: temporarily unschedulable with a clear payment-required reason.
+		s.tempUnscheduleGrok(ctx, account, 30*time.Minute, "grok payment required")
 	case http.StatusForbidden:
+		// Spending-limit 403 (personal-team-blocked:spending-limit) is billing exhaustion,
+		// not a generic entitlement denial — still temp-unschedule with a distinct reason.
+		if isGrokSpendingLimitError(responseBody) {
+			s.tempUnscheduleGrok(ctx, account, 30*time.Minute, "grok spending limit")
+			return
+		}
 		s.tempUnscheduleGrok(ctx, account, 30*time.Minute, "grok access or entitlement denied")
 	case http.StatusTooManyRequests:
-		// updateGrokUsageSnapshot installs both runtime and durable rate-limit state.
+		// updateGrokUsageSnapshot installs rate-limit state for non-pool accounts.
 	default:
 		if statusCode >= 500 {
 			s.tempUnscheduleGrok(ctx, account, 2*time.Minute, "grok upstream temporary error")
 		}
 	}
-	_ = responseBody
+}
+
+// isGrokSpendingLimitError detects xAI billing exhaustion bodies (often 403, sometimes 402).
+func isGrokSpendingLimitError(responseBody []byte) bool {
+	if len(responseBody) == 0 {
+		return false
+	}
+	code := strings.ToLower(strings.TrimSpace(firstNonEmpty(
+		gjson.GetBytes(responseBody, "code").String(),
+		gjson.GetBytes(responseBody, "error.code").String(),
+	)))
+	if code == "personal-team-blocked:spending-limit" {
+		return true
+	}
+	message := strings.ToLower(strings.TrimSpace(firstNonEmpty(
+		gjson.GetBytes(responseBody, "error").String(),
+		gjson.GetBytes(responseBody, "error.message").String(),
+		gjson.GetBytes(responseBody, "message").String(),
+	)))
+	return strings.Contains(message, "spending limit") ||
+		strings.Contains(message, "run out of credits")
 }
 
 func (s *OpenAIGatewayService) tempUnscheduleGrok(ctx context.Context, account *Account, cooldown time.Duration, reason string) {
