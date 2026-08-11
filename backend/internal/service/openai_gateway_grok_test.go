@@ -58,7 +58,7 @@ func TestPatchGrokResponsesBodySanitizesComposerReasoningParameters(t *testing.T
 		{name: "grok 4.5", upstreamModel: "grok-4.5", wantReasoning: true},
 	}
 
-	body := []byte(`{
+	bodyTemplate := []byte(`{
 		"model": "grok",
 		"input": "hello",
 		"reasoning": {"effort": "medium", "summary": "auto"},
@@ -68,7 +68,7 @@ func TestPatchGrokResponsesBodySanitizesComposerReasoningParameters(t *testing.T
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			patched, err := patchGrokResponsesBody(body, tt.upstreamModel)
+			patched, err := patchGrokResponsesBody(append([]byte(nil), bodyTemplate...), tt.upstreamModel)
 			require.NoError(t, err)
 			require.True(t, json.Valid(patched))
 			require.Equal(t, tt.upstreamModel, gjson.GetBytes(patched, "model").String())
@@ -76,7 +76,7 @@ func TestPatchGrokResponsesBodySanitizesComposerReasoningParameters(t *testing.T
 			if tt.wantReasoning {
 				require.Equal(t, "medium", gjson.GetBytes(patched, "reasoning.effort").String())
 				require.Equal(t, "medium", gjson.GetBytes(patched, "reasoning_effort").String())
-				require.Equal(t, "medium", gjson.GetBytes(patched, "reasoningEffort").String())
+				require.False(t, gjson.GetBytes(patched, "reasoningEffort").Exists())
 				return
 			}
 
@@ -142,6 +142,61 @@ func TestPatchGrokResponsesBodyKeepsPenaltyAndStopFieldsForNon45Models(t *testin
 	require.Len(t, gjson.GetBytes(patched, "stop").Array(), 1)
 }
 
+func TestPatchGrokResponsesBodyDropsLogprobsForGrok420Family(t *testing.T) {
+	t.Parallel()
+	body := []byte(`{"model":"grok-4.20-0309-reasoning","input":"hello","logprobs":true,"top_logprobs":5}`)
+	patched, err := patchGrokResponsesBody(body, "grok-4.20-0309-reasoning")
+	require.NoError(t, err)
+	require.False(t, gjson.GetBytes(patched, "logprobs").Exists())
+	require.False(t, gjson.GetBytes(patched, "top_logprobs").Exists())
+}
+
+func TestPatchGrokResponsesBodyNormalizesReasoningEffortAliases(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		body string
+		path string
+		want string
+	}{
+		{name: "minimal nested", body: `{"input":"hi","reasoning":{"effort":"minimal"}}`, path: "reasoning.effort", want: "low"},
+		{name: "xhigh snake", body: `{"input":"hi","reasoning_effort":"xhigh"}`, path: "reasoning_effort", want: "high"},
+		{name: "max camel", body: `{"input":"hi","reasoningEffort":"max"}`, path: "reasoning_effort", want: "high"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			patched, err := patchGrokResponsesBody([]byte(tt.body), "grok-4.5")
+			require.NoError(t, err)
+			require.Equal(t, tt.want, gjson.GetBytes(patched, tt.path).String(), string(patched))
+			require.False(t, gjson.GetBytes(patched, "reasoningEffort").Exists())
+		})
+	}
+}
+
+func TestPatchGrokResponsesBodyAddsDefaultFunctionParameters(t *testing.T) {
+	patched, err := patchGrokResponsesBody(
+		[]byte(`{"input":"hi","tools":[{"type":"function","name":"lookup"},{"type":"function","name":"wait","parameters":null}]}`),
+		"grok-4.5",
+	)
+	require.NoError(t, err)
+	for _, tool := range gjson.GetBytes(patched, "tools").Array() {
+		require.Equal(t, "object", tool.Get("parameters.type").String(), string(patched))
+		require.True(t, tool.Get("parameters.properties").IsObject(), string(patched))
+	}
+}
+
+func TestNormalizeGrokChatReasoningEffort(t *testing.T) {
+	patched, err := normalizeGrokChatReasoningEffort([]byte(`{"reasoningEffort":"ultra"}`), "grok-4.3")
+	require.NoError(t, err)
+	require.Equal(t, "high", gjson.GetBytes(patched, "reasoning_effort").String())
+	require.False(t, gjson.GetBytes(patched, "reasoningEffort").Exists())
+
+	patched, err = normalizeGrokChatReasoningEffort([]byte(`{"reasoning_effort":"high"}`), "grok-composer-2.5-fast")
+	require.NoError(t, err)
+	require.False(t, gjson.GetBytes(patched, "reasoning_effort").Exists())
+}
+
 func TestPatchGrokResponsesBodyDropsNestedUnsupportedFields(t *testing.T) {
 	t.Parallel()
 
@@ -162,29 +217,31 @@ func TestPatchGrokResponsesBodyDropsNestedUnsupportedFields(t *testing.T) {
 	require.Equal(t, "kept_fn", gjson.GetBytes(patched, "tools.0.name").String())
 }
 
-func TestPatchGrokResponsesBodyDropsUnsupportedNamespaceTools(t *testing.T) {
+func TestPatchGrokResponsesBodyFlattensNamespaceTools(t *testing.T) {
 	t.Parallel()
 
 	body := []byte(`{
 		"model": "grok",
 		"input": "hello",
 		"tools": [
-			{"type": "namespace", "namespace": "functions", "tools": [{"type": "function", "name": "inner"}]},
+			{"type": "namespace", "name": "functions", "tools": [{"type": "function", "name": "inner"}]},
 			{"type": "function", "name": "kept_fn", "parameters": {"type": "object"}},
 			{"type": "shell", "name": "kept_shell"}
 		],
-		"tool_choice": {"type": "function", "name": "kept_fn"}
+		"tool_choice": {"type": "function", "namespace": "functions", "name": "inner"}
 	}`)
 
-	patched, err := patchGrokResponsesBody(body, "grok-4.3")
+	patched, _, err := patchGrokResponsesBodyWithClientTools(body, "grok-4.3")
 	require.NoError(t, err)
 	require.True(t, json.Valid(patched))
 	require.Equal(t, "grok-4.3", gjson.GetBytes(patched, "model").String())
-	require.Len(t, gjson.GetBytes(patched, "tools").Array(), 2)
+	require.Len(t, gjson.GetBytes(patched, "tools").Array(), 3)
 	require.False(t, gjson.GetBytes(patched, `tools.#(type=="namespace")`).Exists())
 	require.True(t, gjson.GetBytes(patched, `tools.#(type=="function")`).Exists())
 	require.True(t, gjson.GetBytes(patched, `tools.#(type=="shell")`).Exists())
-	require.Equal(t, "kept_fn", gjson.GetBytes(patched, "tool_choice.name").String())
+	require.Equal(t, "functions__inner", gjson.GetBytes(patched, "tools.0.name").String())
+	require.Equal(t, "functions__inner", gjson.GetBytes(patched, "tool_choice.name").String())
+	require.False(t, gjson.GetBytes(patched, "tool_choice.namespace").Exists())
 }
 
 func TestPatchGrokResponsesBodyDropsToolChoiceWhenNoSupportedToolsRemain(t *testing.T) {
@@ -205,6 +262,60 @@ func TestPatchGrokResponsesBodyDropsToolChoiceWhenNoSupportedToolsRemain(t *test
 	require.True(t, json.Valid(patched))
 	require.False(t, gjson.GetBytes(patched, "tools").Exists())
 	require.False(t, gjson.GetBytes(patched, "tool_choice").Exists())
+}
+
+func TestSanitizeGrokResponsesToolsKeepsToolChoiceOnlyWithSupportedTools(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name           string
+		body           string
+		wantTools      bool
+		wantToolChoice bool
+	}{
+		{
+			name: "missing tools with string tool choice",
+			body: `{"input":"hello","tool_choice":"auto"}`,
+		},
+		{
+			name: "missing tools with object tool choice",
+			body: `{"input":"hello","tool_choice":{"type":"function","name":"lookup"}}`,
+		},
+		{
+			name:      "empty tools",
+			body:      `{"input":"hello","tools":[],"tool_choice":"auto"}`,
+			wantTools: true,
+		},
+		{
+			name: "all tools unsupported",
+			body: `{"input":"hello","tools":[{"type":"namespace","name":"client_tools"}],"tool_choice":"auto"}`,
+		},
+		{
+			name:           "supported tool",
+			body:           `{"input":"hello","tools":[{"type":"function","name":"lookup"}],"tool_choice":"auto"}`,
+			wantTools:      true,
+			wantToolChoice: true,
+		},
+		{
+			name:           "malformed non-array tools remain untouched",
+			body:           `{"input":"hello","tools":{"type":"function","name":"lookup"},"tool_choice":"auto"}`,
+			wantTools:      true,
+			wantToolChoice: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			patched, err := sanitizeGrokResponsesTools([]byte(tt.body))
+			require.NoError(t, err)
+			require.True(t, json.Valid(patched))
+			require.Equal(t, tt.wantTools, gjson.GetBytes(patched, "tools").Exists())
+			require.Equal(t, tt.wantToolChoice, gjson.GetBytes(patched, "tool_choice").Exists())
+			if tt.wantToolChoice {
+				require.Equal(t, "auto", gjson.GetBytes(patched, "tool_choice").String())
+			}
+		})
+	}
 }
 
 func TestPatchGrokResponsesBodyPromotesCodexAdditionalTools(t *testing.T) {
@@ -243,19 +354,22 @@ func TestPatchGrokResponsesBodyPromotesCodexAdditionalTools(t *testing.T) {
 		]
 	}`)
 
-	patched, err := patchGrokResponsesBody(body, "grok-4.5")
+	patched, _, err := patchGrokResponsesBodyWithClientTools(body, "grok-4.5")
 	require.NoError(t, err)
 	require.True(t, json.Valid(patched))
 	require.Equal(t, "grok-4.5", gjson.GetBytes(patched, "model").String())
 	require.Equal(t, 2, len(gjson.GetBytes(patched, "input").Array()))
 	require.False(t, gjson.GetBytes(patched, `input.#(type=="additional_tools")`).Exists())
 	tools := gjson.GetBytes(patched, "tools").Array()
-	require.Len(t, tools, 4)
+	require.Len(t, tools, 5)
 	require.Equal(t, "existing", tools[0].Get("name").String())
 	require.Equal(t, "top-level wins", tools[0].Get("description").String())
 	require.Equal(t, "web_search", tools[1].Get("type").String())
 	require.Equal(t, "wait", tools[2].Get("name").String())
 	require.Equal(t, "shell", tools[3].Get("type").String())
+	require.Equal(t, "function", tools[4].Get("type").String())
+	require.Equal(t, "apply_patch", tools[4].Get("name").String())
+	require.Equal(t, "string", tools[4].Get("parameters.properties.input.type").String())
 	require.False(t, gjson.GetBytes(patched, `tools.#(type=="custom")`).Exists())
 	require.False(t, gjson.GetBytes(patched, `tools.#(type=="namespace")`).Exists())
 	require.Equal(t, "auto", gjson.GetBytes(patched, "tool_choice").String())
@@ -316,11 +430,13 @@ func TestForwardGrokResponsesCodexAdditionalToolsUsesMixedCacheIntent(t *testing
 	require.Equal(t, "resp_codex_lite", result.ResponseID)
 	require.False(t, gjson.GetBytes(upstream.lastBody, `input.#(type=="additional_tools")`).Exists())
 	tools := gjson.GetBytes(upstream.lastBody, "tools").Array()
-	require.Len(t, tools, 3)
+	require.Len(t, tools, 4)
 	require.Equal(t, "function", tools[0].Get("type").String())
 	require.Equal(t, "lookup", tools[0].Get("name").String())
 	require.Equal(t, "web_search", tools[1].Get("type").String())
-	require.Equal(t, "x_search", tools[2].Get("type").String())
+	require.Equal(t, "function", tools[2].Get("type").String())
+	require.Equal(t, "apply_patch", tools[2].Get("name").String())
+	require.Equal(t, "x_search", tools[3].Get("type").String())
 	require.False(t, gjson.GetBytes(upstream.lastBody, "tool_choice").Exists())
 	require.False(t, gjson.GetBytes(upstream.lastBody, `tools.#(type=="custom")`).Exists())
 	require.False(t, gjson.GetBytes(upstream.lastBody, `tools.#(type=="namespace")`).Exists())
@@ -502,6 +618,69 @@ func TestBuildGrokResponsesRequestUsesAccountBaseURLAndBearerToken(t *testing.T)
 	data, err := io.ReadAll(req.Body)
 	require.NoError(t, err)
 	require.Equal(t, `{"model":"grok-4.3"}`, strings.TrimSpace(string(data)))
+}
+
+func TestBuildGrokCompactRequestBodyUsesResponsesCompactionTurn(t *testing.T) {
+	body := []byte(`{"model":"grok-4.5","input":[{"type":"message","role":"user","content":[{"type":"input_text","text":"hello"}]}],"tools":[{"type":"function","name":"shell"}],"stream":true}`)
+
+	patched, err := buildGrokCompactRequestBody(body)
+	require.NoError(t, err)
+	require.False(t, gjson.GetBytes(patched, "stream").Bool())
+	require.False(t, gjson.GetBytes(patched, "store").Bool())
+	require.Equal(t, "none", gjson.GetBytes(patched, "tool_choice").String())
+	require.Equal(t, "reasoning.encrypted_content", gjson.GetBytes(patched, "include.0").String())
+	require.Equal(t, "hello", gjson.GetBytes(patched, "input.0.content.0.text").String())
+	prompt := gjson.GetBytes(patched, "input.1.content.0.text").String()
+	require.Contains(t, prompt, "1. Primary Request and Intent")
+	require.Contains(t, prompt, "9. Optional Next Step")
+	require.Contains(t, prompt, "Respond with ONLY the <summary>...</summary> block")
+	require.NotContains(t, prompt, "<summary_request>")
+}
+
+func TestConvertGrokResponseToOpenAICompact(t *testing.T) {
+	body := []byte(`{
+		"id":"resp_grok_1",
+		"object":"response",
+		"status":"completed",
+		"model":"grok-4.5",
+		"output":[
+			{"id":"rs_1","type":"reasoning","summary":[],"encrypted_content":"grok-encrypted-state"},
+			{"id":"msg_1","type":"message","role":"assistant","content":[{"type":"output_text","text":"summary text"}]}
+		],
+		"usage":{"input_tokens":10,"output_tokens":4,"total_tokens":14}
+	}`)
+
+	converted, err := convertGrokResponseToOpenAICompact(body)
+	require.NoError(t, err)
+	require.Equal(t, "resp_grok_1", gjson.GetBytes(converted, "id").String())
+	require.Len(t, gjson.GetBytes(converted, "output").Array(), 1)
+	require.Equal(t, "compaction", gjson.GetBytes(converted, "output.0.type").String())
+	require.Equal(t, "grok-encrypted-state", gjson.GetBytes(converted, "output.0.encrypted_content").String())
+	require.Equal(t, "summary text", gjson.GetBytes(converted, "output.0.summary.0.text").String())
+	require.Equal(t, int64(14), gjson.GetBytes(converted, "usage.total_tokens").Int())
+}
+
+func TestPatchGrokResponsesBodyRestoresCompactInput(t *testing.T) {
+	body := []byte(`{
+		"model":"grok-4.5",
+		"input":[
+			{"id":"cmp_1","type":"compaction","status":"completed","encrypted_content":"grok-encrypted-state","summary":[{"type":"summary_text","text":"summary text"}]},
+			{"type":"message","role":"user","content":[{"type":"input_text","text":"continue"}]}
+		]
+	}`)
+
+	patched, err := patchGrokResponsesBody(body, "grok-4.5")
+	require.NoError(t, err)
+	require.Equal(t, "reasoning", gjson.GetBytes(patched, "input.0.type").String())
+	require.Equal(t, "grok-encrypted-state", gjson.GetBytes(patched, "input.0.encrypted_content").String())
+	require.Equal(t, "message", gjson.GetBytes(patched, "input.1.type").String())
+	require.Contains(t, gjson.GetBytes(patched, "input.1.content.0.text").String(), "summary text")
+	require.Equal(t, "continue", gjson.GetBytes(patched, "input.2.content.0.text").String())
+}
+
+func TestConvertGrokResponseToOpenAICompactRequiresEncryptedContent(t *testing.T) {
+	_, err := convertGrokResponseToOpenAICompact([]byte(`{"output":[{"type":"message","content":[{"type":"output_text","text":"summary"}]}]}`))
+	require.ErrorContains(t, err, "reasoning.encrypted_content")
 }
 
 func TestBuildGrokResponsesRequestAllowsPublicAPIKeyBaseURLByDefault(t *testing.T) {
@@ -733,6 +912,33 @@ func TestCanonicalizeGrokMediaImageURLFieldsReplacesEmptyOfficialURL(t *testing.
 	require.False(t, gjson.GetBytes(out, "image.image_url").Exists())
 }
 
+func TestPrepareGrokImageEditNormalizesOfficialImageObjects(t *testing.T) {
+	body := []byte(`{
+		"model":"grok-imagine-image-quality",
+		"image":{"image_url":{"url":"https://example.com/first.png"}},
+		"images":["https://example.com/second.png"],
+		"mask":{"image_url":"https://example.com/mask.png"}
+	}`)
+
+	out, contentType, err := prepareGrokMediaForwardBody(GrokMediaEndpointImagesEdits, body, "application/json")
+	require.NoError(t, err)
+	require.Equal(t, "application/json", contentType)
+	for _, path := range []string{"image", "images.0", "mask"} {
+		require.Equal(t, "image_url", gjson.GetBytes(out, path+".type").String())
+		require.NotEmpty(t, gjson.GetBytes(out, path+".url").String())
+		require.False(t, gjson.GetBytes(out, path+".image_url").Exists())
+	}
+}
+
+func TestPrepareGrokImageEditRejectsMoreThanThreeSources(t *testing.T) {
+	body := []byte(`{"images":["https://example.com/1.png","https://example.com/2.png","https://example.com/3.png","https://example.com/4.png"]}`)
+
+	out, _, err := prepareGrokMediaForwardBody(GrokMediaEndpointImagesEdits, body, "application/json")
+	require.Error(t, err)
+	require.Nil(t, out)
+	require.Contains(t, err.Error(), "maximum of 3 source images")
+}
+
 func TestNormalizeGrokMediaModelForEndpoint(t *testing.T) {
 	tests := []struct {
 		name          string
@@ -746,7 +952,7 @@ func TestNormalizeGrokMediaModelForEndpoint(t *testing.T) {
 		{name: "image quality passthrough", endpoint: GrokMediaEndpointImagesGenerations, model: "grok-imagine-image-quality", want: "grok-imagine-image-quality"},
 		{name: "image fast passthrough", endpoint: GrokMediaEndpointImagesGenerations, model: "grok-imagine-image", want: "grok-imagine-image"},
 		{name: "video passthrough", endpoint: GrokMediaEndpointVideosGenerations, model: "grok-imagine-video", want: "grok-imagine-video"},
-		{name: "video 1.5 text-only fallback", endpoint: GrokMediaEndpointVideosGenerations, model: "grok-imagine-video-1.5", want: "grok-imagine-video"},
+		{name: "video 1.5 text-only remains explicit", endpoint: GrokMediaEndpointVideosGenerations, model: "grok-imagine-video-1.5", want: "grok-imagine-video-1.5"},
 		{name: "video 1.5 image-to-video passthrough", endpoint: GrokMediaEndpointVideosGenerations, model: "grok-imagine-video-1.5", hasInputImage: true, want: "grok-imagine-video-1.5"},
 	}
 
@@ -838,9 +1044,9 @@ func TestForwardGrokMediaAppliesAccountModelMappingAfterEndpointNormalization(t 
 			path:             "/v1/videos/generations",
 			body:             `{"model":"grok-imagine-video-1.5","prompt":"waves"}`,
 			modelMapping:     map[string]any{"grok-imagine-video": "grok-image-video"},
-			wantRequestModel: "grok-imagine-video",
-			wantUpstream:     "grok-image-video",
-			wantBody:         `{"model":"grok-image-video","prompt":"waves"}`,
+			wantRequestModel: "grok-imagine-video-1.5",
+			wantUpstream:     "grok-imagine-video-1.5",
+			wantBody:         `{"model":"grok-imagine-video-1.5","prompt":"waves"}`,
 			responseBody:     `{"request_id":"video-request-mapped"}`,
 		},
 		{
@@ -1080,14 +1286,15 @@ func TestForwardGrokMediaVideoGenerationReturnsUsageAndResponseID(t *testing.T) 
 	result, err := svc.ForwardGrokMedia(context.Background(), c, account, GrokMediaEndpointVideosGenerations, "", body, "application/json")
 	require.NoError(t, err)
 	require.Equal(t, "https://xai.test/v1/videos/generations", upstream.lastReq.URL.String())
-	require.JSONEq(t, `{"model":"grok-imagine-video","prompt":"waves","resolution":"720p","duration":10}`, string(upstream.lastBody))
+	require.JSONEq(t, `{"model":"grok-imagine-video-1.5","prompt":"waves","resolution":"720p","duration":10}`, string(upstream.lastBody))
 	require.Equal(t, "video-request-123", result.ResponseID)
-	require.Equal(t, "grok-imagine-video", result.BillingModel)
+	require.Equal(t, "grok-imagine-video-1.5", result.BillingModel)
 	require.Equal(t, 3, result.Usage.InputTokens)
 	require.Equal(t, 4, result.Usage.OutputTokens)
-	require.Equal(t, 1, result.ImageCount)
+	// Create accepts the job only — VideoCount stays 0 until status returns video.url.
+	require.Equal(t, 0, result.ImageCount)
 	require.Empty(t, result.ImageSize)
-	require.Equal(t, 1, result.VideoCount)
+	require.Equal(t, 0, result.VideoCount)
 	require.Equal(t, VideoBillingResolution720P, result.VideoResolution)
 	require.Equal(t, 10, result.VideoDurationSeconds)
 }
@@ -1259,7 +1466,7 @@ func TestForwardGrokMediaVideoMutationEndpoints(t *testing.T) {
 			require.Equal(t, http.MethodPost, upstream.lastReq.Method)
 			require.JSONEq(t, `{"model":"vendor-video-mutation","prompt":"continue","video":{"url":"https://example.com/in.mp4"},"duration":6}`, string(upstream.lastBody))
 			require.Equal(t, "video-mutation-123", result.ResponseID)
-			require.Equal(t, 1, result.VideoCount)
+			require.Equal(t, 0, result.VideoCount)
 			require.Equal(t, 6, result.VideoDurationSeconds)
 			require.Equal(t, "grok-imagine-video", result.BillingModel)
 			require.Equal(t, "vendor-video-mutation", result.UpstreamModel)
@@ -1635,29 +1842,6 @@ func TestForwardGrokResponsesRetriesInvalidEncryptedContentOnce(t *testing.T) {
 	require.False(t, hasTerminalStatus)
 }
 
-func TestIsGrokInvalidEncryptedContentResponseAcceptsRelayWrapper(t *testing.T) {
-	t.Parallel()
-
-	wrapped := []byte(`{
-		"error": {
-			"message": "Could not decrypt the provided encrypted_content. Ensure the value is the unmodified encrypted_content from a previous response.",
-			"type": "bad_response_status_code",
-			"code": "bad_response_status_code"
-		}
-	}`)
-	require.True(t, isGrokInvalidEncryptedContentResponse(http.StatusBadRequest, wrapped))
-
-	unrelated := []byte(`{
-		"error": {
-			"message": "The request body is invalid.",
-			"type": "bad_response_status_code",
-			"code": "bad_response_status_code"
-		}
-	}`)
-	require.False(t, isGrokInvalidEncryptedContentResponse(http.StatusBadRequest, unrelated))
-	require.False(t, isGrokInvalidEncryptedContentResponse(http.StatusUnprocessableEntity, wrapped))
-}
-
 func TestForwardGrokResponsesInvalidEncryptedContentRecoveryDoesNotOvermatch(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
@@ -1863,7 +2047,7 @@ func TestAccountTestServiceGrokAPIKeyUsesXAIResponses(t *testing.T) {
 	c, _ := gin.CreateTestContext(recorder)
 	c.Request = httptest.NewRequest(http.MethodPost, "/api/v1/admin/accounts/54/test", nil)
 
-	err := svc.testGrokAccountConnection(c, account, "grok")
+	err := svc.testGrokAccountConnection(c, account, "grok", "", AccountTestModeDefault, AccountTestOptions{})
 	require.NoError(t, err)
 	require.Equal(t, "https://api.x.ai/v1/responses", upstream.lastReq.URL.String())
 	require.Equal(t, "Bearer xai-test-key", upstream.lastReq.Header.Get("Authorization"))
@@ -1897,12 +2081,43 @@ func TestAccountTestServiceGrokAPIKeyAllowsConfiguredHTTPWhenGlobalPolicyDoes(t 
 	c, _ := gin.CreateTestContext(recorder)
 	c.Request = httptest.NewRequest(http.MethodPost, "/api/v1/admin/accounts/55/test", nil)
 
-	err := svc.testGrokAccountConnection(c, account, "grok")
+	err := svc.testGrokAccountConnection(c, account, "grok", "", AccountTestModeDefault, AccountTestOptions{})
 	require.NoError(t, err)
 	require.Equal(t, "http://grok.example.test/v1/responses", upstream.lastReq.URL.String())
 	require.Equal(t, "Bearer third-party-key", upstream.lastReq.Header.Get("Authorization"))
 	require.Empty(t, upstream.lastReq.Header.Get("X-Grok-Client-Version"))
 	require.Contains(t, recorder.Body.String(), `"type":"test_complete"`)
+}
+
+func TestAccountTestServiceGrokOAuthPaymentRequiredTemporarilyUnschedulesAccount(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	account := healthyGrokOAuthGatewayTestAccount(56, "access-token")
+	repo := &grokQuotaAccountRepo{}
+	upstream := &httpUpstreamRecorder{resp: &http.Response{
+		StatusCode: http.StatusPaymentRequired,
+		Header:     http.Header{"Content-Type": []string{"application/json"}},
+		Body:       io.NopCloser(strings.NewReader(`{"code":"personal-team-blocked:spending-limit"}`)),
+	}}
+	svc := &AccountTestService{
+		accountRepo:       repo,
+		grokTokenProvider: NewGrokTokenProvider(repo, nil),
+		httpUpstream:      upstream,
+	}
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	c.Request = httptest.NewRequest(http.MethodPost, "/api/v1/admin/accounts/56/test", nil)
+	before := time.Now()
+
+	err := svc.testGrokAccountConnection(c, account, "grok", "", AccountTestModeDefault, AccountTestOptions{})
+
+	require.Error(t, err)
+	require.Zero(t, repo.tempUnschedCalls)
+	require.Equal(t, 1, repo.rateLimitedCalls)
+	require.Equal(t, account.ID, repo.lastRateLimitedID)
+	require.WithinDuration(t, before.Add(grokSpendingLimitProbeCooldown), repo.lastRateLimitResetAt, time.Second)
+	require.Contains(t, recorder.Body.String(), `"type":"error"`)
+	require.Contains(t, recorder.Body.String(), "Grok Responses API returned 402")
 }
 
 func TestForwardAsChatCompletionsForGrokStreamingUsesRawXAIChatCompletions(t *testing.T) {
@@ -1950,7 +2165,7 @@ func TestForwardAsChatCompletionsForGrokStreamingUsesRawXAIChatCompletions(t *te
 	require.Equal(t, xai.DefaultCLIBaseURL+"/chat/completions", upstream.lastReq.URL.String())
 	require.Equal(t, "Bearer access-token", upstream.lastReq.Header.Get("Authorization"))
 	require.Equal(t, "text/event-stream", upstream.lastReq.Header.Get("Accept"))
-	require.Equal(t, "sub2api-grok/1.0", upstream.lastReq.Header.Get("User-Agent"))
+	require.Equal(t, xai.CLIUserAgent(xai.CLIClientVersion), upstream.lastReq.Header.Get("User-Agent"))
 	require.Equal(t, "grok-4.5", gjson.GetBytes(upstream.lastBody, "model").String())
 	require.True(t, gjson.GetBytes(upstream.lastBody, "stream_options.include_usage").Bool())
 	require.True(t, result.Stream)
@@ -2123,7 +2338,7 @@ func TestForwardAsChatCompletionsForGrokStreamingStopFallsBackToRawXAIChatComple
 	require.Equal(t, xai.DefaultCLIBaseURL+"/chat/completions", upstream.lastReq.URL.String())
 	require.Equal(t, "Bearer access-token", upstream.lastReq.Header.Get("Authorization"))
 	require.Equal(t, "text/event-stream", upstream.lastReq.Header.Get("Accept"))
-	require.Equal(t, "sub2api-grok/1.0", upstream.lastReq.Header.Get("User-Agent"))
+	require.Equal(t, xai.CLIUserAgent(xai.CLIClientVersion), upstream.lastReq.Header.Get("User-Agent"))
 	require.Equal(t, grokCLIVersion, upstream.lastReq.Header.Get("X-Grok-Client-Version"))
 	require.NotEmpty(t, upstream.lastReq.Header.Get(grokConversationIDHeader))
 	require.NotEqual(t, "native-client-conversation", upstream.lastReq.Header.Get(grokConversationIDHeader))
@@ -2227,7 +2442,7 @@ func TestForwardAsAnthropicForGrokUsesXAIResponses(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, xai.DefaultCLIBaseURL+"/responses", upstream.lastReq.URL.String())
 	require.Equal(t, "Bearer access-token", upstream.lastReq.Header.Get("Authorization"))
-	require.Equal(t, "sub2api-grok/1.0", upstream.lastReq.Header.Get("User-Agent"))
+	require.Equal(t, xai.CLIUserAgent(xai.CLIClientVersion), upstream.lastReq.Header.Get("User-Agent"))
 	require.Equal(t, grokCLIVersion, upstream.lastReq.Header.Get("X-Grok-Client-Version"))
 	require.Equal(t, "grok-experimental", upstream.lastReq.Header.Get("OpenAI-Beta"))
 	require.Empty(t, upstream.lastReq.Header.Get("originator"))
@@ -2369,6 +2584,20 @@ func grokMessagesSSECompletedResponse(responseID string, cachedTokens int) *http
 	}
 }
 
+func TestHandleGrokAccountUpstreamErrorSpendingLimitUsesRecoverableProbeCool(t *testing.T) {
+	repo := &grokQuotaAccountRepo{}
+	svc := &OpenAIGatewayService{accountRepo: repo}
+	account := &Account{ID: 2570, Platform: PlatformGrok, Type: AccountTypeOAuth}
+	before := time.Now()
+	body := []byte(`{"code":"personal-team-blocked:spending-limit","error":"You have run out of credits"}`)
+
+	svc.handleGrokAccountUpstreamError(context.Background(), account, http.StatusForbidden, nil, body)
+
+	require.Equal(t, 1, repo.rateLimitedCalls)
+	require.WithinDuration(t, before.Add(grokSpendingLimitProbeCooldown), repo.lastRateLimitResetAt, 2*time.Second)
+	require.Zero(t, repo.tempUnschedCalls)
+}
+
 func TestHandleGrokAccountUpstreamErrorTempUnschedulesNonRateLimitStates(t *testing.T) {
 	tests := []struct {
 		name            string
@@ -2389,6 +2618,13 @@ func TestHandleGrokAccountUpstreamErrorTempUnschedulesNonRateLimitStates(t *test
 			name:            "forbidden entitlement",
 			status:          http.StatusForbidden,
 			wantReason:      "grok access or entitlement denied",
+			wantMinCooldown: 30*time.Minute - time.Second,
+			wantMaxCooldown: 30*time.Minute + time.Second,
+		},
+		{
+			name:            "payment required",
+			status:          http.StatusPaymentRequired,
+			wantReason:      "grok payment required",
 			wantMinCooldown: 30*time.Minute - time.Second,
 			wantMaxCooldown: 30*time.Minute + time.Second,
 		},
@@ -2421,6 +2657,60 @@ func TestHandleGrokAccountUpstreamErrorTempUnschedulesNonRateLimitStates(t *test
 	}
 }
 
+func TestHandleGrokAccountUpstreamErrorSpendingLimit403RateLimits(t *testing.T) {
+	account := &Account{ID: 614, Platform: PlatformGrok, Type: AccountTypeOAuth}
+	repo := &grokQuotaAccountRepo{}
+	svc := &OpenAIGatewayService{accountRepo: repo}
+	before := time.Now()
+	body := []byte(`{"code":"personal-team-blocked:spending-limit","error":"You have run out of credits"}`)
+
+	svc.handleGrokAccountUpstreamError(context.Background(), account, http.StatusForbidden, nil, body)
+
+	require.True(t, svc.isOpenAIAccountRuntimeBlocked(account))
+	require.Equal(t, 1, repo.rateLimitedCalls)
+	require.Equal(t, account.ID, repo.lastRateLimitedID)
+	require.WithinDuration(t, before.Add(grokSpendingLimitProbeCooldown), repo.lastRateLimitResetAt, 2*time.Second)
+	require.Zero(t, repo.tempUnschedCalls)
+	require.True(t, isGrokSpendingLimitError(body))
+}
+
+func TestHandleGrokAccountUpstreamError5xxRespectsPoolMode(t *testing.T) {
+	t.Run("pool mode keeps scheduling state", func(t *testing.T) {
+		account := &Account{
+			ID:       611,
+			Platform: PlatformGrok,
+			Type:     AccountTypeAPIKey,
+			Credentials: map[string]any{
+				"pool_mode": true,
+			},
+		}
+		repo := &grokQuotaAccountRepo{}
+		svc := &OpenAIGatewayService{accountRepo: repo}
+
+		svc.handleGrokAccountUpstreamError(context.Background(), account, http.StatusBadGateway, nil, nil)
+
+		require.False(t, svc.isOpenAIAccountRuntimeBlocked(account))
+		require.Zero(t, repo.tempUnschedCalls)
+		require.Nil(t, account.TempUnschedulableUntil)
+		require.Empty(t, account.TempUnschedulableReason)
+	})
+
+	t.Run("non-pool mode keeps two minute cooldown", func(t *testing.T) {
+		account := &Account{ID: 612, Platform: PlatformGrok, Type: AccountTypeAPIKey}
+		repo := &grokQuotaAccountRepo{}
+		svc := &OpenAIGatewayService{accountRepo: repo}
+		before := time.Now()
+
+		svc.handleGrokAccountUpstreamError(context.Background(), account, http.StatusBadGateway, nil, nil)
+
+		require.True(t, svc.isOpenAIAccountRuntimeBlocked(account))
+		require.Equal(t, 1, repo.tempUnschedCalls)
+		require.Equal(t, account.ID, repo.lastTempUnschedID)
+		require.Equal(t, "grok upstream temporary error", repo.lastTempUnschedReason)
+		require.WithinDuration(t, before.Add(2*time.Minute), repo.lastTempUnschedUntil, time.Second)
+	})
+}
+
 func TestHandleGrokAccountUpstreamError429SetsRateLimitedFromRetryAfter(t *testing.T) {
 	account := &Account{ID: 61, Platform: PlatformGrok, Type: AccountTypeOAuth}
 	repo := &grokQuotaAccountRepo{}
@@ -2434,6 +2724,50 @@ func TestHandleGrokAccountUpstreamError429SetsRateLimitedFromRetryAfter(t *testi
 	require.Equal(t, account.ID, repo.lastRateLimitedID)
 	require.WithinDuration(t, before.Add(45*time.Second), repo.lastRateLimitResetAt, time.Second)
 	require.Zero(t, repo.tempUnschedCalls)
+}
+
+func TestHandleGrokAccountUpstreamError429PoolModeKeepsSchedulingState(t *testing.T) {
+	account := &Account{
+		ID:       613,
+		Platform: PlatformGrok,
+		Type:     AccountTypeAPIKey,
+		Credentials: map[string]any{
+			"pool_mode": true,
+		},
+	}
+	repo := &grokQuotaAccountRepo{}
+	svc := &OpenAIGatewayService{accountRepo: repo}
+
+	svc.handleGrokAccountUpstreamError(
+		context.Background(), account, http.StatusTooManyRequests,
+		http.Header{"Retry-After": []string{"45"}}, nil,
+	)
+
+	require.Equal(t, 1, repo.updateCalls, "pool mode should retain the quota snapshot for observability")
+	require.Zero(t, repo.rateLimitedCalls)
+	require.Zero(t, repo.tempUnschedCalls)
+	require.False(t, svc.isOpenAIAccountRuntimeBlocked(account))
+	require.Nil(t, account.RateLimitResetAt)
+}
+
+func TestHandleGrokAccountUpstreamError402RecoversAfterCooldownExpiry(t *testing.T) {
+	account := &Account{
+		ID: 610, Platform: PlatformGrok, Type: AccountTypeOAuth,
+		Status: StatusActive, Schedulable: true,
+	}
+	repo := &grokQuotaAccountRepo{}
+	svc := &OpenAIGatewayService{accountRepo: repo}
+
+	svc.handleGrokAccountUpstreamError(context.Background(), account, http.StatusPaymentRequired, nil, nil)
+	require.True(t, svc.isOpenAIAccountRuntimeBlocked(account))
+	require.Equal(t, 1, repo.tempUnschedCalls)
+
+	expired := time.Now().Add(-time.Second)
+	account.TempUnschedulableUntil = &expired
+	svc.openaiAccountRuntimeBlockUntil.Store(account.ID, expired)
+
+	require.False(t, svc.isOpenAIAccountRuntimeBlocked(account))
+	require.True(t, account.IsSchedulable())
 }
 
 func TestHandleGrokAccountUpstreamError429UsesLatestExhaustedWindowReset(t *testing.T) {
@@ -2950,90 +3284,6 @@ func TestPatchGrokResponsesBody_MultipleReasoningContentNull(t *testing.T) {
 	require.False(t, items[2].Get("content").Exists())
 }
 
-func TestPatchGrokResponsesBody_NormalizesUnsupportedModelInputVariants(t *testing.T) {
-	t.Parallel()
-
-	body := []byte(`{
-		"model": "grok-latest",
-		"input": [
-			{"type":"item_reference","id":"msg_old"},
-			{"type":"custom_tool_call","call_id":"custom_1","name":"apply_patch","input":"patch text"},
-			{"type":"custom_tool_call_output","call_id":"custom_1","output":{"ok":true}},
-			{"type":"computer_call","call_id":"computer_1","action":{"type":"screenshot"}},
-			{"type":"computer_call_output","call_id":"computer_1","output":{"type":"computer_screenshot","image_url":"data:image/png;base64,aGVsbG8="}},
-			{"type":"image_generation_call","id":"image_1","result":"data:image/png;base64,aGVsbG8="},
-			{"type":"tool_search_output","call_id":"search_1","tools":[{"name":"shell"}]},
-			{"type":"compaction","id":"compact_1","encrypted_content":"opaque"},
-			{"type":"web_search_call","id":"web_1","status":"completed","action":{"type":"search","query":"test"}},
-			{"type":"message","role":"user","content":[{"type":"input_text","text":"continue"}]}
-		]
-	}`)
-
-	patched, err := patchGrokResponsesBody(body, "grok-4.5")
-	require.NoError(t, err)
-	require.True(t, json.Valid(patched))
-
-	items := gjson.GetBytes(patched, "input").Array()
-	require.Len(t, items, 7)
-	require.Equal(t, "function_call", items[0].Get("type").String())
-	require.Equal(t, "custom_1", items[0].Get("call_id").String())
-	require.Equal(t, "apply_patch", items[0].Get("name").String())
-	require.JSONEq(t, `{"input":"patch text"}`, items[0].Get("arguments").String())
-
-	require.Equal(t, "function_call_output", items[1].Get("type").String())
-	require.Equal(t, "custom_1", items[1].Get("call_id").String())
-	require.JSONEq(t, `{"ok":true}`, items[1].Get("output").String())
-
-	require.Equal(t, "message", items[2].Get("type").String())
-	require.Equal(t, "data:image/png;base64,aGVsbG8=", items[2].Get("content.1.image_url").String())
-	require.Equal(t, "message", items[3].Get("type").String())
-	require.Equal(t, "data:image/png;base64,aGVsbG8=", items[3].Get("content.1.image_url").String())
-	require.Equal(t, "message", items[4].Get("type").String())
-	require.Contains(t, items[4].Get("content.1.text").String(), `"shell"`)
-
-	require.Equal(t, "web_search_call", items[5].Get("type").String())
-	require.Equal(t, "message", items[6].Get("type").String())
-
-	for _, item := range items {
-		switch item.Get("type").String() {
-		case "item_reference", "custom_tool_call", "custom_tool_call_output",
-			"computer_call", "computer_call_output", "image_generation_call",
-			"tool_search_output", "compaction":
-			t.Fatalf("unsupported Grok ModelInput item survived normalization: %s", item.Raw)
-		}
-	}
-}
-
-func TestPatchGrokResponsesBody_LeavesSupportedModelInputUntouched(t *testing.T) {
-	t.Parallel()
-
-	body := []byte(`{
-		"model": "grok-latest",
-		"input": [
-			{"type":"function_call","call_id":"call_1","name":"probe","arguments":"{}"},
-			{"type":"function_call_output","call_id":"call_1","output":"ok"},
-			{"type":"local_shell_call_output","call_id":"shell_1","output":"ok"},
-			{"type":"mcp_call_output","call_id":"mcp_1","output":"ok"},
-			{"type":"file_search_call","id":"file_1","status":"completed","queries":["test"],"results":[]},
-			{"type":"code_interpreter_call","id":"code_1","status":"completed","code":"print(1)","outputs":[]},
-			{"type":"message","role":"user","content":[{"type":"input_text","text":"continue"}]}
-		]
-	}`)
-
-	patched, err := patchGrokResponsesBody(body, "grok-4.5")
-	require.NoError(t, err)
-
-	items := gjson.GetBytes(patched, "input").Array()
-	require.Len(t, items, 7)
-	require.Equal(t, "function_call", items[0].Get("type").String())
-	require.Equal(t, "function_call_output", items[1].Get("type").String())
-	require.Equal(t, "local_shell_call_output", items[2].Get("type").String())
-	require.Equal(t, "mcp_call_output", items[3].Get("type").String())
-	require.Equal(t, "file_search_call", items[4].Get("type").String())
-	require.Equal(t, "code_interpreter_call", items[5].Get("type").String())
-	require.Equal(t, "message", items[6].Get("type").String())
-}
-
 func TestIsGrokImageGenerationModel(t *testing.T) {
 	t.Parallel()
 
@@ -3053,4 +3303,31 @@ func TestIsGrokImageGenerationModel(t *testing.T) {
 			require.Equal(t, tt.want, isGrokImageGenerationModel(tt.model))
 		})
 	}
+}
+
+func TestBuildGrokSchedulerExtraUpdates_FeedsThresholdEvaluator(t *testing.T) {
+	int64p := func(v int64) *int64 { return &v }
+	resetUnix := time.Now().Add(90 * time.Minute).Unix()
+	snapshot := &xai.QuotaSnapshot{
+		Requests: &xai.QuotaWindow{Limit: int64p(100), Remaining: int64p(30)},                         // 70% used
+		Tokens:   &xai.QuotaWindow{Limit: int64p(1000), Remaining: int64p(50), ResetUnix: &resetUnix}, // 95% used (most constrained)
+	}
+
+	updates := buildGrokSchedulerExtraUpdates(snapshot)
+	require.NotNil(t, updates)
+	require.InDelta(t, 95.0, updates["grok_sched_utilization"], 0.001, "picks the most-constrained window")
+	require.Contains(t, updates, "grok_sched_reset_at")
+
+	// The written extras must actually drive EvaluateAccountSchedulingThreshold
+	// (proves the previously-dead read side is now fed).
+	account := &Account{Platform: PlatformGrok, Extra: updates}
+	decision := EvaluateAccountSchedulingThreshold(account, map[string]int{PlatformGrok: 90}, time.Now())
+	require.True(t, decision.ShouldPause)
+	require.InDelta(t, 95.0, decision.UsedPercent, 0.001)
+	require.NotNil(t, decision.Until)
+}
+
+func TestBuildGrokSchedulerExtraUpdates_NilWhenNoQuotaWindows(t *testing.T) {
+	require.Nil(t, buildGrokSchedulerExtraUpdates(&xai.QuotaSnapshot{}))
+	require.Nil(t, buildGrokSchedulerExtraUpdates(nil))
 }

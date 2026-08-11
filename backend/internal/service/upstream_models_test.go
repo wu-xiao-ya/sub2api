@@ -214,7 +214,7 @@ func TestBuildUpstreamModelsRequestsForAPIKeyAccounts(t *testing.T) {
 	require.Equal(t, "antigravity-key", antigravityReq.Header.Get("x-api-key"))
 }
 
-func TestBuildUpstreamModelsRequestRejectsGrokOAuth(t *testing.T) {
+func TestBuildUpstreamModelsRequestRequiresGrokOAuthProvider(t *testing.T) {
 	t.Parallel()
 
 	svc := &AccountTestService{cfg: upstreamModelSyncTestConfig()}
@@ -226,8 +226,8 @@ func TestBuildUpstreamModelsRequestRejectsGrokOAuth(t *testing.T) {
 
 	var syncErr *UpstreamModelSyncError
 	require.True(t, errors.As(err, &syncErr))
-	require.Equal(t, UpstreamModelSyncErrorUnsupported, syncErr.Kind)
-	require.Contains(t, syncErr.SafeMessage(), "Unsupported Grok account type")
+	require.Equal(t, UpstreamModelSyncErrorConfiguration, syncErr.Kind)
+	require.Contains(t, syncErr.SafeMessage(), "token provider is not configured")
 }
 
 func TestBuildAntigravityAPIKeyModelsRequestRejectsOfficialCloudCodeBase(t *testing.T) {
