@@ -890,6 +890,21 @@ usage_cleanup:
   # Task execution timeout (seconds)
   # 单次任务最大执行时长（秒）
   task_timeout_seconds: 1800
+  # Archive detailed records older than the retention window into hourly summaries
+  # 将超过保留期的明细归档为小时汇总后删除
+  archive_enabled: true
+  # Detail retention period (days)
+  # 明细保留天数
+  archive_retention_days: 15
+  # Archive worker interval (seconds)
+  # 归档执行间隔（秒）
+  archive_interval_seconds: 3600
+  # Hours handled by one archive window
+  # 单个归档窗口跨度（小时）
+  archive_window_hours: 1
+  # Maximum archive windows in one run
+  # 单次最多归档窗口数
+  archive_max_windows_per_run: 1
 
 # =============================================================================
 # HTTP 写接口幂等配置
