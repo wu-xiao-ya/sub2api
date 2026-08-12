@@ -127,6 +127,8 @@ type UsageLog struct {
 	InboundEndpoint *string
 	// UpstreamEndpoint is the normalized upstream endpoint path, e.g. /v1/responses.
 	UpstreamEndpoint *string
+	// UsageSource marks internal request origins, e.g. channel_monitor.
+	UsageSource *string
 
 	GroupID        *int64
 	SubscriptionID *int64

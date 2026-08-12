@@ -320,6 +320,19 @@ func (s *OpsCleanupService) runCleanupOnce(ctx context.Context) (opsCleanupDelet
 		*t.counter = n
 	}
 
+	runtimeLogCutoff := now.AddDate(0, 0, -15)
+	runtimeLogsDeleted, err := deleteOldSystemLogsByComponent(
+		ctx,
+		s.db,
+		runtimeLogCutoff,
+		openAIAccountRuntimeLogComponent,
+		opsCleanupBatchSize,
+	)
+	if err != nil {
+		return out, err
+	}
+	out.accountRuntimeLogs = runtimeLogsDeleted
+
 	// Channel monitor 每日维护（聚合昨日明细 + 软删过期明细/聚合）。
 	// 失败只记日志，不影响 ops 清理的成功状态（与 ops 各步骤风格一致）；
 	// 维护本身已经把每步错误打到 slog，heartbeat result 不再分项记录。

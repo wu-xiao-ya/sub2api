@@ -15,6 +15,7 @@ export default {
       todayRequests: '今日请求',
       totalRequests: '总请求数',
       todayCost: '今日消费',
+      todayMonitorCost: '今日监测费用',
       totalCost: '总消费',
       newUsersToday: '今日新增用户',
       actual: '实际',

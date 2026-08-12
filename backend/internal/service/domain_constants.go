@@ -102,6 +102,14 @@ const (
 	PromoCodeStatusDisabled = domain.PromoCodeStatusDisabled
 )
 
+// Account contribution status constants.
+const (
+	ContributionStatusPending  = "pending"
+	ContributionStatusApproved = "approved"
+	ContributionStatusRejected = "rejected"
+	ContributionStatusRevoked  = "revoked"
+)
+
 // Admin adjustment type constants
 const (
 	AdjustmentTypeAdminBalance     = domain.AdjustmentTypeAdminBalance     // 管理员调整余额
@@ -270,14 +278,15 @@ const (
 	SettingKeyGoogleOAuthFrontendRedirectURL = "google_oauth_frontend_redirect_url"
 
 	// OEM设置
-	SettingKeySiteName                    = "site_name"                     // 网站名称
-	SettingKeySiteLogo                    = "site_logo"                     // 网站Logo (base64)
-	SettingKeySiteSubtitle                = "site_subtitle"                 // 网站副标题
-	SettingKeyAPIBaseURL                  = "api_base_url"                  // API端点地址（用于客户端配置和导入）
-	SettingKeyContactInfo                 = "contact_info"                  // 客服联系方式
-	SettingKeyDocURL                      = "doc_url"                       // 文档链接
-	SettingKeyHomeContent                 = "home_content"                  // 首页内容（支持 Markdown/HTML，或 URL 作为 iframe src）
-	SettingKeyHideCcsImportButton         = "hide_ccs_import_button"        // 是否隐藏 API Keys 页面的导入 CCS 按钮
+	SettingKeySiteName                    = "site_name"              // 网站名称
+	SettingKeySiteLogo                    = "site_logo"              // 网站Logo (base64)
+	SettingKeySiteSubtitle                = "site_subtitle"          // 网站副标题
+	SettingKeyAPIBaseURL                  = "api_base_url"           // API端点地址（用于客户端配置和导入）
+	SettingKeyContactInfo                 = "contact_info"           // 客服联系方式
+	SettingKeyDocURL                      = "doc_url"                // 文档链接
+	SettingKeyHomeContent                 = "home_content"           // 首页内容（支持 Markdown/HTML，或 URL 作为 iframe src）
+	SettingKeyHideCcsImportButton         = "hide_ccs_import_button" // 是否隐藏 API Keys 页面的导入 CCS 按钮
+	SettingKeyAPIEndpointProbeInterval    = "api_endpoint_probe_interval_seconds"
 	SettingKeyPurchaseSubscriptionEnabled = "purchase_subscription_enabled" // 是否展示"购买订阅"页面入口
 	SettingKeyPurchaseSubscriptionURL     = "purchase_subscription_url"     // "购买订阅"页面 URL（作为 iframe src）
 	SettingKeyTableDefaultPageSize        = "table_default_page_size"       // 表格默认每页条数
@@ -398,6 +407,10 @@ const (
 	// SettingKeyGrokDefaultBaseURLMode controls the default text upstream for
 	// Grok accounts without an explicit credentials.base_url.
 	SettingKeyGrokDefaultBaseURLMode = "grok_default_base_url_mode"
+
+	// SettingKeyChannelMonitorAccountProbeSettings stores adaptive account probe
+	// limits and retry behavior as a single JSON value.
+	SettingKeyChannelMonitorAccountProbeSettings = "channel_monitor_account_probe_settings"
 
 	// SettingKeyAvailableChannelsEnabled is a DB-backed soft switch for the "Available Channels"
 	// user-facing aggregate view. When false: user endpoint returns an empty list and the
@@ -573,15 +586,6 @@ func SettingKeyAuthSourcePlatformQuotas(source string) string {
 const (
 	QuotaDimensionGlobal = "global"
 	QuotaDimensionSpark  = "spark"
-)
-
-// Account contribution lifecycle values. An empty status identifies an
-// administrator-managed account and remains compatible with existing pools.
-const (
-	ContributionStatusPending  = "pending"
-	ContributionStatusApproved = "approved"
-	ContributionStatusRejected = "rejected"
-	ContributionStatusRevoked  = "revoked"
 )
 
 // AdminAPIKeyPrefix is the prefix for admin API keys (distinct from user "sk-" keys).

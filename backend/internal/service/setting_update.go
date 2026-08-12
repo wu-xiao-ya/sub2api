@@ -269,6 +269,7 @@ func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, setting
 	updates[SettingKeySiteLogo] = settings.SiteLogo
 	updates[SettingKeySiteSubtitle] = settings.SiteSubtitle
 	updates[SettingKeyAPIBaseURL] = settings.APIBaseURL
+	updates[SettingKeyAPIEndpointProbeInterval] = strconv.Itoa(clampAPIEndpointProbeInterval(settings.APIEndpointProbeInterval))
 	updates[SettingKeyContactInfo] = settings.ContactInfo
 	updates[SettingKeyDocURL] = settings.DocURL
 	updates[SettingKeyHomeContent] = settings.HomeContent
@@ -343,6 +344,12 @@ func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, setting
 	if v := clampChannelMonitorInterval(settings.ChannelMonitorDefaultIntervalSeconds); v > 0 {
 		updates[SettingKeyChannelMonitorDefaultIntervalSeconds] = strconv.Itoa(v)
 	}
+	accountProbeSettings := normalizeChannelMonitorAccountProbeSettings(settings.ChannelMonitorAccountProbeSettings)
+	accountProbeJSON, err := json.Marshal(accountProbeSettings)
+	if err != nil {
+		return nil, fmt.Errorf("marshal channel monitor account probe settings: %w", err)
+	}
+	updates[SettingKeyChannelMonitorAccountProbeSettings] = string(accountProbeJSON)
 
 	// Grok model mapping policy
 	if v := strings.TrimSpace(settings.GrokDefaultTextModel); v != "" {

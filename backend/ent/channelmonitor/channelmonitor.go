@@ -35,6 +35,8 @@ const (
 	FieldExtraModels = "extra_models"
 	// FieldGroupName holds the string denoting the group_name field in the database.
 	FieldGroupName = "group_name"
+	// FieldAccountGroupID holds the string denoting the account_group_id field in the database.
+	FieldAccountGroupID = "account_group_id"
 	// FieldEnabled holds the string denoting the enabled field in the database.
 	FieldEnabled = "enabled"
 	// FieldIntervalSeconds holds the string denoting the interval_seconds field in the database.
@@ -99,6 +101,7 @@ var Columns = []string{
 	FieldPrimaryModel,
 	FieldExtraModels,
 	FieldGroupName,
+	FieldAccountGroupID,
 	FieldEnabled,
 	FieldIntervalSeconds,
 	FieldJitterSeconds,
@@ -171,10 +174,11 @@ type Provider string
 
 // Provider values.
 const (
-	ProviderOpenai    Provider = "openai"
-	ProviderAnthropic Provider = "anthropic"
-	ProviderGemini    Provider = "gemini"
-	ProviderGrok      Provider = "grok"
+	ProviderOpenai      Provider = "openai"
+	ProviderAnthropic   Provider = "anthropic"
+	ProviderGemini      Provider = "gemini"
+	ProviderGrok        Provider = "grok"
+	ProviderAntigravity Provider = "antigravity"
 )
 
 func (pr Provider) String() string {
@@ -184,7 +188,7 @@ func (pr Provider) String() string {
 // ProviderValidator is a validator for the "provider" field enum values. It is called by the builders before save.
 func ProviderValidator(pr Provider) error {
 	switch pr {
-	case ProviderOpenai, ProviderAnthropic, ProviderGemini, ProviderGrok:
+	case ProviderOpenai, ProviderAnthropic, ProviderGemini, ProviderGrok, ProviderAntigravity:
 		return nil
 	default:
 		return fmt.Errorf("channelmonitor: invalid enum value for provider field: %q", pr)
@@ -242,6 +246,11 @@ func ByPrimaryModel(opts ...sql.OrderTermOption) OrderOption {
 // ByGroupName orders the results by the group_name field.
 func ByGroupName(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldGroupName, opts...).ToFunc()
+}
+
+// ByAccountGroupID orders the results by the account_group_id field.
+func ByAccountGroupID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAccountGroupID, opts...).ToFunc()
 }
 
 // ByEnabled orders the results by the enabled field.

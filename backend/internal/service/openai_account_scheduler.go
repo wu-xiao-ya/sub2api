@@ -3,6 +3,7 @@ package service
 import (
 	"container/heap"
 	"context"
+	"errors"
 	"fmt"
 	"hash/fnv"
 	"log/slog"
@@ -435,6 +436,11 @@ func (s *defaultOpenAIAccountScheduler) Select(
 	decision.TopK = topK
 	decision.LoadSkew = loadSkew
 	if err != nil {
+		if candidateCount > 0 && (errors.Is(err, ErrNoAvailableAccounts) || errors.Is(err, ErrNoAvailableCompactAccounts)) {
+			s.service.logOpenAIAccountSelectionNoCandidates(ctx, req.GroupID, req.Platform, req.RequestedModel, req.ExcludedIDs, map[string]int{
+				"scheduler_exhausted": candidateCount,
+			})
+		}
 		return nil, decision, err
 	}
 	if selection != nil && selection.Account != nil {
@@ -448,6 +454,11 @@ func (s *defaultOpenAIAccountScheduler) Select(
 				decision.StickySessionHit = true
 			}
 		}
+	}
+	if (selection == nil || selection.Account == nil) && candidateCount > 0 {
+		s.service.logOpenAIAccountSelectionNoCandidates(ctx, req.GroupID, req.Platform, req.RequestedModel, req.ExcludedIDs, map[string]int{
+			"scheduler_exhausted": candidateCount,
+		})
 	}
 	return selection, decision, nil
 }
@@ -1347,6 +1358,9 @@ func (s *defaultOpenAIAccountScheduler) selectByLoadBalance(
 		return nil, 0, 0, 0, err
 	}
 	if len(accounts) == 0 {
+		s.service.logOpenAIAccountSelectionNoCandidates(ctx, req.GroupID, req.Platform, req.RequestedModel, req.ExcludedIDs, map[string]int{
+			"repository_no_schedulable_accounts": 1,
+		})
 		return nil, 0, 0, 0, noAvailableOpenAISelectionError(req.RequestedModel, false)
 	}
 	// Local free-tier soft gate on the Grok scheduling path only (not admin probe).
@@ -1380,30 +1394,52 @@ func (s *defaultOpenAIAccountScheduler) selectByLoadBalance(
 
 	filtered := make([]*Account, 0, len(accounts))
 	loadReq := make([]AccountWithConcurrency, 0, len(accounts))
+	reasonCounts := make(map[string]int)
+	countReason := func(reason string) {
+		reasonCounts[reason]++
+	}
 	for i := range accounts {
 		account := &accounts[i]
 		if req.ExcludedIDs != nil {
 			if _, excluded := req.ExcludedIDs[account.ID]; excluded {
+				countReason("explicitly_excluded")
 				continue
 			}
 		}
-		if !account.IsSchedulable() || account.Platform != normalizeOpenAICompatiblePlatform(req.Platform) || !account.IsOpenAICompatible() {
+		if !account.IsSchedulable() {
+			countReason("account_not_schedulable")
 			continue
 		}
-		if s.service.isOpenAIAccountRequestRuntimeBlocked(account, req.RequestedModel) {
+		if account.Platform != normalizeOpenAICompatiblePlatform(req.Platform) {
+			countReason("platform_mismatch")
+			continue
+		}
+		if !account.IsOpenAICompatible() {
+			countReason("account_type_incompatible")
+			continue
+		}
+		if s.service.isOpenAIAccountRuntimeBlocked(account) {
+			countReason("account_runtime_cooldown")
+			continue
+		}
+		if s.service.isOpenAIAccountModelRuntimeBlocked(account, req.RequestedModel) {
+			countReason("model_runtime_cooldown")
 			continue
 		}
 		// require_privacy_set: 跳过 privacy 未设置的账号并标记异常
 		if schedGroup != nil && schedGroup.RequirePrivacySet && !account.IsPrivacySet() {
+			countReason("privacy_not_set")
 			s.service.BlockAccountScheduling(account, time.Time{}, "privacy_not_set")
 			_ = s.service.accountRepo.SetError(ctx, account.ID,
 				fmt.Sprintf("Privacy not set, required by group [%s]", schedGroup.Name))
 			continue
 		}
 		if !s.isAccountRequestCompatible(ctx, account, req) {
+			countReason("request_incompatible")
 			continue
 		}
 		if !s.isAccountTransportCompatible(account, req.RequiredTransport) {
+			countReason("transport_incompatible")
 			continue
 		}
 		filtered = append(filtered, account)
@@ -1413,6 +1449,7 @@ func (s *defaultOpenAIAccountScheduler) selectByLoadBalance(
 		})
 	}
 	if len(filtered) == 0 {
+		s.service.logOpenAIAccountSelectionNoCandidates(ctx, req.GroupID, req.Platform, req.RequestedModel, req.ExcludedIDs, reasonCounts)
 		return nil, 0, 0, 0, noAvailableOpenAISelectionError(req.RequestedModel, false)
 	}
 

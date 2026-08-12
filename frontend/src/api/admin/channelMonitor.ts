@@ -5,7 +5,7 @@
 
 import { apiClient } from '../client'
 
-export type Provider = 'openai' | 'anthropic' | 'gemini' | 'grok'
+export type Provider = 'openai' | 'anthropic' | 'gemini' | 'grok' | 'antigravity'
 export type MonitorStatus = 'operational' | 'degraded' | 'failed' | 'error'
 export type BodyOverrideMode = 'off' | 'merge' | 'replace'
 export type APIMode = 'chat_completions' | 'responses' | 'models' | 'images'
@@ -26,6 +26,8 @@ export interface ChannelMonitor {
   primary_model: string
   extra_models: string[]
   group_name: string
+  /** Explicit account-management group used by adaptive account probes. */
+  account_group_id?: number | null
   enabled: boolean
   interval_seconds: number
   /** 每次调度在 interval 基础上 ± [0, jitter] 的随机偏移（秒），0 = 固定间隔 */
@@ -40,6 +42,13 @@ export interface ChannelMonitor {
   primary_status: MonitorStatus | ''
   /** Latest latency of the primary model in ms (null when no history yet) */
   primary_latency_ms: number | null
+  /** Admin-only metadata for the most recent primary-model probe. */
+  primary_account_id?: number | null
+  primary_account_name?: string
+  primary_probe_mode?: 'static' | 'sticky' | 'confirm' | 'full'
+  primary_candidate_count?: number
+  primary_healthy_count?: number
+  primary_checked_at?: string | null
   /** Primary model 7-day availability percentage (0-100) */
   availability_7d: number
   /** Latest status per extra model (used for hover tooltip) */
@@ -83,6 +92,7 @@ export interface CreateParams {
   primary_model: string
   extra_models?: string[]
   group_name?: string
+  account_group_id?: number | null
   enabled?: boolean
   interval_seconds: number
   jitter_seconds?: number
@@ -96,6 +106,7 @@ export interface CreateParams {
 // Update request: api_key 空串 = 不修改；clear_template=true 时把 template_id 置空
 export type UpdateParams = Partial<CreateParams> & {
   clear_template?: boolean
+  clear_account_group?: boolean
 }
 
 export interface CheckResult {
@@ -103,6 +114,11 @@ export interface CheckResult {
   status: MonitorStatus
   latency_ms: number | null
   ping_latency_ms: number | null
+  account_id?: number | null
+  account_name?: string
+  probe_mode?: 'static' | 'sticky' | 'confirm' | 'full'
+  candidate_count?: number
+  healthy_count?: number
   message: string
   checked_at: string
 }
@@ -117,6 +133,11 @@ export interface HistoryItem {
   status: MonitorStatus
   latency_ms: number | null
   ping_latency_ms: number | null
+  account_id?: number | null
+  account_name?: string
+  probe_mode?: 'static' | 'sticky' | 'confirm' | 'full'
+  candidate_count?: number
+  healthy_count?: number
   message: string
   checked_at: string
 }
@@ -262,11 +283,11 @@ export async function del(id: number): Promise<void> {
  * Trigger an immediate manual check for a channel monitor.
  * Returns the latest check results for primary + extra models.
  */
-export async function runNow(id: number): Promise<RunNowResponse> {
+export async function runNow(id: number, options: { forceFull?: boolean } = {}): Promise<RunNowResponse> {
   // Image monitors may legitimately wait up to the configured 15-minute cap.
   const { data } = await apiClient.post<RunNowResponse>(
     `/admin/channel-monitors/${id}/run`,
-    undefined,
+    options.forceFull ? { force_full: true } : undefined,
     { timeout: 930000 }
   )
   return data

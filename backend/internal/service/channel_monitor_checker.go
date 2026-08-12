@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/servertiming"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/usagesource"
 	"github.com/tidwall/gjson"
 )
 
@@ -93,10 +94,12 @@ func runCheckForModel(ctx context.Context, provider, endpoint, apiKey, model str
 	mode := bodyOverrideMode(opts)
 
 	start := time.Now()
+	res.monitorRequestAttempted = true
 	respText, rawBody, statusCode, err := callProvider(ctx, provider, endpoint, apiKey, model, challenge.Prompt, opts)
 	latency := time.Since(start)
 	latencyMs := int(latency / time.Millisecond)
 	res.LatencyMs = &latencyMs
+	res.monitorUsage = monitorUsageFromResponse(provider, checkAPIMode(opts), []byte(rawBody))
 
 	if err != nil {
 		res.Status = MonitorStatusError
@@ -159,10 +162,14 @@ func runImageCheckForModel(
 	defer cancel()
 
 	start := time.Now()
+	res.monitorRequestAttempted = true
 	respBytes, statusCode, err := callImageProvider(requestCtx, endpoint, apiKey, model, opts)
 	latency := time.Since(start)
 	latencyMs := int(latency / time.Millisecond)
 	res.LatencyMs = &latencyMs
+	if imageCount := monitorImageCountFromResponse(respBytes); imageCount > 0 {
+		res.monitorUsage = monitorUsage{ImageCount: imageCount, Observed: true}
+	}
 
 	if err != nil {
 		res.Message = truncateMessage(sanitizeErrorMessage(err.Error()))
@@ -349,6 +356,9 @@ func providerAdapterFor(provider, apiMode string) (providerAdapter, string, bool
 // isSupportedProvider 校验 provider 字符串是否在 adapter 表中。
 // 供 validate.go 的 validateProvider 复用，避免两份 switch 漂移。
 func isSupportedProvider(p string) bool {
+	if p == MonitorProviderAntigravity {
+		return true
+	}
 	_, ok := providerAdapters[p]
 	return ok
 }
@@ -368,7 +378,7 @@ func callProvider(ctx context.Context, provider, endpoint, apiKey, model, prompt
 	}
 	if provider == MonitorProviderOpenAI && requestedAPIMode == MonitorAPIModeModels {
 		full := joinURL(endpoint, providerOpenAIModelsPath)
-		respBytes, status, err := getRaw(ctx, full, map[string]string{"Authorization": "Bearer " + apiKey})
+		respBytes, status, err := getRaw(ctx, full, usagesource.MarkChannelMonitor(map[string]string{"Authorization": "Bearer " + apiKey}))
 		if err != nil {
 			return "", "", status, err
 		}
@@ -387,7 +397,7 @@ func callProvider(ctx context.Context, provider, endpoint, apiKey, model, prompt
 	if err != nil {
 		return "", "", 0, err
 	}
-	headers := mergeHeaders(adapter.buildHeaders(apiKey), opts)
+	headers := usagesource.MarkChannelMonitor(mergeHeaders(adapter.buildHeaders(apiKey), opts))
 	full := joinURL(endpoint, adapter.buildPath(model))
 	respBytes, status, err := postRawJSON(ctx, full, body, headers)
 	if err != nil {
@@ -413,7 +423,7 @@ func callImageProvider(ctx context.Context, endpoint, apiKey, model string, opts
 	if err != nil {
 		return nil, 0, fmt.Errorf("marshal image health-check body: %w", err)
 	}
-	headers := mergeHeaders(map[string]string{"Authorization": "Bearer " + apiKey}, opts)
+	headers := usagesource.MarkChannelMonitor(mergeHeaders(map[string]string{"Authorization": "Bearer " + apiKey}, opts))
 	return postRawJSONWithClientAndLimit(
 		ctx,
 		monitorImageHTTPClient,

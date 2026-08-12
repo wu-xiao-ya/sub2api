@@ -117,6 +117,20 @@ func (_c *ChannelMonitorCreate) SetNillableGroupName(v *string) *ChannelMonitorC
 	return _c
 }
 
+// SetAccountGroupID sets the "account_group_id" field.
+func (_c *ChannelMonitorCreate) SetAccountGroupID(v int64) *ChannelMonitorCreate {
+	_c.mutation.SetAccountGroupID(v)
+	return _c
+}
+
+// SetNillableAccountGroupID sets the "account_group_id" field if the given value is not nil.
+func (_c *ChannelMonitorCreate) SetNillableAccountGroupID(v *int64) *ChannelMonitorCreate {
+	if v != nil {
+		_c.SetAccountGroupID(*v)
+	}
+	return _c
+}
+
 // SetEnabled sets the "enabled" field.
 func (_c *ChannelMonitorCreate) SetEnabled(v bool) *ChannelMonitorCreate {
 	_c.mutation.SetEnabled(v)
@@ -523,6 +537,10 @@ func (_c *ChannelMonitorCreate) createSpec() (*ChannelMonitor, *sqlgraph.CreateS
 		_spec.SetField(channelmonitor.FieldGroupName, field.TypeString, value)
 		_node.GroupName = value
 	}
+	if value, ok := _c.mutation.AccountGroupID(); ok {
+		_spec.SetField(channelmonitor.FieldAccountGroupID, field.TypeInt64, value)
+		_node.AccountGroupID = &value
+	}
 	if value, ok := _c.mutation.Enabled(); ok {
 		_spec.SetField(channelmonitor.FieldEnabled, field.TypeBool, value)
 		_node.Enabled = value
@@ -771,6 +789,30 @@ func (u *ChannelMonitorUpsert) UpdateGroupName() *ChannelMonitorUpsert {
 // ClearGroupName clears the value of the "group_name" field.
 func (u *ChannelMonitorUpsert) ClearGroupName() *ChannelMonitorUpsert {
 	u.SetNull(channelmonitor.FieldGroupName)
+	return u
+}
+
+// SetAccountGroupID sets the "account_group_id" field.
+func (u *ChannelMonitorUpsert) SetAccountGroupID(v int64) *ChannelMonitorUpsert {
+	u.Set(channelmonitor.FieldAccountGroupID, v)
+	return u
+}
+
+// UpdateAccountGroupID sets the "account_group_id" field to the value that was provided on create.
+func (u *ChannelMonitorUpsert) UpdateAccountGroupID() *ChannelMonitorUpsert {
+	u.SetExcluded(channelmonitor.FieldAccountGroupID)
+	return u
+}
+
+// AddAccountGroupID adds v to the "account_group_id" field.
+func (u *ChannelMonitorUpsert) AddAccountGroupID(v int64) *ChannelMonitorUpsert {
+	u.Add(channelmonitor.FieldAccountGroupID, v)
+	return u
+}
+
+// ClearAccountGroupID clears the value of the "account_group_id" field.
+func (u *ChannelMonitorUpsert) ClearAccountGroupID() *ChannelMonitorUpsert {
+	u.SetNull(channelmonitor.FieldAccountGroupID)
 	return u
 }
 
@@ -1111,6 +1153,34 @@ func (u *ChannelMonitorUpsertOne) UpdateGroupName() *ChannelMonitorUpsertOne {
 func (u *ChannelMonitorUpsertOne) ClearGroupName() *ChannelMonitorUpsertOne {
 	return u.Update(func(s *ChannelMonitorUpsert) {
 		s.ClearGroupName()
+	})
+}
+
+// SetAccountGroupID sets the "account_group_id" field.
+func (u *ChannelMonitorUpsertOne) SetAccountGroupID(v int64) *ChannelMonitorUpsertOne {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.SetAccountGroupID(v)
+	})
+}
+
+// AddAccountGroupID adds v to the "account_group_id" field.
+func (u *ChannelMonitorUpsertOne) AddAccountGroupID(v int64) *ChannelMonitorUpsertOne {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.AddAccountGroupID(v)
+	})
+}
+
+// UpdateAccountGroupID sets the "account_group_id" field to the value that was provided on create.
+func (u *ChannelMonitorUpsertOne) UpdateAccountGroupID() *ChannelMonitorUpsertOne {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.UpdateAccountGroupID()
+	})
+}
+
+// ClearAccountGroupID clears the value of the "account_group_id" field.
+func (u *ChannelMonitorUpsertOne) ClearAccountGroupID() *ChannelMonitorUpsertOne {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.ClearAccountGroupID()
 	})
 }
 
@@ -1644,6 +1714,34 @@ func (u *ChannelMonitorUpsertBulk) UpdateGroupName() *ChannelMonitorUpsertBulk {
 func (u *ChannelMonitorUpsertBulk) ClearGroupName() *ChannelMonitorUpsertBulk {
 	return u.Update(func(s *ChannelMonitorUpsert) {
 		s.ClearGroupName()
+	})
+}
+
+// SetAccountGroupID sets the "account_group_id" field.
+func (u *ChannelMonitorUpsertBulk) SetAccountGroupID(v int64) *ChannelMonitorUpsertBulk {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.SetAccountGroupID(v)
+	})
+}
+
+// AddAccountGroupID adds v to the "account_group_id" field.
+func (u *ChannelMonitorUpsertBulk) AddAccountGroupID(v int64) *ChannelMonitorUpsertBulk {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.AddAccountGroupID(v)
+	})
+}
+
+// UpdateAccountGroupID sets the "account_group_id" field to the value that was provided on create.
+func (u *ChannelMonitorUpsertBulk) UpdateAccountGroupID() *ChannelMonitorUpsertBulk {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.UpdateAccountGroupID()
+	})
+}
+
+// ClearAccountGroupID clears the value of the "account_group_id" field.
+func (u *ChannelMonitorUpsertBulk) ClearAccountGroupID() *ChannelMonitorUpsertBulk {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.ClearAccountGroupID()
 	})
 }
 

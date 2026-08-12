@@ -225,6 +225,7 @@ func (h *SettingHandler) GetSettings(c *gin.Context) {
 		SiteLogo:                                               settings.SiteLogo,
 		SiteSubtitle:                                           settings.SiteSubtitle,
 		APIBaseURL:                                             settings.APIBaseURL,
+		APIEndpointProbeInterval:                               settings.APIEndpointProbeInterval,
 		ContactInfo:                                            settings.ContactInfo,
 		DocURL:                                                 settings.DocURL,
 		HomeContent:                                            settings.HomeContent,
@@ -342,6 +343,7 @@ func (h *SettingHandler) GetSettings(c *gin.Context) {
 
 		ChannelMonitorEnabled:                settings.ChannelMonitorEnabled,
 		ChannelMonitorDefaultIntervalSeconds: settings.ChannelMonitorDefaultIntervalSeconds,
+		ChannelMonitorAccountProbeSettings:   settings.ChannelMonitorAccountProbeSettings,
 
 		GrokDefaultTextModel:           settings.GrokDefaultTextModel,
 		GrokCrossClientModelMapEnabled: settings.GrokCrossClientModelMapEnabled,

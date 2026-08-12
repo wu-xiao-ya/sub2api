@@ -848,11 +848,18 @@ func ProvideChannelMonitorService(
 	httpUpstream HTTPUpstream,
 	cfg *config.Config,
 	tlsFPProfileService *TLSFingerprintProfileService,
+	settingService *SettingService,
+	accountTestService *AccountTestService,
+	channelService *ChannelService,
+	billingService *BillingService,
 ) *ChannelMonitorService {
 	svc := NewChannelMonitorService(repo, encryptor)
 	if probeRepo, ok := accountRepo.(channelMonitorAccountProbeRepository); ok {
 		svc.SetAccountProbeDependencies(probeRepo, httpUpstream, cfg, tlsFPProfileService)
 	}
+	svc.SetAccountProbeSettingsProvider(settingService)
+	svc.SetAccountProbeExecutor(accountTestService)
+	svc.SetCostDependencies(settingService, channelService, billingService)
 	return svc
 }
 

@@ -125,6 +125,127 @@ func (_u *ChannelMonitorHistoryUpdate) ClearPingLatencyMs() *ChannelMonitorHisto
 	return _u
 }
 
+// SetAccountID sets the "account_id" field.
+func (_u *ChannelMonitorHistoryUpdate) SetAccountID(v int64) *ChannelMonitorHistoryUpdate {
+	_u.mutation.ResetAccountID()
+	_u.mutation.SetAccountID(v)
+	return _u
+}
+
+// SetNillableAccountID sets the "account_id" field if the given value is not nil.
+func (_u *ChannelMonitorHistoryUpdate) SetNillableAccountID(v *int64) *ChannelMonitorHistoryUpdate {
+	if v != nil {
+		_u.SetAccountID(*v)
+	}
+	return _u
+}
+
+// AddAccountID adds value to the "account_id" field.
+func (_u *ChannelMonitorHistoryUpdate) AddAccountID(v int64) *ChannelMonitorHistoryUpdate {
+	_u.mutation.AddAccountID(v)
+	return _u
+}
+
+// ClearAccountID clears the value of the "account_id" field.
+func (_u *ChannelMonitorHistoryUpdate) ClearAccountID() *ChannelMonitorHistoryUpdate {
+	_u.mutation.ClearAccountID()
+	return _u
+}
+
+// SetAccountName sets the "account_name" field.
+func (_u *ChannelMonitorHistoryUpdate) SetAccountName(v string) *ChannelMonitorHistoryUpdate {
+	_u.mutation.SetAccountName(v)
+	return _u
+}
+
+// SetNillableAccountName sets the "account_name" field if the given value is not nil.
+func (_u *ChannelMonitorHistoryUpdate) SetNillableAccountName(v *string) *ChannelMonitorHistoryUpdate {
+	if v != nil {
+		_u.SetAccountName(*v)
+	}
+	return _u
+}
+
+// ClearAccountName clears the value of the "account_name" field.
+func (_u *ChannelMonitorHistoryUpdate) ClearAccountName() *ChannelMonitorHistoryUpdate {
+	_u.mutation.ClearAccountName()
+	return _u
+}
+
+// SetProbeMode sets the "probe_mode" field.
+func (_u *ChannelMonitorHistoryUpdate) SetProbeMode(v string) *ChannelMonitorHistoryUpdate {
+	_u.mutation.SetProbeMode(v)
+	return _u
+}
+
+// SetNillableProbeMode sets the "probe_mode" field if the given value is not nil.
+func (_u *ChannelMonitorHistoryUpdate) SetNillableProbeMode(v *string) *ChannelMonitorHistoryUpdate {
+	if v != nil {
+		_u.SetProbeMode(*v)
+	}
+	return _u
+}
+
+// ClearProbeMode clears the value of the "probe_mode" field.
+func (_u *ChannelMonitorHistoryUpdate) ClearProbeMode() *ChannelMonitorHistoryUpdate {
+	_u.mutation.ClearProbeMode()
+	return _u
+}
+
+// SetCandidateCount sets the "candidate_count" field.
+func (_u *ChannelMonitorHistoryUpdate) SetCandidateCount(v int) *ChannelMonitorHistoryUpdate {
+	_u.mutation.ResetCandidateCount()
+	_u.mutation.SetCandidateCount(v)
+	return _u
+}
+
+// SetNillableCandidateCount sets the "candidate_count" field if the given value is not nil.
+func (_u *ChannelMonitorHistoryUpdate) SetNillableCandidateCount(v *int) *ChannelMonitorHistoryUpdate {
+	if v != nil {
+		_u.SetCandidateCount(*v)
+	}
+	return _u
+}
+
+// AddCandidateCount adds value to the "candidate_count" field.
+func (_u *ChannelMonitorHistoryUpdate) AddCandidateCount(v int) *ChannelMonitorHistoryUpdate {
+	_u.mutation.AddCandidateCount(v)
+	return _u
+}
+
+// ClearCandidateCount clears the value of the "candidate_count" field.
+func (_u *ChannelMonitorHistoryUpdate) ClearCandidateCount() *ChannelMonitorHistoryUpdate {
+	_u.mutation.ClearCandidateCount()
+	return _u
+}
+
+// SetHealthyCount sets the "healthy_count" field.
+func (_u *ChannelMonitorHistoryUpdate) SetHealthyCount(v int) *ChannelMonitorHistoryUpdate {
+	_u.mutation.ResetHealthyCount()
+	_u.mutation.SetHealthyCount(v)
+	return _u
+}
+
+// SetNillableHealthyCount sets the "healthy_count" field if the given value is not nil.
+func (_u *ChannelMonitorHistoryUpdate) SetNillableHealthyCount(v *int) *ChannelMonitorHistoryUpdate {
+	if v != nil {
+		_u.SetHealthyCount(*v)
+	}
+	return _u
+}
+
+// AddHealthyCount adds value to the "healthy_count" field.
+func (_u *ChannelMonitorHistoryUpdate) AddHealthyCount(v int) *ChannelMonitorHistoryUpdate {
+	_u.mutation.AddHealthyCount(v)
+	return _u
+}
+
+// ClearHealthyCount clears the value of the "healthy_count" field.
+func (_u *ChannelMonitorHistoryUpdate) ClearHealthyCount() *ChannelMonitorHistoryUpdate {
+	_u.mutation.ClearHealthyCount()
+	return _u
+}
+
 // SetMessage sets the "message" field.
 func (_u *ChannelMonitorHistoryUpdate) SetMessage(v string) *ChannelMonitorHistoryUpdate {
 	_u.mutation.SetMessage(v)
@@ -214,6 +335,16 @@ func (_u *ChannelMonitorHistoryUpdate) check() error {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "ChannelMonitorHistory.status": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.AccountName(); ok {
+		if err := channelmonitorhistory.AccountNameValidator(v); err != nil {
+			return &ValidationError{Name: "account_name", err: fmt.Errorf(`ent: validator failed for field "ChannelMonitorHistory.account_name": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.ProbeMode(); ok {
+		if err := channelmonitorhistory.ProbeModeValidator(v); err != nil {
+			return &ValidationError{Name: "probe_mode", err: fmt.Errorf(`ent: validator failed for field "ChannelMonitorHistory.probe_mode": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.Message(); ok {
 		if err := channelmonitorhistory.MessageValidator(v); err != nil {
 			return &ValidationError{Name: "message", err: fmt.Errorf(`ent: validator failed for field "ChannelMonitorHistory.message": %w`, err)}
@@ -260,6 +391,45 @@ func (_u *ChannelMonitorHistoryUpdate) sqlSave(ctx context.Context) (_node int, 
 	}
 	if _u.mutation.PingLatencyMsCleared() {
 		_spec.ClearField(channelmonitorhistory.FieldPingLatencyMs, field.TypeInt)
+	}
+	if value, ok := _u.mutation.AccountID(); ok {
+		_spec.SetField(channelmonitorhistory.FieldAccountID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedAccountID(); ok {
+		_spec.AddField(channelmonitorhistory.FieldAccountID, field.TypeInt64, value)
+	}
+	if _u.mutation.AccountIDCleared() {
+		_spec.ClearField(channelmonitorhistory.FieldAccountID, field.TypeInt64)
+	}
+	if value, ok := _u.mutation.AccountName(); ok {
+		_spec.SetField(channelmonitorhistory.FieldAccountName, field.TypeString, value)
+	}
+	if _u.mutation.AccountNameCleared() {
+		_spec.ClearField(channelmonitorhistory.FieldAccountName, field.TypeString)
+	}
+	if value, ok := _u.mutation.ProbeMode(); ok {
+		_spec.SetField(channelmonitorhistory.FieldProbeMode, field.TypeString, value)
+	}
+	if _u.mutation.ProbeModeCleared() {
+		_spec.ClearField(channelmonitorhistory.FieldProbeMode, field.TypeString)
+	}
+	if value, ok := _u.mutation.CandidateCount(); ok {
+		_spec.SetField(channelmonitorhistory.FieldCandidateCount, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedCandidateCount(); ok {
+		_spec.AddField(channelmonitorhistory.FieldCandidateCount, field.TypeInt, value)
+	}
+	if _u.mutation.CandidateCountCleared() {
+		_spec.ClearField(channelmonitorhistory.FieldCandidateCount, field.TypeInt)
+	}
+	if value, ok := _u.mutation.HealthyCount(); ok {
+		_spec.SetField(channelmonitorhistory.FieldHealthyCount, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedHealthyCount(); ok {
+		_spec.AddField(channelmonitorhistory.FieldHealthyCount, field.TypeInt, value)
+	}
+	if _u.mutation.HealthyCountCleared() {
+		_spec.ClearField(channelmonitorhistory.FieldHealthyCount, field.TypeInt)
 	}
 	if value, ok := _u.mutation.Message(); ok {
 		_spec.SetField(channelmonitorhistory.FieldMessage, field.TypeString, value)
@@ -415,6 +585,127 @@ func (_u *ChannelMonitorHistoryUpdateOne) ClearPingLatencyMs() *ChannelMonitorHi
 	return _u
 }
 
+// SetAccountID sets the "account_id" field.
+func (_u *ChannelMonitorHistoryUpdateOne) SetAccountID(v int64) *ChannelMonitorHistoryUpdateOne {
+	_u.mutation.ResetAccountID()
+	_u.mutation.SetAccountID(v)
+	return _u
+}
+
+// SetNillableAccountID sets the "account_id" field if the given value is not nil.
+func (_u *ChannelMonitorHistoryUpdateOne) SetNillableAccountID(v *int64) *ChannelMonitorHistoryUpdateOne {
+	if v != nil {
+		_u.SetAccountID(*v)
+	}
+	return _u
+}
+
+// AddAccountID adds value to the "account_id" field.
+func (_u *ChannelMonitorHistoryUpdateOne) AddAccountID(v int64) *ChannelMonitorHistoryUpdateOne {
+	_u.mutation.AddAccountID(v)
+	return _u
+}
+
+// ClearAccountID clears the value of the "account_id" field.
+func (_u *ChannelMonitorHistoryUpdateOne) ClearAccountID() *ChannelMonitorHistoryUpdateOne {
+	_u.mutation.ClearAccountID()
+	return _u
+}
+
+// SetAccountName sets the "account_name" field.
+func (_u *ChannelMonitorHistoryUpdateOne) SetAccountName(v string) *ChannelMonitorHistoryUpdateOne {
+	_u.mutation.SetAccountName(v)
+	return _u
+}
+
+// SetNillableAccountName sets the "account_name" field if the given value is not nil.
+func (_u *ChannelMonitorHistoryUpdateOne) SetNillableAccountName(v *string) *ChannelMonitorHistoryUpdateOne {
+	if v != nil {
+		_u.SetAccountName(*v)
+	}
+	return _u
+}
+
+// ClearAccountName clears the value of the "account_name" field.
+func (_u *ChannelMonitorHistoryUpdateOne) ClearAccountName() *ChannelMonitorHistoryUpdateOne {
+	_u.mutation.ClearAccountName()
+	return _u
+}
+
+// SetProbeMode sets the "probe_mode" field.
+func (_u *ChannelMonitorHistoryUpdateOne) SetProbeMode(v string) *ChannelMonitorHistoryUpdateOne {
+	_u.mutation.SetProbeMode(v)
+	return _u
+}
+
+// SetNillableProbeMode sets the "probe_mode" field if the given value is not nil.
+func (_u *ChannelMonitorHistoryUpdateOne) SetNillableProbeMode(v *string) *ChannelMonitorHistoryUpdateOne {
+	if v != nil {
+		_u.SetProbeMode(*v)
+	}
+	return _u
+}
+
+// ClearProbeMode clears the value of the "probe_mode" field.
+func (_u *ChannelMonitorHistoryUpdateOne) ClearProbeMode() *ChannelMonitorHistoryUpdateOne {
+	_u.mutation.ClearProbeMode()
+	return _u
+}
+
+// SetCandidateCount sets the "candidate_count" field.
+func (_u *ChannelMonitorHistoryUpdateOne) SetCandidateCount(v int) *ChannelMonitorHistoryUpdateOne {
+	_u.mutation.ResetCandidateCount()
+	_u.mutation.SetCandidateCount(v)
+	return _u
+}
+
+// SetNillableCandidateCount sets the "candidate_count" field if the given value is not nil.
+func (_u *ChannelMonitorHistoryUpdateOne) SetNillableCandidateCount(v *int) *ChannelMonitorHistoryUpdateOne {
+	if v != nil {
+		_u.SetCandidateCount(*v)
+	}
+	return _u
+}
+
+// AddCandidateCount adds value to the "candidate_count" field.
+func (_u *ChannelMonitorHistoryUpdateOne) AddCandidateCount(v int) *ChannelMonitorHistoryUpdateOne {
+	_u.mutation.AddCandidateCount(v)
+	return _u
+}
+
+// ClearCandidateCount clears the value of the "candidate_count" field.
+func (_u *ChannelMonitorHistoryUpdateOne) ClearCandidateCount() *ChannelMonitorHistoryUpdateOne {
+	_u.mutation.ClearCandidateCount()
+	return _u
+}
+
+// SetHealthyCount sets the "healthy_count" field.
+func (_u *ChannelMonitorHistoryUpdateOne) SetHealthyCount(v int) *ChannelMonitorHistoryUpdateOne {
+	_u.mutation.ResetHealthyCount()
+	_u.mutation.SetHealthyCount(v)
+	return _u
+}
+
+// SetNillableHealthyCount sets the "healthy_count" field if the given value is not nil.
+func (_u *ChannelMonitorHistoryUpdateOne) SetNillableHealthyCount(v *int) *ChannelMonitorHistoryUpdateOne {
+	if v != nil {
+		_u.SetHealthyCount(*v)
+	}
+	return _u
+}
+
+// AddHealthyCount adds value to the "healthy_count" field.
+func (_u *ChannelMonitorHistoryUpdateOne) AddHealthyCount(v int) *ChannelMonitorHistoryUpdateOne {
+	_u.mutation.AddHealthyCount(v)
+	return _u
+}
+
+// ClearHealthyCount clears the value of the "healthy_count" field.
+func (_u *ChannelMonitorHistoryUpdateOne) ClearHealthyCount() *ChannelMonitorHistoryUpdateOne {
+	_u.mutation.ClearHealthyCount()
+	return _u
+}
+
 // SetMessage sets the "message" field.
 func (_u *ChannelMonitorHistoryUpdateOne) SetMessage(v string) *ChannelMonitorHistoryUpdateOne {
 	_u.mutation.SetMessage(v)
@@ -517,6 +808,16 @@ func (_u *ChannelMonitorHistoryUpdateOne) check() error {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "ChannelMonitorHistory.status": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.AccountName(); ok {
+		if err := channelmonitorhistory.AccountNameValidator(v); err != nil {
+			return &ValidationError{Name: "account_name", err: fmt.Errorf(`ent: validator failed for field "ChannelMonitorHistory.account_name": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.ProbeMode(); ok {
+		if err := channelmonitorhistory.ProbeModeValidator(v); err != nil {
+			return &ValidationError{Name: "probe_mode", err: fmt.Errorf(`ent: validator failed for field "ChannelMonitorHistory.probe_mode": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.Message(); ok {
 		if err := channelmonitorhistory.MessageValidator(v); err != nil {
 			return &ValidationError{Name: "message", err: fmt.Errorf(`ent: validator failed for field "ChannelMonitorHistory.message": %w`, err)}
@@ -580,6 +881,45 @@ func (_u *ChannelMonitorHistoryUpdateOne) sqlSave(ctx context.Context) (_node *C
 	}
 	if _u.mutation.PingLatencyMsCleared() {
 		_spec.ClearField(channelmonitorhistory.FieldPingLatencyMs, field.TypeInt)
+	}
+	if value, ok := _u.mutation.AccountID(); ok {
+		_spec.SetField(channelmonitorhistory.FieldAccountID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedAccountID(); ok {
+		_spec.AddField(channelmonitorhistory.FieldAccountID, field.TypeInt64, value)
+	}
+	if _u.mutation.AccountIDCleared() {
+		_spec.ClearField(channelmonitorhistory.FieldAccountID, field.TypeInt64)
+	}
+	if value, ok := _u.mutation.AccountName(); ok {
+		_spec.SetField(channelmonitorhistory.FieldAccountName, field.TypeString, value)
+	}
+	if _u.mutation.AccountNameCleared() {
+		_spec.ClearField(channelmonitorhistory.FieldAccountName, field.TypeString)
+	}
+	if value, ok := _u.mutation.ProbeMode(); ok {
+		_spec.SetField(channelmonitorhistory.FieldProbeMode, field.TypeString, value)
+	}
+	if _u.mutation.ProbeModeCleared() {
+		_spec.ClearField(channelmonitorhistory.FieldProbeMode, field.TypeString)
+	}
+	if value, ok := _u.mutation.CandidateCount(); ok {
+		_spec.SetField(channelmonitorhistory.FieldCandidateCount, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedCandidateCount(); ok {
+		_spec.AddField(channelmonitorhistory.FieldCandidateCount, field.TypeInt, value)
+	}
+	if _u.mutation.CandidateCountCleared() {
+		_spec.ClearField(channelmonitorhistory.FieldCandidateCount, field.TypeInt)
+	}
+	if value, ok := _u.mutation.HealthyCount(); ok {
+		_spec.SetField(channelmonitorhistory.FieldHealthyCount, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedHealthyCount(); ok {
+		_spec.AddField(channelmonitorhistory.FieldHealthyCount, field.TypeInt, value)
+	}
+	if _u.mutation.HealthyCountCleared() {
+		_spec.ClearField(channelmonitorhistory.FieldHealthyCount, field.TypeInt)
 	}
 	if value, ok := _u.mutation.Message(); ok {
 		_spec.SetField(channelmonitorhistory.FieldMessage, field.TypeString, value)

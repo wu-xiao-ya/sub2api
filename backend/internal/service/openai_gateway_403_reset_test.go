@@ -15,6 +15,10 @@ func (s *openAI403CounterResetStub) IncrementOpenAI403Count(context.Context, int
 	return 0, nil
 }
 
+func (s *openAI403CounterResetStub) RecordOpenAI403Model(context.Context, int64, string, int) (int64, bool, error) {
+	return 0, false, nil
+}
+
 func (s *openAI403CounterResetStub) ResetOpenAI403Count(_ context.Context, accountID int64) error {
 	s.resetCalls = append(s.resetCalls, accountID)
 	return nil

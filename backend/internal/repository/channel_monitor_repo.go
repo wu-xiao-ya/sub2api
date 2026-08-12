@@ -53,6 +53,9 @@ func (r *channelMonitorRepository) Create(ctx context.Context, m *service.Channe
 		SetCreatedBy(m.CreatedBy).
 		SetExtraHeaders(channelMonitorHeadersForPersistence(m)).
 		SetBodyOverrideMode(defaultBodyModeRepo(m.BodyOverrideMode))
+	if m.AccountGroupID != nil {
+		builder = builder.SetAccountGroupID(*m.AccountGroupID)
+	}
 	if m.TemplateID != nil {
 		builder = builder.SetTemplateID(*m.TemplateID)
 	}
@@ -121,6 +124,11 @@ func (r *channelMonitorRepository) Update(ctx context.Context, m *service.Channe
 		SetRequestTimeoutSeconds(m.RequestTimeoutSeconds).
 		SetExtraHeaders(channelMonitorHeadersForPersistence(m)).
 		SetBodyOverrideMode(defaultBodyModeRepo(m.BodyOverrideMode))
+	if m.AccountGroupID != nil {
+		updater = updater.SetAccountGroupID(*m.AccountGroupID)
+	} else {
+		updater = updater.ClearAccountGroupID()
+	}
 	if m.TemplateID != nil {
 		updater = updater.SetTemplateID(*m.TemplateID)
 	} else {
@@ -280,10 +288,72 @@ func (r *channelMonitorRepository) InsertHistoryBatch(ctx context.Context, rows 
 		if row.PingLatencyMs != nil {
 			c = c.SetPingLatencyMs(*row.PingLatencyMs)
 		}
+		if row.AccountID != nil {
+			c = c.SetAccountID(*row.AccountID)
+		}
+		if row.AccountName != "" {
+			c = c.SetAccountName(row.AccountName)
+		}
+		if row.ProbeMode != "" {
+			c = c.SetProbeMode(row.ProbeMode)
+		}
+		if row.CandidateCount > 0 {
+			c = c.SetCandidateCount(row.CandidateCount)
+		}
+		if row.HealthyCount > 0 {
+			c = c.SetHealthyCount(row.HealthyCount)
+		}
 		bulk = append(bulk, c)
 	}
 	if _, err := client.ChannelMonitorHistory.CreateBulk(bulk...).Save(ctx); err != nil {
 		return fmt.Errorf("insert history bulk: %w", err)
+	}
+	return nil
+}
+
+func (r *channelMonitorRepository) InsertCostEvents(ctx context.Context, events []*service.ChannelMonitorCostEvent) error {
+	if len(events) == 0 {
+		return nil
+	}
+	if r.db == nil {
+		return fmt.Errorf("channel monitor cost event database is unavailable")
+	}
+	const q = `
+		INSERT INTO channel_monitor_cost_events (
+		    monitor_id, account_id, provider, api_mode, model,
+		    input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens,
+		    image_count, estimated_cost, account_cost, cost_source, created_at
+		)
+		VALUES (
+		    $1, $2, $3, $4, $5,
+		    $6, $7, $8, $9,
+		    $10, $11, $12, $13, $14
+		)
+	`
+	for _, event := range events {
+		if event == nil || event.MonitorID <= 0 || strings.TrimSpace(event.Model) == "" {
+			continue
+		}
+		if _, err := r.db.ExecContext(
+			ctx,
+			q,
+			event.MonitorID,
+			event.AccountID,
+			event.Provider,
+			event.APIMode,
+			event.Model,
+			event.InputTokens,
+			event.OutputTokens,
+			event.CacheCreationTokens,
+			event.CacheReadTokens,
+			event.ImageCount,
+			event.EstimatedCost,
+			event.AccountCost,
+			event.CostSource,
+			event.CreatedAt,
+		); err != nil {
+			return fmt.Errorf("insert monitor cost event: %w", err)
+		}
 	}
 	return nil
 }
@@ -312,17 +382,154 @@ func (r *channelMonitorRepository) ListHistory(ctx context.Context, monitorID in
 	out := make([]*service.ChannelMonitorHistoryEntry, 0, len(rows))
 	for _, row := range rows {
 		entry := &service.ChannelMonitorHistoryEntry{
-			ID:            row.ID,
-			Model:         row.Model,
-			Status:        string(row.Status),
-			LatencyMs:     row.LatencyMs,
-			PingLatencyMs: row.PingLatencyMs,
-			Message:       row.Message,
-			CheckedAt:     row.CheckedAt,
+			ID:             row.ID,
+			Model:          row.Model,
+			Status:         string(row.Status),
+			LatencyMs:      row.LatencyMs,
+			PingLatencyMs:  row.PingLatencyMs,
+			AccountID:      row.AccountID,
+			AccountName:    row.AccountName,
+			ProbeMode:      row.ProbeMode,
+			CandidateCount: row.CandidateCount,
+			HealthyCount:   row.HealthyCount,
+			Message:        row.Message,
+			CheckedAt:      row.CheckedAt,
 		}
 		out = append(out, entry)
 	}
 	return out, nil
+}
+
+// GetAccountProbeState reads the durable sticky account state for one model.
+func (r *channelMonitorRepository) GetAccountProbeState(ctx context.Context, monitorID int64, model string) (*service.ChannelMonitorAccountProbeState, error) {
+	const q = `
+		SELECT monitor_id, model, account_id, account_name, final_status,
+		       last_latency_ms, last_probe_mode, last_full_sweep_at,
+		       last_checked_at, updated_at
+		FROM channel_monitor_account_probe_states
+		WHERE monitor_id = $1 AND model = $2
+	`
+	state := &service.ChannelMonitorAccountProbeState{}
+	var accountID, latency sql.NullInt64
+	var fullSweep sql.NullTime
+	if err := r.db.QueryRowContext(ctx, q, monitorID, model).Scan(
+		&state.MonitorID, &state.Model, &accountID, &state.AccountName,
+		&state.FinalStatus, &latency, &state.LastProbeMode, &fullSweep,
+		&state.LastCheckedAt, &state.UpdatedAt,
+	); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("get account probe state: %w", err)
+	}
+	if accountID.Valid {
+		id := accountID.Int64
+		state.AccountID = &id
+	}
+	assignNullInt(&state.LastLatencyMs, latency)
+	if fullSweep.Valid {
+		t := fullSweep.Time
+		state.LastFullSweepAt = &t
+	}
+	return state, nil
+}
+
+// ListAccountProbeStates lists current model-level sticky state for admin views.
+func (r *channelMonitorRepository) ListAccountProbeStates(ctx context.Context, monitorID int64) ([]*service.ChannelMonitorAccountProbeState, error) {
+	const q = `
+		SELECT monitor_id, model, account_id, account_name, final_status,
+		       last_latency_ms, last_probe_mode, last_full_sweep_at,
+		       last_checked_at, updated_at
+		FROM channel_monitor_account_probe_states
+		WHERE monitor_id = $1
+		ORDER BY model
+	`
+	rows, err := r.db.QueryContext(ctx, q, monitorID)
+	if err != nil {
+		return nil, fmt.Errorf("list account probe states: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	out := make([]*service.ChannelMonitorAccountProbeState, 0)
+	for rows.Next() {
+		state := &service.ChannelMonitorAccountProbeState{}
+		var accountID, latency sql.NullInt64
+		var fullSweep sql.NullTime
+		if err := rows.Scan(
+			&state.MonitorID, &state.Model, &accountID, &state.AccountName,
+			&state.FinalStatus, &latency, &state.LastProbeMode, &fullSweep,
+			&state.LastCheckedAt, &state.UpdatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("scan account probe state: %w", err)
+		}
+		if accountID.Valid {
+			id := accountID.Int64
+			state.AccountID = &id
+		}
+		assignNullInt(&state.LastLatencyMs, latency)
+		if fullSweep.Valid {
+			t := fullSweep.Time
+			state.LastFullSweepAt = &t
+		}
+		out = append(out, state)
+	}
+	return out, rows.Err()
+}
+
+// UpsertAccountProbeState persists one model's selected account and final state.
+func (r *channelMonitorRepository) UpsertAccountProbeState(ctx context.Context, state *service.ChannelMonitorAccountProbeState) error {
+	if state == nil || state.MonitorID <= 0 || strings.TrimSpace(state.Model) == "" {
+		return fmt.Errorf("account probe state is empty")
+	}
+	const q = `
+		INSERT INTO channel_monitor_account_probe_states (
+		    monitor_id, model, account_id, account_name, final_status,
+		    last_latency_ms, last_probe_mode, last_full_sweep_at,
+		    last_checked_at, updated_at
+		)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
+		ON CONFLICT (monitor_id, model) DO UPDATE SET
+		    account_id = EXCLUDED.account_id,
+		    account_name = EXCLUDED.account_name,
+		    final_status = EXCLUDED.final_status,
+		    last_latency_ms = EXCLUDED.last_latency_ms,
+		    last_probe_mode = EXCLUDED.last_probe_mode,
+		    last_full_sweep_at = COALESCE(
+		        EXCLUDED.last_full_sweep_at,
+		        channel_monitor_account_probe_states.last_full_sweep_at
+		    ),
+		    last_checked_at = EXCLUDED.last_checked_at,
+		    updated_at = NOW()
+	`
+	var accountID any
+	if state.AccountID != nil {
+		accountID = *state.AccountID
+	}
+	var latency any
+	if state.LastLatencyMs != nil {
+		latency = *state.LastLatencyMs
+	}
+	var fullSweep any
+	if state.LastFullSweepAt != nil {
+		fullSweep = *state.LastFullSweepAt
+	}
+	if _, err := r.db.ExecContext(ctx, q,
+		state.MonitorID, state.Model, accountID, state.AccountName,
+		state.FinalStatus, latency, state.LastProbeMode, fullSweep,
+		state.LastCheckedAt,
+	); err != nil {
+		return fmt.Errorf("upsert account probe state: %w", err)
+	}
+	return nil
+}
+
+func (r *channelMonitorRepository) ClearAccountProbeStates(ctx context.Context, monitorID int64) error {
+	if _, err := r.db.ExecContext(ctx,
+		`DELETE FROM channel_monitor_account_probe_states WHERE monitor_id = $1`,
+		monitorID,
+	); err != nil {
+		return fmt.Errorf("clear account probe states: %w", err)
+	}
+	return nil
 }
 
 // ---------- 用户视图聚合（原生 SQL） ----------
@@ -332,7 +539,8 @@ func (r *channelMonitorRepository) ListHistory(ctx context.Context, monitorID in
 func (r *channelMonitorRepository) ListLatestPerModel(ctx context.Context, monitorID int64) ([]*service.ChannelMonitorLatest, error) {
 	const q = `
 		SELECT DISTINCT ON (model)
-		    model, status, latency_ms, ping_latency_ms, checked_at
+		    model, status, latency_ms, ping_latency_ms, account_id, account_name, probe_mode,
+		    candidate_count, healthy_count, checked_at
 		FROM channel_monitor_histories
 		WHERE monitor_id = $1
 		ORDER BY model, checked_at DESC
@@ -346,12 +554,16 @@ func (r *channelMonitorRepository) ListLatestPerModel(ctx context.Context, monit
 	out := make([]*service.ChannelMonitorLatest, 0)
 	for rows.Next() {
 		l := &service.ChannelMonitorLatest{}
-		var latency, ping sql.NullInt64
-		if err := rows.Scan(&l.Model, &l.Status, &latency, &ping, &l.CheckedAt); err != nil {
+		var latency, ping, accountID sql.NullInt64
+		if err := rows.Scan(
+			&l.Model, &l.Status, &latency, &ping, &accountID, &l.AccountName, &l.ProbeMode,
+			&l.CandidateCount, &l.HealthyCount, &l.CheckedAt,
+		); err != nil {
 			return nil, fmt.Errorf("scan latest row: %w", err)
 		}
 		assignNullInt(&l.LatencyMs, latency)
 		assignNullInt(&l.PingLatencyMs, ping)
+		assignNullInt64(&l.AccountID, accountID)
 		out = append(out, l)
 	}
 	return out, rows.Err()
@@ -364,6 +576,14 @@ func assignNullInt(dst **int, n sql.NullInt64) {
 		return
 	}
 	v := int(n.Int64)
+	*dst = &v
+}
+
+func assignNullInt64(dst **int64, n sql.NullInt64) {
+	if !n.Valid {
+		return
+	}
+	v := n.Int64
 	*dst = &v
 }
 
@@ -439,7 +659,8 @@ func (r *channelMonitorRepository) ListLatestForMonitorIDs(ctx context.Context, 
 	}
 	const q = `
 		SELECT DISTINCT ON (monitor_id, model)
-		    monitor_id, model, status, latency_ms, ping_latency_ms, checked_at
+		    monitor_id, model, status, latency_ms, ping_latency_ms, account_id, account_name, probe_mode,
+		    candidate_count, healthy_count, checked_at
 		FROM channel_monitor_histories
 		WHERE monitor_id = ANY($1)
 		ORDER BY monitor_id, model, checked_at DESC
@@ -453,12 +674,16 @@ func (r *channelMonitorRepository) ListLatestForMonitorIDs(ctx context.Context, 
 	for rows.Next() {
 		var monitorID int64
 		l := &service.ChannelMonitorLatest{}
-		var latency, ping sql.NullInt64
-		if err := rows.Scan(&monitorID, &l.Model, &l.Status, &latency, &ping, &l.CheckedAt); err != nil {
+		var latency, ping, accountID sql.NullInt64
+		if err := rows.Scan(
+			&monitorID, &l.Model, &l.Status, &latency, &ping, &accountID, &l.AccountName, &l.ProbeMode,
+			&l.CandidateCount, &l.HealthyCount, &l.CheckedAt,
+		); err != nil {
 			return nil, fmt.Errorf("scan latest batch row: %w", err)
 		}
 		assignNullInt(&l.LatencyMs, latency)
 		assignNullInt(&l.PingLatencyMs, ping)
+		assignNullInt64(&l.AccountID, accountID)
 		out[monitorID] = append(out[monitorID], l)
 	}
 	if err := rows.Err(); err != nil {
@@ -790,6 +1015,7 @@ func entToServiceMonitor(row *dbent.ChannelMonitor) *service.ChannelMonitor {
 		PrimaryModel:          row.PrimaryModel,
 		ExtraModels:           extras,
 		GroupName:             row.GroupName,
+		AccountGroupID:        row.AccountGroupID,
 		Enabled:               row.Enabled,
 		IntervalSeconds:       row.IntervalSeconds,
 		JitterSeconds:         row.JitterSeconds,

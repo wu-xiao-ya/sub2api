@@ -96,7 +96,7 @@
         </div>
 
         <!-- Row 2: Token Stats -->
-        <div class="grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-6">
+        <div class="grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-7">
           <!-- Today Tokens -->
           <div class="card p-4">
             <div class="flex items-center gap-3">
@@ -128,6 +128,31 @@
                     :title="t('admin.dashboard.standard')"
                     >${{ formatCost(stats.today_cost) }}</span
                   >
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Today Monitor Cost -->
+          <div class="card p-4">
+            <div class="flex items-center gap-3">
+              <div class="rounded-lg bg-teal-100 p-2 dark:bg-teal-900/30">
+                <Icon name="beaker" size="md" class="text-teal-600 dark:text-teal-400" :stroke-width="2" />
+              </div>
+              <div>
+                <p class="text-xs font-medium text-gray-500 dark:text-gray-400">
+                  {{ t('admin.dashboard.todayMonitorCost') }}
+                </p>
+                <p class="text-xl font-bold text-gray-900 dark:text-white">
+                  <span :title="t('admin.dashboard.accountCost')">
+                    ${{ formatCost(stats.today_monitor_actual_cost) }}
+                  </span>
+                </p>
+                <p class="text-xs text-gray-500 dark:text-gray-400">
+                  {{ formatNumber(stats.today_monitor_requests) }} {{ t('admin.dashboard.requests') }} /
+                  <span :title="t('admin.dashboard.standard')">
+                    ${{ formatCost(stats.today_monitor_account_cost) }}
+                  </span>
                 </p>
               </div>
             </div>

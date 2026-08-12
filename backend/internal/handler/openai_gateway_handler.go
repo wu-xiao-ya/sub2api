@@ -105,6 +105,9 @@ func usageRecordContext(parent context.Context, base context.Context) context.Co
 	if requestID, _ := parent.Value(ctxkey.RequestID).(string); strings.TrimSpace(requestID) != "" {
 		base = context.WithValue(base, ctxkey.RequestID, strings.TrimSpace(requestID))
 	}
+	if usageSource, _ := parent.Value(ctxkey.UsageSource).(string); strings.TrimSpace(usageSource) != "" {
+		base = context.WithValue(base, ctxkey.UsageSource, strings.TrimSpace(usageSource))
+	}
 	return base
 }
 

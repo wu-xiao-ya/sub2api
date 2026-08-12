@@ -106,6 +106,17 @@
       </div>
 
       <div>
+        <label class="input-label">{{ t('admin.channelMonitor.form.accountGroup') }}</label>
+        <Select
+          v-model="accountGroupSelectValue"
+          :options="accountGroupOptions"
+          :placeholder="t('admin.channelMonitor.form.accountGroupPlaceholder')"
+          :disabled="accountGroupsLoading"
+        />
+        <p class="mt-1 text-xs text-gray-400">{{ t('admin.channelMonitor.form.accountGroupHint') }}</p>
+      </div>
+
+      <div>
         <label class="input-label">{{ t('admin.channelMonitor.form.intervalSeconds') }} <span class="text-red-500">*</span></label>
         <input v-model.number="form.interval_seconds" type="number" min="15" max="3600" required class="input" />
         <p class="mt-1 text-xs text-gray-400">{{ t('admin.channelMonitor.form.intervalSecondsHint') }}</p>
@@ -207,7 +218,7 @@ import type {
   UpdateParams,
 } from '@/api/admin/channelMonitor'
 import type { ChannelMonitorTemplate } from '@/api/admin/channelMonitorTemplate'
-import type { ApiKey } from '@/types'
+import type { AdminGroup, ApiKey } from '@/types'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import Toggle from '@/components/common/Toggle.vue'
 import Select from '@/components/common/Select.vue'
@@ -222,6 +233,7 @@ import {
   PROVIDER_ANTHROPIC,
   PROVIDER_GEMINI,
   PROVIDER_GROK,
+  PROVIDER_ANTIGRAVITY,
   API_MODE_CHAT_COMPLETIONS,
   API_MODE_RESPONSES,
   API_MODE_MODELS,
@@ -275,6 +287,7 @@ interface MonitorForm {
   primary_model: string
   extra_models: string[]
   group_name: string
+  account_group_id: number | null
   interval_seconds: number
   jitter_seconds: number
   request_timeout_seconds: number
@@ -295,6 +308,7 @@ const form = reactive<MonitorForm>({
   primary_model: '',
   extra_models: [],
   group_name: '',
+  account_group_id: null,
   interval_seconds: systemDefaultInterval.value,
   jitter_seconds: 0,
   request_timeout_seconds: DEFAULT_TEXT_REQUEST_TIMEOUT_SECONDS,
@@ -313,6 +327,9 @@ let suppressFormWatchers = false
 // 可用模板列表（进入 dialog 时一次性拉取 cache；按 provider / api mode 过滤）。
 const templatesCache = ref<ChannelMonitorTemplate[]>([])
 const templatesLoading = ref(false)
+const accountGroupsCache = new Map<Provider, AdminGroup[]>()
+const accountGroups = ref<AdminGroup[]>([])
+const accountGroupsLoading = ref(false)
 
 const templateOptions = computed(() => {
   const items = templatesCache.value.filter((t) => {
@@ -432,7 +449,52 @@ const providerOptions = computed<ProviderOption[]>(() => [
   { value: PROVIDER_OPENAI, label: t('monitorCommon.providers.openai') },
   { value: PROVIDER_GEMINI, label: t('monitorCommon.providers.gemini') },
   { value: PROVIDER_GROK, label: t('monitorCommon.providers.grok') },
+  { value: PROVIDER_ANTIGRAVITY, label: t('admin.channelMonitor.form.providerAntigravity') },
 ])
+
+const accountGroupOptions = computed(() => [
+  { value: '', label: t('admin.channelMonitor.form.accountGroupNone') },
+  ...accountGroups.value.map((group) => ({
+    value: String(group.id),
+    label: `${group.name} (#${group.id})`,
+  })),
+])
+
+const accountGroupSelectValue = computed<string>({
+  get: () => (form.account_group_id == null ? '' : String(form.account_group_id)),
+  set: (raw: string) => {
+    if (!raw) {
+      form.account_group_id = null
+      return
+    }
+    const id = Number(raw)
+    form.account_group_id = Number.isSafeInteger(id) && id > 0 ? id : null
+  },
+})
+
+async function loadAccountGroups() {
+  const provider = form.provider
+  const cached = accountGroupsCache.get(provider)
+  if (cached) {
+    accountGroups.value = cached
+    return
+  }
+  accountGroupsLoading.value = true
+  try {
+    const groups = await adminAPI.groups.getByPlatform(provider)
+    accountGroupsCache.set(provider, groups)
+    if (form.provider === provider) {
+      accountGroups.value = groups
+    }
+  } catch (err: unknown) {
+    console.warn('load monitor account groups failed', err)
+    if (form.provider === provider) {
+      accountGroups.value = []
+    }
+  } finally {
+    accountGroupsLoading.value = false
+  }
+}
 
 function selectProvider(provider: Provider) {
   if (form.provider === provider) return
@@ -459,10 +521,12 @@ function selectProvider(provider: Provider) {
 watch(() => form.provider, () => {
   if (suppressFormWatchers) return
   form.api_key = ''
+  form.account_group_id = null
   if (form.provider !== PROVIDER_OPENAI) {
     form.api_mode = API_MODE_CHAT_COMPLETIONS
   }
   clearRequestSnapshot()
+  void loadAccountGroups()
 }, { flush: 'sync' })
 
 watch(() => form.api_mode, () => {
@@ -504,6 +568,7 @@ function resetForm() {
   form.primary_model = ''
   form.extra_models = []
   form.group_name = ''
+  form.account_group_id = null
   form.interval_seconds = defaultIntervalForMode(form.api_mode)
   form.jitter_seconds = 0
   form.request_timeout_seconds = defaultRequestTimeoutForMode(form.api_mode)
@@ -525,6 +590,7 @@ function loadFromMonitor(m: ChannelMonitor) {
   form.primary_model = m.primary_model
   form.extra_models = [...(m.extra_models || [])]
   form.group_name = m.group_name || ''
+  form.account_group_id = m.account_group_id ?? null
   form.interval_seconds = m.interval_seconds || defaultIntervalForMode(form.api_mode)
   form.jitter_seconds = m.jitter_seconds || 0
   form.request_timeout_seconds = m.request_timeout_seconds || defaultRequestTimeoutForMode(form.api_mode)
@@ -545,6 +611,7 @@ watch(
     void loadTemplates()
     if (m) loadFromMonitor(m)
     else resetForm()
+    void loadAccountGroups()
   },
   { immediate: true },
 )
@@ -592,6 +659,7 @@ function buildPayload(): CreateParams {
     primary_model: form.primary_model.trim(),
     extra_models: form.extra_models,
     group_name: form.group_name.trim(),
+    account_group_id: form.account_group_id,
     enabled: form.enabled,
     interval_seconds: form.interval_seconds,
     jitter_seconds: form.jitter_seconds || 0,
@@ -626,6 +694,10 @@ async function handleSubmit() {
       if (form.template_id == null) {
         req.clear_template = true
         delete req.template_id
+      }
+      if (form.account_group_id == null) {
+        req.clear_account_group = true
+        delete req.account_group_id
       }
       await adminAPI.channelMonitor.update(target.id, req)
       appStore.showSuccess(t('admin.channelMonitor.updateSuccess'))

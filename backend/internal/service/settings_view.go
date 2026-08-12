@@ -135,6 +135,7 @@ type SystemSettings struct {
 	SiteLogo                    string
 	SiteSubtitle                string
 	APIBaseURL                  string
+	APIEndpointProbeInterval    int
 	ContactInfo                 string
 	DocURL                      string
 	HomeContent                 string
@@ -178,8 +179,9 @@ type SystemSettings struct {
 	OpsMetricsIntervalSeconds    int
 
 	// Channel Monitor feature
-	ChannelMonitorEnabled                bool `json:"channel_monitor_enabled"`
-	ChannelMonitorDefaultIntervalSeconds int  `json:"channel_monitor_default_interval_seconds"`
+	ChannelMonitorEnabled                bool                               `json:"channel_monitor_enabled"`
+	ChannelMonitorDefaultIntervalSeconds int                                `json:"channel_monitor_default_interval_seconds"`
+	ChannelMonitorAccountProbeSettings   ChannelMonitorAccountProbeSettings `json:"channel_monitor_account_probe_settings"`
 
 	// Grok model mapping policy (admin settings; empty mapping falls back to these).
 	GrokDefaultTextModel           string `json:"grok_default_text_model"`
@@ -303,6 +305,7 @@ type PublicSettings struct {
 	SiteLogo                         string
 	SiteSubtitle                     string
 	APIBaseURL                       string
+	APIEndpointProbeInterval         int
 	ContactInfo                      string
 	DocURL                           string
 	HomeContent                      string

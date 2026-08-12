@@ -496,6 +496,8 @@ type UsageLog struct {
 	InboundEndpoint *string `json:"inbound_endpoint,omitempty"`
 	// UpstreamEndpoint is the normalized upstream endpoint path, e.g. /v1/responses.
 	UpstreamEndpoint *string `json:"upstream_endpoint,omitempty"`
+	// UsageSource marks internal request origins such as channel_monitor.
+	UsageSource *string `json:"usage_source,omitempty"`
 
 	GroupID        *int64 `json:"group_id"`
 	SubscriptionID *int64 `json:"subscription_id"`

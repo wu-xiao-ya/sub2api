@@ -16,6 +16,15 @@ export interface DefaultSubscriptionSetting {
   validity_days: number;
 }
 
+export interface ChannelMonitorAccountProbeSettings {
+  enabled: boolean;
+  confirm_attempts: number;
+  degraded_threshold_ms: number;
+  max_candidates: number;
+  parallelism: number;
+  allow_image_fanout: boolean;
+}
+
 // ── 平台限额类型 ──────────────────────────────────────────────────
 export type PlatformType = "anthropic" | "openai" | "gemini" | "antigravity" | "grok"
 export type QuotaWindowType = "daily" | "weekly" | "monthly"
@@ -465,6 +474,7 @@ export interface SystemSettings {
   site_logo: string;
   site_subtitle: string;
   api_base_url: string;
+  api_endpoint_probe_interval_seconds: number;
   contact_info: string;
   doc_url: string;
   home_content: string;
@@ -688,6 +698,7 @@ export interface SystemSettings {
   // Channel Monitor feature switch
   channel_monitor_enabled: boolean;
   channel_monitor_default_interval_seconds: number;
+  channel_monitor_account_probe_settings: ChannelMonitorAccountProbeSettings;
 
   // Available Channels feature switch
   available_channels_enabled: boolean;
@@ -776,6 +787,7 @@ export interface UpdateSettingsRequest {
   site_logo?: string;
   site_subtitle?: string;
   api_base_url?: string;
+  api_endpoint_probe_interval_seconds?: number;
   contact_info?: string;
   doc_url?: string;
   home_content?: string;
@@ -961,6 +973,7 @@ export interface UpdateSettingsRequest {
   // Channel Monitor feature switch
   channel_monitor_enabled?: boolean;
   channel_monitor_default_interval_seconds?: number;
+  channel_monitor_account_probe_settings?: ChannelMonitorAccountProbeSettings;
 
   // Available Channels feature switch
   available_channels_enabled?: boolean;

@@ -252,6 +252,12 @@ func buildStatusSummary(
 		if l, ok := latestByModel[primary]; ok {
 			summary.PrimaryStatus = l.Status
 			summary.PrimaryLatencyMs = l.LatencyMs
+			summary.PrimaryAccountID = l.AccountID
+			summary.PrimaryAccountName = l.AccountName
+			summary.PrimaryProbeMode = l.ProbeMode
+			summary.PrimaryCandidateCount = l.CandidateCount
+			summary.PrimaryHealthyCount = l.HealthyCount
+			summary.PrimaryCheckedAt = l.CheckedAt
 		}
 		if a, ok := availByModel[primary]; ok {
 			summary.Availability7d = a.AvailabilityPct

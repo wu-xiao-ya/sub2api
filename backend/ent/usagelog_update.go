@@ -229,6 +229,26 @@ func (_u *UsageLogUpdate) ClearBillingMode() *UsageLogUpdate {
 	return _u
 }
 
+// SetUsageSource sets the "usage_source" field.
+func (_u *UsageLogUpdate) SetUsageSource(v string) *UsageLogUpdate {
+	_u.mutation.SetUsageSource(v)
+	return _u
+}
+
+// SetNillableUsageSource sets the "usage_source" field if the given value is not nil.
+func (_u *UsageLogUpdate) SetNillableUsageSource(v *string) *UsageLogUpdate {
+	if v != nil {
+		_u.SetUsageSource(*v)
+	}
+	return _u
+}
+
+// ClearUsageSource clears the value of the "usage_source" field.
+func (_u *UsageLogUpdate) ClearUsageSource() *UsageLogUpdate {
+	_u.mutation.ClearUsageSource()
+	return _u
+}
+
 // SetGroupID sets the "group_id" field.
 func (_u *UsageLogUpdate) SetGroupID(v int64) *UsageLogUpdate {
 	_u.mutation.SetGroupID(v)
@@ -1105,6 +1125,11 @@ func (_u *UsageLogUpdate) check() error {
 			return &ValidationError{Name: "billing_mode", err: fmt.Errorf(`ent: validator failed for field "UsageLog.billing_mode": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.UsageSource(); ok {
+		if err := usagelog.UsageSourceValidator(v); err != nil {
+			return &ValidationError{Name: "usage_source", err: fmt.Errorf(`ent: validator failed for field "UsageLog.usage_source": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.PromotionName(); ok {
 		if err := usagelog.PromotionNameValidator(v); err != nil {
 			return &ValidationError{Name: "promotion_name", err: fmt.Errorf(`ent: validator failed for field "UsageLog.promotion_name": %w`, err)}
@@ -1213,6 +1238,12 @@ func (_u *UsageLogUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.BillingModeCleared() {
 		_spec.ClearField(usagelog.FieldBillingMode, field.TypeString)
+	}
+	if value, ok := _u.mutation.UsageSource(); ok {
+		_spec.SetField(usagelog.FieldUsageSource, field.TypeString, value)
+	}
+	if _u.mutation.UsageSourceCleared() {
+		_spec.ClearField(usagelog.FieldUsageSource, field.TypeString)
 	}
 	if value, ok := _u.mutation.InputTokens(); ok {
 		_spec.SetField(usagelog.FieldInputTokens, field.TypeInt, value)
@@ -1786,6 +1817,26 @@ func (_u *UsageLogUpdateOne) SetNillableBillingMode(v *string) *UsageLogUpdateOn
 // ClearBillingMode clears the value of the "billing_mode" field.
 func (_u *UsageLogUpdateOne) ClearBillingMode() *UsageLogUpdateOne {
 	_u.mutation.ClearBillingMode()
+	return _u
+}
+
+// SetUsageSource sets the "usage_source" field.
+func (_u *UsageLogUpdateOne) SetUsageSource(v string) *UsageLogUpdateOne {
+	_u.mutation.SetUsageSource(v)
+	return _u
+}
+
+// SetNillableUsageSource sets the "usage_source" field if the given value is not nil.
+func (_u *UsageLogUpdateOne) SetNillableUsageSource(v *string) *UsageLogUpdateOne {
+	if v != nil {
+		_u.SetUsageSource(*v)
+	}
+	return _u
+}
+
+// ClearUsageSource clears the value of the "usage_source" field.
+func (_u *UsageLogUpdateOne) ClearUsageSource() *UsageLogUpdateOne {
+	_u.mutation.ClearUsageSource()
 	return _u
 }
 
@@ -2678,6 +2729,11 @@ func (_u *UsageLogUpdateOne) check() error {
 			return &ValidationError{Name: "billing_mode", err: fmt.Errorf(`ent: validator failed for field "UsageLog.billing_mode": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.UsageSource(); ok {
+		if err := usagelog.UsageSourceValidator(v); err != nil {
+			return &ValidationError{Name: "usage_source", err: fmt.Errorf(`ent: validator failed for field "UsageLog.usage_source": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.PromotionName(); ok {
 		if err := usagelog.PromotionNameValidator(v); err != nil {
 			return &ValidationError{Name: "promotion_name", err: fmt.Errorf(`ent: validator failed for field "UsageLog.promotion_name": %w`, err)}
@@ -2803,6 +2859,12 @@ func (_u *UsageLogUpdateOne) sqlSave(ctx context.Context) (_node *UsageLog, err 
 	}
 	if _u.mutation.BillingModeCleared() {
 		_spec.ClearField(usagelog.FieldBillingMode, field.TypeString)
+	}
+	if value, ok := _u.mutation.UsageSource(); ok {
+		_spec.SetField(usagelog.FieldUsageSource, field.TypeString, value)
+	}
+	if _u.mutation.UsageSourceCleared() {
+		_spec.ClearField(usagelog.FieldUsageSource, field.TypeString)
 	}
 	if value, ok := _u.mutation.InputTokens(); ok {
 		_spec.SetField(usagelog.FieldInputTokens, field.TypeInt, value)

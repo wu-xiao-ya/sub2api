@@ -277,6 +277,7 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		ReasoningEffort:     result.ReasoningEffort,
 		InboundEndpoint:     optionalTrimmedStringPtr(input.InboundEndpoint),
 		UpstreamEndpoint:    optionalTrimmedStringPtr(input.UpstreamEndpoint),
+		UsageSource:         usageSourceFromContext(ctx),
 		InputTokens:         actualInputTokens,
 		OutputTokens:        result.Usage.OutputTokens,
 		CacheCreationTokens: result.Usage.CacheCreationInputTokens,

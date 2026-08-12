@@ -928,7 +928,7 @@ func TestOpenAIGatewayServiceRecordUsage_GeneratesRequestIDWhenAllSourcesMissing
 	require.Equal(t, billingRepo.lastCmd.RequestID, usageRepo.lastLog.RequestID)
 }
 
-func TestOpenAIGatewayServiceRecordUsage_BillingErrorSkipsUsageLogWrite(t *testing.T) {
+func TestOpenAIGatewayServiceRecordUsage_BillingErrorWritesZeroCostUsageLog(t *testing.T) {
 	usageRepo := &openAIRecordUsageLogRepoStub{}
 	billingRepo := &openAIRecordUsageBillingRepoStub{err: errors.New("billing tx failed")}
 	userRepo := &openAIRecordUsageUserRepoStub{}
@@ -952,7 +952,9 @@ func TestOpenAIGatewayServiceRecordUsage_BillingErrorSkipsUsageLogWrite(t *testi
 
 	require.Error(t, err)
 	require.Equal(t, 1, billingRepo.calls)
-	require.Equal(t, 0, usageRepo.calls)
+	require.Equal(t, 1, usageRepo.calls)
+	require.NotNil(t, usageRepo.lastLog)
+	require.Zero(t, usageRepo.lastLog.ActualCost)
 }
 
 func TestOpenAIGatewayServiceRecordUsage_UpdatesAPIKeyQuotaWhenConfigured(t *testing.T) {

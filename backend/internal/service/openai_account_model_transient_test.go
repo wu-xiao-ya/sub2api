@@ -31,6 +31,7 @@ func TestOpenAIModelTransient_SecondFailureCreatesShortModelBlock(t *testing.T) 
 
 	assert.Equal(t, 2, decision.FailureStreak)
 	assert.Equal(t, openAIModelTransientShortCooldown, decision.Cooldown)
+	assert.False(t, decision.WasBlocked)
 	assert.True(t, state.isBlocked(35, "gpt-5.5", now.Add(2*time.Second)))
 	assert.False(t, state.isBlocked(35, "gpt-5.5", now.Add(openAIModelTransientShortCooldown+2*time.Second)))
 }
@@ -45,8 +46,25 @@ func TestOpenAIModelTransient_ThirdFailureCreatesFortyFiveSecondModelBlock(t *te
 
 	assert.Equal(t, 3, decision.FailureStreak)
 	assert.Equal(t, 45*time.Second, decision.Cooldown)
+	assert.True(t, decision.WasBlocked)
+	assert.False(t, decision.PreviousBlockUntil.IsZero())
 	assert.True(t, state.isBlocked(35, "gpt-5.5", now.Add(40*time.Second)))
 	assert.False(t, state.isBlocked(35, "gpt-5.5", now.Add(48*time.Second)))
+}
+
+func TestOpenAIModelTransient_ExpiredCooldownTransitionIsReportedOnce(t *testing.T) {
+	state := newOpenAIAccountModelTransientState(128)
+	now := time.Date(2026, 7, 10, 10, 0, 0, 0, time.UTC)
+	state.recordFailure(35, "gpt-5.5", now)
+	decision := state.recordFailure(35, "gpt-5.5", now.Add(time.Second))
+
+	blocked, clearedUntil := state.checkBlocked(35, "gpt-5.5", decision.BlockUntil.Add(time.Millisecond))
+	assert.False(t, blocked)
+	assert.Equal(t, decision.BlockUntil, clearedUntil)
+
+	blocked, clearedUntil = state.checkBlocked(35, "gpt-5.5", decision.BlockUntil.Add(2*time.Millisecond))
+	assert.False(t, blocked)
+	assert.True(t, clearedUntil.IsZero())
 }
 
 func TestOpenAIModelTransient_BlockIsIsolatedByModel(t *testing.T) {

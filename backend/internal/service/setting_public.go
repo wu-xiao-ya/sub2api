@@ -175,6 +175,7 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		SettingKeySiteLogo,
 		SettingKeySiteSubtitle,
 		SettingKeyAPIBaseURL,
+		SettingKeyAPIEndpointProbeInterval,
 		SettingKeyContactInfo,
 		SettingKeyDocURL,
 		SettingKeyHomeContent,
@@ -300,6 +301,7 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		SiteLogo:                         settings[SettingKeySiteLogo],
 		SiteSubtitle:                     s.getStringOrDefault(settings, SettingKeySiteSubtitle, "Subscription to API Conversion Platform"),
 		APIBaseURL:                       settings[SettingKeyAPIBaseURL],
+		APIEndpointProbeInterval:         parseAPIEndpointProbeInterval(settings[SettingKeyAPIEndpointProbeInterval]),
 		ContactInfo:                      settings[SettingKeyContactInfo],
 		DocURL:                           settings[SettingKeyDocURL],
 		HomeContent:                      settings[SettingKeyHomeContent],
@@ -346,6 +348,10 @@ const (
 	channelMonitorIntervalMin      = 15
 	channelMonitorIntervalMax      = 3600
 	channelMonitorIntervalFallback = 60
+
+	apiEndpointProbeIntervalMin      = 3
+	apiEndpointProbeIntervalMax      = 300
+	apiEndpointProbeIntervalFallback = 5
 )
 
 // parseChannelMonitorInterval parses the stored string and clamps to [15, 3600].
@@ -372,6 +378,29 @@ func clampChannelMonitorInterval(v int) int {
 	return v
 }
 
+// parseAPIEndpointProbeInterval parses the API endpoint latency probe interval.
+// 0 disables automatic probing; otherwise values are clamped to [3, 300].
+func parseAPIEndpointProbeInterval(raw string) int {
+	v, err := strconv.Atoi(strings.TrimSpace(raw))
+	if err != nil {
+		return apiEndpointProbeIntervalFallback
+	}
+	return clampAPIEndpointProbeInterval(v)
+}
+
+func clampAPIEndpointProbeInterval(v int) int {
+	if v <= 0 {
+		return 0
+	}
+	if v < apiEndpointProbeIntervalMin {
+		return apiEndpointProbeIntervalMin
+	}
+	if v > apiEndpointProbeIntervalMax {
+		return apiEndpointProbeIntervalMax
+	}
+	return v
+}
+
 // ChannelMonitorRuntime is the lightweight view of the channel monitor feature
 // consumed by the runner and user-facing handlers.
 type ChannelMonitorRuntime struct {
@@ -393,6 +422,27 @@ func (s *SettingService) GetChannelMonitorRuntime(ctx context.Context) ChannelMo
 		Enabled:                !isFalseSettingValue(vals[SettingKeyChannelMonitorEnabled]),
 		DefaultIntervalSeconds: parseChannelMonitorInterval(vals[SettingKeyChannelMonitorDefaultIntervalSeconds]),
 	}
+}
+
+// GetChannelMonitorAccountProbeSettings returns the global adaptive account
+// monitoring limits. Invalid or unavailable values fall back to safe defaults.
+func (s *SettingService) GetChannelMonitorAccountProbeSettings(ctx context.Context) ChannelMonitorAccountProbeSettings {
+	value, err := s.settingRepo.GetValue(ctx, SettingKeyChannelMonitorAccountProbeSettings)
+	if err != nil {
+		return DefaultChannelMonitorAccountProbeSettings()
+	}
+	return parseChannelMonitorAccountProbeSettings(value)
+}
+
+func parseChannelMonitorAccountProbeSettings(raw string) ChannelMonitorAccountProbeSettings {
+	settings := DefaultChannelMonitorAccountProbeSettings()
+	if strings.TrimSpace(raw) == "" {
+		return settings
+	}
+	if err := json.Unmarshal([]byte(raw), &settings); err != nil {
+		return DefaultChannelMonitorAccountProbeSettings()
+	}
+	return normalizeChannelMonitorAccountProbeSettings(settings)
 }
 
 // AvailableChannelsRuntime is the lightweight view of the available-channels feature
@@ -457,6 +507,7 @@ type PublicSettingsInjectionPayload struct {
 	SiteLogo                         string                   `json:"site_logo"`
 	SiteSubtitle                     string                   `json:"site_subtitle"`
 	APIBaseURL                       string                   `json:"api_base_url"`
+	APIEndpointProbeInterval         int                      `json:"api_endpoint_probe_interval_seconds"`
 	ContactInfo                      string                   `json:"contact_info"`
 	DocURL                           string                   `json:"doc_url"`
 	HomeContent                      string                   `json:"home_content"`
@@ -526,6 +577,7 @@ func (s *SettingService) GetPublicSettingsForInjection(ctx context.Context) (any
 		SiteLogo:                         settings.SiteLogo,
 		SiteSubtitle:                     settings.SiteSubtitle,
 		APIBaseURL:                       settings.APIBaseURL,
+		APIEndpointProbeInterval:         settings.APIEndpointProbeInterval,
 		ContactInfo:                      settings.ContactInfo,
 		DocURL:                           settings.DocURL,
 		HomeContent:                      settings.HomeContent,

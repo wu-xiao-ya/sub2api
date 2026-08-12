@@ -73,11 +73,14 @@ const (
 	// providerGeminiPathTemplate Gemini generateContent 路径模板（含 model 占位）。
 	providerGeminiPathTemplate = "/v1beta/models/%s:generateContent"
 
-	// MonitorProviderOpenAI / Anthropic / Gemini / Grok provider 字符串常量（也是 ent enum 的实际值）。
-	MonitorProviderOpenAI    = "openai"
-	MonitorProviderAnthropic = "anthropic"
-	MonitorProviderGemini    = "gemini"
-	MonitorProviderGrok      = "grok"
+	// MonitorProvider* provider strings. Antigravity is only meaningful with
+	// an explicit account-management group; legacy static monitors continue to
+	// use the existing endpoint/API-key adapters.
+	MonitorProviderOpenAI      = "openai"
+	MonitorProviderAnthropic   = "anthropic"
+	MonitorProviderGemini      = "gemini"
+	MonitorProviderGrok        = "grok"
+	MonitorProviderAntigravity = "antigravity"
 
 	// MonitorDefaultGrokModel 是新增 Grok 监控未显式指定模型时使用的轻量测活模型。
 	MonitorDefaultGrokModel = "grok-4.5"

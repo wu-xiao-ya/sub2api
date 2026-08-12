@@ -52,11 +52,43 @@ func (h *GatewayHandler) WebSearch(c *gin.Context) {
 		return
 	}
 
+	subject, ok := middleware2.GetAuthSubjectFromContext(c)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": gin.H{
+			"type":    "api_error",
+			"message": "User context not found",
+		}})
+		return
+	}
+
 	if apiKey.Group == nil || apiKey.Group.Platform != "grok" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": gin.H{
 			"type":    "invalid_request_error",
 			"message": "web search is only supported for grok groups",
 		}})
+		return
+	}
+
+	reqLog := requestLogger(c, "handler.gateway.grok_web_search",
+		zap.Int64("user_id", subject.UserID),
+		zap.Int64("api_key_id", apiKey.ID),
+		zap.Any("group_id", apiKey.GroupID),
+	)
+	auditBody, _ := json.Marshal(map[string]any{
+		"input":       req.Query,
+		"query":       req.Query,
+		"max_results": req.MaxResults,
+	})
+	if decision := h.checkSecurityAudit(
+		c,
+		reqLog,
+		apiKey,
+		subject,
+		"grok_web_search",
+		xai.DefaultTextModel,
+		auditBody,
+	); decision != nil && !decision.AllowNextStage {
+		h.openAISecurityAuditError(c, decision)
 		return
 	}
 

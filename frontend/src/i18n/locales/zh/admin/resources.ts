@@ -580,6 +580,7 @@ export default {
       billingModeImage: '按次(图片)',
       billingModeVideo: '按次(视频)',
       allBillingModes: '全部计费模式',
+      showMonitorUsage: '显示监测记录',
       ipAddress: 'IP',
       clickToViewBalance: '点击查看充值记录',
       failedToLoadUser: '加载用户信息失败',

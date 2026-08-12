@@ -17,6 +17,7 @@ import {
   PROVIDER_ANTHROPIC,
   PROVIDER_GEMINI,
   PROVIDER_GROK,
+  PROVIDER_ANTIGRAVITY,
   STATUS_OPERATIONAL,
   STATUS_DEGRADED,
   STATUS_FAILED,
@@ -62,7 +63,8 @@ export function useChannelMonitorFormat() {
       p === PROVIDER_OPENAI ||
       p === PROVIDER_ANTHROPIC ||
       p === PROVIDER_GEMINI ||
-      p === PROVIDER_GROK
+      p === PROVIDER_GROK ||
+      p === PROVIDER_ANTIGRAVITY
     ) {
       return t(`monitorCommon.providers.${p}`)
     }
@@ -79,6 +81,8 @@ export function useChannelMonitorFormat() {
         return 'bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300'
       case PROVIDER_GROK:
         return 'bg-zinc-100 text-zinc-700 dark:bg-zinc-500/15 dark:text-zinc-300'
+      case PROVIDER_ANTIGRAVITY:
+        return 'bg-cyan-100 text-cyan-700 dark:bg-cyan-500/15 dark:text-cyan-300'
       default:
         return NEUTRAL_BADGE
     }
@@ -107,6 +111,10 @@ export function useChannelMonitorFormat() {
         return active
           ? 'border-zinc-500 bg-zinc-50 text-zinc-800 dark:bg-zinc-500/15 dark:text-zinc-200 dark:border-zinc-400'
           : 'border-gray-200 bg-white text-gray-600 hover:border-zinc-400 hover:text-zinc-800 dark:border-dark-700 dark:bg-dark-800 dark:text-gray-400 dark:hover:border-zinc-500/50'
+      case PROVIDER_ANTIGRAVITY:
+        return active
+          ? 'border-cyan-500 bg-cyan-50 text-cyan-800 dark:bg-cyan-500/15 dark:text-cyan-200 dark:border-cyan-400'
+          : 'border-gray-200 bg-white text-gray-600 hover:border-cyan-300 hover:text-cyan-800 dark:border-dark-700 dark:bg-dark-800 dark:text-gray-400 dark:hover:border-cyan-500/50'
       default:
         return active
           ? 'border-gray-400 bg-gray-50 text-gray-700 dark:border-dark-500 dark:bg-dark-700 dark:text-gray-200'

@@ -206,6 +206,7 @@ export interface PublicSettings {
   site_logo: string
   site_subtitle: string
   api_base_url: string
+  api_endpoint_probe_interval_seconds?: number
   contact_info: string
   doc_url: string
   home_content: string
@@ -1602,6 +1603,7 @@ export interface AdminUsageLog extends UsageLog {
   // 渠道 ID 和计费等级（仅管理员可见）
   channel_id?: number | null
   billing_tier?: string | null
+  usage_source?: string | null
 
   // 最小账号信息（仅管理员接口返回）
   account?: UsageLogAccountSummary
@@ -1722,6 +1724,9 @@ export interface DashboardStats {
   today_cost: number // 今日标准计费
   today_actual_cost: number // 今日实际扣除
   today_account_cost: number // 今日账号成本
+  today_monitor_requests: number
+  today_monitor_actual_cost: number // 监测实际成本
+  today_monitor_account_cost: number // 监测标准估算
 
   // 系统运行统计
   average_duration_ms: number // 平均响应时间
@@ -1999,6 +2004,7 @@ export interface UsageQueryParams {
   start_date?: string
   end_date?: string
   timezone?: string
+  include_monitor_usage?: boolean
   sort_by?: string
   sort_order?: 'asc' | 'desc'
 }

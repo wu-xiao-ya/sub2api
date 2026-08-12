@@ -15,6 +15,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	coderws "github.com/coder/websocket"
 	"github.com/gin-gonic/gin"
+	"github.com/tidwall/gjson"
 	"go.uber.org/zap"
 )
 
@@ -131,16 +132,18 @@ func (h *OpenAIGatewayHandler) GrokVoice(c *gin.Context, endpoint string) {
 		h.errorResponse(c, http.StatusNotFound, "not_found_error", "Voice API is not supported for this platform")
 		return
 	}
-	if !h.ensureResponsesDependencies(c, nil) {
+	subject, ok := middleware2.GetAuthSubjectFromContext(c)
+	if !ok {
+		h.errorResponse(c, http.StatusInternalServerError, "api_error", "User context not found")
 		return
 	}
-	subscription, _ := middleware2.GetSubscriptionFromContext(c)
-	if err := h.billingCacheService.CheckBillingEligibility(c.Request.Context(), apiKey.User, apiKey, apiKey.Group, subscription, service.QuotaPlatform(c.Request.Context(), apiKey)); err != nil {
-		status, code, message, retryAfter := billingErrorDetails(err)
-		if retryAfter > 0 {
-			c.Header("Retry-After", strconv.Itoa(retryAfter))
-		}
-		h.errorResponse(c, status, code, message)
+	reqLog := requestLogger(c, "handler.openai_gateway.grok_voice",
+		zap.Int64("user_id", subject.UserID),
+		zap.Int64("api_key_id", apiKey.ID),
+		zap.Any("group_id", apiKey.GroupID),
+		zap.String("endpoint", endpoint),
+	)
+	if !h.ensureResponsesDependencies(c, reqLog) {
 		return
 	}
 
@@ -154,9 +157,26 @@ func (h *OpenAIGatewayHandler) GrokVoice(c *gin.Context, endpoint string) {
 		contentType = "application/json"
 	}
 
+	requestModel := strings.TrimSpace(gjson.GetBytes(body, "model").String())
+	if endpoint == "tts" {
+		if decision := h.checkSecurityAudit(c, reqLog, apiKey, subject, "grok_voice", requestModel, body); decision != nil && !decision.AllowNextStage {
+			h.openAISecurityAuditError(c, decision)
+			return
+		}
+	}
+
+	subscription, _ := middleware2.GetSubscriptionFromContext(c)
+	if err := h.billingCacheService.CheckBillingEligibility(c.Request.Context(), apiKey.User, apiKey, apiKey.Group, subscription, service.QuotaPlatform(c.Request.Context(), apiKey)); err != nil {
+		status, code, message, retryAfter := billingErrorDetails(err)
+		if retryAfter > 0 {
+			c.Header("Retry-After", strconv.Itoa(retryAfter))
+		}
+		h.errorResponse(c, status, code, message)
+		return
+	}
+
 	failed := map[int64]struct{}{}
 	var last *service.UpstreamFailoverError
-	reqLog := requestLogger(c, "handler.openai_gateway.grok_voice", zap.String("endpoint", endpoint))
 	selectionModel := "grok-4.5"
 
 	for attempts := 0; attempts < 4; attempts++ {

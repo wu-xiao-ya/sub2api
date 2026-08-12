@@ -139,6 +139,19 @@
           <Select v-model="filters.billing_mode" :options="billingModeOptions" @change="emitChange" />
         </div>
 
+        <label
+          v-if="mode === 'usage'"
+          class="flex h-10 w-full items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300 sm:w-auto"
+        >
+          <input
+            v-model="filters.include_monitor_usage"
+            type="checkbox"
+            class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500 dark:border-dark-500 dark:bg-dark-800"
+            @change="emitChange"
+          />
+          <span>{{ t('admin.usage.showMonitorUsage') }}</span>
+        </label>
+
         <!-- Error Phase Filter (errors only) -->
         <div v-if="mode === 'errors'" class="w-full sm:w-auto sm:min-w-[180px]">
           <label class="input-label">{{ t('admin.ops.errorLog.type') }}</label>

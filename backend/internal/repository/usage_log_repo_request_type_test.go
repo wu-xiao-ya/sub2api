@@ -100,6 +100,7 @@ func TestUsageLogRepositoryCreateSyncRequestTypeAndLegacyFields(t *testing.T) {
 			sqlmock.AnyArg(), // billing_tier
 			sqlmock.AnyArg(), // billing_mode
 			sqlmock.AnyArg(), // account_stats_cost
+			sqlmock.AnyArg(), // usage_source
 			createdAt,
 		).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "created_at"}).AddRow(int64(99), createdAt))
@@ -192,6 +193,7 @@ func TestUsageLogRepositoryCreate_PersistsServiceTier(t *testing.T) {
 			sqlmock.AnyArg(), // billing_tier
 			sqlmock.AnyArg(), // billing_mode
 			sqlmock.AnyArg(), // account_stats_cost
+			sqlmock.AnyArg(), // usage_source
 			createdAt,
 		).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "created_at"}).AddRow(int64(100), createdAt))
@@ -278,11 +280,11 @@ func TestPrepareUsageLogInsert_PersistsImageSizeMetadata(t *testing.T) {
 		CreatedAt:          time.Date(2025, 1, 6, 12, 0, 0, 0, time.UTC),
 	})
 
-	require.Equal(t, sql.NullString{String: imageSize, Valid: true}, prepared.args[36])
-	require.Equal(t, sql.NullString{String: inputSize, Valid: true}, prepared.args[37])
-	require.Equal(t, sql.NullString{String: outputSize, Valid: true}, prepared.args[38])
-	require.Equal(t, sql.NullString{String: source, Valid: true}, prepared.args[39])
-	breakdownJSON, ok := prepared.args[40].(string)
+	require.Equal(t, sql.NullString{String: imageSize, Valid: true}, prepared.args[39])
+	require.Equal(t, sql.NullString{String: inputSize, Valid: true}, prepared.args[40])
+	require.Equal(t, sql.NullString{String: outputSize, Valid: true}, prepared.args[41])
+	require.Equal(t, sql.NullString{String: source, Valid: true}, prepared.args[42])
+	breakdownJSON, ok := prepared.args[43].(string)
 	require.True(t, ok)
 	require.JSONEq(t, `{"1K":1,"4K":1}`, breakdownJSON)
 }
@@ -367,7 +369,7 @@ func TestUsageLogRepositoryListWithFiltersRequestTypePriority(t *testing.T) {
 	mock.ExpectQuery("SELECT COUNT\\(\\*\\) FROM usage_logs WHERE \\(request_type = \\$1 OR \\(request_type = 0 AND openai_ws_mode = TRUE\\)\\)").
 		WithArgs(requestType).
 		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(int64(0)))
-	mock.ExpectQuery("SELECT .* FROM usage_logs WHERE \\(request_type = \\$1 OR \\(request_type = 0 AND openai_ws_mode = TRUE\\)\\) ORDER BY id DESC LIMIT \\$2 OFFSET \\$3").
+	mock.ExpectQuery("SELECT .* FROM usage_logs WHERE \\(request_type = \\$1 OR \\(request_type = 0 AND openai_ws_mode = TRUE\\)\\) AND \\(usage_source IS NULL OR usage_source <> 'channel_monitor'\\) ORDER BY id DESC LIMIT \\$2 OFFSET \\$3").
 		WithArgs(requestType, 20, 0).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}))
 
@@ -388,7 +390,7 @@ func TestUsageLogRepositoryListWithFiltersRequestedModelSource(t *testing.T) {
 		ModelFilterSource: usagestats.ModelSourceRequested,
 	}
 
-	mock.ExpectQuery("SELECT .* FROM usage_logs WHERE COALESCE\\(NULLIF\\(TRIM\\(requested_model\\), ''\\), model\\) = \\$1 ORDER BY id DESC LIMIT \\$2 OFFSET \\$3").
+	mock.ExpectQuery("SELECT .* FROM usage_logs WHERE COALESCE\\(NULLIF\\(TRIM\\(requested_model\\), ''\\), model\\) = \\$1 AND \\(usage_source IS NULL OR usage_source <> 'channel_monitor'\\) ORDER BY id DESC LIMIT \\$2 OFFSET \\$3").
 		WithArgs("gpt-5", 21, 0).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}))
 
@@ -905,6 +907,7 @@ func TestScanUsageLogRequestTypeAndLegacyFallback(t *testing.T) {
 			sql.NullString{},
 			sql.NullString{},
 			sql.NullFloat64{},
+			sql.NullString{},
 			now,
 		}})
 		require.NoError(t, err)
@@ -982,6 +985,7 @@ func TestScanUsageLogRequestTypeAndLegacyFallback(t *testing.T) {
 			sql.NullString{},  // billing_tier
 			sql.NullString{},  // billing_mode
 			sql.NullFloat64{}, // account_stats_cost
+			sql.NullString{},  // usage_source
 			now,
 		}})
 		require.NoError(t, err)
@@ -1042,6 +1046,7 @@ func TestScanUsageLogRequestTypeAndLegacyFallback(t *testing.T) {
 			sql.NullString{},  // billing_tier
 			sql.NullString{},  // billing_mode
 			sql.NullFloat64{}, // account_stats_cost
+			sql.NullString{},  // usage_source
 			now,
 		}})
 		require.NoError(t, err)
@@ -1102,6 +1107,7 @@ func TestScanUsageLogRequestTypeAndLegacyFallback(t *testing.T) {
 			sql.NullString{},  // billing_tier
 			sql.NullString{},  // billing_mode
 			sql.NullFloat64{}, // account_stats_cost
+			sql.NullString{},  // usage_source
 			now,
 		}})
 		require.NoError(t, err)

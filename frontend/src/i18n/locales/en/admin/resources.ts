@@ -583,6 +583,7 @@ export default {
       billingModeImage: 'Image',
       billingModeVideo: 'Video',
       allBillingModes: 'All Billing Modes',
+      showMonitorUsage: 'Show monitor records',
       ipAddress: 'IP',
       clickToViewBalance: 'Click to view balance history',
       failedToLoadUser: 'Failed to load user info',

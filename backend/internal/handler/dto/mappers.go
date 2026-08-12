@@ -703,6 +703,7 @@ func UsageLogFromServiceAdmin(l *service.UsageLog) *AdminUsageLog {
 	}
 	usageLog := usageLogFromServiceUser(l)
 	usageLog.UpstreamEndpoint = l.UpstreamEndpoint
+	usageLog.UsageSource = l.UsageSource
 	return &AdminUsageLog{
 		UsageLog:              usageLog,
 		UpstreamModel:         l.UpstreamModel,

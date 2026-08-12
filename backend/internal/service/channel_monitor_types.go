@@ -60,6 +60,7 @@ type ChannelMonitor struct {
 	PrimaryModel    string
 	ExtraModels     []string
 	GroupName       string
+	AccountGroupID  *int64
 	Enabled         bool
 	IntervalSeconds int
 	JitterSeconds   int // 每次调度 ± [0, jitter] 的随机偏移（秒），0 = 固定间隔
@@ -107,6 +108,7 @@ type ChannelMonitorCreateParams struct {
 	PrimaryModel          string
 	ExtraModels           []string
 	GroupName             string
+	AccountGroupID        *int64
 	Enabled               bool
 	IntervalSeconds       int
 	JitterSeconds         int
@@ -120,14 +122,18 @@ type ChannelMonitorCreateParams struct {
 
 // ChannelMonitorUpdateParams 更新参数（指针字段表示"未提供则不更新"）。
 type ChannelMonitorUpdateParams struct {
-	Name                  *string
-	Provider              *string
-	APIMode               *string
-	Endpoint              *string
-	APIKey                *string // 空字符串表示不修改；非空字符串覆盖
-	PrimaryModel          *string
-	ExtraModels           *[]string
-	GroupName             *string
+	Name         *string
+	Provider     *string
+	APIMode      *string
+	Endpoint     *string
+	APIKey       *string // 空字符串表示不修改；非空字符串覆盖
+	PrimaryModel *string
+	ExtraModels  *[]string
+	GroupName    *string
+	// AccountGroupID is applied when non-nil. ClearAccountGroup explicitly
+	// clears the binding because JSON null cannot preserve pointer tri-state.
+	AccountGroupID        *int64
+	ClearAccountGroup     bool
 	Enabled               *bool
 	IntervalSeconds       *int
 	JitterSeconds         *int
@@ -144,12 +150,39 @@ type ChannelMonitorUpdateParams struct {
 
 // CheckResult 单个模型一次检测的结果。
 type CheckResult struct {
-	Model         string
-	Status        string // operational / degraded / failed / error
-	LatencyMs     *int
-	PingLatencyMs *int
-	Message       string
-	CheckedAt     time.Time
+	Model          string
+	Status         string // operational / degraded / failed / error
+	LatencyMs      *int
+	PingLatencyMs  *int
+	AccountID      *int64
+	AccountName    string
+	ProbeMode      string // static / sticky / confirm / full
+	CandidateCount int
+	HealthyCount   int
+	Message        string
+	CheckedAt      time.Time
+
+	// Internal-only accounting metadata. It is intentionally kept out of
+	// monitor history and API responses.
+	monitorUsage            monitorUsage
+	monitorRequestAttempted bool
+	monitorCostRecorded     bool
+	monitorCostModel        string
+}
+
+// ChannelMonitorAccountProbeState is the durable selected account for one
+// monitor/model pair. It is intentionally not exposed by user-facing APIs.
+type ChannelMonitorAccountProbeState struct {
+	MonitorID       int64
+	Model           string
+	AccountID       *int64
+	AccountName     string
+	FinalStatus     string
+	LastLatencyMs   *int
+	LastProbeMode   string
+	LastFullSweepAt *time.Time
+	LastCheckedAt   time.Time
+	UpdatedAt       time.Time
 }
 
 // MonitorGroupCheckSummary is the best result selected from one grouped probe.
@@ -218,33 +251,48 @@ type ModelDetail struct {
 
 // ChannelMonitorHistoryRow 历史记录入库行（service 层向 repository 提交的数据）。
 type ChannelMonitorHistoryRow struct {
-	MonitorID     int64
-	Model         string
-	Status        string
-	LatencyMs     *int
-	PingLatencyMs *int
-	Message       string
-	CheckedAt     time.Time
+	MonitorID      int64
+	Model          string
+	Status         string
+	LatencyMs      *int
+	PingLatencyMs  *int
+	AccountID      *int64
+	AccountName    string
+	ProbeMode      string
+	CandidateCount int
+	HealthyCount   int
+	Message        string
+	CheckedAt      time.Time
 }
 
 // ChannelMonitorHistoryEntry 历史记录查询返回行（含 ent 主键 ID）。
 type ChannelMonitorHistoryEntry struct {
-	ID            int64
-	Model         string
-	Status        string
-	LatencyMs     *int
-	PingLatencyMs *int
-	Message       string
-	CheckedAt     time.Time
+	ID             int64
+	Model          string
+	Status         string
+	LatencyMs      *int
+	PingLatencyMs  *int
+	AccountID      *int64
+	AccountName    string
+	ProbeMode      string
+	CandidateCount int
+	HealthyCount   int
+	Message        string
+	CheckedAt      time.Time
 }
 
 // ChannelMonitorLatest 最近一次检测的简明信息（用于 UserMonitorView 聚合）。
 type ChannelMonitorLatest struct {
-	Model         string
-	Status        string
-	LatencyMs     *int
-	PingLatencyMs *int
-	CheckedAt     time.Time
+	Model          string
+	Status         string
+	LatencyMs      *int
+	PingLatencyMs  *int
+	AccountID      *int64
+	AccountName    string
+	ProbeMode      string
+	CandidateCount int
+	HealthyCount   int
+	CheckedAt      time.Time
 }
 
 // ChannelMonitorAvailability 单个模型在某窗口内的可用率与平均延迟（用于 UserMonitorDetail 聚合）。
@@ -261,8 +309,14 @@ type ChannelMonitorAvailability struct {
 // PrimaryStatus / PrimaryLatencyMs 描述主模型最近状态；Availability7d 是主模型 7 天可用率；
 // ExtraModels 描述附加模型最近状态（用于 hover 展示）。
 type MonitorStatusSummary struct {
-	PrimaryStatus    string // 空字符串表示无历史
-	PrimaryLatencyMs *int
-	Availability7d   float64 // 0-100，无历史时为 0
-	ExtraModels      []ExtraModelStatus
+	PrimaryStatus         string // 空字符串表示无历史
+	PrimaryLatencyMs      *int
+	PrimaryAccountID      *int64
+	PrimaryAccountName    string
+	PrimaryProbeMode      string
+	PrimaryCandidateCount int
+	PrimaryHealthyCount   int
+	PrimaryCheckedAt      time.Time
+	Availability7d        float64 // 0-100，无历史时为 0
+	ExtraModels           []ExtraModelStatus
 }

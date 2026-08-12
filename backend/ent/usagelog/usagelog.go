@@ -36,6 +36,8 @@ const (
 	FieldBillingTier = "billing_tier"
 	// FieldBillingMode holds the string denoting the billing_mode field in the database.
 	FieldBillingMode = "billing_mode"
+	// FieldUsageSource holds the string denoting the usage_source field in the database.
+	FieldUsageSource = "usage_source"
 	// FieldGroupID holds the string denoting the group_id field in the database.
 	FieldGroupID = "group_id"
 	// FieldSubscriptionID holds the string denoting the subscription_id field in the database.
@@ -173,6 +175,7 @@ var Columns = []string{
 	FieldModelMappingChain,
 	FieldBillingTier,
 	FieldBillingMode,
+	FieldUsageSource,
 	FieldGroupID,
 	FieldSubscriptionID,
 	FieldInputTokens,
@@ -237,6 +240,8 @@ var (
 	BillingTierValidator func(string) error
 	// BillingModeValidator is a validator for the "billing_mode" field. It is called by the builders before save.
 	BillingModeValidator func(string) error
+	// UsageSourceValidator is a validator for the "usage_source" field. It is called by the builders before save.
+	UsageSourceValidator func(string) error
 	// DefaultInputTokens holds the default value on creation for the "input_tokens" field.
 	DefaultInputTokens int
 	// DefaultOutputTokens holds the default value on creation for the "output_tokens" field.
@@ -356,6 +361,11 @@ func ByBillingTier(opts ...sql.OrderTermOption) OrderOption {
 // ByBillingMode orders the results by the billing_mode field.
 func ByBillingMode(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldBillingMode, opts...).ToFunc()
+}
+
+// ByUsageSource orders the results by the usage_source field.
+func ByUsageSource(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldUsageSource, opts...).ToFunc()
 }
 
 // ByGroupID orders the results by the group_id field.

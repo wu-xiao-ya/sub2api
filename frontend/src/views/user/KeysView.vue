@@ -24,9 +24,10 @@
             />
           </div>
           <EndpointPopover
-            v-if="publicSettings?.api_base_url || (publicSettings?.custom_endpoints?.length ?? 0) > 0"
+            v-if="publicSettings"
             :api-base-url="publicSettings?.api_base_url || ''"
             :custom-endpoints="publicSettings?.custom_endpoints || []"
+            :probe-interval-seconds="publicSettings?.api_endpoint_probe_interval_seconds ?? 5"
           />
         </div>
       </template>

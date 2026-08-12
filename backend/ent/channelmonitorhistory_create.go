@@ -69,6 +69,76 @@ func (_c *ChannelMonitorHistoryCreate) SetNillablePingLatencyMs(v *int) *Channel
 	return _c
 }
 
+// SetAccountID sets the "account_id" field.
+func (_c *ChannelMonitorHistoryCreate) SetAccountID(v int64) *ChannelMonitorHistoryCreate {
+	_c.mutation.SetAccountID(v)
+	return _c
+}
+
+// SetNillableAccountID sets the "account_id" field if the given value is not nil.
+func (_c *ChannelMonitorHistoryCreate) SetNillableAccountID(v *int64) *ChannelMonitorHistoryCreate {
+	if v != nil {
+		_c.SetAccountID(*v)
+	}
+	return _c
+}
+
+// SetAccountName sets the "account_name" field.
+func (_c *ChannelMonitorHistoryCreate) SetAccountName(v string) *ChannelMonitorHistoryCreate {
+	_c.mutation.SetAccountName(v)
+	return _c
+}
+
+// SetNillableAccountName sets the "account_name" field if the given value is not nil.
+func (_c *ChannelMonitorHistoryCreate) SetNillableAccountName(v *string) *ChannelMonitorHistoryCreate {
+	if v != nil {
+		_c.SetAccountName(*v)
+	}
+	return _c
+}
+
+// SetProbeMode sets the "probe_mode" field.
+func (_c *ChannelMonitorHistoryCreate) SetProbeMode(v string) *ChannelMonitorHistoryCreate {
+	_c.mutation.SetProbeMode(v)
+	return _c
+}
+
+// SetNillableProbeMode sets the "probe_mode" field if the given value is not nil.
+func (_c *ChannelMonitorHistoryCreate) SetNillableProbeMode(v *string) *ChannelMonitorHistoryCreate {
+	if v != nil {
+		_c.SetProbeMode(*v)
+	}
+	return _c
+}
+
+// SetCandidateCount sets the "candidate_count" field.
+func (_c *ChannelMonitorHistoryCreate) SetCandidateCount(v int) *ChannelMonitorHistoryCreate {
+	_c.mutation.SetCandidateCount(v)
+	return _c
+}
+
+// SetNillableCandidateCount sets the "candidate_count" field if the given value is not nil.
+func (_c *ChannelMonitorHistoryCreate) SetNillableCandidateCount(v *int) *ChannelMonitorHistoryCreate {
+	if v != nil {
+		_c.SetCandidateCount(*v)
+	}
+	return _c
+}
+
+// SetHealthyCount sets the "healthy_count" field.
+func (_c *ChannelMonitorHistoryCreate) SetHealthyCount(v int) *ChannelMonitorHistoryCreate {
+	_c.mutation.SetHealthyCount(v)
+	return _c
+}
+
+// SetNillableHealthyCount sets the "healthy_count" field if the given value is not nil.
+func (_c *ChannelMonitorHistoryCreate) SetNillableHealthyCount(v *int) *ChannelMonitorHistoryCreate {
+	if v != nil {
+		_c.SetHealthyCount(*v)
+	}
+	return _c
+}
+
 // SetMessage sets the "message" field.
 func (_c *ChannelMonitorHistoryCreate) SetMessage(v string) *ChannelMonitorHistoryCreate {
 	_c.mutation.SetMessage(v)
@@ -137,6 +207,22 @@ func (_c *ChannelMonitorHistoryCreate) ExecX(ctx context.Context) {
 
 // defaults sets the default values of the builder before save.
 func (_c *ChannelMonitorHistoryCreate) defaults() {
+	if _, ok := _c.mutation.AccountName(); !ok {
+		v := channelmonitorhistory.DefaultAccountName
+		_c.mutation.SetAccountName(v)
+	}
+	if _, ok := _c.mutation.ProbeMode(); !ok {
+		v := channelmonitorhistory.DefaultProbeMode
+		_c.mutation.SetProbeMode(v)
+	}
+	if _, ok := _c.mutation.CandidateCount(); !ok {
+		v := channelmonitorhistory.DefaultCandidateCount
+		_c.mutation.SetCandidateCount(v)
+	}
+	if _, ok := _c.mutation.HealthyCount(); !ok {
+		v := channelmonitorhistory.DefaultHealthyCount
+		_c.mutation.SetHealthyCount(v)
+	}
 	if _, ok := _c.mutation.Message(); !ok {
 		v := channelmonitorhistory.DefaultMessage
 		_c.mutation.SetMessage(v)
@@ -166,6 +252,16 @@ func (_c *ChannelMonitorHistoryCreate) check() error {
 	if v, ok := _c.mutation.Status(); ok {
 		if err := channelmonitorhistory.StatusValidator(v); err != nil {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "ChannelMonitorHistory.status": %w`, err)}
+		}
+	}
+	if v, ok := _c.mutation.AccountName(); ok {
+		if err := channelmonitorhistory.AccountNameValidator(v); err != nil {
+			return &ValidationError{Name: "account_name", err: fmt.Errorf(`ent: validator failed for field "ChannelMonitorHistory.account_name": %w`, err)}
+		}
+	}
+	if v, ok := _c.mutation.ProbeMode(); ok {
+		if err := channelmonitorhistory.ProbeModeValidator(v); err != nil {
+			return &ValidationError{Name: "probe_mode", err: fmt.Errorf(`ent: validator failed for field "ChannelMonitorHistory.probe_mode": %w`, err)}
 		}
 	}
 	if v, ok := _c.mutation.Message(); ok {
@@ -221,6 +317,26 @@ func (_c *ChannelMonitorHistoryCreate) createSpec() (*ChannelMonitorHistory, *sq
 	if value, ok := _c.mutation.PingLatencyMs(); ok {
 		_spec.SetField(channelmonitorhistory.FieldPingLatencyMs, field.TypeInt, value)
 		_node.PingLatencyMs = &value
+	}
+	if value, ok := _c.mutation.AccountID(); ok {
+		_spec.SetField(channelmonitorhistory.FieldAccountID, field.TypeInt64, value)
+		_node.AccountID = &value
+	}
+	if value, ok := _c.mutation.AccountName(); ok {
+		_spec.SetField(channelmonitorhistory.FieldAccountName, field.TypeString, value)
+		_node.AccountName = value
+	}
+	if value, ok := _c.mutation.ProbeMode(); ok {
+		_spec.SetField(channelmonitorhistory.FieldProbeMode, field.TypeString, value)
+		_node.ProbeMode = value
+	}
+	if value, ok := _c.mutation.CandidateCount(); ok {
+		_spec.SetField(channelmonitorhistory.FieldCandidateCount, field.TypeInt, value)
+		_node.CandidateCount = value
+	}
+	if value, ok := _c.mutation.HealthyCount(); ok {
+		_spec.SetField(channelmonitorhistory.FieldHealthyCount, field.TypeInt, value)
+		_node.HealthyCount = value
 	}
 	if value, ok := _c.mutation.Message(); ok {
 		_spec.SetField(channelmonitorhistory.FieldMessage, field.TypeString, value)
@@ -380,6 +496,114 @@ func (u *ChannelMonitorHistoryUpsert) AddPingLatencyMs(v int) *ChannelMonitorHis
 // ClearPingLatencyMs clears the value of the "ping_latency_ms" field.
 func (u *ChannelMonitorHistoryUpsert) ClearPingLatencyMs() *ChannelMonitorHistoryUpsert {
 	u.SetNull(channelmonitorhistory.FieldPingLatencyMs)
+	return u
+}
+
+// SetAccountID sets the "account_id" field.
+func (u *ChannelMonitorHistoryUpsert) SetAccountID(v int64) *ChannelMonitorHistoryUpsert {
+	u.Set(channelmonitorhistory.FieldAccountID, v)
+	return u
+}
+
+// UpdateAccountID sets the "account_id" field to the value that was provided on create.
+func (u *ChannelMonitorHistoryUpsert) UpdateAccountID() *ChannelMonitorHistoryUpsert {
+	u.SetExcluded(channelmonitorhistory.FieldAccountID)
+	return u
+}
+
+// AddAccountID adds v to the "account_id" field.
+func (u *ChannelMonitorHistoryUpsert) AddAccountID(v int64) *ChannelMonitorHistoryUpsert {
+	u.Add(channelmonitorhistory.FieldAccountID, v)
+	return u
+}
+
+// ClearAccountID clears the value of the "account_id" field.
+func (u *ChannelMonitorHistoryUpsert) ClearAccountID() *ChannelMonitorHistoryUpsert {
+	u.SetNull(channelmonitorhistory.FieldAccountID)
+	return u
+}
+
+// SetAccountName sets the "account_name" field.
+func (u *ChannelMonitorHistoryUpsert) SetAccountName(v string) *ChannelMonitorHistoryUpsert {
+	u.Set(channelmonitorhistory.FieldAccountName, v)
+	return u
+}
+
+// UpdateAccountName sets the "account_name" field to the value that was provided on create.
+func (u *ChannelMonitorHistoryUpsert) UpdateAccountName() *ChannelMonitorHistoryUpsert {
+	u.SetExcluded(channelmonitorhistory.FieldAccountName)
+	return u
+}
+
+// ClearAccountName clears the value of the "account_name" field.
+func (u *ChannelMonitorHistoryUpsert) ClearAccountName() *ChannelMonitorHistoryUpsert {
+	u.SetNull(channelmonitorhistory.FieldAccountName)
+	return u
+}
+
+// SetProbeMode sets the "probe_mode" field.
+func (u *ChannelMonitorHistoryUpsert) SetProbeMode(v string) *ChannelMonitorHistoryUpsert {
+	u.Set(channelmonitorhistory.FieldProbeMode, v)
+	return u
+}
+
+// UpdateProbeMode sets the "probe_mode" field to the value that was provided on create.
+func (u *ChannelMonitorHistoryUpsert) UpdateProbeMode() *ChannelMonitorHistoryUpsert {
+	u.SetExcluded(channelmonitorhistory.FieldProbeMode)
+	return u
+}
+
+// ClearProbeMode clears the value of the "probe_mode" field.
+func (u *ChannelMonitorHistoryUpsert) ClearProbeMode() *ChannelMonitorHistoryUpsert {
+	u.SetNull(channelmonitorhistory.FieldProbeMode)
+	return u
+}
+
+// SetCandidateCount sets the "candidate_count" field.
+func (u *ChannelMonitorHistoryUpsert) SetCandidateCount(v int) *ChannelMonitorHistoryUpsert {
+	u.Set(channelmonitorhistory.FieldCandidateCount, v)
+	return u
+}
+
+// UpdateCandidateCount sets the "candidate_count" field to the value that was provided on create.
+func (u *ChannelMonitorHistoryUpsert) UpdateCandidateCount() *ChannelMonitorHistoryUpsert {
+	u.SetExcluded(channelmonitorhistory.FieldCandidateCount)
+	return u
+}
+
+// AddCandidateCount adds v to the "candidate_count" field.
+func (u *ChannelMonitorHistoryUpsert) AddCandidateCount(v int) *ChannelMonitorHistoryUpsert {
+	u.Add(channelmonitorhistory.FieldCandidateCount, v)
+	return u
+}
+
+// ClearCandidateCount clears the value of the "candidate_count" field.
+func (u *ChannelMonitorHistoryUpsert) ClearCandidateCount() *ChannelMonitorHistoryUpsert {
+	u.SetNull(channelmonitorhistory.FieldCandidateCount)
+	return u
+}
+
+// SetHealthyCount sets the "healthy_count" field.
+func (u *ChannelMonitorHistoryUpsert) SetHealthyCount(v int) *ChannelMonitorHistoryUpsert {
+	u.Set(channelmonitorhistory.FieldHealthyCount, v)
+	return u
+}
+
+// UpdateHealthyCount sets the "healthy_count" field to the value that was provided on create.
+func (u *ChannelMonitorHistoryUpsert) UpdateHealthyCount() *ChannelMonitorHistoryUpsert {
+	u.SetExcluded(channelmonitorhistory.FieldHealthyCount)
+	return u
+}
+
+// AddHealthyCount adds v to the "healthy_count" field.
+func (u *ChannelMonitorHistoryUpsert) AddHealthyCount(v int) *ChannelMonitorHistoryUpsert {
+	u.Add(channelmonitorhistory.FieldHealthyCount, v)
+	return u
+}
+
+// ClearHealthyCount clears the value of the "healthy_count" field.
+func (u *ChannelMonitorHistoryUpsert) ClearHealthyCount() *ChannelMonitorHistoryUpsert {
+	u.SetNull(channelmonitorhistory.FieldHealthyCount)
 	return u
 }
 
@@ -548,6 +772,132 @@ func (u *ChannelMonitorHistoryUpsertOne) UpdatePingLatencyMs() *ChannelMonitorHi
 func (u *ChannelMonitorHistoryUpsertOne) ClearPingLatencyMs() *ChannelMonitorHistoryUpsertOne {
 	return u.Update(func(s *ChannelMonitorHistoryUpsert) {
 		s.ClearPingLatencyMs()
+	})
+}
+
+// SetAccountID sets the "account_id" field.
+func (u *ChannelMonitorHistoryUpsertOne) SetAccountID(v int64) *ChannelMonitorHistoryUpsertOne {
+	return u.Update(func(s *ChannelMonitorHistoryUpsert) {
+		s.SetAccountID(v)
+	})
+}
+
+// AddAccountID adds v to the "account_id" field.
+func (u *ChannelMonitorHistoryUpsertOne) AddAccountID(v int64) *ChannelMonitorHistoryUpsertOne {
+	return u.Update(func(s *ChannelMonitorHistoryUpsert) {
+		s.AddAccountID(v)
+	})
+}
+
+// UpdateAccountID sets the "account_id" field to the value that was provided on create.
+func (u *ChannelMonitorHistoryUpsertOne) UpdateAccountID() *ChannelMonitorHistoryUpsertOne {
+	return u.Update(func(s *ChannelMonitorHistoryUpsert) {
+		s.UpdateAccountID()
+	})
+}
+
+// ClearAccountID clears the value of the "account_id" field.
+func (u *ChannelMonitorHistoryUpsertOne) ClearAccountID() *ChannelMonitorHistoryUpsertOne {
+	return u.Update(func(s *ChannelMonitorHistoryUpsert) {
+		s.ClearAccountID()
+	})
+}
+
+// SetAccountName sets the "account_name" field.
+func (u *ChannelMonitorHistoryUpsertOne) SetAccountName(v string) *ChannelMonitorHistoryUpsertOne {
+	return u.Update(func(s *ChannelMonitorHistoryUpsert) {
+		s.SetAccountName(v)
+	})
+}
+
+// UpdateAccountName sets the "account_name" field to the value that was provided on create.
+func (u *ChannelMonitorHistoryUpsertOne) UpdateAccountName() *ChannelMonitorHistoryUpsertOne {
+	return u.Update(func(s *ChannelMonitorHistoryUpsert) {
+		s.UpdateAccountName()
+	})
+}
+
+// ClearAccountName clears the value of the "account_name" field.
+func (u *ChannelMonitorHistoryUpsertOne) ClearAccountName() *ChannelMonitorHistoryUpsertOne {
+	return u.Update(func(s *ChannelMonitorHistoryUpsert) {
+		s.ClearAccountName()
+	})
+}
+
+// SetProbeMode sets the "probe_mode" field.
+func (u *ChannelMonitorHistoryUpsertOne) SetProbeMode(v string) *ChannelMonitorHistoryUpsertOne {
+	return u.Update(func(s *ChannelMonitorHistoryUpsert) {
+		s.SetProbeMode(v)
+	})
+}
+
+// UpdateProbeMode sets the "probe_mode" field to the value that was provided on create.
+func (u *ChannelMonitorHistoryUpsertOne) UpdateProbeMode() *ChannelMonitorHistoryUpsertOne {
+	return u.Update(func(s *ChannelMonitorHistoryUpsert) {
+		s.UpdateProbeMode()
+	})
+}
+
+// ClearProbeMode clears the value of the "probe_mode" field.
+func (u *ChannelMonitorHistoryUpsertOne) ClearProbeMode() *ChannelMonitorHistoryUpsertOne {
+	return u.Update(func(s *ChannelMonitorHistoryUpsert) {
+		s.ClearProbeMode()
+	})
+}
+
+// SetCandidateCount sets the "candidate_count" field.
+func (u *ChannelMonitorHistoryUpsertOne) SetCandidateCount(v int) *ChannelMonitorHistoryUpsertOne {
+	return u.Update(func(s *ChannelMonitorHistoryUpsert) {
+		s.SetCandidateCount(v)
+	})
+}
+
+// AddCandidateCount adds v to the "candidate_count" field.
+func (u *ChannelMonitorHistoryUpsertOne) AddCandidateCount(v int) *ChannelMonitorHistoryUpsertOne {
+	return u.Update(func(s *ChannelMonitorHistoryUpsert) {
+		s.AddCandidateCount(v)
+	})
+}
+
+// UpdateCandidateCount sets the "candidate_count" field to the value that was provided on create.
+func (u *ChannelMonitorHistoryUpsertOne) UpdateCandidateCount() *ChannelMonitorHistoryUpsertOne {
+	return u.Update(func(s *ChannelMonitorHistoryUpsert) {
+		s.UpdateCandidateCount()
+	})
+}
+
+// ClearCandidateCount clears the value of the "candidate_count" field.
+func (u *ChannelMonitorHistoryUpsertOne) ClearCandidateCount() *ChannelMonitorHistoryUpsertOne {
+	return u.Update(func(s *ChannelMonitorHistoryUpsert) {
+		s.ClearCandidateCount()
+	})
+}
+
+// SetHealthyCount sets the "healthy_count" field.
+func (u *ChannelMonitorHistoryUpsertOne) SetHealthyCount(v int) *ChannelMonitorHistoryUpsertOne {
+	return u.Update(func(s *ChannelMonitorHistoryUpsert) {
+		s.SetHealthyCount(v)
+	})
+}
+
+// AddHealthyCount adds v to the "healthy_count" field.
+func (u *ChannelMonitorHistoryUpsertOne) AddHealthyCount(v int) *ChannelMonitorHistoryUpsertOne {
+	return u.Update(func(s *ChannelMonitorHistoryUpsert) {
+		s.AddHealthyCount(v)
+	})
+}
+
+// UpdateHealthyCount sets the "healthy_count" field to the value that was provided on create.
+func (u *ChannelMonitorHistoryUpsertOne) UpdateHealthyCount() *ChannelMonitorHistoryUpsertOne {
+	return u.Update(func(s *ChannelMonitorHistoryUpsert) {
+		s.UpdateHealthyCount()
+	})
+}
+
+// ClearHealthyCount clears the value of the "healthy_count" field.
+func (u *ChannelMonitorHistoryUpsertOne) ClearHealthyCount() *ChannelMonitorHistoryUpsertOne {
+	return u.Update(func(s *ChannelMonitorHistoryUpsert) {
+		s.ClearHealthyCount()
 	})
 }
 
@@ -885,6 +1235,132 @@ func (u *ChannelMonitorHistoryUpsertBulk) UpdatePingLatencyMs() *ChannelMonitorH
 func (u *ChannelMonitorHistoryUpsertBulk) ClearPingLatencyMs() *ChannelMonitorHistoryUpsertBulk {
 	return u.Update(func(s *ChannelMonitorHistoryUpsert) {
 		s.ClearPingLatencyMs()
+	})
+}
+
+// SetAccountID sets the "account_id" field.
+func (u *ChannelMonitorHistoryUpsertBulk) SetAccountID(v int64) *ChannelMonitorHistoryUpsertBulk {
+	return u.Update(func(s *ChannelMonitorHistoryUpsert) {
+		s.SetAccountID(v)
+	})
+}
+
+// AddAccountID adds v to the "account_id" field.
+func (u *ChannelMonitorHistoryUpsertBulk) AddAccountID(v int64) *ChannelMonitorHistoryUpsertBulk {
+	return u.Update(func(s *ChannelMonitorHistoryUpsert) {
+		s.AddAccountID(v)
+	})
+}
+
+// UpdateAccountID sets the "account_id" field to the value that was provided on create.
+func (u *ChannelMonitorHistoryUpsertBulk) UpdateAccountID() *ChannelMonitorHistoryUpsertBulk {
+	return u.Update(func(s *ChannelMonitorHistoryUpsert) {
+		s.UpdateAccountID()
+	})
+}
+
+// ClearAccountID clears the value of the "account_id" field.
+func (u *ChannelMonitorHistoryUpsertBulk) ClearAccountID() *ChannelMonitorHistoryUpsertBulk {
+	return u.Update(func(s *ChannelMonitorHistoryUpsert) {
+		s.ClearAccountID()
+	})
+}
+
+// SetAccountName sets the "account_name" field.
+func (u *ChannelMonitorHistoryUpsertBulk) SetAccountName(v string) *ChannelMonitorHistoryUpsertBulk {
+	return u.Update(func(s *ChannelMonitorHistoryUpsert) {
+		s.SetAccountName(v)
+	})
+}
+
+// UpdateAccountName sets the "account_name" field to the value that was provided on create.
+func (u *ChannelMonitorHistoryUpsertBulk) UpdateAccountName() *ChannelMonitorHistoryUpsertBulk {
+	return u.Update(func(s *ChannelMonitorHistoryUpsert) {
+		s.UpdateAccountName()
+	})
+}
+
+// ClearAccountName clears the value of the "account_name" field.
+func (u *ChannelMonitorHistoryUpsertBulk) ClearAccountName() *ChannelMonitorHistoryUpsertBulk {
+	return u.Update(func(s *ChannelMonitorHistoryUpsert) {
+		s.ClearAccountName()
+	})
+}
+
+// SetProbeMode sets the "probe_mode" field.
+func (u *ChannelMonitorHistoryUpsertBulk) SetProbeMode(v string) *ChannelMonitorHistoryUpsertBulk {
+	return u.Update(func(s *ChannelMonitorHistoryUpsert) {
+		s.SetProbeMode(v)
+	})
+}
+
+// UpdateProbeMode sets the "probe_mode" field to the value that was provided on create.
+func (u *ChannelMonitorHistoryUpsertBulk) UpdateProbeMode() *ChannelMonitorHistoryUpsertBulk {
+	return u.Update(func(s *ChannelMonitorHistoryUpsert) {
+		s.UpdateProbeMode()
+	})
+}
+
+// ClearProbeMode clears the value of the "probe_mode" field.
+func (u *ChannelMonitorHistoryUpsertBulk) ClearProbeMode() *ChannelMonitorHistoryUpsertBulk {
+	return u.Update(func(s *ChannelMonitorHistoryUpsert) {
+		s.ClearProbeMode()
+	})
+}
+
+// SetCandidateCount sets the "candidate_count" field.
+func (u *ChannelMonitorHistoryUpsertBulk) SetCandidateCount(v int) *ChannelMonitorHistoryUpsertBulk {
+	return u.Update(func(s *ChannelMonitorHistoryUpsert) {
+		s.SetCandidateCount(v)
+	})
+}
+
+// AddCandidateCount adds v to the "candidate_count" field.
+func (u *ChannelMonitorHistoryUpsertBulk) AddCandidateCount(v int) *ChannelMonitorHistoryUpsertBulk {
+	return u.Update(func(s *ChannelMonitorHistoryUpsert) {
+		s.AddCandidateCount(v)
+	})
+}
+
+// UpdateCandidateCount sets the "candidate_count" field to the value that was provided on create.
+func (u *ChannelMonitorHistoryUpsertBulk) UpdateCandidateCount() *ChannelMonitorHistoryUpsertBulk {
+	return u.Update(func(s *ChannelMonitorHistoryUpsert) {
+		s.UpdateCandidateCount()
+	})
+}
+
+// ClearCandidateCount clears the value of the "candidate_count" field.
+func (u *ChannelMonitorHistoryUpsertBulk) ClearCandidateCount() *ChannelMonitorHistoryUpsertBulk {
+	return u.Update(func(s *ChannelMonitorHistoryUpsert) {
+		s.ClearCandidateCount()
+	})
+}
+
+// SetHealthyCount sets the "healthy_count" field.
+func (u *ChannelMonitorHistoryUpsertBulk) SetHealthyCount(v int) *ChannelMonitorHistoryUpsertBulk {
+	return u.Update(func(s *ChannelMonitorHistoryUpsert) {
+		s.SetHealthyCount(v)
+	})
+}
+
+// AddHealthyCount adds v to the "healthy_count" field.
+func (u *ChannelMonitorHistoryUpsertBulk) AddHealthyCount(v int) *ChannelMonitorHistoryUpsertBulk {
+	return u.Update(func(s *ChannelMonitorHistoryUpsert) {
+		s.AddHealthyCount(v)
+	})
+}
+
+// UpdateHealthyCount sets the "healthy_count" field to the value that was provided on create.
+func (u *ChannelMonitorHistoryUpsertBulk) UpdateHealthyCount() *ChannelMonitorHistoryUpsertBulk {
+	return u.Update(func(s *ChannelMonitorHistoryUpsert) {
+		s.UpdateHealthyCount()
+	})
+}
+
+// ClearHealthyCount clears the value of the "healthy_count" field.
+func (u *ChannelMonitorHistoryUpsertBulk) ClearHealthyCount() *ChannelMonitorHistoryUpsertBulk {
+	return u.Update(func(s *ChannelMonitorHistoryUpsert) {
+		s.ClearHealthyCount()
 	})
 }
 

@@ -35,7 +35,7 @@ func (ChannelMonitor) Fields() []ent.Field {
 			NotEmpty().
 			MaxLen(100),
 		field.Enum("provider").
-			Values("openai", "anthropic", "gemini", "grok"),
+			Values("openai", "anthropic", "gemini", "grok", "antigravity"),
 		field.String("api_mode").
 			Default("chat_completions").
 			MaxLen(32).
@@ -58,6 +58,11 @@ func (ChannelMonitor) Fields() []ent.Field {
 			Optional().
 			Default("").
 			MaxLen(100),
+		// Explicitly binds a monitor to one account-management group. Legacy
+		// monitors keep this null and continue using their static API key.
+		field.Int64("account_group_id").
+			Optional().
+			Nillable(),
 		field.Bool("enabled").
 			Default(true),
 		field.Int("interval_seconds").

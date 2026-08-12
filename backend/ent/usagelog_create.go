@@ -141,6 +141,20 @@ func (_c *UsageLogCreate) SetNillableBillingMode(v *string) *UsageLogCreate {
 	return _c
 }
 
+// SetUsageSource sets the "usage_source" field.
+func (_c *UsageLogCreate) SetUsageSource(v string) *UsageLogCreate {
+	_c.mutation.SetUsageSource(v)
+	return _c
+}
+
+// SetNillableUsageSource sets the "usage_source" field if the given value is not nil.
+func (_c *UsageLogCreate) SetNillableUsageSource(v *string) *UsageLogCreate {
+	if v != nil {
+		_c.SetUsageSource(*v)
+	}
+	return _c
+}
+
 // SetGroupID sets the "group_id" field.
 func (_c *UsageLogCreate) SetGroupID(v int64) *UsageLogCreate {
 	_c.mutation.SetGroupID(v)
@@ -845,6 +859,11 @@ func (_c *UsageLogCreate) check() error {
 			return &ValidationError{Name: "billing_mode", err: fmt.Errorf(`ent: validator failed for field "UsageLog.billing_mode": %w`, err)}
 		}
 	}
+	if v, ok := _c.mutation.UsageSource(); ok {
+		if err := usagelog.UsageSourceValidator(v); err != nil {
+			return &ValidationError{Name: "usage_source", err: fmt.Errorf(`ent: validator failed for field "UsageLog.usage_source": %w`, err)}
+		}
+	}
 	if _, ok := _c.mutation.InputTokens(); !ok {
 		return &ValidationError{Name: "input_tokens", err: errors.New(`ent: missing required field "UsageLog.input_tokens"`)}
 	}
@@ -1012,6 +1031,10 @@ func (_c *UsageLogCreate) createSpec() (*UsageLog, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.BillingMode(); ok {
 		_spec.SetField(usagelog.FieldBillingMode, field.TypeString, value)
 		_node.BillingMode = &value
+	}
+	if value, ok := _c.mutation.UsageSource(); ok {
+		_spec.SetField(usagelog.FieldUsageSource, field.TypeString, value)
+		_node.UsageSource = &value
 	}
 	if value, ok := _c.mutation.InputTokens(); ok {
 		_spec.SetField(usagelog.FieldInputTokens, field.TypeInt, value)
@@ -1461,6 +1484,24 @@ func (u *UsageLogUpsert) UpdateBillingMode() *UsageLogUpsert {
 // ClearBillingMode clears the value of the "billing_mode" field.
 func (u *UsageLogUpsert) ClearBillingMode() *UsageLogUpsert {
 	u.SetNull(usagelog.FieldBillingMode)
+	return u
+}
+
+// SetUsageSource sets the "usage_source" field.
+func (u *UsageLogUpsert) SetUsageSource(v string) *UsageLogUpsert {
+	u.Set(usagelog.FieldUsageSource, v)
+	return u
+}
+
+// UpdateUsageSource sets the "usage_source" field to the value that was provided on create.
+func (u *UsageLogUpsert) UpdateUsageSource() *UsageLogUpsert {
+	u.SetExcluded(usagelog.FieldUsageSource)
+	return u
+}
+
+// ClearUsageSource clears the value of the "usage_source" field.
+func (u *UsageLogUpsert) ClearUsageSource() *UsageLogUpsert {
+	u.SetNull(usagelog.FieldUsageSource)
 	return u
 }
 
@@ -2375,6 +2416,27 @@ func (u *UsageLogUpsertOne) UpdateBillingMode() *UsageLogUpsertOne {
 func (u *UsageLogUpsertOne) ClearBillingMode() *UsageLogUpsertOne {
 	return u.Update(func(s *UsageLogUpsert) {
 		s.ClearBillingMode()
+	})
+}
+
+// SetUsageSource sets the "usage_source" field.
+func (u *UsageLogUpsertOne) SetUsageSource(v string) *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.SetUsageSource(v)
+	})
+}
+
+// UpdateUsageSource sets the "usage_source" field to the value that was provided on create.
+func (u *UsageLogUpsertOne) UpdateUsageSource() *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.UpdateUsageSource()
+	})
+}
+
+// ClearUsageSource clears the value of the "usage_source" field.
+func (u *UsageLogUpsertOne) ClearUsageSource() *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.ClearUsageSource()
 	})
 }
 
@@ -3566,6 +3628,27 @@ func (u *UsageLogUpsertBulk) UpdateBillingMode() *UsageLogUpsertBulk {
 func (u *UsageLogUpsertBulk) ClearBillingMode() *UsageLogUpsertBulk {
 	return u.Update(func(s *UsageLogUpsert) {
 		s.ClearBillingMode()
+	})
+}
+
+// SetUsageSource sets the "usage_source" field.
+func (u *UsageLogUpsertBulk) SetUsageSource(v string) *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.SetUsageSource(v)
+	})
+}
+
+// UpdateUsageSource sets the "usage_source" field to the value that was provided on create.
+func (u *UsageLogUpsertBulk) UpdateUsageSource() *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.UpdateUsageSource()
+	})
+}
+
+// ClearUsageSource clears the value of the "usage_source" field.
+func (u *UsageLogUpsertBulk) ClearUsageSource() *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.ClearUsageSource()
 	})
 }
 

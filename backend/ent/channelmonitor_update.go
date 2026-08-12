@@ -154,6 +154,33 @@ func (_u *ChannelMonitorUpdate) ClearGroupName() *ChannelMonitorUpdate {
 	return _u
 }
 
+// SetAccountGroupID sets the "account_group_id" field.
+func (_u *ChannelMonitorUpdate) SetAccountGroupID(v int64) *ChannelMonitorUpdate {
+	_u.mutation.ResetAccountGroupID()
+	_u.mutation.SetAccountGroupID(v)
+	return _u
+}
+
+// SetNillableAccountGroupID sets the "account_group_id" field if the given value is not nil.
+func (_u *ChannelMonitorUpdate) SetNillableAccountGroupID(v *int64) *ChannelMonitorUpdate {
+	if v != nil {
+		_u.SetAccountGroupID(*v)
+	}
+	return _u
+}
+
+// AddAccountGroupID adds value to the "account_group_id" field.
+func (_u *ChannelMonitorUpdate) AddAccountGroupID(v int64) *ChannelMonitorUpdate {
+	_u.mutation.AddAccountGroupID(v)
+	return _u
+}
+
+// ClearAccountGroupID clears the value of the "account_group_id" field.
+func (_u *ChannelMonitorUpdate) ClearAccountGroupID() *ChannelMonitorUpdate {
+	_u.mutation.ClearAccountGroupID()
+	return _u
+}
+
 // SetEnabled sets the "enabled" field.
 func (_u *ChannelMonitorUpdate) SetEnabled(v bool) *ChannelMonitorUpdate {
 	_u.mutation.SetEnabled(v)
@@ -569,6 +596,15 @@ func (_u *ChannelMonitorUpdate) sqlSave(ctx context.Context) (_node int, err err
 	if _u.mutation.GroupNameCleared() {
 		_spec.ClearField(channelmonitor.FieldGroupName, field.TypeString)
 	}
+	if value, ok := _u.mutation.AccountGroupID(); ok {
+		_spec.SetField(channelmonitor.FieldAccountGroupID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedAccountGroupID(); ok {
+		_spec.AddField(channelmonitor.FieldAccountGroupID, field.TypeInt64, value)
+	}
+	if _u.mutation.AccountGroupIDCleared() {
+		_spec.ClearField(channelmonitor.FieldAccountGroupID, field.TypeInt64)
+	}
 	if value, ok := _u.mutation.Enabled(); ok {
 		_spec.SetField(channelmonitor.FieldEnabled, field.TypeBool, value)
 	}
@@ -872,6 +908,33 @@ func (_u *ChannelMonitorUpdateOne) SetNillableGroupName(v *string) *ChannelMonit
 // ClearGroupName clears the value of the "group_name" field.
 func (_u *ChannelMonitorUpdateOne) ClearGroupName() *ChannelMonitorUpdateOne {
 	_u.mutation.ClearGroupName()
+	return _u
+}
+
+// SetAccountGroupID sets the "account_group_id" field.
+func (_u *ChannelMonitorUpdateOne) SetAccountGroupID(v int64) *ChannelMonitorUpdateOne {
+	_u.mutation.ResetAccountGroupID()
+	_u.mutation.SetAccountGroupID(v)
+	return _u
+}
+
+// SetNillableAccountGroupID sets the "account_group_id" field if the given value is not nil.
+func (_u *ChannelMonitorUpdateOne) SetNillableAccountGroupID(v *int64) *ChannelMonitorUpdateOne {
+	if v != nil {
+		_u.SetAccountGroupID(*v)
+	}
+	return _u
+}
+
+// AddAccountGroupID adds value to the "account_group_id" field.
+func (_u *ChannelMonitorUpdateOne) AddAccountGroupID(v int64) *ChannelMonitorUpdateOne {
+	_u.mutation.AddAccountGroupID(v)
+	return _u
+}
+
+// ClearAccountGroupID clears the value of the "account_group_id" field.
+func (_u *ChannelMonitorUpdateOne) ClearAccountGroupID() *ChannelMonitorUpdateOne {
+	_u.mutation.ClearAccountGroupID()
 	return _u
 }
 
@@ -1319,6 +1382,15 @@ func (_u *ChannelMonitorUpdateOne) sqlSave(ctx context.Context) (_node *ChannelM
 	}
 	if _u.mutation.GroupNameCleared() {
 		_spec.ClearField(channelmonitor.FieldGroupName, field.TypeString)
+	}
+	if value, ok := _u.mutation.AccountGroupID(); ok {
+		_spec.SetField(channelmonitor.FieldAccountGroupID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedAccountGroupID(); ok {
+		_spec.AddField(channelmonitor.FieldAccountGroupID, field.TypeInt64, value)
+	}
+	if _u.mutation.AccountGroupIDCleared() {
+		_spec.ClearField(channelmonitor.FieldAccountGroupID, field.TypeInt64)
 	}
 	if value, ok := _u.mutation.Enabled(); ok {
 		_spec.SetField(channelmonitor.FieldEnabled, field.TypeBool, value)

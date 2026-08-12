@@ -287,6 +287,9 @@ func diffSettings(before *service.SystemSettings, after *service.SystemSettings,
 	if before.APIBaseURL != after.APIBaseURL {
 		changed = append(changed, "api_base_url")
 	}
+	if before.APIEndpointProbeInterval != after.APIEndpointProbeInterval {
+		changed = append(changed, "api_endpoint_probe_interval_seconds")
+	}
 	if before.ContactInfo != after.ContactInfo {
 		changed = append(changed, "contact_info")
 	}
@@ -521,6 +524,9 @@ func diffSettings(before *service.SystemSettings, after *service.SystemSettings,
 	}
 	if before.ChannelMonitorDefaultIntervalSeconds != after.ChannelMonitorDefaultIntervalSeconds {
 		changed = append(changed, "channel_monitor_default_interval_seconds")
+	}
+	if before.ChannelMonitorAccountProbeSettings != after.ChannelMonitorAccountProbeSettings {
+		changed = append(changed, "channel_monitor_account_probe_settings")
 	}
 	if before.AvailableChannelsEnabled != after.AvailableChannelsEnabled {
 		changed = append(changed, "available_channels_enabled")

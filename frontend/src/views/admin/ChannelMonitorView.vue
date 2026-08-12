@@ -35,6 +35,32 @@
             <MonitorPrimaryModelCell :row="row" />
           </template>
 
+          <template #cell-best_account="{ row }">
+            <div v-if="hasBestAccount(row)" class="min-w-40 max-w-56">
+              <div
+                class="truncate text-sm font-medium text-gray-900 dark:text-gray-100"
+                :title="bestAccountTitle(row)"
+              >
+                {{ bestAccountLabel(row) }}
+              </div>
+              <div class="mt-0.5 flex flex-wrap gap-x-2 gap-y-1 text-xs text-gray-500 dark:text-gray-400">
+                <span v-if="row.primary_probe_mode">{{ probeModeLabel(row.primary_probe_mode) }}</span>
+                <span v-if="row.primary_candidate_count">
+                  {{ t('admin.channelMonitor.probeCandidates', {
+                    healthy: row.primary_healthy_count || 0,
+                    candidates: row.primary_candidate_count,
+                  }) }}
+                </span>
+              </div>
+              <div v-if="row.primary_checked_at" class="mt-0.5 text-xs text-gray-400 dark:text-dark-400">
+                {{ formatRelativeTime(row.primary_checked_at) }}
+              </div>
+            </div>
+            <span v-else class="text-sm text-gray-400 dark:text-dark-400">
+              {{ t('admin.channelMonitor.bestAccountEmpty') }}
+            </span>
+          </template>
+
           <template #cell-availability_7d="{ row }">
             <span class="text-sm text-gray-900 dark:text-gray-100">{{ formatAvailability(row) }}</span>
           </template>
@@ -53,6 +79,7 @@
               :running="runningId === row.id"
               :duplicating="duplicatingIds.has(row.id)"
               @run="handleRunNow"
+              @run-full="handleForceFullRun"
               @view-image="handleViewImage"
               @duplicate="handleDuplicate"
               @edit="openEditDialog"
@@ -162,6 +189,7 @@ const {
   providerBadgeClass,
   formatLatency,
   formatAvailability,
+  formatRelativeTime,
 } = useChannelMonitorFormat()
 
 const monitors = ref<ChannelMonitor[]>([])
@@ -192,6 +220,7 @@ const columns = computed<Column[]>(() => [
   { key: 'name', label: t('admin.channelMonitor.columns.name'), sortable: false },
   { key: 'provider', label: t('admin.channelMonitor.columns.provider'), sortable: false },
   { key: 'primary_model', label: t('admin.channelMonitor.columns.primaryModel'), sortable: false },
+  { key: 'best_account', label: t('admin.channelMonitor.columns.bestAccount'), sortable: false },
   { key: 'availability_7d', label: t('admin.channelMonitor.columns.availability7d'), sortable: false },
   { key: 'latency', label: t('admin.channelMonitor.columns.latency'), sortable: false },
   { key: 'enabled', label: t('admin.channelMonitor.columns.enabled'), sortable: false },
@@ -202,6 +231,33 @@ const deleteConfirmMessage = computed(() => {
   const name = deleting.value?.name || ''
   return t('admin.channelMonitor.deleteConfirm', { name })
 })
+
+function hasBestAccount(row: ChannelMonitor): boolean {
+  return Boolean(
+    row.primary_account_name?.trim() ||
+      row.primary_account_id != null ||
+      row.primary_probe_mode ||
+      row.primary_candidate_count ||
+      row.primary_checked_at,
+  )
+}
+
+function bestAccountLabel(row: ChannelMonitor): string {
+  const name = row.primary_account_name?.trim() || ''
+  const id = row.primary_account_id
+  if (name && id != null) return `${name} #${id}`
+  if (name) return name
+  if (id != null) return `#${id}`
+  return t('admin.channelMonitor.bestAccountEmpty')
+}
+
+function bestAccountTitle(row: ChannelMonitor): string {
+  return bestAccountLabel(row)
+}
+
+function probeModeLabel(mode: NonNullable<ChannelMonitor['primary_probe_mode']>): string {
+  return t(`admin.channelMonitor.probeModes.${mode}`)
+}
 
 async function reload() {
   if (abortController) abortController.abort()
@@ -278,11 +334,11 @@ async function toggleEnabled(row: ChannelMonitor) {
   }
 }
 
-async function handleRunNow(row: ChannelMonitor) {
+async function handleRunNow(row: ChannelMonitor, forceFull = false) {
   if (runningId.value != null) return
   runningId.value = row.id
   try {
-    const res = await adminAPI.channelMonitor.runNow(row.id)
+    const res = await adminAPI.channelMonitor.runNow(row.id, { forceFull })
     runResults.value = res.results || []
     showRunResult.value = true
     appStore.showSuccess(t('admin.channelMonitor.runSuccess'))
@@ -293,6 +349,10 @@ async function handleRunNow(row: ChannelMonitor) {
   } finally {
     runningId.value = null
   }
+}
+
+async function handleForceFullRun(row: ChannelMonitor) {
+  await handleRunNow(row, true)
 }
 
 function revokeImageUrl() {

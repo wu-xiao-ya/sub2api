@@ -15,7 +15,6 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -23,7 +22,6 @@ import (
 
 	"github.com/andybalholm/brotli"
 	"github.com/klauspost/compress/zstd"
-	"golang.org/x/mod/semver"
 	"golang.org/x/net/http2"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
@@ -75,11 +73,9 @@ const (
 	// The Grok CLI proxy rejects requests that do not identify a supported
 	// client version. Host/env/version pins live in package xai so service,
 	// billing, and transport layers advertise the same identity.
-	grokCLIProxyHost       = xai.CLIProxyHost
-	grokOfficialAPIHost    = "api.x.ai"
-	grokCLIStableVersion   = xai.CLIClientVersion // preferred pin (not the minimum floor)
-	grokCLIVersionOverride = xai.CLIVersionEnv
-	grokFallbackBodyLimit  = 64 << 10
+	grokCLIProxyHost      = xai.CLIProxyHost
+	grokOfficialAPIHost   = "api.x.ai"
+	grokFallbackBodyLimit = 64 << 10
 )
 
 const (
@@ -439,10 +435,8 @@ type prefixedReadCloser struct {
 // proxy host keeps direct api.x.ai traffic unchanged and automatically covers
 // Responses, Chat Completions, media, quota probes, and account tests.
 //
-// Operator overrides must be >= CLIClientVersion (the preferred pin). Package
-// xai.IsSupportedCLIVersion uses a lower floor (CLIStableVersion) for general
-// validation; transport is stricter so we never silently advertise an older pin
-// than the binary default.
+// The version resolver is shared with billing and account-test paths so every
+// Grok CLI-proxy request advertises the same supported identity.
 func applyGrokCLIProxyHeaders(req *http.Request) {
 	if req == nil || req.URL == nil || !strings.EqualFold(strings.TrimSpace(req.URL.Hostname()), grokCLIProxyHost) {
 		return
@@ -450,22 +444,11 @@ func applyGrokCLIProxyHeaders(req *http.Request) {
 	if req.Header == nil {
 		req.Header = make(http.Header)
 	}
-	version := strings.TrimSpace(os.Getenv(grokCLIVersionOverride))
-	if !isSupportedGrokCLIVersion(version) {
-		version = grokCLIStableVersion
-	}
+	version := xai.ResolveCLIVersion()
 	req.Header.Set("X-XAI-Token-Auth", xai.CLITokenAuth)
 	req.Header.Set("x-grok-client-version", version)
 	req.Header.Set("x-grok-client-identifier", xai.CLIClientIdentifier)
 	req.Header.Set("User-Agent", xai.CLIUserAgent(version))
-}
-
-func isSupportedGrokCLIVersion(version string) bool {
-	canonical := "v" + version
-	minimum := "v" + xai.CLIClientVersion
-	return semver.IsValid(canonical) &&
-		semver.Canonical(canonical) == canonical &&
-		semver.Compare(canonical, minimum) >= 0
 }
 
 // acquireClientWithTLS 获取或创建带 TLS 指纹的客户端

@@ -243,6 +243,9 @@ func TestUpdateWithUpstreamBillingProbeEnabledRollsBackWhenOutboxFails(t *testin
 	mock.ExpectQuery(`(?s)SELECT .* FROM "accounts" WHERE "id" = \$1`).
 		WithArgs(int64(27)).
 		WillReturnRows(updatedAccountRows(27, `{"upstream_billing_probe_enabled":false}`))
+	mock.ExpectExec(regexp.QuoteMeta("UPDATE accounts SET pool_group_id = NULL WHERE id = $1 AND deleted_at IS NULL")).
+		WithArgs(int64(27)).
+		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectExec(regexp.QuoteMeta("INSERT INTO scheduler_outbox")).WillReturnError(errors.New("outbox failed"))
 	mock.ExpectRollback()
 
@@ -340,7 +343,14 @@ func updatedAccountRows(id int64, extra string) *sqlmock.Rows {
 	return sqlmock.NewRows(dbaccount.Columns).AddRow(
 		id, now, now, nil, "test", nil, service.PlatformOpenAI, service.AccountTypeAPIKey,
 		[]byte(`{"api_key":"sk-test"}`), []byte(extra), nil, nil, 1, nil, 1, 1.0,
-		service.StatusActive, nil, nil, nil, false, true, nil, nil, nil, nil, nil, nil,
-		nil, nil, nil, service.QuotaDimensionGlobal,
+		service.StatusActive, nil, nil, nil,
+		false, // auto_pause_on_expired
+		nil,   // owner_user_id
+		"",    // contribution_status
+		nil, nil, nil,
+		true, // schedulable
+		nil, nil, nil, nil, nil,
+		nil, nil, nil, nil,
+		service.QuotaDimensionGlobal,
 	)
 }

@@ -22,6 +22,22 @@ export default {
           enabledHint: 'Disabling stops background checks; existing history is preserved.',
           defaultInterval: 'Default check interval (seconds)',
           defaultIntervalHint: 'Pre-fills the interval when creating a new monitor; each monitor can override it. Range 15 – 3600.',
+          accountProbe: {
+            title: 'Adaptive Account Probing',
+            description: 'Use candidate account state to adaptively probe monitors linked to account groups.',
+            enabled: 'Enable Adaptive Account Probing',
+            enabledHint: 'When disabled, monitoring keeps its existing channel check path without account-group candidate probing.',
+            confirmAttempts: 'Confirmation attempts',
+            confirmAttemptsHint: 'Additional confirmation probes after an abnormal first result. Range 0 – 2.',
+            degradedThreshold: 'Healthy latency threshold (ms)',
+            degradedThresholdHint: 'Responses above this threshold are marked as degraded. Range 100 – 120000 ms.',
+            maxCandidates: 'Candidate accounts',
+            maxCandidatesHint: 'Maximum candidate accounts considered for each adaptive probe. Range 1 – 20.',
+            parallelism: 'Probe parallelism',
+            parallelismHint: 'Maximum accounts probed at the same time. Range 1 – 20.',
+            allowImageFanout: 'Multi-account image probing',
+            allowImageFanoutHint: 'When enabled, image monitor checks can send requests to multiple candidate accounts and incur additional billed usage.',
+          },
         },
         availableChannels: {
           title: 'Available Channels',
@@ -479,6 +495,9 @@ export default {
         apiBaseUrlPlaceholder: 'https://api.example.com',
         apiBaseUrlHint:
           'Used for "Use Key", "Import to CC Switch", and callback URL suggestions. Leave empty to use current site URL.',
+        apiEndpointProbeInterval: 'Endpoint Latency Probe Interval',
+        apiEndpointProbeIntervalHint:
+          'Auto probe interval in seconds for the API Keys endpoint status bar. 0 disables auto probing and keeps manual refresh only; non-zero values are saved within 3-300 seconds.',
         tablePreferencesTitle: 'Global Table Preferences',
         tablePreferencesDescription: 'Configure default pagination behavior for shared table components',
         tableDefaultPageSize: 'Default Rows Per Page',
