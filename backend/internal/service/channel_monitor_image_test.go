@@ -127,6 +127,48 @@ func TestRunImageCheckForModelUsesDedicatedImageClient(t *testing.T) {
 	}
 }
 
+func TestRunImageCheckForModelUsesConfiguredWaitLimit(t *testing.T) {
+	imageBytes := testPNGBytes(t)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		time.Sleep(120 * time.Millisecond)
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"data": []map[string]string{{
+				"b64_json": base64.StdEncoding.EncodeToString(imageBytes),
+			}},
+		})
+	}))
+	t.Cleanup(server.Close)
+
+	originalImageClient := monitorImageHTTPClient
+	monitorImageHTTPClient = &http.Client{Timeout: time.Second}
+	t.Cleanup(func() {
+		monitorImageHTTPClient = originalImageClient
+	})
+
+	start := time.Now()
+	result, payload := runImageCheckForModel(
+		context.Background(),
+		server.URL,
+		"sk-test",
+		"gpt-image-2",
+		&CheckOptions{
+			APIMode:        MonitorAPIModeImages,
+			RequestTimeout: 20 * time.Millisecond,
+		},
+	)
+
+	if result.Status != MonitorStatusError {
+		t.Fatalf("expected configured timeout to fail the image check, got %s: %s", result.Status, result.Message)
+	}
+	if payload != nil {
+		t.Fatal("timed out image check must not produce a cache payload")
+	}
+	if elapsed := time.Since(start); elapsed >= 100*time.Millisecond {
+		t.Fatalf("configured image wait limit was ignored: elapsed=%s", elapsed)
+	}
+}
+
 func TestRunChecksConcurrentImagesOnlyChecksPrimaryModel(t *testing.T) {
 	swapMonitorHTTPClient(t)
 	imageBytes := testPNGBytes(t)

@@ -70,10 +70,15 @@ var schedulerNeutralExtraKeys = map[string]struct{}{
 const postgresParameterBatchSize = 50000
 
 // NewAccountRepository 创建账户仓储实例。
-// 这是对外暴露的构造函数，返回接口类型以便于依赖注入。
-func NewAccountRepository(client *dbent.Client, sqlDB *sql.DB, schedulerCache service.SchedulerCache) service.AccountRepository {
+// 返回具体类型，使 Wire 可以同时绑定普通账号和贡献账号仓储接口。
+func NewAccountRepository(client *dbent.Client, sqlDB *sql.DB, schedulerCache service.SchedulerCache) *accountRepository {
 	return newAccountRepositoryWithSQL(client, sqlDB, schedulerCache)
 }
+
+var (
+	_ service.AccountRepository             = (*accountRepository)(nil)
+	_ service.AccountContributionRepository = (*accountRepository)(nil)
+)
 
 // NewAdminAccountRepository exposes the account repository's atomic duplication capability
 // as an explicit dependency of the admin service.
@@ -115,6 +120,22 @@ func createAccountRecord(ctx context.Context, client *dbent.Client, account *ser
 		SetErrorMessage(account.ErrorMessage).
 		SetSchedulable(account.Schedulable).
 		SetAutoPauseOnExpired(account.AutoPauseOnExpired)
+
+	if account.OwnerUserID != nil {
+		builder.SetOwnerUserID(*account.OwnerUserID)
+	}
+	if account.ContributionStatus != "" {
+		builder.SetContributionStatus(account.ContributionStatus)
+	}
+	if account.ContributionSubmittedAt != nil {
+		builder.SetContributionSubmittedAt(*account.ContributionSubmittedAt)
+	}
+	if account.ContributionApprovedAt != nil {
+		builder.SetContributionApprovedAt(*account.ContributionApprovedAt)
+	}
+	if account.ContributionRevokedAt != nil {
+		builder.SetContributionRevokedAt(*account.ContributionRevokedAt)
+	}
 
 	if account.RateMultiplier != nil {
 		builder.SetRateMultiplier(*account.RateMultiplier)
@@ -480,6 +501,24 @@ func (r *accountRepository) updateLockedAccount(ctx context.Context, client *dbe
 		SetErrorMessage(account.ErrorMessage).
 		SetSchedulable(schedulable).
 		SetAutoPauseOnExpired(account.AutoPauseOnExpired)
+
+	builder.SetNillableOwnerUserID(account.OwnerUserID)
+	builder.SetContributionStatus(account.ContributionStatus)
+	if account.ContributionSubmittedAt != nil {
+		builder.SetContributionSubmittedAt(*account.ContributionSubmittedAt)
+	} else {
+		builder.ClearContributionSubmittedAt()
+	}
+	if account.ContributionApprovedAt != nil {
+		builder.SetContributionApprovedAt(*account.ContributionApprovedAt)
+	} else {
+		builder.ClearContributionApprovedAt()
+	}
+	if account.ContributionRevokedAt != nil {
+		builder.SetContributionRevokedAt(*account.ContributionRevokedAt)
+	} else {
+		builder.ClearContributionRevokedAt()
+	}
 
 	if account.RateMultiplier != nil {
 		builder.SetRateMultiplier(*account.RateMultiplier)
@@ -1763,6 +1802,7 @@ func (r *accountRepository) schedulableAccountsQuery(now time.Time) *dbent.Accou
 		Where(
 			dbaccount.StatusEQ(service.StatusActive),
 			dbaccount.SchedulableEQ(true),
+			contributionSchedulablePredicate(),
 			tempUnschedulablePredicate(),
 			notExpiredPredicate(now),
 			dbaccount.Or(dbaccount.OverloadUntilIsNil(), dbaccount.OverloadUntilLTE(now)),
@@ -1821,12 +1861,16 @@ func (r *accountRepository) ListSchedulableCapacityByGroupIDs(ctx context.Contex
 			AND a.deleted_at IS NULL
 			AND a.status = $2
 			AND a.schedulable = TRUE
+			AND (
+				(a.owner_user_id IS NULL AND a.contribution_status = '')
+				OR (a.owner_user_id IS NOT NULL AND a.contribution_status = $4)
+			)
 			AND (a.temp_unschedulable_until IS NULL OR a.temp_unschedulable_until <= $3)
 			AND (a.expires_at IS NULL OR a.expires_at > $3 OR a.auto_pause_on_expired = FALSE)
 			AND (a.overload_until IS NULL OR a.overload_until <= $3)
 			AND (a.rate_limit_reset_at IS NULL OR a.rate_limit_reset_at <= $3)
 		ORDER BY ag.group_id ASC, ag.priority ASC, a.priority ASC, a.id ASC
-	`, pq.Array(groupIDs), service.StatusActive, time.Now())
+	`, pq.Array(groupIDs), service.StatusActive, time.Now(), service.ContributionStatusApproved)
 	if err != nil {
 		return nil, err
 	}
@@ -1869,6 +1913,7 @@ func (r *accountRepository) ListSchedulableByPlatform(ctx context.Context, platf
 			dbaccount.PlatformEQ(platform),
 			dbaccount.StatusEQ(service.StatusActive),
 			dbaccount.SchedulableEQ(true),
+			contributionSchedulablePredicate(),
 			tempUnschedulablePredicate(),
 			notExpiredPredicate(now),
 			dbaccount.Or(dbaccount.OverloadUntilIsNil(), dbaccount.OverloadUntilLTE(now)),
@@ -1929,6 +1974,7 @@ func (r *accountRepository) ListSchedulableByPlatforms(ctx context.Context, plat
 			dbaccount.PlatformIn(platforms...),
 			dbaccount.StatusEQ(service.StatusActive),
 			dbaccount.SchedulableEQ(true),
+			contributionSchedulablePredicate(),
 			tempUnschedulablePredicate(),
 			notExpiredPredicate(now),
 			dbaccount.Or(dbaccount.OverloadUntilIsNil(), dbaccount.OverloadUntilLTE(now)),
@@ -1950,6 +1996,7 @@ func (r *accountRepository) ListSchedulableUngroupedByPlatform(ctx context.Conte
 			dbaccount.StatusEQ(service.StatusActive),
 			dbaccount.SchedulableEQ(true),
 			dbaccount.Not(dbaccount.HasAccountGroups()),
+			contributionSchedulablePredicate(),
 			tempUnschedulablePredicate(),
 			notExpiredPredicate(now),
 			dbaccount.Or(dbaccount.OverloadUntilIsNil(), dbaccount.OverloadUntilLTE(now)),
@@ -1974,6 +2021,7 @@ func (r *accountRepository) ListSchedulableUngroupedByPlatforms(ctx context.Cont
 			dbaccount.StatusEQ(service.StatusActive),
 			dbaccount.SchedulableEQ(true),
 			dbaccount.Not(dbaccount.HasAccountGroups()),
+			contributionSchedulablePredicate(),
 			tempUnschedulablePredicate(),
 			notExpiredPredicate(now),
 			dbaccount.Or(dbaccount.OverloadUntilIsNil(), dbaccount.OverloadUntilLTE(now)),
@@ -2025,6 +2073,7 @@ func (r *accountRepository) ListModelAvailabilityCandidates(
 		dbaccount.StatusEQ(service.StatusActive),
 		dbaccount.SchedulableEQ(true),
 		dbaccount.PlatformIn(platforms...),
+		contributionSchedulablePredicate(),
 	}
 	if !includeGrouped {
 		preds = append(preds, dbaccount.Not(dbaccount.HasAccountGroups()))
@@ -2950,7 +2999,10 @@ func (r *accountRepository) queryAccountsByGroup(ctx context.Context, groupID in
 		preds = append(preds, dbaccount.PlatformIn(opts.platforms...))
 	}
 	if opts.schedulable {
-		preds = append(preds, dbaccount.SchedulableEQ(true))
+		preds = append(preds,
+			dbaccount.SchedulableEQ(true),
+			contributionSchedulablePredicate(),
+		)
 		if !opts.ignoreTransientState {
 			now := time.Now()
 			preds = append(preds,
@@ -3359,6 +3411,11 @@ func accountEntityToService(m *dbent.Account) *service.Account {
 		AutoPauseOnExpired:      m.AutoPauseOnExpired,
 		CreatedAt:               m.CreatedAt,
 		UpdatedAt:               m.UpdatedAt,
+		OwnerUserID:             m.OwnerUserID,
+		ContributionStatus:      m.ContributionStatus,
+		ContributionSubmittedAt: m.ContributionSubmittedAt,
+		ContributionApprovedAt:  m.ContributionApprovedAt,
+		ContributionRevokedAt:   m.ContributionRevokedAt,
 		Schedulable:             m.Schedulable,
 		RateLimitedAt:           m.RateLimitedAt,
 		RateLimitResetAt:        m.RateLimitResetAt,
@@ -3371,6 +3428,13 @@ func accountEntityToService(m *dbent.Account) *service.Account {
 		ParentAccountID:         m.ParentAccountID,
 		QuotaDimension:          string(m.QuotaDimension),
 	}
+}
+
+func contributionSchedulablePredicate() dbpredicate.Account {
+	return dbaccount.Or(
+		dbaccount.And(dbaccount.OwnerUserIDIsNil(), dbaccount.ContributionStatusEQ("")),
+		dbaccount.And(dbaccount.OwnerUserIDNotNil(), dbaccount.ContributionStatusEQ(service.ContributionStatusApproved)),
+	)
 }
 
 func normalizeJSONMap(in map[string]any) map[string]any {
@@ -3458,6 +3522,64 @@ func (r *accountRepository) FindByExtraField(ctx context.Context, key string, va
 	}
 
 	return r.accountsToService(ctx, accounts)
+}
+
+func (r *accountRepository) ListContributionsByOwner(
+	ctx context.Context,
+	ownerUserID int64,
+	params pagination.PaginationParams,
+) ([]service.Account, *pagination.PaginationResult, error) {
+	q := r.client.Account.Query().Where(
+		dbaccount.OwnerUserIDEQ(ownerUserID),
+		dbaccount.ContributionStatusNEQ(""),
+	)
+	total, err := q.Clone().Count(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	accounts, err := q.Order(
+		dbent.Desc(dbaccount.FieldCreatedAt),
+		dbent.Desc(dbaccount.FieldID),
+	).Offset(params.Offset()).Limit(params.Limit()).All(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	out, err := r.accountsToService(ctx, accounts)
+	if err != nil {
+		return nil, nil, err
+	}
+	return out, paginationResultFromTotal(int64(total), params), nil
+}
+
+func (r *accountRepository) ListContributionsByStatus(
+	ctx context.Context,
+	status string,
+	params pagination.PaginationParams,
+) ([]service.Account, *pagination.PaginationResult, error) {
+	predicates := []dbpredicate.Account{
+		dbaccount.OwnerUserIDNotNil(),
+		dbaccount.ContributionStatusNEQ(""),
+	}
+	if strings.ToLower(strings.TrimSpace(status)) != "all" {
+		predicates = append(predicates, dbaccount.ContributionStatusEQ(status))
+	}
+	q := r.client.Account.Query().Where(predicates...)
+	total, err := q.Clone().Count(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	accounts, err := q.Order(
+		dbent.Asc(dbaccount.FieldCreatedAt),
+		dbent.Asc(dbaccount.FieldID),
+	).Offset(params.Offset()).Limit(params.Limit()).All(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	out, err := r.accountsToService(ctx, accounts)
+	if err != nil {
+		return nil, nil, err
+	}
+	return out, paginationResultFromTotal(int64(total), params), nil
 }
 
 // ListDueUpstreamBillingProbeAccounts bounds result hydration and network work

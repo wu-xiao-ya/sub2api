@@ -280,6 +280,27 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/account-contributions',
+    name: 'AccountContributions',
+    component: () => import('@/views/user/AccountContributionsView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: false,
+      titleKey: 'accountContributions.title',
+      descriptionKey: 'accountContributions.description'
+    }
+  },
+  {
+    path: '/account-contributions/callback',
+    name: 'AccountContributionCallback',
+    component: () => import('@/views/user/AccountContributionCallbackView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: false,
+      titleKey: 'accountContributions.callbackTitle'
+    }
+  },
+  {
     path: '/subscriptions',
     name: 'Subscriptions',
     component: () => import('@/views/user/SubscriptionsView.vue'),
@@ -516,6 +537,17 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/admin/account-contributions',
+    name: 'AdminAccountContributions',
+    component: () => import('@/views/admin/AccountContributionsView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      titleKey: 'admin.accountContributions.title',
+      descriptionKey: 'admin.accountContributions.description'
+    }
+  },
+  {
     path: '/admin/announcements',
     name: 'AdminAnnouncements',
     component: () => import('@/views/admin/AnnouncementsView.vue'),
@@ -525,6 +557,18 @@ const routes: RouteRecordRaw[] = [
       title: 'Announcements',
       titleKey: 'admin.announcements.title',
       descriptionKey: 'admin.announcements.description'
+    }
+  },
+  {
+    path: '/admin/group-promotions',
+    name: 'AdminGroupPromotions',
+    component: () => import('@/views/admin/GroupPromotionsView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'Group Promotions',
+      titleKey: 'admin.groupPromotions.title',
+      descriptionKey: 'admin.groupPromotions.description'
     }
   },
   {

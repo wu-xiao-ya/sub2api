@@ -25,23 +25,25 @@ type opsCleanupTarget struct {
 }
 
 type opsCleanupDeletedCounts struct {
-	errorLogs      int64
-	ingressRejects int64
-	alertEvents    int64
-	systemLogs     int64
-	logAudits      int64
-	systemMetrics  int64
-	hourlyPreagg   int64
-	dailyPreagg    int64
+	errorLogs          int64
+	ingressRejects     int64
+	alertEvents        int64
+	systemLogs         int64
+	accountRuntimeLogs int64
+	logAudits          int64
+	systemMetrics      int64
+	hourlyPreagg       int64
+	dailyPreagg        int64
 }
 
 func (c opsCleanupDeletedCounts) String() string {
 	return fmt.Sprintf(
-		"error_logs=%d ingress_rejects=%d alert_events=%d system_logs=%d log_audits=%d system_metrics=%d hourly_preagg=%d daily_preagg=%d",
+		"error_logs=%d ingress_rejects=%d alert_events=%d system_logs=%d account_runtime_logs=%d log_audits=%d system_metrics=%d hourly_preagg=%d daily_preagg=%d",
 		c.errorLogs,
 		c.ingressRejects,
 		c.alertEvents,
 		c.systemLogs,
+		c.accountRuntimeLogs,
 		c.logAudits,
 		c.systemMetrics,
 		c.hourlyPreagg,
@@ -129,6 +131,57 @@ WHERE id IN (SELECT id FROM batch)
 		}
 	}
 	return total, nil
+}
+
+// deleteOldSystemLogsByComponent deletes one component without changing the
+// retention policy for unrelated system logs.
+func deleteOldSystemLogsByComponent(
+	ctx context.Context,
+	db *sql.DB,
+	cutoff time.Time,
+	component string,
+	batchSize int,
+) (int64, error) {
+	if db == nil {
+		return 0, nil
+	}
+	component = strings.TrimSpace(component)
+	if component == "" {
+		return 0, nil
+	}
+	if batchSize <= 0 {
+		batchSize = opsCleanupBatchSize
+	}
+
+	const query = `
+WITH batch AS (
+  SELECT id FROM ops_system_logs
+  WHERE created_at < $1 AND component = $2
+  ORDER BY id
+  LIMIT $3
+)
+DELETE FROM ops_system_logs
+WHERE id IN (SELECT id FROM batch)
+`
+
+	var total int64
+	for {
+		result, err := db.ExecContext(ctx, query, cutoff, component, batchSize)
+		if err != nil {
+			if isMissingRelationError(err) {
+				return total, nil
+			}
+			return total, err
+		}
+		affected, err := result.RowsAffected()
+		if err != nil {
+			return total, err
+		}
+		total += affected
+		if affected == 0 {
+			return total, nil
+		}
+	}
 }
 
 // truncateOpsTable 用 TRUNCATE TABLE 清空指定表，先 SELECT COUNT(*) 取得清空前行数用于 heartbeat。

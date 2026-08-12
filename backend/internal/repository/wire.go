@@ -71,6 +71,8 @@ var ProviderSet = wire.NewSet(
 	NewAdminGroupRepository,
 	NewAccountPoolGroupRepository,
 	NewAccountRepository,
+	wire.Bind(new(service.AccountRepository), new(*accountRepository)),
+	wire.Bind(new(service.AccountContributionRepository), new(*accountRepository)),
 	NewAdminAccountRepository,
 	NewScheduledTestPlanRepository,   // 定时测试计划仓储
 	NewScheduledTestResultRepository, // 定时测试结果仓储
@@ -79,8 +81,10 @@ var ProviderSet = wire.NewSet(
 	NewPromoCodeRepository,
 	NewAnnouncementRepository,
 	NewAnnouncementReadRepository,
+	NewGroupPromotionRepository,
 	NewUsageLogRepository,
 	NewUsageBillingRepository,
+	NewContributorRewardRepository,
 	NewBatchImageRepository,
 	NewIdempotencyRepository,
 	NewUsageCleanupRepository,

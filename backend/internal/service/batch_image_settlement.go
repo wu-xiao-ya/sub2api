@@ -279,6 +279,12 @@ func (s *BatchImageSettlementService) recordUsageLog(ctx context.Context, job *B
 		ImageSize:             &imageSize,
 		CreatedAt:             createdAt,
 	}
+	if job.PromotionID != nil && job.PromotionName != nil && job.PromotionBaseRateMultiplier != nil {
+		baseRate := *job.PromotionBaseRateMultiplier * job.BatchDiscountMultiplier
+		usageLog.PromotionID = job.PromotionID
+		usageLog.PromotionName = job.PromotionName
+		usageLog.BaseRateMultiplier = &baseRate
+	}
 	writeUsageLogBestEffort(ctx, s.UsageLogRepo, usageLog, "service.batch_image_settlement")
 }
 

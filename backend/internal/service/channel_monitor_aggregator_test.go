@@ -7,13 +7,19 @@ import (
 func TestBuildStatusSummaryIncludesExtraModelAvailability(t *testing.T) {
 	primaryLatency := 124
 	extraLatency := 83
+	accountID := int64(42)
 
 	summary := buildStatusSummary(
 		map[string]*ChannelMonitorLatest{
 			"gpt-5.6-sol": {
-				Model:     "gpt-5.6-sol",
-				Status:    MonitorStatusOperational,
-				LatencyMs: &primaryLatency,
+				Model:          "gpt-5.6-sol",
+				Status:         MonitorStatusOperational,
+				LatencyMs:      &primaryLatency,
+				AccountID:      &accountID,
+				AccountName:    "plus-line-1",
+				ProbeMode:      accountProbeModeFull,
+				CandidateCount: 5,
+				HealthyCount:   4,
 			},
 			"gpt-5.5": {
 				Model:     "gpt-5.5",
@@ -37,6 +43,15 @@ func TestBuildStatusSummaryIncludesExtraModelAvailability(t *testing.T) {
 
 	if summary.Availability7d != 99.5 {
 		t.Fatalf("primary availability = %v, want 99.5", summary.Availability7d)
+	}
+	if summary.PrimaryAccountID == nil || *summary.PrimaryAccountID != accountID {
+		t.Fatalf("primary account id = %v, want %d", summary.PrimaryAccountID, accountID)
+	}
+	if summary.PrimaryAccountName != "plus-line-1" ||
+		summary.PrimaryProbeMode != accountProbeModeFull ||
+		summary.PrimaryCandidateCount != 5 ||
+		summary.PrimaryHealthyCount != 4 {
+		t.Fatalf("primary probe summary not propagated: %#v", summary)
 	}
 	if len(summary.ExtraModels) != 1 {
 		t.Fatalf("extra model count = %d, want 1", len(summary.ExtraModels))

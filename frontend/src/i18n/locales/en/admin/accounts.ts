@@ -1,4 +1,48 @@
 export default {
+    accountContributions: {
+      title: 'Contribution Review',
+      description: 'Review user-submitted OpenAI OAuth accounts and bind approved accounts to shared groups.',
+      pendingTitle: 'Contribution Review List',
+      pendingDescription: 'Filter contributions by status; approved accounts enter selected groups and become schedulable.',
+      statusAll: 'All statuses',
+      approve: 'Approve',
+      reject: 'Reject',
+      rejectConfirm: 'Reject this contributed account? Rejected accounts will not be scheduled.',
+      approved: 'Contribution approved',
+      rejected: 'Contribution rejected',
+      schedulable: 'Schedulable',
+      notSchedulable: 'Not schedulable',
+      columns: {
+        id: 'ID',
+        account: 'Account',
+        owner: 'Owner',
+        plan: 'Plan',
+        status: 'Status',
+        groups: 'Groups',
+        submittedAt: 'Submitted At'
+      },
+      planInfo: {
+        plan: 'Plan',
+        email: 'Email',
+        chatgptAccountId: 'ChatGPT Account',
+        expiresAt: 'Expires',
+        unknown: 'Unknown'
+      },
+      approveDialog: {
+        title: 'Approve Contribution',
+        groups: 'Bind Groups',
+        noGroups: 'No OpenAI groups are available.',
+        concurrency: 'Concurrency',
+        priority: 'Priority'
+      },
+      errors: {
+        loadFailed: 'Failed to load contribution accounts',
+        loadGroupsFailed: 'Failed to load OpenAI groups',
+        approveFailed: 'Failed to approve contribution',
+        rejectFailed: 'Failed to reject contribution'
+      }
+    },
+
     accounts: {
       title: 'Account Management',
       description: 'Manage AI platform accounts and credentials',

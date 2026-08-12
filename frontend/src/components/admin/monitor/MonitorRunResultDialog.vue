@@ -14,6 +14,18 @@
         <div class="flex flex-col">
           <span class="font-medium text-gray-900 dark:text-white">{{ r.model }}</span>
           <span v-if="r.message" class="text-xs text-gray-500 dark:text-gray-400">{{ r.message }}</span>
+          <span v-if="r.account_name" class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+            {{ t('admin.channelMonitor.probeAccount', { name: r.account_name }) }}
+            <template v-if="r.probe_mode">
+              · {{ t('admin.channelMonitor.probeMode', { mode: probeModeLabel(r.probe_mode) }) }}
+            </template>
+          </span>
+          <span v-if="r.candidate_count" class="text-xs text-gray-500 dark:text-gray-400">
+            {{ t('admin.channelMonitor.probeCandidates', {
+              healthy: r.healthy_count || 0,
+              candidates: r.candidate_count,
+            }) }}
+          </span>
         </div>
         <div class="flex items-center gap-2">
           <span
@@ -53,4 +65,8 @@ defineEmits<{
 
 const { t } = useI18n()
 const { statusLabel, statusBadgeClass, formatLatency } = useChannelMonitorFormat()
+
+function probeModeLabel(mode: string): string {
+  return t(`admin.channelMonitor.probeModes.${mode}`)
+}
 </script>

@@ -65,6 +65,8 @@ func (s *OpenAIGatewayService) handleOpenAIAccountUpstreamError(ctx context.Cont
 	if s == nil || account == nil {
 		return false
 	}
+	var openAI403State *openAI403HandlingState
+	stateCtx, openAI403State = withOpenAI403HandlingState(stateCtx)
 	stateCtx = withTempUnschedulableModel(stateCtx, canonicalModel)
 	if s.rateLimitService != nil && len(canonicalModel) > 0 && s.rateLimitService.HandleUpstreamModelNotFound(stateCtx, account, canonicalModel[0], statusCode, responseBody) {
 		return true
@@ -85,7 +87,8 @@ func (s *OpenAIGatewayService) handleOpenAIAccountUpstreamError(ctx context.Cont
 	shouldDisable := s.rateLimitService.HandleUpstreamError(stateCtx, account, statusCode, headers, responseBody)
 	modelTempMatched := statusCode != http.StatusUnauthorized && tempUnschedulableModel(stateCtx, nil) != "" &&
 		len(matchTempUnschedulableRules(account, statusCode, responseBody)) > 0
-	if shouldDisable && !modelTempMatched {
+	modelScoped403 := openAI403State != nil && openAI403State.modelScoped
+	if shouldDisable && !modelTempMatched && !modelScoped403 {
 		s.BlockAccountScheduling(account, time.Time{}, "upstream_disable")
 	}
 	if !shouldDisable && account.Platform == PlatformOpenAI && account.Type == AccountTypeAPIKey && shouldCooldownOpenAITransientUpstreamError(statusCode, responseBody) {
@@ -102,6 +105,29 @@ func (s *OpenAIGatewayService) handleOpenAIAccountUpstreamError(ctx context.Cont
 				"cooldown_ms", decision.Cooldown.Milliseconds(),
 				"block_scope", "account_model",
 			)
+		}
+		if !decision.ExpiredBlockUntil.IsZero() {
+			writeOpenAIAccountRuntimeEvent(stateCtx, "account_model_cooldown_cleared", account, model, map[string]any{
+				"reason":                  "expired",
+				"previous_cooldown_until": decision.ExpiredBlockUntil.UTC().Format(time.RFC3339Nano),
+			})
+		}
+		if decision.Cooldown > 0 {
+			eventName := "account_model_cooldown_entered"
+			if decision.WasBlocked {
+				eventName = "account_model_cooldown_extended"
+			}
+			fields := map[string]any{
+				"reason":               "upstream_transient",
+				"upstream_status_code": statusCode,
+				"upstream_request_id":  strings.TrimSpace(headers.Get("x-request-id")),
+				"failure_streak":       decision.FailureStreak,
+				"cooldown_until":       decision.BlockUntil.UTC().Format(time.RFC3339Nano),
+			}
+			if !decision.PreviousBlockUntil.IsZero() {
+				fields["previous_cooldown_until"] = decision.PreviousBlockUntil.UTC().Format(time.RFC3339Nano)
+			}
+			writeOpenAIAccountRuntimeEvent(stateCtx, eventName, account, model, fields)
 		}
 	}
 	return shouldDisable
@@ -164,7 +190,7 @@ func (s *OpenAIGatewayService) openAIAccountRuntimeBlockLock(accountID int64) *s
 	return mu
 }
 
-func (s *OpenAIGatewayService) blockAccountSchedulingLocked(account *Account, until time.Time, _ string) (uint64, bool) {
+func (s *OpenAIGatewayService) blockAccountSchedulingLocked(account *Account, until time.Time, reason string) (uint64, bool) {
 	generation := s.openaiAccountRuntimeBlockSequence.Add(1)
 	s.openaiAccountRuntimeBlockGeneration.Store(account.ID, generation)
 	now := time.Now()
@@ -178,6 +204,10 @@ func (s *OpenAIGatewayService) blockAccountSchedulingLocked(account *Account, un
 		if !loaded {
 			actual, stored := s.openaiAccountRuntimeBlockUntil.LoadOrStore(account.ID, blockUntil)
 			if !stored {
+				writeOpenAIAccountRuntimeEvent(context.Background(), "account_runtime_block_entered", account, "", map[string]any{
+					"reason":         strings.TrimSpace(reason),
+					"cooldown_until": blockUntil.UTC().Format(time.RFC3339Nano),
+				})
 				return generation, true
 			}
 			current = actual
@@ -186,6 +216,10 @@ func (s *OpenAIGatewayService) blockAccountSchedulingLocked(account *Account, un
 		currentUntil, ok := current.(time.Time)
 		if !ok || currentUntil.IsZero() {
 			if s.openaiAccountRuntimeBlockUntil.CompareAndSwap(account.ID, current, blockUntil) {
+				writeOpenAIAccountRuntimeEvent(context.Background(), "account_runtime_block_entered", account, "", map[string]any{
+					"reason":         strings.TrimSpace(reason),
+					"cooldown_until": blockUntil.UTC().Format(time.RFC3339Nano),
+				})
 				return generation, true
 			}
 			continue
@@ -194,6 +228,11 @@ func (s *OpenAIGatewayService) blockAccountSchedulingLocked(account *Account, un
 			return generation, false
 		}
 		if s.openaiAccountRuntimeBlockUntil.CompareAndSwap(account.ID, current, blockUntil) {
+			writeOpenAIAccountRuntimeEvent(context.Background(), "account_runtime_block_extended", account, "", map[string]any{
+				"reason":                  strings.TrimSpace(reason),
+				"previous_cooldown_until": currentUntil.UTC().Format(time.RFC3339Nano),
+				"cooldown_until":          blockUntil.UTC().Format(time.RFC3339Nano),
+			})
 			return generation, true
 		}
 	}
@@ -206,8 +245,15 @@ func (s *OpenAIGatewayService) ClearAccountSchedulingBlock(accountID int64) {
 	mu := s.openAIAccountRuntimeBlockLock(accountID)
 	mu.Lock()
 	defer mu.Unlock()
+	previous, existed := s.openaiAccountRuntimeBlockUntil.Load(accountID)
 	s.openaiAccountRuntimeBlockUntil.Delete(accountID)
 	s.openaiAccountRuntimeBlockGeneration.Store(accountID, s.openaiAccountRuntimeBlockSequence.Add(1))
+	if previousUntil, ok := previous.(time.Time); existed && ok && !previousUntil.IsZero() {
+		writeOpenAIAccountRuntimeEvent(context.Background(), "account_runtime_block_cleared", &Account{ID: accountID, Platform: PlatformOpenAI}, "", map[string]any{
+			"reason":                  "explicit_clear",
+			"previous_cooldown_until": previousUntil.UTC().Format(time.RFC3339Nano),
+		})
+	}
 }
 
 func (s *OpenAIGatewayService) isOpenAIAccountRuntimeBlocked(account *Account) bool {
@@ -232,6 +278,10 @@ func (s *OpenAIGatewayService) isOpenAIAccountRuntimeBlocked(account *Account) b
 	}
 	s.openaiAccountRuntimeBlockUntil.Delete(account.ID)
 	s.openaiAccountRuntimeBlockGeneration.Store(account.ID, s.openaiAccountRuntimeBlockSequence.Add(1))
+	writeOpenAIAccountRuntimeEvent(context.Background(), "account_runtime_block_cleared", account, "", map[string]any{
+		"reason":                  "expired",
+		"previous_cooldown_until": cooldownUntil.UTC().Format(time.RFC3339Nano),
+	})
 	return false
 }
 
@@ -278,7 +328,12 @@ func (s *OpenAIGatewayService) clearOpenAIAccountModelTransientState(accountID i
 	if state == nil {
 		return
 	}
-	state.recordSuccess(accountID, model)
+	if previousUntil, cleared := state.recordSuccess(accountID, model); cleared {
+		writeOpenAIAccountRuntimeEvent(context.Background(), "account_model_cooldown_cleared", &Account{ID: accountID, Platform: PlatformOpenAI}, model, map[string]any{
+			"reason":                  "request_succeeded",
+			"previous_cooldown_until": previousUntil.UTC().Format(time.RFC3339Nano),
+		})
+	}
 }
 
 func (s *OpenAIGatewayService) isOpenAIAccountModelRuntimeBlocked(account *Account, requestedModel string) bool {
@@ -290,7 +345,15 @@ func (s *OpenAIGatewayService) isOpenAIAccountModelRuntimeBlocked(account *Accou
 		return false
 	}
 	canonicalModel := canonicalOpenAIAccountSchedulingModel(account, requestedModel)
-	return state.isBlocked(account.ID, openAIAccountModelTransientModel(canonicalModel), time.Now())
+	model := openAIAccountModelTransientModel(canonicalModel)
+	blocked, expiredUntil := state.checkBlocked(account.ID, model, time.Now())
+	if !expiredUntil.IsZero() {
+		writeOpenAIAccountRuntimeEvent(context.Background(), "account_model_cooldown_cleared", account, model, map[string]any{
+			"reason":                  "expired",
+			"previous_cooldown_until": expiredUntil.UTC().Format(time.RFC3339Nano),
+		})
+	}
+	return blocked
 }
 
 func (s *OpenAIGatewayService) isOpenAIAccountRequestRuntimeBlocked(account *Account, requestedModel string) bool {

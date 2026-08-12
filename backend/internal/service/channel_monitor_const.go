@@ -11,9 +11,14 @@ import (
 const (
 	// monitorRequestTimeout 单次模型请求总超时（含 Body 读取）。
 	monitorRequestTimeout = 45 * time.Second
-	// monitorImageRequestTimeout gives image generation enough time to queue
-	// and render while retaining a finite upper bound for monitor workers.
-	monitorImageRequestTimeout = 2 * time.Minute
+	// monitorDefaultImageRequestTimeout gives image generation enough time to
+	// queue and render when an older row or an API client does not provide an
+	// explicit per-monitor timeout.
+	monitorDefaultImageRequestTimeout = 5 * time.Minute
+	// monitorMaxRequestTimeoutSeconds bounds one monitor worker. Image monitors
+	// can choose any value in this range through the admin form.
+	monitorMinRequestTimeoutSeconds = 15
+	monitorMaxRequestTimeoutSeconds = 900
 	// monitorPingTimeout HEAD 请求 endpoint origin 的超时。
 	monitorPingTimeout = 8 * time.Second
 	// monitorDegradedThreshold 主请求成功但耗时超过该阈值视为 degraded。
@@ -68,11 +73,14 @@ const (
 	// providerGeminiPathTemplate Gemini generateContent 路径模板（含 model 占位）。
 	providerGeminiPathTemplate = "/v1beta/models/%s:generateContent"
 
-	// MonitorProviderOpenAI / Anthropic / Gemini / Grok provider 字符串常量（也是 ent enum 的实际值）。
-	MonitorProviderOpenAI    = "openai"
-	MonitorProviderAnthropic = "anthropic"
-	MonitorProviderGemini    = "gemini"
-	MonitorProviderGrok      = "grok"
+	// MonitorProvider* provider strings. Antigravity is only meaningful with
+	// an explicit account-management group; legacy static monitors continue to
+	// use the existing endpoint/API-key adapters.
+	MonitorProviderOpenAI      = "openai"
+	MonitorProviderAnthropic   = "anthropic"
+	MonitorProviderGemini      = "gemini"
+	MonitorProviderGrok        = "grok"
+	MonitorProviderAntigravity = "antigravity"
 
 	// MonitorDefaultGrokModel 是新增 Grok 监控未显式指定模型时使用的轻量测活模型。
 	MonitorDefaultGrokModel = "grok-4.5"
@@ -125,9 +133,6 @@ const (
 	monitorTLSHandshakeTimeout = 10 * time.Second
 	// monitorResponseHeaderTimeout HTTP transport 等待响应头超时。
 	monitorResponseHeaderTimeout = 30 * time.Second
-	// monitorImageResponseHeaderTimeout is intentionally longer than the text
-	// monitor limit because image providers commonly respond only after render.
-	monitorImageResponseHeaderTimeout = 110 * time.Second
 	// monitorPingDiscardMaxBytes ping 时丢弃响应体的最大字节数。
 	monitorPingDiscardMaxBytes = 1024
 
@@ -156,6 +161,9 @@ var (
 	)
 	ErrChannelMonitorInvalidJitter = infraerrors.BadRequest(
 		"CHANNEL_MONITOR_INVALID_JITTER", "jitter_seconds must be >= 0 and interval_seconds - jitter_seconds must be >= 15",
+	)
+	ErrChannelMonitorInvalidRequestTimeout = infraerrors.BadRequest(
+		"CHANNEL_MONITOR_INVALID_REQUEST_TIMEOUT", "request_timeout_seconds must be in [15, 900]",
 	)
 	ErrChannelMonitorInvalidEndpoint = infraerrors.BadRequest(
 		"CHANNEL_MONITOR_INVALID_ENDPOINT", "endpoint must be a valid https URL",

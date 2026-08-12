@@ -43,7 +43,7 @@ import {
 } from '@/api/channelMonitor'
 import {
   groupChannelMonitorViews,
-  groupedChannelStatus,
+  groupedChannelHealth,
   type GroupedChannelStatus,
 } from '@/utils/channelMonitorGrouping'
 import AppLayout from '@/components/layout/AppLayout.vue'
@@ -53,7 +53,7 @@ import MonitorHero, {
 } from '@/components/user/monitor/MonitorHero.vue'
 import MonitorCardGrid from '@/components/user/monitor/MonitorCardGrid.vue'
 import MonitorDetailDialog from '@/components/user/MonitorDetailDialog.vue'
-import { DEFAULT_INTERVAL_SECONDS, STATUS_OPERATIONAL } from '@/constants/channelMonitor'
+import { DEFAULT_INTERVAL_SECONDS } from '@/constants/channelMonitor'
 import { useAutoRefresh } from '@/composables/useAutoRefresh'
 
 const { t } = useI18n()
@@ -83,10 +83,16 @@ const countdown = autoRefresh.countdown
 // ── Computed ──
 const overallStatus = computed<OverallStatus>(() => {
   if (channelGroups.value.length === 0) return 'operational'
-  for (const group of channelGroups.value) {
-    if (groupedChannelStatus(group) !== STATUS_OPERATIONAL) return 'degraded'
+  const priority: Record<OverallStatus, number> = {
+    operational: 0,
+    slow_response: 1,
+    partial: 2,
+    unavailable: 3,
   }
-  return 'operational'
+  return channelGroups.value.reduce<OverallStatus>((current, group) => {
+    const health = groupedChannelHealth(group)
+    return priority[health] > priority[current] ? health : current
+  }, 'operational')
 })
 
 const channelGroups = computed(() => groupChannelMonitorViews(items.value))

@@ -217,7 +217,73 @@ func (r *usageBillingRepository) applyUsageBillingEffects(ctx context.Context, t
 		result.QuotaState = quotaState
 	}
 
+	if cmd.ContributorRewardAmount > 0 && cmd.ContributorOwnerUserID > 0 && cmd.ContributorRewardAccountID > 0 && cmd.ContributorRewardGroupID > 0 {
+		applied, err := applyContributorReward(ctx, tx, cmd)
+		if err != nil {
+			return err
+		}
+		if applied {
+			result.ContributorRewardApplied = true
+			result.ContributorRewardOwnerUserID = cmd.ContributorOwnerUserID
+			result.ContributorRewardAmount = cmd.ContributorRewardAmount
+		}
+	}
+
 	return nil
+}
+
+func applyContributorReward(ctx context.Context, tx *sql.Tx, cmd *service.UsageBillingCommand) (bool, error) {
+	var id int64
+	err := tx.QueryRowContext(ctx, `
+		INSERT INTO contributor_reward_logs (
+			request_id,
+			api_key_id,
+			owner_user_id,
+			consumer_user_id,
+			account_id,
+			group_id,
+			total_cost,
+			actual_cost,
+			reward_multiplier,
+			reward_amount
+		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+		ON CONFLICT (request_id, api_key_id) DO NOTHING
+		RETURNING id
+	`,
+		cmd.RequestID,
+		cmd.APIKeyID,
+		cmd.ContributorOwnerUserID,
+		cmd.UserID,
+		cmd.ContributorRewardAccountID,
+		cmd.ContributorRewardGroupID,
+		cmd.ContributorRewardTotalCost,
+		cmd.ContributorRewardActualCost,
+		cmd.ContributorRewardMultiplier,
+		cmd.ContributorRewardAmount,
+	).Scan(&id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	res, err := tx.ExecContext(ctx, `
+		UPDATE users
+		SET balance = balance + $1,
+			updated_at = NOW()
+		WHERE id = $2 AND deleted_at IS NULL
+	`, cmd.ContributorRewardAmount, cmd.ContributorOwnerUserID)
+	if err != nil {
+		return false, err
+	}
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+	if affected == 0 {
+		return false, service.ErrUserNotFound
+	}
+	return true, nil
 }
 
 func (r *usageBillingRepository) applyConsumptionConcurrencyReward(

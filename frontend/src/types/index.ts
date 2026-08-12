@@ -206,6 +206,7 @@ export interface PublicSettings {
   site_logo: string
   site_subtitle: string
   api_base_url: string
+  api_endpoint_probe_interval_seconds?: number
   contact_info: string
   doc_url: string
   home_content: string
@@ -366,6 +367,50 @@ export interface AnnouncementUserReadStatus {
   read_at?: string
 }
 
+// ==================== Group Promotion Types ====================
+
+export type GroupPromotionMode = 'discount_factor' | 'fixed_multiplier'
+export type GroupPromotionStatus = 'upcoming' | 'active' | 'ended' | 'disabled'
+
+export interface GroupPromotion {
+  id: number
+  name: string
+  description?: string | null
+  group_id: number
+  mode: GroupPromotionMode
+  value: number
+  starts_at: string
+  ends_at: string
+  enabled: boolean
+  status: GroupPromotionStatus
+  created_by?: number | null
+  updated_by?: number | null
+  created_at: string
+  updated_at: string
+}
+
+export interface CreateGroupPromotionRequest {
+  name: string
+  description?: string | null
+  group_id: number
+  mode: GroupPromotionMode
+  value: number
+  starts_at: number
+  ends_at: number
+  enabled?: boolean
+}
+
+export interface UpdateGroupPromotionRequest {
+  name?: string
+  description?: string | null
+  group_id?: number
+  mode?: GroupPromotionMode
+  value?: number
+  starts_at?: number
+  ends_at?: number
+  enabled?: boolean
+}
+
 // ==================== Proxy Node Types ====================
 
 export interface ProxyNode {
@@ -494,6 +539,8 @@ export interface PaginationConfig {
 
 export type GroupPlatform = 'anthropic' | 'openai' | 'gemini' | 'antigravity' | 'grok'
 
+export type VideoModelPrices = Record<string, Record<string, number>>
+
 export type SubscriptionType = 'standard' | 'subscription'
 
 export interface OpenAIMessagesDispatchModelConfig {
@@ -509,6 +556,7 @@ export interface Group {
   description: string | null
   platform: GroupPlatform
   rate_multiplier: number
+  contributor_reward_multiplier: number
   rpm_limit?: number // Group-level RPM cap (0 = unlimited); overrides user-level rpm_limit when set
   is_exclusive: boolean
   status: 'active' | 'inactive'
@@ -647,6 +695,7 @@ export interface CreateGroupRequest {
   description?: string | null
   platform?: GroupPlatform
   rate_multiplier?: number
+  contributor_reward_multiplier?: number
   is_exclusive?: boolean
   subscription_type?: SubscriptionType
   daily_limit_usd?: number | null
@@ -694,6 +743,7 @@ export interface UpdateGroupRequest {
   description?: string | null
   platform?: GroupPlatform
   rate_multiplier?: number
+  contributor_reward_multiplier?: number
   is_exclusive?: boolean
   status?: 'active' | 'inactive'
   subscription_type?: SubscriptionType
@@ -964,6 +1014,11 @@ export interface Account {
   pool_group?: AccountPoolGroup | null
   group_ids?: number[] // Groups this account belongs to
   groups?: Group[] // Preloaded group objects
+  owner_user_id?: number | null
+  contribution_status?: 'pending' | 'approved' | 'rejected' | 'revoked' | ''
+  contribution_submitted_at?: string | null
+  contribution_approved_at?: string | null
+  contribution_revoked_at?: string | null
 
   // Rate limit & scheduling fields
   schedulable: boolean
@@ -1459,6 +1514,9 @@ export interface UsageLog {
   total_cost: number
   actual_cost: number
   rate_multiplier: number
+  promotion_id?: number | null
+  promotion_name?: string | null
+  base_rate_multiplier?: number | null
   long_context_billing_applied: boolean
   billing_type: number
 
@@ -1515,6 +1573,7 @@ export interface AdminUsageLog extends UsageLog {
   // 渠道 ID 和计费等级（仅管理员可见）
   channel_id?: number | null
   billing_tier?: string | null
+  usage_source?: string | null
 
   // 最小账号信息（仅管理员接口返回）
   account?: UsageLogAccountSummary
@@ -1635,6 +1694,9 @@ export interface DashboardStats {
   today_cost: number // 今日标准计费
   today_actual_cost: number // 今日实际扣除
   today_account_cost: number // 今日账号成本
+  today_monitor_requests: number
+  today_monitor_actual_cost: number // 监测实际成本
+  today_monitor_account_cost: number // 监测标准估算
 
   // 系统运行统计
   average_duration_ms: number // 平均响应时间
@@ -1912,6 +1974,7 @@ export interface UsageQueryParams {
   start_date?: string
   end_date?: string
   timezone?: string
+  include_monitor_usage?: boolean
   sort_by?: string
   sort_order?: 'asc' | 'desc'
 }
@@ -1970,6 +2033,27 @@ export interface AccountUsageStatsResponse {
   models: ModelStat[]
   endpoints: EndpointStat[]
   upstream_endpoints: EndpointStat[]
+}
+
+export interface ContributorRewardLog {
+  id: number
+  request_id: string
+  api_key_id: number
+  owner_user_id: number
+  consumer_user_id: number
+  account_id: number
+  group_id: number
+  total_cost: number
+  actual_cost: number
+  reward_multiplier: number
+  reward_amount: number
+  created_at: string
+}
+
+export interface ContributorRewardSummary {
+  total_reward: number
+  today_reward: number
+  last_7d_reward: number
 }
 
 // ==================== User Attribute Types ====================

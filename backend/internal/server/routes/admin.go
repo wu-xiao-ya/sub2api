@@ -39,8 +39,19 @@ func RegisterAdminRoutes(
 		// 账号管理
 		registerAccountRoutes(admin, h, stepUpAuth)
 
+		// 共享号池审核
+		accountContributions := admin.Group("/account-contributions")
+		{
+			accountContributions.GET("", h.AccountContribution.ListPending)
+			accountContributions.POST("/:id/approve", h.AccountContribution.Approve)
+			accountContributions.POST("/:id/reject", h.AccountContribution.Reject)
+		}
+
 		// 公告管理
 		registerAnnouncementRoutes(admin, h)
+
+		// 分组限时活动
+		registerGroupPromotionRoutes(admin, h)
 
 		// OpenAI OAuth
 		registerOpenAIOAuthRoutes(admin, h)
@@ -412,6 +423,17 @@ func registerAnnouncementRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		announcements.PUT("/:id", h.Admin.Announcement.Update)
 		announcements.DELETE("/:id", h.Admin.Announcement.Delete)
 		announcements.GET("/:id/read-status", h.Admin.Announcement.ListReadStatus)
+	}
+}
+
+func registerGroupPromotionRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
+	promotions := admin.Group("/group-promotions")
+	{
+		promotions.GET("", h.Admin.GroupPromotion.List)
+		promotions.POST("", h.Admin.GroupPromotion.Create)
+		promotions.GET("/:id", h.Admin.GroupPromotion.GetByID)
+		promotions.PUT("/:id", h.Admin.GroupPromotion.Update)
+		promotions.DELETE("/:id", h.Admin.GroupPromotion.Delete)
 	}
 }
 

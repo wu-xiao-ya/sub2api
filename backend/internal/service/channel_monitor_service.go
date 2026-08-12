@@ -64,12 +64,17 @@ type ChannelMonitorRepository interface {
 
 // ChannelMonitorService 渠道监控管理服务。
 type ChannelMonitorService struct {
-	repo                ChannelMonitorRepository
-	encryptor           SecretEncryptor
-	accountProbeRepo    channelMonitorAccountProbeRepository
-	httpUpstream        HTTPUpstream
-	cfg                 *config.Config
-	tlsFPProfileService *TLSFingerprintProfileService
+	repo                         ChannelMonitorRepository
+	encryptor                    SecretEncryptor
+	accountProbeRepo             channelMonitorAccountProbeRepository
+	accountProbeExecutor         channelMonitorAccountProbeExecutor
+	accountProbeSettingsProvider channelMonitorAccountProbeSettingsProvider
+	httpUpstream                 HTTPUpstream
+	cfg                          *config.Config
+	tlsFPProfileService          *TLSFingerprintProfileService
+	settingService               *SettingService
+	channelService               *ChannelService
+	billingService               *BillingService
 	// scheduler 由 wire 通过 SetScheduler 注入；CRUD 后调用对应钩子即时同步任务。
 	// 测试或未注入场景下保持 nil，所有钩子调用变为 no-op。
 	scheduler MonitorScheduler
@@ -135,22 +140,24 @@ func (s *ChannelMonitorService) Create(ctx context.Context, p ChannelMonitorCrea
 		return nil, fmt.Errorf("encrypt api key: %w", err)
 	}
 	m := &ChannelMonitor{
-		Name:             strings.TrimSpace(p.Name),
-		Provider:         p.Provider,
-		APIMode:          defaultAPIMode(p.APIMode),
-		Endpoint:         normalizeEndpoint(p.Endpoint),
-		APIKey:           encrypted, // 注意：传入 repository 时该字段为密文
-		PrimaryModel:     normalizeMonitorPrimaryModel(p.Provider, p.PrimaryModel),
-		ExtraModels:      normalizeModels(p.ExtraModels),
-		GroupName:        strings.TrimSpace(p.GroupName),
-		Enabled:          p.Enabled,
-		IntervalSeconds:  p.IntervalSeconds,
-		JitterSeconds:    p.JitterSeconds,
-		CreatedBy:        p.CreatedBy,
-		TemplateID:       p.TemplateID,
-		ExtraHeaders:     emptyHeadersIfNil(p.ExtraHeaders),
-		BodyOverrideMode: defaultBodyMode(p.BodyOverrideMode),
-		BodyOverride:     p.BodyOverride,
+		Name:                  strings.TrimSpace(p.Name),
+		Provider:              p.Provider,
+		APIMode:               defaultAPIMode(p.APIMode),
+		Endpoint:              normalizeEndpoint(p.Endpoint),
+		APIKey:                encrypted, // 注意：传入 repository 时该字段为密文
+		PrimaryModel:          normalizeMonitorPrimaryModel(p.Provider, p.PrimaryModel),
+		ExtraModels:           normalizeModels(p.ExtraModels),
+		GroupName:             strings.TrimSpace(p.GroupName),
+		AccountGroupID:        cloneInt64Pointer(p.AccountGroupID),
+		Enabled:               p.Enabled,
+		IntervalSeconds:       p.IntervalSeconds,
+		JitterSeconds:         p.JitterSeconds,
+		RequestTimeoutSeconds: defaultRequestTimeoutSeconds(p.APIMode, p.RequestTimeoutSeconds),
+		CreatedBy:             p.CreatedBy,
+		TemplateID:            p.TemplateID,
+		ExtraHeaders:          emptyHeadersIfNil(p.ExtraHeaders),
+		BodyOverrideMode:      defaultBodyMode(p.BodyOverrideMode),
+		BodyOverride:          p.BodyOverride,
 	}
 	if err := s.repo.Create(ctx, m); err != nil {
 		return nil, fmt.Errorf("create channel monitor: %w", err)
@@ -198,23 +205,25 @@ func (s *ChannelMonitorService) Duplicate(
 	}
 
 	duplicate := &ChannelMonitor{
-		Name:                 duplicateChannelMonitorName(source.Name),
-		Provider:             source.Provider,
-		APIMode:              source.APIMode,
-		Endpoint:             source.Endpoint,
-		APIKey:               encryptedAPIKey,
-		PrimaryModel:         source.PrimaryModel,
-		ExtraModels:          append([]string{}, source.ExtraModels...),
-		GroupName:            source.GroupName,
-		Enabled:              false,
-		IntervalSeconds:      source.IntervalSeconds,
-		JitterSeconds:        source.JitterSeconds,
-		CreatedBy:            createdBy,
-		TemplateID:           cloneInt64Pointer(source.TemplateID),
-		ExtraHeaders:         cloneChannelMonitorHeaders(source.ExtraHeaders),
-		BodyOverrideMode:     source.BodyOverrideMode,
-		BodyOverride:         bodyOverride,
-		DuplicateOperationID: operationID,
+		Name:                  duplicateChannelMonitorName(source.Name),
+		Provider:              source.Provider,
+		APIMode:               source.APIMode,
+		Endpoint:              source.Endpoint,
+		APIKey:                encryptedAPIKey,
+		PrimaryModel:          source.PrimaryModel,
+		ExtraModels:           append([]string{}, source.ExtraModels...),
+		GroupName:             source.GroupName,
+		AccountGroupID:        cloneInt64Pointer(source.AccountGroupID),
+		Enabled:               false,
+		IntervalSeconds:       source.IntervalSeconds,
+		JitterSeconds:         source.JitterSeconds,
+		RequestTimeoutSeconds: source.RequestTimeoutSeconds,
+		CreatedBy:             createdBy,
+		TemplateID:            cloneInt64Pointer(source.TemplateID),
+		ExtraHeaders:          cloneChannelMonitorHeaders(source.ExtraHeaders),
+		BodyOverrideMode:      source.BodyOverrideMode,
+		BodyOverride:          bodyOverride,
+		DuplicateOperationID:  operationID,
 	}
 	if err := s.repo.Create(ctx, duplicate); err != nil {
 		return nil, fmt.Errorf("duplicate channel monitor: %w", err)
@@ -334,6 +343,9 @@ func validateCreateParams(p ChannelMonitorCreateParams) error {
 	if err := validateJitter(p.JitterSeconds, p.IntervalSeconds); err != nil {
 		return err
 	}
+	if err := validateRequestTimeout(defaultRequestTimeoutSeconds(p.APIMode, p.RequestTimeoutSeconds)); err != nil {
+		return err
+	}
 	if err := validateEndpoint(p.Endpoint); err != nil {
 		return err
 	}
@@ -352,6 +364,7 @@ func (s *ChannelMonitorService) Update(ctx context.Context, id int64, p ChannelM
 	if err != nil {
 		return nil, err
 	}
+	previousProbeConfig := channelMonitorProbeConfigSnapshot(existing)
 	if err := applyMonitorUpdate(existing, p); err != nil {
 		return nil, err
 	}
@@ -364,6 +377,9 @@ func (s *ChannelMonitorService) Update(ctx context.Context, id int64, p ChannelM
 	if err := s.repo.Update(ctx, existing); err != nil {
 		return nil, fmt.Errorf("update channel monitor: %w", err)
 	}
+	if previousProbeConfig.changed(existing) {
+		s.clearAdaptiveProbeState(ctx, existing.ID)
+	}
 
 	// 不再调 s.Get 重走解密链：避免二次解密带来的"密文被静默清空"风险（与 Create 一致）。
 	if apiKeyUpdated {
@@ -373,6 +389,53 @@ func (s *ChannelMonitorService) Update(ctx context.Context, id int64, p ChannelM
 	}
 	s.reconcileScheduler(existing)
 	return existing, nil
+}
+
+type channelMonitorProbeConfig struct {
+	provider        string
+	apiMode         string
+	primaryModel    string
+	extraModelsKey  string
+	accountGroupID  int64
+	hasAccountGroup bool
+}
+
+func channelMonitorProbeConfigSnapshot(m *ChannelMonitor) channelMonitorProbeConfig {
+	snapshot := channelMonitorProbeConfig{
+		provider:       m.Provider,
+		apiMode:        m.APIMode,
+		primaryModel:   m.PrimaryModel,
+		extraModelsKey: strings.Join(m.ExtraModels, "\x00"),
+	}
+	if m.AccountGroupID != nil {
+		snapshot.accountGroupID = *m.AccountGroupID
+		snapshot.hasAccountGroup = true
+	}
+	return snapshot
+}
+
+func (before channelMonitorProbeConfig) changed(after *ChannelMonitor) bool {
+	if after == nil || before.provider != after.Provider ||
+		before.apiMode != after.APIMode ||
+		before.primaryModel != after.PrimaryModel ||
+		before.extraModelsKey != strings.Join(after.ExtraModels, "\x00") {
+		return true
+	}
+	if before.hasAccountGroup != (after.AccountGroupID != nil) {
+		return true
+	}
+	return before.hasAccountGroup && before.accountGroupID != *after.AccountGroupID
+}
+
+func (s *ChannelMonitorService) clearAdaptiveProbeState(ctx context.Context, monitorID int64) {
+	stateRepo, ok := s.repo.(channelMonitorAccountProbeStateRepository)
+	if !ok || monitorID <= 0 {
+		return
+	}
+	if err := stateRepo.ClearAccountProbeStates(ctx, monitorID); err != nil {
+		slog.Warn("channel_monitor: clear adaptive probe states failed",
+			"monitor_id", monitorID, "error", err)
+	}
 }
 
 // applyAPIKeyUpdate 处理 Update 中的 APIKey 字段：
@@ -425,6 +488,12 @@ func (s *ChannelMonitorService) ListHistory(ctx context.Context, id int64, model
 // RunCheck 同步触发对一个监控的检测：并发跑 primary + extra 模型，
 // 写历史记录并更新 last_checked_at。返回每个模型的检测结果。
 func (s *ChannelMonitorService) RunCheck(ctx context.Context, id int64) ([]*CheckResult, error) {
+	return s.RunCheckWithOptions(ctx, id, false)
+}
+
+// RunCheckWithOptions synchronously probes one monitor. forceFull is only
+// meaningful for monitors explicitly bound to an account-management group.
+func (s *ChannelMonitorService) RunCheckWithOptions(ctx context.Context, id int64, forceFull bool) ([]*CheckResult, error) {
 	m, err := s.Get(ctx, id) // 已解密 APIKey
 	if err != nil {
 		return nil, err
@@ -432,9 +501,18 @@ func (s *ChannelMonitorService) RunCheck(ctx context.Context, id int64) ([]*Chec
 	if m.APIKeyDecryptFailed {
 		return nil, ErrChannelMonitorAPIKeyDecryptFailed
 	}
-	if results, handled := s.runBusinessGroupProbeIfConfigured(ctx, m); handled {
+	if results, handled := s.runAdaptiveAccountGroupProbeIfConfigured(ctx, m, forceFull); handled {
 		s.persistCheckResults(ctx, m, results, nil)
 		return results, nil
+	}
+	// Explicit account-group bindings never fall back to the legacy
+	// GroupName-based OpenAI probe. If adaptive probing is disabled or its
+	// dependencies are unavailable, retain the monitor's static behavior.
+	if m.AccountGroupID == nil {
+		if results, handled := s.runBusinessGroupProbeIfConfigured(ctx, m); handled {
+			s.persistCheckResults(ctx, m, results, nil)
+			return results, nil
+		}
 	}
 	results, latestImage := s.runChecksConcurrent(ctx, m)
 	s.persistCheckResults(ctx, m, results, latestImage)
@@ -641,16 +719,24 @@ func (s *ChannelMonitorService) persistCheckResults(
 	results []*CheckResult,
 	latestImage *monitorLatestImagePayload,
 ) {
+	for _, result := range results {
+		s.recordMonitorCost(ctx, m, result, nil)
+	}
 	rows := make([]*ChannelMonitorHistoryRow, 0, len(results))
 	for _, r := range results {
 		rows = append(rows, &ChannelMonitorHistoryRow{
-			MonitorID:     m.ID,
-			Model:         r.Model,
-			Status:        r.Status,
-			LatencyMs:     r.LatencyMs,
-			PingLatencyMs: r.PingLatencyMs,
-			Message:       r.Message,
-			CheckedAt:     r.CheckedAt,
+			MonitorID:      m.ID,
+			Model:          r.Model,
+			Status:         r.Status,
+			LatencyMs:      r.LatencyMs,
+			PingLatencyMs:  r.PingLatencyMs,
+			AccountID:      r.AccountID,
+			AccountName:    r.AccountName,
+			ProbeMode:      r.ProbeMode,
+			CandidateCount: r.CandidateCount,
+			HealthyCount:   r.HealthyCount,
+			Message:        r.Message,
+			CheckedAt:      r.CheckedAt,
 		})
 	}
 	if err := s.repo.InsertHistoryBatch(ctx, rows); err != nil {
@@ -671,6 +757,7 @@ func (s *ChannelMonitorService) runChecksConcurrent(ctx context.Context, m *Chan
 	// 所有模型共用同一份 CheckOptions（来自监控的快照字段）。
 	opts := &CheckOptions{
 		APIMode:          m.APIMode,
+		RequestTimeout:   monitorRequestTimeoutFor(m),
 		ExtraHeaders:     m.ExtraHeaders,
 		BodyOverrideMode: m.BodyOverrideMode,
 		BodyOverride:     m.BodyOverride,
@@ -970,6 +1057,11 @@ func applyMonitorUpdate(existing *ChannelMonitor, p ChannelMonitorUpdateParams) 
 	if p.GroupName != nil {
 		existing.GroupName = strings.TrimSpace(*p.GroupName)
 	}
+	if p.ClearAccountGroup {
+		existing.AccountGroupID = nil
+	} else if p.AccountGroupID != nil {
+		existing.AccountGroupID = cloneInt64Pointer(p.AccountGroupID)
+	}
 	if p.Enabled != nil {
 		existing.Enabled = *p.Enabled
 	}
@@ -981,6 +1073,12 @@ func applyMonitorUpdate(existing *ChannelMonitor, p ChannelMonitorUpdateParams) 
 	}
 	if p.JitterSeconds != nil {
 		existing.JitterSeconds = *p.JitterSeconds
+	}
+	if p.RequestTimeoutSeconds != nil {
+		if err := validateRequestTimeout(*p.RequestTimeoutSeconds); err != nil {
+			return err
+		}
+		existing.RequestTimeoutSeconds = *p.RequestTimeoutSeconds
 	}
 	if p.IntervalSeconds != nil || p.JitterSeconds != nil {
 		// interval 与 jitter 任一变化都需要重新校验组合约束（interval - jitter >= 下限）。
@@ -1006,6 +1104,7 @@ func applyMonitorAdvancedUpdate(existing *ChannelMonitor, p ChannelMonitorUpdate
 		existing.ExtraHeaders = emptyHeadersIfNil(*p.ExtraHeaders)
 	}
 	newAPIMode := defaultAPIMode(existing.APIMode)
+	previousAPIMode := newAPIMode
 	if p.APIMode != nil {
 		newAPIMode = defaultAPIMode(*p.APIMode)
 	} else if existing.Provider != MonitorProviderOpenAI {
@@ -1029,6 +1128,10 @@ func applyMonitorAdvancedUpdate(existing *ChannelMonitor, p ChannelMonitorUpdate
 		}
 		existing.BodyOverrideMode = defaultBodyMode(newMode)
 		existing.BodyOverride = newBody
+	}
+	if p.APIMode != nil && p.RequestTimeoutSeconds == nil &&
+		existing.RequestTimeoutSeconds == defaultRequestTimeoutSeconds(previousAPIMode, 0) {
+		existing.RequestTimeoutSeconds = defaultRequestTimeoutSeconds(newAPIMode, 0)
 	}
 	existing.APIMode = newAPIMode
 	return nil

@@ -39,6 +39,17 @@ func (r *accountProbeRepoStub) ListSchedulableByGroupNameAndPlatform(
 	return append([]Account(nil), r.accounts...), nil
 }
 
+func (r *accountProbeRepoStub) ListSchedulableByGroupIDAndPlatform(
+	_ context.Context,
+	_ int64,
+	_ string,
+) ([]Account, error) {
+	if r.err != nil {
+		return nil, r.err
+	}
+	return append([]Account(nil), r.accounts...), nil
+}
+
 type accountProbeHTTPStub struct {
 	mu        sync.Mutex
 	requests  map[int64]accountProbeRequestSnapshot
@@ -177,6 +188,18 @@ func TestRunCheckBusinessGroupProbesAccountsAndPersistsBest(t *testing.T) {
 	if !strings.Contains(got.Message, `account group "gpt-plus" probed 3 accounts, 2 healthy; best account #2 fast`) {
 		t.Fatalf("best result should include account group summary, got %q", got.Message)
 	}
+	if got.AccountID == nil || *got.AccountID != 2 {
+		t.Fatalf("best result account id = %v, want 2", got.AccountID)
+	}
+	if got.AccountName != "fast" {
+		t.Fatalf("best result account name = %q, want fast", got.AccountName)
+	}
+	if got.ProbeMode != accountProbeModeFull {
+		t.Fatalf("best result probe mode = %q, want %q", got.ProbeMode, accountProbeModeFull)
+	}
+	if got.CandidateCount != 3 || got.HealthyCount != 2 {
+		t.Fatalf("best result candidate summary = %d/%d, want 3/2", got.CandidateCount, got.HealthyCount)
+	}
 	if len(accountRepo.calls) != 1 || accountRepo.calls[0].groupName != "gpt-plus" || accountRepo.calls[0].platform != PlatformOpenAI {
 		t.Fatalf("unexpected account repo calls: %#v", accountRepo.calls)
 	}
@@ -185,6 +208,15 @@ func TestRunCheckBusinessGroupProbesAccountsAndPersistsBest(t *testing.T) {
 	}
 	if monitorRepo.rows[0].MonitorID != 10 || monitorRepo.rows[0].Model != "gpt-5.6-sol" || monitorRepo.rows[0].Status != MonitorStatusOperational {
 		t.Fatalf("unexpected persisted row: %#v", monitorRepo.rows[0])
+	}
+	if monitorRepo.rows[0].AccountID == nil || *monitorRepo.rows[0].AccountID != 2 {
+		t.Fatalf("persisted account id = %v, want 2", monitorRepo.rows[0].AccountID)
+	}
+	if monitorRepo.rows[0].AccountName != "fast" ||
+		monitorRepo.rows[0].ProbeMode != accountProbeModeFull ||
+		monitorRepo.rows[0].CandidateCount != 3 ||
+		monitorRepo.rows[0].HealthyCount != 2 {
+		t.Fatalf("persisted probe metadata mismatch: %#v", monitorRepo.rows[0])
 	}
 
 	upstream.mu.Lock()

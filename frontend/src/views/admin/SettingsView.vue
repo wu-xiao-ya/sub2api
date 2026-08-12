@@ -5389,6 +5389,26 @@
                 </p>
               </div>
 
+              <!-- API Endpoint Latency Probe Interval -->
+              <div>
+                <label
+                  class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
+                >
+                  {{ t("admin.settings.site.apiEndpointProbeInterval") }}
+                </label>
+                <input
+                  v-model.number="form.api_endpoint_probe_interval_seconds"
+                  type="number"
+                  min="0"
+                  max="300"
+                  step="1"
+                  class="input w-40"
+                />
+                <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                  {{ t("admin.settings.site.apiEndpointProbeIntervalHint") }}
+                </p>
+              </div>
+
               <!-- Global Table Preferences -->
               <div class="border-t border-gray-100 pt-4 dark:border-dark-700">
                 <h3 class="text-sm font-medium text-gray-900 dark:text-white">
@@ -6104,6 +6124,137 @@
               <p class="mt-1 text-xs text-gray-400">
                 {{ t('admin.settings.features.channelMonitor.defaultIntervalHint') }}
               </p>
+            </div>
+
+            <div
+              v-if="form.channel_monitor_enabled"
+              data-testid="channel-monitor-account-probe-settings"
+              class="border-t border-gray-100 pt-5 dark:border-dark-700"
+            >
+              <div class="flex items-start justify-between gap-4">
+                <div class="min-w-0">
+                  <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    {{ t('admin.settings.features.channelMonitor.accountProbe.title') }}
+                  </h3>
+                  <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                    {{ t('admin.settings.features.channelMonitor.accountProbe.description') }}
+                  </p>
+                </div>
+                <Toggle
+                  v-model="form.channel_monitor_account_probe_settings.enabled"
+                  data-testid="channel-monitor-account-probe-enabled"
+                />
+              </div>
+
+              <div
+                v-if="form.channel_monitor_account_probe_settings.enabled"
+                class="mt-5 space-y-5"
+              >
+                <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <div>
+                    <label
+                      for="channel-monitor-account-probe-confirm-attempts"
+                      class="input-label"
+                    >
+                      {{ t('admin.settings.features.channelMonitor.accountProbe.confirmAttempts') }}
+                    </label>
+                    <input
+                      id="channel-monitor-account-probe-confirm-attempts"
+                      v-model.number="form.channel_monitor_account_probe_settings.confirm_attempts"
+                      data-testid="channel-monitor-account-probe-confirm-attempts"
+                      type="number"
+                      min="0"
+                      max="2"
+                      step="1"
+                      class="input"
+                    />
+                    <p class="mt-1 text-xs text-gray-400">
+                      {{ t('admin.settings.features.channelMonitor.accountProbe.confirmAttemptsHint') }}
+                    </p>
+                  </div>
+
+                  <div>
+                    <label
+                      for="channel-monitor-account-probe-degraded-threshold"
+                      class="input-label"
+                    >
+                      {{ t('admin.settings.features.channelMonitor.accountProbe.degradedThreshold') }}
+                    </label>
+                    <input
+                      id="channel-monitor-account-probe-degraded-threshold"
+                      v-model.number="form.channel_monitor_account_probe_settings.degraded_threshold_ms"
+                      data-testid="channel-monitor-account-probe-degraded-threshold"
+                      type="number"
+                      min="100"
+                      max="120000"
+                      step="100"
+                      class="input"
+                    />
+                    <p class="mt-1 text-xs text-gray-400">
+                      {{ t('admin.settings.features.channelMonitor.accountProbe.degradedThresholdHint') }}
+                    </p>
+                  </div>
+
+                  <div>
+                    <label
+                      for="channel-monitor-account-probe-max-candidates"
+                      class="input-label"
+                    >
+                      {{ t('admin.settings.features.channelMonitor.accountProbe.maxCandidates') }}
+                    </label>
+                    <input
+                      id="channel-monitor-account-probe-max-candidates"
+                      v-model.number="form.channel_monitor_account_probe_settings.max_candidates"
+                      data-testid="channel-monitor-account-probe-max-candidates"
+                      type="number"
+                      min="1"
+                      max="20"
+                      step="1"
+                      class="input"
+                    />
+                    <p class="mt-1 text-xs text-gray-400">
+                      {{ t('admin.settings.features.channelMonitor.accountProbe.maxCandidatesHint') }}
+                    </p>
+                  </div>
+
+                  <div>
+                    <label
+                      for="channel-monitor-account-probe-parallelism"
+                      class="input-label"
+                    >
+                      {{ t('admin.settings.features.channelMonitor.accountProbe.parallelism') }}
+                    </label>
+                    <input
+                      id="channel-monitor-account-probe-parallelism"
+                      v-model.number="form.channel_monitor_account_probe_settings.parallelism"
+                      data-testid="channel-monitor-account-probe-parallelism"
+                      type="number"
+                      min="1"
+                      max="20"
+                      step="1"
+                      class="input"
+                    />
+                    <p class="mt-1 text-xs text-gray-400">
+                      {{ t('admin.settings.features.channelMonitor.accountProbe.parallelismHint') }}
+                    </p>
+                  </div>
+                </div>
+
+                <div class="flex items-start justify-between gap-4 border-t border-gray-100 pt-4 dark:border-dark-700">
+                  <div class="min-w-0">
+                    <label class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                      {{ t('admin.settings.features.channelMonitor.accountProbe.allowImageFanout') }}
+                    </label>
+                    <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                      {{ t('admin.settings.features.channelMonitor.accountProbe.allowImageFanoutHint') }}
+                    </p>
+                  </div>
+                  <Toggle
+                    v-model="form.channel_monitor_account_probe_settings.allow_image_fanout"
+                    data-testid="channel-monitor-account-probe-allow-image-fanout"
+                  />
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -8395,6 +8546,7 @@ const form = reactive<SettingsForm>({
   site_logo: "",
   site_subtitle: "Subscription to API Conversion Platform",
   api_base_url: "",
+  api_endpoint_probe_interval_seconds: 5,
   contact_info: "",
   doc_url: "",
   home_content: "",
@@ -8601,6 +8753,14 @@ const form = reactive<SettingsForm>({
   // Channel Monitor feature switch
   channel_monitor_enabled: true,
   channel_monitor_default_interval_seconds: 60,
+  channel_monitor_account_probe_settings: {
+    enabled: true,
+    confirm_attempts: 1,
+    degraded_threshold_ms: 6000,
+    max_candidates: 5,
+    parallelism: 5,
+    allow_image_fanout: false,
+  },
   // Available Channels feature switch
   available_channels_enabled: false,
   // Affiliate (邀请返利) feature switch
@@ -9913,6 +10073,8 @@ async function saveSettings() {
       site_logo: form.site_logo,
       site_subtitle: form.site_subtitle,
       api_base_url: form.api_base_url,
+      api_endpoint_probe_interval_seconds:
+        Number(form.api_endpoint_probe_interval_seconds) || 0,
       contact_info: form.contact_info,
       doc_url: form.doc_url,
       home_content: form.home_content,
@@ -10143,6 +10305,55 @@ async function saveSettings() {
       channel_monitor_enabled: form.channel_monitor_enabled,
       channel_monitor_default_interval_seconds:
         Number(form.channel_monitor_default_interval_seconds) || 60,
+      channel_monitor_account_probe_settings: {
+        enabled: Boolean(form.channel_monitor_account_probe_settings.enabled),
+        confirm_attempts: Math.min(
+          2,
+          Math.max(
+            0,
+            Math.floor(
+              Number(
+                form.channel_monitor_account_probe_settings.confirm_attempts,
+              ) || 0,
+            ),
+          ),
+        ),
+        degraded_threshold_ms: Math.min(
+          120000,
+          Math.max(
+            100,
+            Math.floor(
+              Number(
+                form.channel_monitor_account_probe_settings.degraded_threshold_ms,
+              ) || 6000,
+            ),
+          ),
+        ),
+        max_candidates: Math.min(
+          20,
+          Math.max(
+            1,
+            Math.floor(
+              Number(
+                form.channel_monitor_account_probe_settings.max_candidates,
+              ) || 5,
+            ),
+          ),
+        ),
+        parallelism: Math.min(
+          20,
+          Math.max(
+            1,
+            Math.floor(
+              Number(form.channel_monitor_account_probe_settings.parallelism) ||
+                5,
+            ),
+          ),
+        ),
+        allow_image_fanout: Boolean(
+          form.channel_monitor_account_probe_settings.allow_image_fanout,
+        ),
+      },
       // Available Channels feature switch
       available_channels_enabled: form.available_channels_enabled,
       // Affiliate (邀请返利) feature switch

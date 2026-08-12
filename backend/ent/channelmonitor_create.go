@@ -117,6 +117,20 @@ func (_c *ChannelMonitorCreate) SetNillableGroupName(v *string) *ChannelMonitorC
 	return _c
 }
 
+// SetAccountGroupID sets the "account_group_id" field.
+func (_c *ChannelMonitorCreate) SetAccountGroupID(v int64) *ChannelMonitorCreate {
+	_c.mutation.SetAccountGroupID(v)
+	return _c
+}
+
+// SetNillableAccountGroupID sets the "account_group_id" field if the given value is not nil.
+func (_c *ChannelMonitorCreate) SetNillableAccountGroupID(v *int64) *ChannelMonitorCreate {
+	if v != nil {
+		_c.SetAccountGroupID(*v)
+	}
+	return _c
+}
+
 // SetEnabled sets the "enabled" field.
 func (_c *ChannelMonitorCreate) SetEnabled(v bool) *ChannelMonitorCreate {
 	_c.mutation.SetEnabled(v)
@@ -147,6 +161,20 @@ func (_c *ChannelMonitorCreate) SetJitterSeconds(v int) *ChannelMonitorCreate {
 func (_c *ChannelMonitorCreate) SetNillableJitterSeconds(v *int) *ChannelMonitorCreate {
 	if v != nil {
 		_c.SetJitterSeconds(*v)
+	}
+	return _c
+}
+
+// SetRequestTimeoutSeconds sets the "request_timeout_seconds" field.
+func (_c *ChannelMonitorCreate) SetRequestTimeoutSeconds(v int) *ChannelMonitorCreate {
+	_c.mutation.SetRequestTimeoutSeconds(v)
+	return _c
+}
+
+// SetNillableRequestTimeoutSeconds sets the "request_timeout_seconds" field if the given value is not nil.
+func (_c *ChannelMonitorCreate) SetNillableRequestTimeoutSeconds(v *int) *ChannelMonitorCreate {
+	if v != nil {
+		_c.SetRequestTimeoutSeconds(*v)
 	}
 	return _c
 }
@@ -323,6 +351,10 @@ func (_c *ChannelMonitorCreate) defaults() {
 		v := channelmonitor.DefaultJitterSeconds
 		_c.mutation.SetJitterSeconds(v)
 	}
+	if _, ok := _c.mutation.RequestTimeoutSeconds(); !ok {
+		v := channelmonitor.DefaultRequestTimeoutSeconds
+		_c.mutation.SetRequestTimeoutSeconds(v)
+	}
 	if _, ok := _c.mutation.ExtraHeaders(); !ok {
 		v := channelmonitor.DefaultExtraHeaders
 		_c.mutation.SetExtraHeaders(v)
@@ -416,6 +448,14 @@ func (_c *ChannelMonitorCreate) check() error {
 			return &ValidationError{Name: "jitter_seconds", err: fmt.Errorf(`ent: validator failed for field "ChannelMonitor.jitter_seconds": %w`, err)}
 		}
 	}
+	if _, ok := _c.mutation.RequestTimeoutSeconds(); !ok {
+		return &ValidationError{Name: "request_timeout_seconds", err: errors.New(`ent: missing required field "ChannelMonitor.request_timeout_seconds"`)}
+	}
+	if v, ok := _c.mutation.RequestTimeoutSeconds(); ok {
+		if err := channelmonitor.RequestTimeoutSecondsValidator(v); err != nil {
+			return &ValidationError{Name: "request_timeout_seconds", err: fmt.Errorf(`ent: validator failed for field "ChannelMonitor.request_timeout_seconds": %w`, err)}
+		}
+	}
 	if _, ok := _c.mutation.CreatedBy(); !ok {
 		return &ValidationError{Name: "created_by", err: errors.New(`ent: missing required field "ChannelMonitor.created_by"`)}
 	}
@@ -497,6 +537,10 @@ func (_c *ChannelMonitorCreate) createSpec() (*ChannelMonitor, *sqlgraph.CreateS
 		_spec.SetField(channelmonitor.FieldGroupName, field.TypeString, value)
 		_node.GroupName = value
 	}
+	if value, ok := _c.mutation.AccountGroupID(); ok {
+		_spec.SetField(channelmonitor.FieldAccountGroupID, field.TypeInt64, value)
+		_node.AccountGroupID = &value
+	}
 	if value, ok := _c.mutation.Enabled(); ok {
 		_spec.SetField(channelmonitor.FieldEnabled, field.TypeBool, value)
 		_node.Enabled = value
@@ -508,6 +552,10 @@ func (_c *ChannelMonitorCreate) createSpec() (*ChannelMonitor, *sqlgraph.CreateS
 	if value, ok := _c.mutation.JitterSeconds(); ok {
 		_spec.SetField(channelmonitor.FieldJitterSeconds, field.TypeInt, value)
 		_node.JitterSeconds = value
+	}
+	if value, ok := _c.mutation.RequestTimeoutSeconds(); ok {
+		_spec.SetField(channelmonitor.FieldRequestTimeoutSeconds, field.TypeInt, value)
+		_node.RequestTimeoutSeconds = value
 	}
 	if value, ok := _c.mutation.LastCheckedAt(); ok {
 		_spec.SetField(channelmonitor.FieldLastCheckedAt, field.TypeTime, value)
@@ -744,6 +792,30 @@ func (u *ChannelMonitorUpsert) ClearGroupName() *ChannelMonitorUpsert {
 	return u
 }
 
+// SetAccountGroupID sets the "account_group_id" field.
+func (u *ChannelMonitorUpsert) SetAccountGroupID(v int64) *ChannelMonitorUpsert {
+	u.Set(channelmonitor.FieldAccountGroupID, v)
+	return u
+}
+
+// UpdateAccountGroupID sets the "account_group_id" field to the value that was provided on create.
+func (u *ChannelMonitorUpsert) UpdateAccountGroupID() *ChannelMonitorUpsert {
+	u.SetExcluded(channelmonitor.FieldAccountGroupID)
+	return u
+}
+
+// AddAccountGroupID adds v to the "account_group_id" field.
+func (u *ChannelMonitorUpsert) AddAccountGroupID(v int64) *ChannelMonitorUpsert {
+	u.Add(channelmonitor.FieldAccountGroupID, v)
+	return u
+}
+
+// ClearAccountGroupID clears the value of the "account_group_id" field.
+func (u *ChannelMonitorUpsert) ClearAccountGroupID() *ChannelMonitorUpsert {
+	u.SetNull(channelmonitor.FieldAccountGroupID)
+	return u
+}
+
 // SetEnabled sets the "enabled" field.
 func (u *ChannelMonitorUpsert) SetEnabled(v bool) *ChannelMonitorUpsert {
 	u.Set(channelmonitor.FieldEnabled, v)
@@ -789,6 +861,24 @@ func (u *ChannelMonitorUpsert) UpdateJitterSeconds() *ChannelMonitorUpsert {
 // AddJitterSeconds adds v to the "jitter_seconds" field.
 func (u *ChannelMonitorUpsert) AddJitterSeconds(v int) *ChannelMonitorUpsert {
 	u.Add(channelmonitor.FieldJitterSeconds, v)
+	return u
+}
+
+// SetRequestTimeoutSeconds sets the "request_timeout_seconds" field.
+func (u *ChannelMonitorUpsert) SetRequestTimeoutSeconds(v int) *ChannelMonitorUpsert {
+	u.Set(channelmonitor.FieldRequestTimeoutSeconds, v)
+	return u
+}
+
+// UpdateRequestTimeoutSeconds sets the "request_timeout_seconds" field to the value that was provided on create.
+func (u *ChannelMonitorUpsert) UpdateRequestTimeoutSeconds() *ChannelMonitorUpsert {
+	u.SetExcluded(channelmonitor.FieldRequestTimeoutSeconds)
+	return u
+}
+
+// AddRequestTimeoutSeconds adds v to the "request_timeout_seconds" field.
+func (u *ChannelMonitorUpsert) AddRequestTimeoutSeconds(v int) *ChannelMonitorUpsert {
+	u.Add(channelmonitor.FieldRequestTimeoutSeconds, v)
 	return u
 }
 
@@ -1066,6 +1156,34 @@ func (u *ChannelMonitorUpsertOne) ClearGroupName() *ChannelMonitorUpsertOne {
 	})
 }
 
+// SetAccountGroupID sets the "account_group_id" field.
+func (u *ChannelMonitorUpsertOne) SetAccountGroupID(v int64) *ChannelMonitorUpsertOne {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.SetAccountGroupID(v)
+	})
+}
+
+// AddAccountGroupID adds v to the "account_group_id" field.
+func (u *ChannelMonitorUpsertOne) AddAccountGroupID(v int64) *ChannelMonitorUpsertOne {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.AddAccountGroupID(v)
+	})
+}
+
+// UpdateAccountGroupID sets the "account_group_id" field to the value that was provided on create.
+func (u *ChannelMonitorUpsertOne) UpdateAccountGroupID() *ChannelMonitorUpsertOne {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.UpdateAccountGroupID()
+	})
+}
+
+// ClearAccountGroupID clears the value of the "account_group_id" field.
+func (u *ChannelMonitorUpsertOne) ClearAccountGroupID() *ChannelMonitorUpsertOne {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.ClearAccountGroupID()
+	})
+}
+
 // SetEnabled sets the "enabled" field.
 func (u *ChannelMonitorUpsertOne) SetEnabled(v bool) *ChannelMonitorUpsertOne {
 	return u.Update(func(s *ChannelMonitorUpsert) {
@@ -1119,6 +1237,27 @@ func (u *ChannelMonitorUpsertOne) AddJitterSeconds(v int) *ChannelMonitorUpsertO
 func (u *ChannelMonitorUpsertOne) UpdateJitterSeconds() *ChannelMonitorUpsertOne {
 	return u.Update(func(s *ChannelMonitorUpsert) {
 		s.UpdateJitterSeconds()
+	})
+}
+
+// SetRequestTimeoutSeconds sets the "request_timeout_seconds" field.
+func (u *ChannelMonitorUpsertOne) SetRequestTimeoutSeconds(v int) *ChannelMonitorUpsertOne {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.SetRequestTimeoutSeconds(v)
+	})
+}
+
+// AddRequestTimeoutSeconds adds v to the "request_timeout_seconds" field.
+func (u *ChannelMonitorUpsertOne) AddRequestTimeoutSeconds(v int) *ChannelMonitorUpsertOne {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.AddRequestTimeoutSeconds(v)
+	})
+}
+
+// UpdateRequestTimeoutSeconds sets the "request_timeout_seconds" field to the value that was provided on create.
+func (u *ChannelMonitorUpsertOne) UpdateRequestTimeoutSeconds() *ChannelMonitorUpsertOne {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.UpdateRequestTimeoutSeconds()
 	})
 }
 
@@ -1578,6 +1717,34 @@ func (u *ChannelMonitorUpsertBulk) ClearGroupName() *ChannelMonitorUpsertBulk {
 	})
 }
 
+// SetAccountGroupID sets the "account_group_id" field.
+func (u *ChannelMonitorUpsertBulk) SetAccountGroupID(v int64) *ChannelMonitorUpsertBulk {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.SetAccountGroupID(v)
+	})
+}
+
+// AddAccountGroupID adds v to the "account_group_id" field.
+func (u *ChannelMonitorUpsertBulk) AddAccountGroupID(v int64) *ChannelMonitorUpsertBulk {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.AddAccountGroupID(v)
+	})
+}
+
+// UpdateAccountGroupID sets the "account_group_id" field to the value that was provided on create.
+func (u *ChannelMonitorUpsertBulk) UpdateAccountGroupID() *ChannelMonitorUpsertBulk {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.UpdateAccountGroupID()
+	})
+}
+
+// ClearAccountGroupID clears the value of the "account_group_id" field.
+func (u *ChannelMonitorUpsertBulk) ClearAccountGroupID() *ChannelMonitorUpsertBulk {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.ClearAccountGroupID()
+	})
+}
+
 // SetEnabled sets the "enabled" field.
 func (u *ChannelMonitorUpsertBulk) SetEnabled(v bool) *ChannelMonitorUpsertBulk {
 	return u.Update(func(s *ChannelMonitorUpsert) {
@@ -1631,6 +1798,27 @@ func (u *ChannelMonitorUpsertBulk) AddJitterSeconds(v int) *ChannelMonitorUpsert
 func (u *ChannelMonitorUpsertBulk) UpdateJitterSeconds() *ChannelMonitorUpsertBulk {
 	return u.Update(func(s *ChannelMonitorUpsert) {
 		s.UpdateJitterSeconds()
+	})
+}
+
+// SetRequestTimeoutSeconds sets the "request_timeout_seconds" field.
+func (u *ChannelMonitorUpsertBulk) SetRequestTimeoutSeconds(v int) *ChannelMonitorUpsertBulk {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.SetRequestTimeoutSeconds(v)
+	})
+}
+
+// AddRequestTimeoutSeconds adds v to the "request_timeout_seconds" field.
+func (u *ChannelMonitorUpsertBulk) AddRequestTimeoutSeconds(v int) *ChannelMonitorUpsertBulk {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.AddRequestTimeoutSeconds(v)
+	})
+}
+
+// UpdateRequestTimeoutSeconds sets the "request_timeout_seconds" field to the value that was provided on create.
+func (u *ChannelMonitorUpsertBulk) UpdateRequestTimeoutSeconds() *ChannelMonitorUpsertBulk {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.UpdateRequestTimeoutSeconds()
 	})
 }
 

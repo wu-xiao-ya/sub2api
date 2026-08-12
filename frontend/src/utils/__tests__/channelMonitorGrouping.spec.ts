@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { UserMonitorView } from '@/api/channelMonitor'
 import {
+  groupedChannelHealth,
   groupChannelMonitorViews,
   groupedChannelStatus,
 } from '@/utils/channelMonitorGrouping'
@@ -41,6 +42,7 @@ describe('groupChannelMonitorViews', () => {
     expect(groups[0].monitorIds).toEqual([1, 2])
     expect(groups[0].models.map(row => row.model)).toEqual(['gpt-5.5', 'gpt-5.6-sol'])
     expect(groupedChannelStatus(groups[0])).toBe('degraded')
+    expect(groupedChannelHealth(groups[0])).toBe('slow_response')
   })
 
   it('keeps same-named channels separate when their protocol differs', () => {
@@ -67,6 +69,35 @@ describe('groupChannelMonitorViews', () => {
     ])
 
     expect(groupedChannelStatus(groups[0])).toBe('degraded')
+    expect(groupedChannelHealth(groups[0])).toBe('partial')
+  })
+
+  it('describes a successful slow probe as a slow response', () => {
+    const groups = groupChannelMonitorViews([
+      monitor({
+        primary_status: 'degraded',
+        primary_latency_ms: 6_100,
+      }),
+    ])
+
+    expect(groupedChannelHealth(groups[0])).toBe('slow_response')
+  })
+
+  it('keeps an all-error channel in the error state', () => {
+    const groups = groupChannelMonitorViews([
+      monitor({
+        primary_status: 'error',
+        extra_models: [{
+          model: 'gpt-5.5',
+          status: 'error',
+          latency_ms: null,
+          availability_7d: 0,
+        }],
+      }),
+    ])
+
+    expect(groupedChannelStatus(groups[0])).toBe('error')
+    expect(groupedChannelHealth(groups[0])).toBe('unavailable')
   })
 
   it('shows each configured extra model in the same channel panel', () => {

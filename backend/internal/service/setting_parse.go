@@ -67,6 +67,7 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 		settingKeyForwardedClientIPModeV2:                   "true",
 		SettingKeySiteName:                                  "Sub2API",
 		SettingKeySiteLogo:                                  "",
+		SettingKeyAPIEndpointProbeInterval:                  "5",
 		SettingKeyPurchaseSubscriptionEnabled:               "false",
 		SettingKeyPurchaseSubscriptionURL:                   "",
 		SettingKeyTableDefaultPageSize:                      "20",
@@ -186,6 +187,7 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 		// Channel monitor defaults (enabled, 60s)
 		SettingKeyChannelMonitorEnabled:                "true",
 		SettingKeyChannelMonitorDefaultIntervalSeconds: "60",
+		SettingKeyChannelMonitorAccountProbeSettings:   `{"enabled":true,"confirm_attempts":1,"degraded_threshold_ms":6000,"max_candidates":5,"parallelism":5,"allow_image_fanout":false}`,
 
 		// Available channels feature (default disabled; opt-in)
 		SettingKeyAvailableChannelsEnabled: "false",
@@ -757,6 +759,12 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 	result.ChannelMonitorEnabled = !isFalseSettingValue(settings[SettingKeyChannelMonitorEnabled])
 	result.ChannelMonitorDefaultIntervalSeconds = parseChannelMonitorInterval(
 		settings[SettingKeyChannelMonitorDefaultIntervalSeconds],
+	)
+	result.ChannelMonitorAccountProbeSettings = parseChannelMonitorAccountProbeSettings(
+		settings[SettingKeyChannelMonitorAccountProbeSettings],
+	)
+	result.APIEndpointProbeInterval = parseAPIEndpointProbeInterval(
+		settings[SettingKeyAPIEndpointProbeInterval],
 	)
 
 	// Available channels feature (default: disabled; strict true)

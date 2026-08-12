@@ -78,6 +78,7 @@ const (
 	openAI403CooldownMinutesDefault = 10
 	openAI403DisableThreshold       = 3
 	openAI403CounterWindowMinutes   = 180
+	openAI403ModelCooldownReason    = "openai_403_waf_blocked"
 )
 
 // NewRateLimitService 创建RateLimitService实例
@@ -371,7 +372,7 @@ func (s *RateLimitService) HandleUpstreamError(ctx context.Context, account *Acc
 			upstreamMsg,
 			truncateForLog(responseBody, 1024),
 		)
-		shouldDisable = s.handle403(ctx, account, upstreamMsg, responseBody)
+		shouldDisable = s.handle403(ctx, account, upstreamMsg, responseBody, headers)
 	case 429:
 		s.handle429(ctx, account, headers, responseBody)
 		shouldDisable = false
@@ -804,12 +805,12 @@ func buildForbiddenErrorMessage(prefix string, upstreamMsg string, responseBody 
 // handle403 处理 403 Forbidden 错误
 // Antigravity 平台区分 validation/violation/generic 三种类型，均 SetError 永久禁用；
 // 其他平台保持原有 SetError 行为。
-func (s *RateLimitService) handle403(ctx context.Context, account *Account, upstreamMsg string, responseBody []byte) (shouldDisable bool) {
+func (s *RateLimitService) handle403(ctx context.Context, account *Account, upstreamMsg string, responseBody []byte, headers http.Header) (shouldDisable bool) {
 	if account.Platform == PlatformAntigravity {
 		return s.handleAntigravity403(ctx, account, upstreamMsg, responseBody)
 	}
 	if account.Platform == PlatformOpenAI {
-		return s.handleOpenAI403(ctx, account, upstreamMsg, responseBody)
+		return s.handleOpenAI403(ctx, account, upstreamMsg, responseBody, headers)
 	}
 	// 非 Antigravity 平台：保持原有行为
 	msg := buildForbiddenErrorMessage(
@@ -822,13 +823,49 @@ func (s *RateLimitService) handle403(ctx context.Context, account *Account, upst
 	return true
 }
 
-func (s *RateLimitService) handleOpenAI403(ctx context.Context, account *Account, upstreamMsg string, responseBody []byte) (shouldDisable bool) {
+func (s *RateLimitService) handleOpenAI403(ctx context.Context, account *Account, upstreamMsg string, responseBody []byte, headers http.Header) (shouldDisable bool) {
 	msg := buildForbiddenErrorMessage(
 		"Access forbidden (403):",
 		upstreamMsg,
 		responseBody,
 		"account may be suspended or lack permissions",
 	)
+
+	model := tempUnschedulableModel(ctx, nil)
+	if isOpenAIGenericBlocked403(upstreamMsg, responseBody) &&
+		!isExplicitOpenAI403AuthFailure(upstreamMsg, responseBody) &&
+		model != "" &&
+		s.openAI403CounterCache != nil {
+		distinctModels, added, err := s.openAI403CounterCache.RecordOpenAI403Model(
+			ctx,
+			account.ID,
+			model,
+			openAI403CounterWindowMinutes,
+		)
+		if err != nil {
+			slog.Warn("openai_403_model_record_failed", "account_id", account.ID, "model", model, "error", err)
+		} else if distinctModels < 2 {
+			until := time.Now().Add(time.Duration(openAI403CooldownMinutesDefault) * time.Minute)
+			reason := fmt.Sprintf("OpenAI generic blocked 403 model cooldown: %s", msg)
+			if err := s.accountRepo.SetModelRateLimit(ctx, account.ID, model, until, reason); err != nil {
+				slog.Warn("openai_403_set_model_rate_limit_failed", "account_id", account.ID, "model", model, "error", err)
+			} else {
+				markOpenAI403ModelScoped(ctx)
+				eventName := "account_model_cooldown_entered"
+				if !added {
+					eventName = "account_model_cooldown_extended"
+				}
+				writeOpenAIAccountRuntimeEvent(ctx, eventName, account, model, map[string]any{
+					"reason":               openAI403ModelCooldownReason,
+					"upstream_status_code": http.StatusForbidden,
+					"upstream_request_id":  strings.TrimSpace(headers.Get("x-request-id")),
+					"cooldown_until":       until.UTC().Format(time.RFC3339Nano),
+					"distinct_403_models":  distinctModels,
+				})
+				return true
+			}
+		}
+	}
 
 	if s.openAI403CounterCache == nil {
 		s.handleAuthError(ctx, account, msg)
@@ -865,6 +902,36 @@ func (s *RateLimitService) handleOpenAI403(ctx context.Context, account *Account
 		"threshold", openAI403DisableThreshold,
 	)
 	return true
+}
+
+func isOpenAIGenericBlocked403(upstreamMsg string, responseBody []byte) bool {
+	combined := strings.ToLower(strings.TrimSpace(upstreamMsg) + "\n" + strings.TrimSpace(string(responseBody)))
+	return strings.Contains(combined, "your request was blocked")
+}
+
+func isExplicitOpenAI403AuthFailure(upstreamMsg string, responseBody []byte) bool {
+	combined := strings.ToLower(strings.TrimSpace(upstreamMsg) + "\n" + strings.TrimSpace(string(responseBody)))
+	for _, marker := range []string{
+		"invalid_api_key",
+		"invalid api key",
+		"authentication failed",
+		"authentication error",
+		"unauthorized",
+		"invalid token",
+		"token expired",
+		"token revoked",
+		"token was revoked",
+		"token has been revoked",
+		"credential revoked",
+		"credentials are invalid",
+		"account deactivated",
+		"workspace deactivated",
+	} {
+		if strings.Contains(combined, marker) {
+			return true
+		}
+	}
+	return false
 }
 
 // handleAntigravity403 处理 Antigravity 平台的 403 错误

@@ -147,12 +147,15 @@ describe('admin DashboardView', () => {
     }))
   })
 
-  it('shows today cache hit rate using all prompt tokens', async () => {
+  it('shows separate today and historical cache hit rates using all prompt tokens', async () => {
     getSnapshotV2.mockResolvedValue({
       stats: createDashboardStats({
         today_input_tokens: 500,
         today_cache_creation_tokens: 0,
-        today_cache_read_tokens: 1500
+        today_cache_read_tokens: 1500,
+        total_input_tokens: 200,
+        total_cache_creation_tokens: 300,
+        total_cache_read_tokens: 500,
       }),
       trend: [],
       models: []
@@ -176,6 +179,7 @@ describe('admin DashboardView', () => {
     await flushPromises()
 
     expect(wrapper.get('[data-testid="admin-cache-hit-rate"]').text()).toBe('75.0%')
+    expect(wrapper.get('[data-testid="admin-historical-cache-hit-rate"]').text()).toBe('50.0%')
   })
 
   it('renders time-range cost and profit metrics by group', async () => {

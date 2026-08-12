@@ -145,6 +145,31 @@ func AutoPauseOnExpired(v bool) predicate.Account {
 	return predicate.Account(sql.FieldEQ(FieldAutoPauseOnExpired, v))
 }
 
+// OwnerUserID applies equality check predicate on the "owner_user_id" field. It's identical to OwnerUserIDEQ.
+func OwnerUserID(v int64) predicate.Account {
+	return predicate.Account(sql.FieldEQ(FieldOwnerUserID, v))
+}
+
+// ContributionStatus applies equality check predicate on the "contribution_status" field. It's identical to ContributionStatusEQ.
+func ContributionStatus(v string) predicate.Account {
+	return predicate.Account(sql.FieldEQ(FieldContributionStatus, v))
+}
+
+// ContributionSubmittedAt applies equality check predicate on the "contribution_submitted_at" field. It's identical to ContributionSubmittedAtEQ.
+func ContributionSubmittedAt(v time.Time) predicate.Account {
+	return predicate.Account(sql.FieldEQ(FieldContributionSubmittedAt, v))
+}
+
+// ContributionApprovedAt applies equality check predicate on the "contribution_approved_at" field. It's identical to ContributionApprovedAtEQ.
+func ContributionApprovedAt(v time.Time) predicate.Account {
+	return predicate.Account(sql.FieldEQ(FieldContributionApprovedAt, v))
+}
+
+// ContributionRevokedAt applies equality check predicate on the "contribution_revoked_at" field. It's identical to ContributionRevokedAtEQ.
+func ContributionRevokedAt(v time.Time) predicate.Account {
+	return predicate.Account(sql.FieldEQ(FieldContributionRevokedAt, v))
+}
+
 // Schedulable applies equality check predicate on the "schedulable" field. It's identical to SchedulableEQ.
 func Schedulable(v bool) predicate.Account {
 	return predicate.Account(sql.FieldEQ(FieldSchedulable, v))
@@ -1093,6 +1118,271 @@ func AutoPauseOnExpiredEQ(v bool) predicate.Account {
 // AutoPauseOnExpiredNEQ applies the NEQ predicate on the "auto_pause_on_expired" field.
 func AutoPauseOnExpiredNEQ(v bool) predicate.Account {
 	return predicate.Account(sql.FieldNEQ(FieldAutoPauseOnExpired, v))
+}
+
+// OwnerUserIDEQ applies the EQ predicate on the "owner_user_id" field.
+func OwnerUserIDEQ(v int64) predicate.Account {
+	return predicate.Account(sql.FieldEQ(FieldOwnerUserID, v))
+}
+
+// OwnerUserIDNEQ applies the NEQ predicate on the "owner_user_id" field.
+func OwnerUserIDNEQ(v int64) predicate.Account {
+	return predicate.Account(sql.FieldNEQ(FieldOwnerUserID, v))
+}
+
+// OwnerUserIDIn applies the In predicate on the "owner_user_id" field.
+func OwnerUserIDIn(vs ...int64) predicate.Account {
+	return predicate.Account(sql.FieldIn(FieldOwnerUserID, vs...))
+}
+
+// OwnerUserIDNotIn applies the NotIn predicate on the "owner_user_id" field.
+func OwnerUserIDNotIn(vs ...int64) predicate.Account {
+	return predicate.Account(sql.FieldNotIn(FieldOwnerUserID, vs...))
+}
+
+// OwnerUserIDGT applies the GT predicate on the "owner_user_id" field.
+func OwnerUserIDGT(v int64) predicate.Account {
+	return predicate.Account(sql.FieldGT(FieldOwnerUserID, v))
+}
+
+// OwnerUserIDGTE applies the GTE predicate on the "owner_user_id" field.
+func OwnerUserIDGTE(v int64) predicate.Account {
+	return predicate.Account(sql.FieldGTE(FieldOwnerUserID, v))
+}
+
+// OwnerUserIDLT applies the LT predicate on the "owner_user_id" field.
+func OwnerUserIDLT(v int64) predicate.Account {
+	return predicate.Account(sql.FieldLT(FieldOwnerUserID, v))
+}
+
+// OwnerUserIDLTE applies the LTE predicate on the "owner_user_id" field.
+func OwnerUserIDLTE(v int64) predicate.Account {
+	return predicate.Account(sql.FieldLTE(FieldOwnerUserID, v))
+}
+
+// OwnerUserIDIsNil applies the IsNil predicate on the "owner_user_id" field.
+func OwnerUserIDIsNil() predicate.Account {
+	return predicate.Account(sql.FieldIsNull(FieldOwnerUserID))
+}
+
+// OwnerUserIDNotNil applies the NotNil predicate on the "owner_user_id" field.
+func OwnerUserIDNotNil() predicate.Account {
+	return predicate.Account(sql.FieldNotNull(FieldOwnerUserID))
+}
+
+// ContributionStatusEQ applies the EQ predicate on the "contribution_status" field.
+func ContributionStatusEQ(v string) predicate.Account {
+	return predicate.Account(sql.FieldEQ(FieldContributionStatus, v))
+}
+
+// ContributionStatusNEQ applies the NEQ predicate on the "contribution_status" field.
+func ContributionStatusNEQ(v string) predicate.Account {
+	return predicate.Account(sql.FieldNEQ(FieldContributionStatus, v))
+}
+
+// ContributionStatusIn applies the In predicate on the "contribution_status" field.
+func ContributionStatusIn(vs ...string) predicate.Account {
+	return predicate.Account(sql.FieldIn(FieldContributionStatus, vs...))
+}
+
+// ContributionStatusNotIn applies the NotIn predicate on the "contribution_status" field.
+func ContributionStatusNotIn(vs ...string) predicate.Account {
+	return predicate.Account(sql.FieldNotIn(FieldContributionStatus, vs...))
+}
+
+// ContributionStatusGT applies the GT predicate on the "contribution_status" field.
+func ContributionStatusGT(v string) predicate.Account {
+	return predicate.Account(sql.FieldGT(FieldContributionStatus, v))
+}
+
+// ContributionStatusGTE applies the GTE predicate on the "contribution_status" field.
+func ContributionStatusGTE(v string) predicate.Account {
+	return predicate.Account(sql.FieldGTE(FieldContributionStatus, v))
+}
+
+// ContributionStatusLT applies the LT predicate on the "contribution_status" field.
+func ContributionStatusLT(v string) predicate.Account {
+	return predicate.Account(sql.FieldLT(FieldContributionStatus, v))
+}
+
+// ContributionStatusLTE applies the LTE predicate on the "contribution_status" field.
+func ContributionStatusLTE(v string) predicate.Account {
+	return predicate.Account(sql.FieldLTE(FieldContributionStatus, v))
+}
+
+// ContributionStatusContains applies the Contains predicate on the "contribution_status" field.
+func ContributionStatusContains(v string) predicate.Account {
+	return predicate.Account(sql.FieldContains(FieldContributionStatus, v))
+}
+
+// ContributionStatusHasPrefix applies the HasPrefix predicate on the "contribution_status" field.
+func ContributionStatusHasPrefix(v string) predicate.Account {
+	return predicate.Account(sql.FieldHasPrefix(FieldContributionStatus, v))
+}
+
+// ContributionStatusHasSuffix applies the HasSuffix predicate on the "contribution_status" field.
+func ContributionStatusHasSuffix(v string) predicate.Account {
+	return predicate.Account(sql.FieldHasSuffix(FieldContributionStatus, v))
+}
+
+// ContributionStatusEqualFold applies the EqualFold predicate on the "contribution_status" field.
+func ContributionStatusEqualFold(v string) predicate.Account {
+	return predicate.Account(sql.FieldEqualFold(FieldContributionStatus, v))
+}
+
+// ContributionStatusContainsFold applies the ContainsFold predicate on the "contribution_status" field.
+func ContributionStatusContainsFold(v string) predicate.Account {
+	return predicate.Account(sql.FieldContainsFold(FieldContributionStatus, v))
+}
+
+// ContributionSubmittedAtEQ applies the EQ predicate on the "contribution_submitted_at" field.
+func ContributionSubmittedAtEQ(v time.Time) predicate.Account {
+	return predicate.Account(sql.FieldEQ(FieldContributionSubmittedAt, v))
+}
+
+// ContributionSubmittedAtNEQ applies the NEQ predicate on the "contribution_submitted_at" field.
+func ContributionSubmittedAtNEQ(v time.Time) predicate.Account {
+	return predicate.Account(sql.FieldNEQ(FieldContributionSubmittedAt, v))
+}
+
+// ContributionSubmittedAtIn applies the In predicate on the "contribution_submitted_at" field.
+func ContributionSubmittedAtIn(vs ...time.Time) predicate.Account {
+	return predicate.Account(sql.FieldIn(FieldContributionSubmittedAt, vs...))
+}
+
+// ContributionSubmittedAtNotIn applies the NotIn predicate on the "contribution_submitted_at" field.
+func ContributionSubmittedAtNotIn(vs ...time.Time) predicate.Account {
+	return predicate.Account(sql.FieldNotIn(FieldContributionSubmittedAt, vs...))
+}
+
+// ContributionSubmittedAtGT applies the GT predicate on the "contribution_submitted_at" field.
+func ContributionSubmittedAtGT(v time.Time) predicate.Account {
+	return predicate.Account(sql.FieldGT(FieldContributionSubmittedAt, v))
+}
+
+// ContributionSubmittedAtGTE applies the GTE predicate on the "contribution_submitted_at" field.
+func ContributionSubmittedAtGTE(v time.Time) predicate.Account {
+	return predicate.Account(sql.FieldGTE(FieldContributionSubmittedAt, v))
+}
+
+// ContributionSubmittedAtLT applies the LT predicate on the "contribution_submitted_at" field.
+func ContributionSubmittedAtLT(v time.Time) predicate.Account {
+	return predicate.Account(sql.FieldLT(FieldContributionSubmittedAt, v))
+}
+
+// ContributionSubmittedAtLTE applies the LTE predicate on the "contribution_submitted_at" field.
+func ContributionSubmittedAtLTE(v time.Time) predicate.Account {
+	return predicate.Account(sql.FieldLTE(FieldContributionSubmittedAt, v))
+}
+
+// ContributionSubmittedAtIsNil applies the IsNil predicate on the "contribution_submitted_at" field.
+func ContributionSubmittedAtIsNil() predicate.Account {
+	return predicate.Account(sql.FieldIsNull(FieldContributionSubmittedAt))
+}
+
+// ContributionSubmittedAtNotNil applies the NotNil predicate on the "contribution_submitted_at" field.
+func ContributionSubmittedAtNotNil() predicate.Account {
+	return predicate.Account(sql.FieldNotNull(FieldContributionSubmittedAt))
+}
+
+// ContributionApprovedAtEQ applies the EQ predicate on the "contribution_approved_at" field.
+func ContributionApprovedAtEQ(v time.Time) predicate.Account {
+	return predicate.Account(sql.FieldEQ(FieldContributionApprovedAt, v))
+}
+
+// ContributionApprovedAtNEQ applies the NEQ predicate on the "contribution_approved_at" field.
+func ContributionApprovedAtNEQ(v time.Time) predicate.Account {
+	return predicate.Account(sql.FieldNEQ(FieldContributionApprovedAt, v))
+}
+
+// ContributionApprovedAtIn applies the In predicate on the "contribution_approved_at" field.
+func ContributionApprovedAtIn(vs ...time.Time) predicate.Account {
+	return predicate.Account(sql.FieldIn(FieldContributionApprovedAt, vs...))
+}
+
+// ContributionApprovedAtNotIn applies the NotIn predicate on the "contribution_approved_at" field.
+func ContributionApprovedAtNotIn(vs ...time.Time) predicate.Account {
+	return predicate.Account(sql.FieldNotIn(FieldContributionApprovedAt, vs...))
+}
+
+// ContributionApprovedAtGT applies the GT predicate on the "contribution_approved_at" field.
+func ContributionApprovedAtGT(v time.Time) predicate.Account {
+	return predicate.Account(sql.FieldGT(FieldContributionApprovedAt, v))
+}
+
+// ContributionApprovedAtGTE applies the GTE predicate on the "contribution_approved_at" field.
+func ContributionApprovedAtGTE(v time.Time) predicate.Account {
+	return predicate.Account(sql.FieldGTE(FieldContributionApprovedAt, v))
+}
+
+// ContributionApprovedAtLT applies the LT predicate on the "contribution_approved_at" field.
+func ContributionApprovedAtLT(v time.Time) predicate.Account {
+	return predicate.Account(sql.FieldLT(FieldContributionApprovedAt, v))
+}
+
+// ContributionApprovedAtLTE applies the LTE predicate on the "contribution_approved_at" field.
+func ContributionApprovedAtLTE(v time.Time) predicate.Account {
+	return predicate.Account(sql.FieldLTE(FieldContributionApprovedAt, v))
+}
+
+// ContributionApprovedAtIsNil applies the IsNil predicate on the "contribution_approved_at" field.
+func ContributionApprovedAtIsNil() predicate.Account {
+	return predicate.Account(sql.FieldIsNull(FieldContributionApprovedAt))
+}
+
+// ContributionApprovedAtNotNil applies the NotNil predicate on the "contribution_approved_at" field.
+func ContributionApprovedAtNotNil() predicate.Account {
+	return predicate.Account(sql.FieldNotNull(FieldContributionApprovedAt))
+}
+
+// ContributionRevokedAtEQ applies the EQ predicate on the "contribution_revoked_at" field.
+func ContributionRevokedAtEQ(v time.Time) predicate.Account {
+	return predicate.Account(sql.FieldEQ(FieldContributionRevokedAt, v))
+}
+
+// ContributionRevokedAtNEQ applies the NEQ predicate on the "contribution_revoked_at" field.
+func ContributionRevokedAtNEQ(v time.Time) predicate.Account {
+	return predicate.Account(sql.FieldNEQ(FieldContributionRevokedAt, v))
+}
+
+// ContributionRevokedAtIn applies the In predicate on the "contribution_revoked_at" field.
+func ContributionRevokedAtIn(vs ...time.Time) predicate.Account {
+	return predicate.Account(sql.FieldIn(FieldContributionRevokedAt, vs...))
+}
+
+// ContributionRevokedAtNotIn applies the NotIn predicate on the "contribution_revoked_at" field.
+func ContributionRevokedAtNotIn(vs ...time.Time) predicate.Account {
+	return predicate.Account(sql.FieldNotIn(FieldContributionRevokedAt, vs...))
+}
+
+// ContributionRevokedAtGT applies the GT predicate on the "contribution_revoked_at" field.
+func ContributionRevokedAtGT(v time.Time) predicate.Account {
+	return predicate.Account(sql.FieldGT(FieldContributionRevokedAt, v))
+}
+
+// ContributionRevokedAtGTE applies the GTE predicate on the "contribution_revoked_at" field.
+func ContributionRevokedAtGTE(v time.Time) predicate.Account {
+	return predicate.Account(sql.FieldGTE(FieldContributionRevokedAt, v))
+}
+
+// ContributionRevokedAtLT applies the LT predicate on the "contribution_revoked_at" field.
+func ContributionRevokedAtLT(v time.Time) predicate.Account {
+	return predicate.Account(sql.FieldLT(FieldContributionRevokedAt, v))
+}
+
+// ContributionRevokedAtLTE applies the LTE predicate on the "contribution_revoked_at" field.
+func ContributionRevokedAtLTE(v time.Time) predicate.Account {
+	return predicate.Account(sql.FieldLTE(FieldContributionRevokedAt, v))
+}
+
+// ContributionRevokedAtIsNil applies the IsNil predicate on the "contribution_revoked_at" field.
+func ContributionRevokedAtIsNil() predicate.Account {
+	return predicate.Account(sql.FieldIsNull(FieldContributionRevokedAt))
+}
+
+// ContributionRevokedAtNotNil applies the NotNil predicate on the "contribution_revoked_at" field.
+func ContributionRevokedAtNotNil() predicate.Account {
+	return predicate.Account(sql.FieldNotNull(FieldContributionRevokedAt))
 }
 
 // SchedulableEQ applies the EQ predicate on the "schedulable" field.

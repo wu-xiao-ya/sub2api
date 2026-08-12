@@ -8,6 +8,7 @@ import (
 	"time"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/usagesource"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	gocache "github.com/patrickmn/go-cache"
 )
@@ -98,6 +99,32 @@ func appendUsageLogBillingModeQueryFilter(query string, args []any, billingMode 
 		return query, args
 	}
 	return query + " AND " + conditions[0], args
+}
+
+func usageLogColumnWithAlias(name string, alias string) string {
+	if alias == "" {
+		return name
+	}
+	return alias + "." + name
+}
+
+func channelMonitorUsageSourceExclusion(alias string) string {
+	column := usageLogColumnWithAlias("usage_source", alias)
+	return fmt.Sprintf("(%s IS NULL OR %s <> '%s')", column, column, usagesource.ChannelMonitor)
+}
+
+func appendUsageSourceWhereCondition(conditions []string, filters UsageLogFilters, alias string) []string {
+	if filters.IncludeMonitorUsage {
+		return conditions
+	}
+	return append(conditions, channelMonitorUsageSourceExclusion(alias))
+}
+
+func appendUsageSourceQueryFilter(query string, filters UsageLogFilters, alias string) string {
+	if filters.IncludeMonitorUsage {
+		return query
+	}
+	return query + " AND " + channelMonitorUsageSourceExclusion(alias)
 }
 
 func appendUsageLogModelWhereCondition(conditions []string, args []any, model string, source string) ([]string, []any) {

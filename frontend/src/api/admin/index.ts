@@ -11,6 +11,7 @@ import proxiesAPI from './proxies'
 import redeemAPI from './redeem'
 import promoAPI from './promo'
 import announcementsAPI from './announcements'
+import groupPromotionsAPI from './groupPromotions'
 import settingsAPI from './settings'
 import systemAPI from './system'
 import subscriptionsAPI from './subscriptions'
@@ -33,6 +34,7 @@ import adminPaymentAPI from './payment'
 import affiliatesAPI from './affiliates'
 import riskControlAPI from './riskControl'
 import adminComplianceAPI from './compliance'
+import adminAccountContributionsAPI from './accountContributions'
 import auditAPI from './audit'
 
 /**
@@ -47,6 +49,7 @@ export const adminAPI = {
   redeem: redeemAPI,
   promo: promoAPI,
   announcements: announcementsAPI,
+  groupPromotions: groupPromotionsAPI,
   settings: settingsAPI,
   system: systemAPI,
   subscriptions: subscriptionsAPI,
@@ -69,6 +72,7 @@ export const adminAPI = {
   affiliates: affiliatesAPI,
   riskControl: riskControlAPI,
   compliance: adminComplianceAPI,
+  accountContributions: adminAccountContributionsAPI,
   audit: auditAPI
 }
 
@@ -81,6 +85,7 @@ export {
   redeemAPI,
   promoAPI,
   announcementsAPI,
+  groupPromotionsAPI,
   settingsAPI,
   systemAPI,
   subscriptionsAPI,
@@ -103,6 +108,7 @@ export {
   affiliatesAPI,
   riskControlAPI,
   adminComplianceAPI,
+  adminAccountContributionsAPI,
   auditAPI
 }
 

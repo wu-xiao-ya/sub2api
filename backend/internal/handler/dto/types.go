@@ -87,13 +87,14 @@ type APIKey struct {
 }
 
 type Group struct {
-	ID             int64   `json:"id"`
-	Name           string  `json:"name"`
-	Description    string  `json:"description"`
-	Platform       string  `json:"platform"`
-	RateMultiplier float64 `json:"rate_multiplier"`
-	IsExclusive    bool    `json:"is_exclusive"`
-	Status         string  `json:"status"`
+	ID                          int64   `json:"id"`
+	Name                        string  `json:"name"`
+	Description                 string  `json:"description"`
+	Platform                    string  `json:"platform"`
+	RateMultiplier              float64 `json:"rate_multiplier"`
+	ContributorRewardMultiplier float64 `json:"contributor_reward_multiplier"`
+	IsExclusive                 bool    `json:"is_exclusive"`
+	Status                      string  `json:"status"`
 
 	SubscriptionType string   `json:"subscription_type"`
 	DailyLimitUSD    *float64 `json:"daily_limit_usd"`
@@ -197,6 +198,12 @@ type Account struct {
 	AutoPauseOnExpired      bool            `json:"auto_pause_on_expired"`
 	CreatedAt               time.Time       `json:"created_at"`
 	UpdatedAt               time.Time       `json:"updated_at"`
+
+	OwnerUserID             *int64     `json:"owner_user_id,omitempty"`
+	ContributionStatus      string     `json:"contribution_status,omitempty"`
+	ContributionSubmittedAt *time.Time `json:"contribution_submitted_at,omitempty"`
+	ContributionApprovedAt  *time.Time `json:"contribution_approved_at,omitempty"`
+	ContributionRevokedAt   *time.Time `json:"contribution_revoked_at,omitempty"`
 
 	Schedulable bool `json:"schedulable"`
 
@@ -483,6 +490,8 @@ type UsageLog struct {
 	InboundEndpoint *string `json:"inbound_endpoint,omitempty"`
 	// UpstreamEndpoint is the normalized upstream endpoint path, e.g. /v1/responses.
 	UpstreamEndpoint *string `json:"upstream_endpoint,omitempty"`
+	// UsageSource marks internal request origins such as channel_monitor.
+	UsageSource *string `json:"usage_source,omitempty"`
 
 	GroupID        *int64 `json:"group_id"`
 	SubscriptionID *int64 `json:"subscription_id"`
@@ -495,14 +504,17 @@ type UsageLog struct {
 	CacheCreation5mTokens int `json:"cache_creation_5m_tokens"`
 	CacheCreation1hTokens int `json:"cache_creation_1h_tokens"`
 
-	InputCost                 float64 `json:"input_cost"`
-	OutputCost                float64 `json:"output_cost"`
-	CacheCreationCost         float64 `json:"cache_creation_cost"`
-	CacheReadCost             float64 `json:"cache_read_cost"`
-	TotalCost                 float64 `json:"total_cost"`
-	ActualCost                float64 `json:"actual_cost"`
-	RateMultiplier            float64 `json:"rate_multiplier"`
-	LongContextBillingApplied bool    `json:"long_context_billing_applied"`
+	InputCost                 float64  `json:"input_cost"`
+	OutputCost                float64  `json:"output_cost"`
+	CacheCreationCost         float64  `json:"cache_creation_cost"`
+	CacheReadCost             float64  `json:"cache_read_cost"`
+	TotalCost                 float64  `json:"total_cost"`
+	ActualCost                float64  `json:"actual_cost"`
+	RateMultiplier            float64  `json:"rate_multiplier"`
+	PromotionID               *int64   `json:"promotion_id,omitempty"`
+	PromotionName             *string  `json:"promotion_name,omitempty"`
+	BaseRateMultiplier        *float64 `json:"base_rate_multiplier,omitempty"`
+	LongContextBillingApplied bool     `json:"long_context_billing_applied"`
 
 	BillingType  int8   `json:"billing_type"`
 	RequestType  string `json:"request_type"`

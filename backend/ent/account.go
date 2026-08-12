@@ -59,6 +59,16 @@ type Account struct {
 	ExpiresAt *time.Time `json:"expires_at,omitempty"`
 	// Auto pause scheduling when account expires.
 	AutoPauseOnExpired bool `json:"auto_pause_on_expired,omitempty"`
+	// OwnerUserID holds the value of the "owner_user_id" field.
+	OwnerUserID *int64 `json:"owner_user_id,omitempty"`
+	// ContributionStatus holds the value of the "contribution_status" field.
+	ContributionStatus string `json:"contribution_status,omitempty"`
+	// ContributionSubmittedAt holds the value of the "contribution_submitted_at" field.
+	ContributionSubmittedAt *time.Time `json:"contribution_submitted_at,omitempty"`
+	// ContributionApprovedAt holds the value of the "contribution_approved_at" field.
+	ContributionApprovedAt *time.Time `json:"contribution_approved_at,omitempty"`
+	// ContributionRevokedAt holds the value of the "contribution_revoked_at" field.
+	ContributionRevokedAt *time.Time `json:"contribution_revoked_at,omitempty"`
 	// Schedulable holds the value of the "schedulable" field.
 	Schedulable bool `json:"schedulable,omitempty"`
 	// RateLimitedAt holds the value of the "rate_limited_at" field.
@@ -175,11 +185,11 @@ func (*Account) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case account.FieldRateMultiplier:
 			values[i] = new(sql.NullFloat64)
-		case account.FieldID, account.FieldProxyID, account.FieldProxyFallbackOriginID, account.FieldConcurrency, account.FieldLoadFactor, account.FieldPriority, account.FieldParentAccountID:
+		case account.FieldID, account.FieldProxyID, account.FieldProxyFallbackOriginID, account.FieldConcurrency, account.FieldLoadFactor, account.FieldPriority, account.FieldOwnerUserID, account.FieldParentAccountID:
 			values[i] = new(sql.NullInt64)
-		case account.FieldName, account.FieldNotes, account.FieldPlatform, account.FieldType, account.FieldStatus, account.FieldErrorMessage, account.FieldTempUnschedulableReason, account.FieldSessionWindowStatus, account.FieldQuotaDimension:
+		case account.FieldName, account.FieldNotes, account.FieldPlatform, account.FieldType, account.FieldStatus, account.FieldErrorMessage, account.FieldContributionStatus, account.FieldTempUnschedulableReason, account.FieldSessionWindowStatus, account.FieldQuotaDimension:
 			values[i] = new(sql.NullString)
-		case account.FieldCreatedAt, account.FieldUpdatedAt, account.FieldDeletedAt, account.FieldLastUsedAt, account.FieldExpiresAt, account.FieldRateLimitedAt, account.FieldRateLimitResetAt, account.FieldOverloadUntil, account.FieldTempUnschedulableUntil, account.FieldSessionWindowStart, account.FieldSessionWindowEnd:
+		case account.FieldCreatedAt, account.FieldUpdatedAt, account.FieldDeletedAt, account.FieldLastUsedAt, account.FieldExpiresAt, account.FieldContributionSubmittedAt, account.FieldContributionApprovedAt, account.FieldContributionRevokedAt, account.FieldRateLimitedAt, account.FieldRateLimitResetAt, account.FieldOverloadUntil, account.FieldTempUnschedulableUntil, account.FieldSessionWindowStart, account.FieldSessionWindowEnd:
 			values[i] = new(sql.NullTime)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -333,6 +343,40 @@ func (_m *Account) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field auto_pause_on_expired", values[i])
 			} else if value.Valid {
 				_m.AutoPauseOnExpired = value.Bool
+			}
+		case account.FieldOwnerUserID:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field owner_user_id", values[i])
+			} else if value.Valid {
+				_m.OwnerUserID = new(int64)
+				*_m.OwnerUserID = value.Int64
+			}
+		case account.FieldContributionStatus:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field contribution_status", values[i])
+			} else if value.Valid {
+				_m.ContributionStatus = value.String
+			}
+		case account.FieldContributionSubmittedAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field contribution_submitted_at", values[i])
+			} else if value.Valid {
+				_m.ContributionSubmittedAt = new(time.Time)
+				*_m.ContributionSubmittedAt = value.Time
+			}
+		case account.FieldContributionApprovedAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field contribution_approved_at", values[i])
+			} else if value.Valid {
+				_m.ContributionApprovedAt = new(time.Time)
+				*_m.ContributionApprovedAt = value.Time
+			}
+		case account.FieldContributionRevokedAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field contribution_revoked_at", values[i])
+			} else if value.Valid {
+				_m.ContributionRevokedAt = new(time.Time)
+				*_m.ContributionRevokedAt = value.Time
 			}
 		case account.FieldSchedulable:
 			if value, ok := values[i].(*sql.NullBool); !ok {
@@ -550,6 +594,29 @@ func (_m *Account) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("auto_pause_on_expired=")
 	builder.WriteString(fmt.Sprintf("%v", _m.AutoPauseOnExpired))
+	builder.WriteString(", ")
+	if v := _m.OwnerUserID; v != nil {
+		builder.WriteString("owner_user_id=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	builder.WriteString("contribution_status=")
+	builder.WriteString(_m.ContributionStatus)
+	builder.WriteString(", ")
+	if v := _m.ContributionSubmittedAt; v != nil {
+		builder.WriteString("contribution_submitted_at=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
+	builder.WriteString(", ")
+	if v := _m.ContributionApprovedAt; v != nil {
+		builder.WriteString("contribution_approved_at=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
+	builder.WriteString(", ")
+	if v := _m.ContributionRevokedAt; v != nil {
+		builder.WriteString("contribution_revoked_at=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
 	builder.WriteString(", ")
 	builder.WriteString("schedulable=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Schedulable))

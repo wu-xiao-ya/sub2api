@@ -7,14 +7,14 @@ import { describe, expect, it } from 'vitest'
 const componentPath = resolve(dirname(fileURLToPath(import.meta.url)), '../AvailableChannelsTable.vue')
 const componentSource = readFileSync(componentPath, 'utf8')
 
-describe('AvailableChannelsTable scroll integration', () => {
-  // #4555：根元素必须是 TablePageLayout 滚动链约定的 .table-wrapper，
-  // 否则内容超出视口高度时被外层 overflow-hidden 裁剪且没有滚动条。
-  it('mounts the table on the .table-wrapper scroll hook', () => {
-    expect(componentSource).toMatch(/<div class="table-wrapper">\s*<table/)
+describe('AvailableChannelsTable directory layout', () => {
+  it('uses a responsive channel card grid instead of a wide table', () => {
+    expect(componentSource).toContain('grid grid-cols-1 items-start gap-3 xl:grid-cols-2')
+    expect(componentSource).not.toContain('<table')
   })
 
-  it('does not clip content with its own overflow-hidden card wrapper', () => {
-    expect(componentSource).not.toMatch(/<div class="card overflow-hidden">/)
+  it('keeps platform rows inside each channel card instead of nesting cards', () => {
+    expect(componentSource).toContain('sm:grid-cols-[7.5rem_minmax(0,1fr)]')
+    expect(componentSource).not.toContain('rounded-2xl')
   })
 })

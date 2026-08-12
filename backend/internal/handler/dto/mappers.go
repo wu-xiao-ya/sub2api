@@ -191,6 +191,7 @@ func groupFromServiceBase(g *service.Group) Group {
 		Description:                     g.Description,
 		Platform:                        g.Platform,
 		RateMultiplier:                  g.RateMultiplier,
+		ContributorRewardMultiplier:     g.ContributorRewardMultiplier,
 		IsExclusive:                     g.IsExclusive,
 		Status:                          g.Status,
 		SubscriptionType:                g.SubscriptionType,
@@ -257,6 +258,11 @@ func AccountFromServiceShallow(a *service.Account) *Account {
 		AutoPauseOnExpired:      a.AutoPauseOnExpired,
 		CreatedAt:               a.CreatedAt,
 		UpdatedAt:               a.UpdatedAt,
+		OwnerUserID:             a.OwnerUserID,
+		ContributionStatus:      a.ContributionStatus,
+		ContributionSubmittedAt: a.ContributionSubmittedAt,
+		ContributionApprovedAt:  a.ContributionApprovedAt,
+		ContributionRevokedAt:   a.ContributionRevokedAt,
 		Schedulable:             a.Schedulable,
 		RateLimitedAt:           a.RateLimitedAt,
 		RateLimitResetAt:        a.RateLimitResetAt,
@@ -641,6 +647,9 @@ func usageLogFromServiceUser(l *service.UsageLog) UsageLog {
 		TotalCost:                 l.TotalCost,
 		ActualCost:                l.ActualCost,
 		RateMultiplier:            l.RateMultiplier,
+		PromotionID:               l.PromotionID,
+		PromotionName:             l.PromotionName,
+		BaseRateMultiplier:        l.BaseRateMultiplier,
 		LongContextBillingApplied: l.LongContextBillingApplied,
 		BillingType:               l.BillingType,
 		RequestType:               requestType.String(),
@@ -689,6 +698,7 @@ func UsageLogFromServiceAdmin(l *service.UsageLog) *AdminUsageLog {
 	}
 	usageLog := usageLogFromServiceUser(l)
 	usageLog.UpstreamEndpoint = l.UpstreamEndpoint
+	usageLog.UsageSource = l.UsageSource
 	return &AdminUsageLog{
 		UsageLog:              usageLog,
 		UpstreamModel:         l.UpstreamModel,

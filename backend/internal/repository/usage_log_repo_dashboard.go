@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/timezone"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/usagesource"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/usagestats"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 )
@@ -89,6 +90,9 @@ func (r *usageLogRepository) GetDashboardStats(ctx context.Context) (*DashboardS
 	if err := r.fillDashboardUsageStatsAggregated(ctx, stats, todayStart, now); err != nil {
 		return nil, err
 	}
+	if err := r.fillDashboardMonitorUsageStats(ctx, stats, todayStart, now); err != nil {
+		return nil, err
+	}
 
 	rpm, tpm, err := r.getPerformanceStats(ctx, 0)
 	if err != nil {
@@ -115,6 +119,9 @@ func (r *usageLogRepository) GetDashboardStatsWithRange(ctx context.Context, sta
 		return nil, err
 	}
 	if err := r.fillDashboardUsageStatsFromUsageLogs(ctx, stats, startUTC, endUTC, todayStart, now); err != nil {
+		return nil, err
+	}
+	if err := r.fillDashboardMonitorUsageStats(ctx, stats, todayStart, now); err != nil {
 		return nil, err
 	}
 
@@ -190,6 +197,45 @@ func (r *usageLogRepository) fillDashboardEntityStats(ctx context.Context, stats
 	}
 
 	return nil
+}
+
+func (r *usageLogRepository) fillDashboardMonitorUsageStats(ctx context.Context, stats *DashboardStats, todayUTC, now time.Time) error {
+	if stats == nil {
+		return nil
+	}
+	query := `
+		SELECT
+			COUNT(*) AS monitor_requests,
+			COALESCE(SUM(account_cost), 0) AS monitor_actual_cost,
+			COALESCE(SUM(estimated_cost), 0) AS monitor_account_cost
+		FROM (
+			SELECT
+				estimated_cost,
+				account_cost
+			FROM channel_monitor_cost_events
+			WHERE created_at >= $1
+			  AND created_at < $2
+
+			UNION ALL
+
+			SELECT
+				actual_cost AS estimated_cost,
+				COALESCE(account_stats_cost, total_cost) * COALESCE(account_rate_multiplier, 1) AS account_cost
+			FROM usage_logs
+			WHERE usage_source = $3
+			  AND created_at >= $1
+			  AND created_at < $2
+		) AS monitor_costs
+	`
+	return scanSingleRow(
+		ctx,
+		r.sql,
+		query,
+		[]any{todayUTC, now, usagesource.ChannelMonitor},
+		&stats.TodayMonitorRequests,
+		&stats.TodayMonitorActualCost,
+		&stats.TodayMonitorAccountCost,
+	)
 }
 
 func (r *usageLogRepository) fillDashboardUsageStatsAggregated(ctx context.Context, stats *DashboardStats, todayUTC, now time.Time) error {

@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/servertiming"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/usagesource"
 	"github.com/tidwall/gjson"
 )
 
@@ -28,8 +29,8 @@ var monitorHTTPClient = newSSRFSafeHTTPClient(
 // Image generation can legitimately queue or render for tens of seconds
 // before it sends response headers, so it must not reuse the text client.
 var monitorImageHTTPClient = newSSRFSafeHTTPClient(
-	monitorImageRequestTimeout,
-	monitorImageResponseHeaderTimeout,
+	time.Duration(monitorMaxRequestTimeoutSeconds)*time.Second,
+	0,
 )
 
 // monitorPingHTTPClient 用于 endpoint origin 的 HEAD ping，超时更短。
@@ -68,6 +69,9 @@ type CheckOptions struct {
 	// BodyOverride 在 merge 模式下做浅合并（key 命中黑名单时静默丢弃），
 	// 在 replace 模式下直接当作完整 body。
 	BodyOverride map[string]any
+	// RequestTimeout is the monitor-specific upstream wait limit. It is only
+	// applied to images mode; text clients retain their lower fixed timeout.
+	RequestTimeout time.Duration
 }
 
 // runCheckForModel 对单个 (provider, model) 做一次完整检测。
@@ -90,10 +94,12 @@ func runCheckForModel(ctx context.Context, provider, endpoint, apiKey, model str
 	mode := bodyOverrideMode(opts)
 
 	start := time.Now()
+	res.monitorRequestAttempted = true
 	respText, rawBody, statusCode, err := callProvider(ctx, provider, endpoint, apiKey, model, challenge.Prompt, opts)
 	latency := time.Since(start)
 	latencyMs := int(latency / time.Millisecond)
 	res.LatencyMs = &latencyMs
+	res.monitorUsage = monitorUsageFromResponse(provider, checkAPIMode(opts), []byte(rawBody))
 
 	if err != nil {
 		res.Status = MonitorStatusError
@@ -152,11 +158,18 @@ func runImageCheckForModel(
 		CheckedAt: time.Now(),
 	}
 
+	requestCtx, cancel := context.WithTimeout(ctx, imageRequestTimeout(opts))
+	defer cancel()
+
 	start := time.Now()
-	respBytes, statusCode, err := callImageProvider(ctx, endpoint, apiKey, model, opts)
+	res.monitorRequestAttempted = true
+	respBytes, statusCode, err := callImageProvider(requestCtx, endpoint, apiKey, model, opts)
 	latency := time.Since(start)
 	latencyMs := int(latency / time.Millisecond)
 	res.LatencyMs = &latencyMs
+	if imageCount := monitorImageCountFromResponse(respBytes); imageCount > 0 {
+		res.monitorUsage = monitorUsage{ImageCount: imageCount, Observed: true}
+	}
 
 	if err != nil {
 		res.Message = truncateMessage(sanitizeErrorMessage(err.Error()))
@@ -177,6 +190,17 @@ func runImageCheckForModel(
 	}
 	finalizeOperationalOrDegraded(res, latency, latencyMs)
 	return res, image
+}
+
+func imageRequestTimeout(opts *CheckOptions) time.Duration {
+	if opts != nil && opts.RequestTimeout > 0 {
+		max := time.Duration(monitorMaxRequestTimeoutSeconds) * time.Second
+		if opts.RequestTimeout > max {
+			return max
+		}
+		return opts.RequestTimeout
+	}
+	return monitorDefaultImageRequestTimeout
 }
 
 // finalizeOperationalOrDegraded 负责走到最后一步的 operational/degraded 判定。
@@ -332,6 +356,9 @@ func providerAdapterFor(provider, apiMode string) (providerAdapter, string, bool
 // isSupportedProvider 校验 provider 字符串是否在 adapter 表中。
 // 供 validate.go 的 validateProvider 复用，避免两份 switch 漂移。
 func isSupportedProvider(p string) bool {
+	if p == MonitorProviderAntigravity {
+		return true
+	}
 	_, ok := providerAdapters[p]
 	return ok
 }
@@ -351,7 +378,7 @@ func callProvider(ctx context.Context, provider, endpoint, apiKey, model, prompt
 	}
 	if provider == MonitorProviderOpenAI && requestedAPIMode == MonitorAPIModeModels {
 		full := joinURL(endpoint, providerOpenAIModelsPath)
-		respBytes, status, err := getRaw(ctx, full, map[string]string{"Authorization": "Bearer " + apiKey})
+		respBytes, status, err := getRaw(ctx, full, usagesource.MarkChannelMonitor(map[string]string{"Authorization": "Bearer " + apiKey}))
 		if err != nil {
 			return "", "", status, err
 		}
@@ -370,7 +397,7 @@ func callProvider(ctx context.Context, provider, endpoint, apiKey, model, prompt
 	if err != nil {
 		return "", "", 0, err
 	}
-	headers := mergeHeaders(adapter.buildHeaders(apiKey), opts)
+	headers := usagesource.MarkChannelMonitor(mergeHeaders(adapter.buildHeaders(apiKey), opts))
 	full := joinURL(endpoint, adapter.buildPath(model))
 	respBytes, status, err := postRawJSON(ctx, full, body, headers)
 	if err != nil {
@@ -396,7 +423,7 @@ func callImageProvider(ctx context.Context, endpoint, apiKey, model string, opts
 	if err != nil {
 		return nil, 0, fmt.Errorf("marshal image health-check body: %w", err)
 	}
-	headers := mergeHeaders(map[string]string{"Authorization": "Bearer " + apiKey}, opts)
+	headers := usagesource.MarkChannelMonitor(mergeHeaders(map[string]string{"Authorization": "Bearer " + apiKey}, opts))
 	return postRawJSONWithClientAndLimit(
 		ctx,
 		monitorImageHTTPClient,

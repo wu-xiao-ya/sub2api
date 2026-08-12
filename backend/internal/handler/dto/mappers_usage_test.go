@@ -106,6 +106,29 @@ func TestUsageLogFromService_IncludesServiceTierForUserAndAdmin(t *testing.T) {
 	require.InDelta(t, 1.5, *adminDTO.AccountRateMultiplier, 1e-12)
 }
 
+func TestUsageLogFromService_ExposesPromotionSnapshot(t *testing.T) {
+	t.Parallel()
+
+	promotionID := int64(42)
+	promotionName := "Summer rate"
+	baseRate := 0.20
+	log := &service.UsageLog{
+		RateMultiplier:     0.18,
+		PromotionID:        &promotionID,
+		PromotionName:      &promotionName,
+		BaseRateMultiplier: &baseRate,
+	}
+
+	userDTO := UsageLogFromService(log)
+	adminDTO := UsageLogFromServiceAdmin(log)
+	require.Equal(t, &promotionID, userDTO.PromotionID)
+	require.Equal(t, &promotionName, userDTO.PromotionName)
+	require.Equal(t, &baseRate, userDTO.BaseRateMultiplier)
+	require.Equal(t, &promotionID, adminDTO.PromotionID)
+	require.Equal(t, &promotionName, adminDTO.PromotionName)
+	require.Equal(t, &baseRate, adminDTO.BaseRateMultiplier)
+}
+
 func TestUsageLogFromService_UsesRequestedModelAndKeepsUpstreamAdminOnly(t *testing.T) {
 	t.Parallel()
 

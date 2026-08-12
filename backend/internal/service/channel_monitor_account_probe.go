@@ -11,12 +11,14 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/usagesource"
 	"github.com/Wei-Shaw/sub2api/internal/util/urlvalidator"
 	"golang.org/x/sync/errgroup"
 )
 
 type channelMonitorAccountProbeRepository interface {
 	ListSchedulableByGroupNameAndPlatform(ctx context.Context, groupName, platform string) ([]Account, error)
+	ListSchedulableByGroupIDAndPlatform(ctx context.Context, groupID int64, platform string) ([]Account, error)
 }
 
 func (s *ChannelMonitorService) SetAccountProbeDependencies(
@@ -60,6 +62,12 @@ func (s *ChannelMonitorService) runBusinessGroupProbeIfConfigured(
 	}
 
 	result := cloneCheckResult(best.result)
+	accountID := best.account.ID
+	result.AccountID = &accountID
+	result.AccountName = strings.TrimSpace(best.account.Name)
+	result.ProbeMode = accountProbeModeFull
+	result.CandidateCount = len(probes)
+	result.HealthyCount = countHealthyAccountProbes(probes)
 	result.Model = m.PrimaryModel
 	result.Message = decorateAccountProbeMessage(result.Message, accountProbeSummaryMessage(groupName, probes, best))
 	slog.Info("channel_monitor: account group probe complete",
@@ -130,9 +138,11 @@ func (s *ChannelMonitorService) runBusinessGroupProbeChecks(
 		i := i
 		account := accounts[i]
 		eg.Go(func() error {
+			result := s.runOpenAIAPIKeyAccountProbe(ctx, m, &account)
+			s.recordMonitorCost(ctx, m, result, &account)
 			results[i] = accountProbeResult{
 				account: account,
-				result:  s.runOpenAIAPIKeyAccountProbe(ctx, m, &account),
+				result:  result,
 			}
 			return nil
 		})
@@ -175,6 +185,7 @@ func (s *ChannelMonitorService) runOpenAIAPIKeyAccountProbe(
 	}
 
 	start := time.Now()
+	res.monitorRequestAttempted = true
 	resp, err := s.doAccountProbeRequest(req, account)
 	latency := time.Since(start)
 	latencyMs := int(latency / time.Millisecond)
@@ -190,6 +201,11 @@ func (s *ChannelMonitorService) runOpenAIAPIKeyAccountProbe(
 	if readErr != nil {
 		res.Message = truncateMessage(sanitizeErrorMessage(fmt.Sprintf("read body: %v", readErr)))
 		return res
+	}
+	res.monitorUsage = monitorUsageFromResponse(MonitorProviderOpenAI, apiMode, respBytes)
+	res.monitorCostModel = strings.TrimSpace(account.GetMappedModel(m.PrimaryModel))
+	if res.monitorCostModel == "" {
+		res.monitorCostModel = m.PrimaryModel
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		res.Message = truncateMessage(sanitizeErrorMessage(fmt.Sprintf(
@@ -291,6 +307,7 @@ func buildOpenAIAccountProbeRequest(
 		req.Header.Set(key, value)
 	}
 	account.ApplyHeaderOverrides(req.Header)
+	usagesource.SetChannelMonitor(req.Header)
 	return req, apiMode, nil
 }
 

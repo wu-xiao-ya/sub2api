@@ -44,6 +44,13 @@ type Account struct {
 	CreatedAt          time.Time
 	UpdatedAt          time.Time
 
+	// Contribution lifecycle: normal admin accounts keep both fields empty.
+	OwnerUserID             *int64
+	ContributionStatus      string
+	ContributionSubmittedAt *time.Time
+	ContributionApprovedAt  *time.Time
+	ContributionRevokedAt   *time.Time
+
 	Schedulable bool
 
 	RateLimitedAt    *time.Time
@@ -137,6 +144,28 @@ func (a *Account) IsActive() bool {
 	return a.Status == StatusActive
 }
 
+// IsContributionSchedulable closes the scheduler to all contributed accounts
+// until a reviewer approves them. Non-contribution accounts are unaffected.
+func (a *Account) IsContributionSchedulable() bool {
+	if a == nil {
+		return false
+	}
+	if a.OwnerUserID == nil {
+		return a.ContributionStatus == ""
+	}
+	return a.ContributionStatus == ContributionStatusApproved
+}
+
+// IsSyntheticUITest identifies an isolated UI-test account that must never
+// reach a provider with placeholder credentials.
+func (a *Account) IsSyntheticUITest() bool {
+	if a == nil || a.Extra == nil {
+		return false
+	}
+	enabled, ok := a.Extra["synthetic_ui_test"].(bool)
+	return ok && enabled
+}
+
 // BillingRateMultiplier 返回账号计费倍率。
 // - nil 表示未配置/旧缓存缺字段，按 1.0 处理
 // - 允许 0，表示该账号计费为 0
@@ -165,7 +194,7 @@ func (a *Account) EffectiveLoadFactor() int {
 }
 
 func (a *Account) IsSchedulable() bool {
-	if !a.IsActive() || !a.Schedulable {
+	if !a.IsActive() || !a.Schedulable || !a.IsContributionSchedulable() {
 		return false
 	}
 	now := time.Now()

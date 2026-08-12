@@ -70,6 +70,9 @@ type DashboardStats struct {
 	TodayCost                float64 `json:"today_cost"`         // 今日标准计费
 	TodayActualCost          float64 `json:"today_actual_cost"`  // 今日实际扣除
 	TodayAccountCost         float64 `json:"today_account_cost"` // 今日账号成本
+	TodayMonitorRequests     int64   `json:"today_monitor_requests"`
+	TodayMonitorActualCost   float64 `json:"today_monitor_actual_cost"`  // 今日监测实际成本
+	TodayMonitorAccountCost  float64 `json:"today_monitor_account_cost"` // 今日监测标准估算
 
 	// 系统运行统计
 	AverageDurationMs float64 `json:"average_duration_ms"` // 平均响应时间
@@ -308,6 +311,9 @@ type UsageLogFilters struct {
 	BillingMode       string
 	StartTime         *time.Time
 	EndTime           *time.Time
+	// IncludeMonitorUsage includes rows produced by internal channel-monitor probes.
+	// Default false keeps normal usage views focused on customer traffic.
+	IncludeMonitorUsage bool
 	// ExactTotal requests exact COUNT(*) for pagination. Default false for fast large-table paging.
 	ExactTotal bool
 }

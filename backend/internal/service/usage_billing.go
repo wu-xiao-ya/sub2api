@@ -6,7 +6,10 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"math"
 	"strings"
+
+	"github.com/shopspring/decimal"
 )
 
 var ErrUsageBillingRequestIDRequired = errors.New("usage billing request_id is required")
@@ -39,6 +42,14 @@ type UsageBillingCommand struct {
 	APIKeyQuotaCost     float64
 	APIKeyRateLimitCost float64
 	AccountQuotaCost    float64
+
+	ContributorOwnerUserID      int64
+	ContributorRewardAccountID  int64
+	ContributorRewardGroupID    int64
+	ContributorRewardMultiplier float64
+	ContributorRewardTotalCost  float64
+	ContributorRewardActualCost float64
+	ContributorRewardAmount     float64
 }
 
 func (c *UsageBillingCommand) Normalize() {
@@ -49,6 +60,37 @@ func (c *UsageBillingCommand) Normalize() {
 	if strings.TrimSpace(c.RequestFingerprint) == "" {
 		c.RequestFingerprint = buildUsageBillingFingerprint(c)
 	}
+	// Keep the idempotency fingerprint based on the original values so an
+	// upgrade cannot turn a retry into a request fingerprint conflict.
+	c.quantizeMonetaryFields()
+}
+
+// UsageBillingMonetaryScale matches users.balance and api_keys.quota_used.
+const UsageBillingMonetaryScale = 8
+
+// quantizeMonetaryFields makes every database mutation use the same NUMERIC
+// precision. Without this, PostgreSQL can round balance deductions and quota
+// increments in opposite directions at half-way values.
+func (c *UsageBillingCommand) quantizeMonetaryFields() {
+	c.BalanceCost = QuantizeUsageBillingAmount(c.BalanceCost)
+	c.SubscriptionCost = QuantizeUsageBillingAmount(c.SubscriptionCost)
+	c.APIKeyQuotaCost = QuantizeUsageBillingAmount(c.APIKeyQuotaCost)
+	c.APIKeyRateLimitCost = QuantizeUsageBillingAmount(c.APIKeyRateLimitCost)
+	c.AccountQuotaCost = QuantizeUsageBillingAmount(c.AccountQuotaCost)
+	c.ContributorRewardMultiplier = QuantizeUsageBillingAmount(c.ContributorRewardMultiplier)
+	c.ContributorRewardTotalCost = QuantizeUsageBillingAmount(c.ContributorRewardTotalCost)
+	c.ContributorRewardActualCost = QuantizeUsageBillingAmount(c.ContributorRewardActualCost)
+	c.ContributorRewardAmount = QuantizeUsageBillingAmount(c.ContributorRewardAmount)
+}
+
+// QuantizeUsageBillingAmount uses PostgreSQL NUMERIC-compatible decimal
+// rounding rather than binary floating-point multiplication and rounding.
+func QuantizeUsageBillingAmount(v float64) float64 {
+	if v == 0 || math.IsNaN(v) || math.IsInf(v, 0) {
+		return v
+	}
+	quantized, _ := decimal.NewFromFloat(v).Round(UsageBillingMonetaryScale).Float64()
+	return quantized
 }
 
 func buildUsageBillingFingerprint(c *UsageBillingCommand) string {
@@ -56,7 +98,7 @@ func buildUsageBillingFingerprint(c *UsageBillingCommand) string {
 		return ""
 	}
 	raw := fmt.Sprintf(
-		"%d|%d|%d|%s|%s|%s|%s|%d|%d|%d|%d|%d|%d|%s|%d|%0.10f|%0.10f|%0.10f|%0.10f|%0.10f",
+		"%d|%d|%d|%s|%s|%s|%s|%d|%d|%d|%d|%d|%d|%s|%d|%0.10f|%0.10f|%0.10f|%0.10f|%0.10f|%d|%d|%d|%0.10f|%0.10f|%0.10f|%0.10f",
 		c.UserID,
 		c.AccountID,
 		c.APIKeyID,
@@ -77,6 +119,13 @@ func buildUsageBillingFingerprint(c *UsageBillingCommand) string {
 		c.APIKeyQuotaCost,
 		c.APIKeyRateLimitCost,
 		c.AccountQuotaCost,
+		c.ContributorOwnerUserID,
+		c.ContributorRewardAccountID,
+		c.ContributorRewardGroupID,
+		c.ContributorRewardMultiplier,
+		c.ContributorRewardTotalCost,
+		c.ContributorRewardActualCost,
+		c.ContributorRewardAmount,
 	)
 	if payloadHash := strings.TrimSpace(c.RequestPayloadHash); payloadHash != "" {
 		raw += "|" + payloadHash
@@ -121,6 +170,9 @@ type UsageBillingApplyResult struct {
 	ConsumptionConcurrencyDelta   int
 	ConsumptionLifetimeUSD        float64
 	ConsumptionConcurrencyTier    int
+	ContributorRewardApplied      bool
+	ContributorRewardOwnerUserID  int64
+	ContributorRewardAmount       float64
 }
 
 // BatchImageBalanceHoldCommand describes an idempotent balance hold operation.

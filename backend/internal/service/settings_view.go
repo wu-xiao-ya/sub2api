@@ -135,6 +135,7 @@ type SystemSettings struct {
 	SiteLogo                    string
 	SiteSubtitle                string
 	APIBaseURL                  string
+	APIEndpointProbeInterval    int
 	ContactInfo                 string
 	DocURL                      string
 	HomeContent                 string
@@ -180,6 +181,7 @@ type SystemSettings struct {
 	// Channel Monitor feature
 	ChannelMonitorEnabled                bool `json:"channel_monitor_enabled"`
 	ChannelMonitorDefaultIntervalSeconds int  `json:"channel_monitor_default_interval_seconds"`
+	ChannelMonitorAccountProbeSettings   ChannelMonitorAccountProbeSettings `json:"channel_monitor_account_probe_settings"`
 
 	// Available Channels feature (user-facing aggregate view)
 	AvailableChannelsEnabled bool `json:"available_channels_enabled"`
@@ -295,6 +297,7 @@ type PublicSettings struct {
 	SiteLogo                         string
 	SiteSubtitle                     string
 	APIBaseURL                       string
+	APIEndpointProbeInterval         int
 	ContactInfo                      string
 	DocURL                           string
 	HomeContent                      string

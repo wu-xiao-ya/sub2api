@@ -275,6 +275,33 @@ func buildUsageBillingCommand(requestID string, usageLog *UsageLog, p *postUsage
 		cmd.AccountQuotaCost = p.Cost.TotalCost * p.AccountRateMultiplier
 	}
 
+	// 贡献账号仅在管理员审核通过后才可能被调度到这里。奖励以原始成本为基数，
+	// 但不会超过这次请求对消费者实际扣除的金额。
+	if p.Account.OwnerUserID != nil &&
+		p.Account.ContributionStatus == ContributionStatusApproved &&
+		p.APIKey.Group != nil &&
+		p.APIKey.Group.ContributorRewardMultiplier > 0 &&
+		p.Cost.TotalCost > 0 &&
+		p.Cost.ActualCost > 0 {
+		reward := p.Cost.TotalCost * p.APIKey.Group.ContributorRewardMultiplier
+		if reward > p.Cost.ActualCost {
+			reward = p.Cost.ActualCost
+		}
+		if reward > 0 {
+			cmd.ContributorOwnerUserID = *p.Account.OwnerUserID
+			cmd.ContributorRewardAccountID = p.Account.ID
+			if p.APIKey.GroupID != nil {
+				cmd.ContributorRewardGroupID = *p.APIKey.GroupID
+			} else {
+				cmd.ContributorRewardGroupID = p.APIKey.Group.ID
+			}
+			cmd.ContributorRewardMultiplier = p.APIKey.Group.ContributorRewardMultiplier
+			cmd.ContributorRewardTotalCost = p.Cost.TotalCost
+			cmd.ContributorRewardActualCost = p.Cost.ActualCost
+			cmd.ContributorRewardAmount = reward
+		}
+	}
+
 	cmd.Normalize()
 	return cmd
 }
@@ -329,6 +356,12 @@ func finalizePostUsageBilling(ctx context.Context, p *postUsageBillingParams, de
 		}
 	} else if p.Cost.ActualCost > 0 && p.User != nil {
 		syncBalanceCacheAfterDeduction(ctx, p, deps, result)
+	}
+
+	if result != nil && result.ContributorRewardApplied && result.ContributorRewardOwnerUserID > 0 && deps.billingCacheService != nil {
+		if err := deps.billingCacheService.InvalidateUserBalance(ctx, result.ContributorRewardOwnerUserID); err != nil {
+			slog.Warn("invalidate contributor balance cache failed", "user_id", result.ContributorRewardOwnerUserID, "error", err)
+		}
 	}
 
 	if p.Cost.ActualCost > 0 && p.APIKey != nil && p.APIKey.HasRateLimits() {
@@ -674,9 +707,17 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 		groupDefault := apiKey.Group.RateMultiplier
 		multiplier = s.ResolveUserGroupRateMultiplier(ctx, user.ID, *apiKey.GroupID, groupDefault)
 	}
-	// token 倍率叠加高峰因子（token 计费含图片 token，图片按次倍率不受影响）。高峰因子按请求时刻现算，
-	// 不并入上面的 getUserGroupRateMultiplier，以免污染 user:group 倍率缓存。
-	multiplier, imageMultiplier := computePeakAwareMultipliers(apiKey, multiplier, timezone.Now())
+	// Resolve the user's normal rate first, then high-peak/media rules, and
+	// finally the activity. The promotion therefore lowers the real charge
+	// without ever bypassing a more favorable user-specific rate.
+	now := timezone.Now()
+	textBaseMultiplier, imageBaseMultiplier := computePeakAwareMultipliers(apiKey, multiplier, now)
+	groupID := int64(0)
+	if apiKey.GroupID != nil {
+		groupID = *apiKey.GroupID
+	}
+	multiplier, textPromotion := applyCurrentGroupPromotion(ctx, groupID, textBaseMultiplier, now)
+	imageMultiplier, imagePromotion := applyCurrentGroupPromotion(ctx, groupID, imageBaseMultiplier, now)
 
 	// 确定计费模型
 	billingModel := forwardResultBillingModel(result.Model, result.UpstreamModel)
@@ -706,7 +747,7 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 	// 创建使用日志
 	accountRateMultiplier := account.BillingRateMultiplier()
 	usageLog := s.buildRecordUsageLog(ctx, input, result, apiKey, user, account, subscription,
-		requestedModel, multiplier, imageMultiplier, accountRateMultiplier, billingType, cacheTTLOverridden, cost, opts)
+		requestedModel, multiplier, imageMultiplier, textPromotion, imagePromotion, accountRateMultiplier, billingType, cacheTTLOverridden, cost, opts)
 
 	// 计算账号统计定价费用（使用最终上游模型匹配自定义规则）
 	if apiKey.GroupID != nil {
@@ -754,6 +795,8 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 	}, s.billingDeps(), s.usageBillingRepo)
 
 	if billingErr != nil {
+		usageLog.ActualCost = 0
+		writeUsageLogBestEffort(ctx, s.usageLogRepo, usageLog, "service.gateway")
 		return billingErr
 	}
 	writeUsageLogBestEffort(ctx, s.usageLogRepo, usageLog, "service.gateway")
@@ -898,6 +941,8 @@ func (s *GatewayService) buildRecordUsageLog(
 	requestedModel string,
 	multiplier float64,
 	imageMultiplier float64,
+	textPromotion *AppliedGroupPromotion,
+	imagePromotion *AppliedGroupPromotion,
 	accountRateMultiplier float64,
 	billingType int8,
 	cacheTTLOverridden bool,
@@ -913,10 +958,11 @@ func (s *GatewayService) buildRecordUsageLog(
 		RequestID:             requestID,
 		Model:                 result.Model,
 		RequestedModel:        requestedModel,
-		UpstreamModel:         optionalNonEqualStringPtr(result.UpstreamModel, result.Model),
+		UpstreamModel:         optionalNonEqualStringPtr(result.UpstreamModel, requestedModel),
 		ReasoningEffort:       result.ReasoningEffort,
 		InboundEndpoint:       optionalTrimmedStringPtr(input.InboundEndpoint),
 		UpstreamEndpoint:      optionalTrimmedStringPtr(input.UpstreamEndpoint),
+		UsageSource:           usageSourceFromContext(ctx),
 		InputTokens:           result.Usage.InputTokens,
 		OutputTokens:          result.Usage.OutputTokens,
 		CacheCreationTokens:   result.Usage.CacheCreationInputTokens,
@@ -948,6 +994,9 @@ func (s *GatewayService) buildRecordUsageLog(
 	}
 	if result.ImageCount > 0 && (cost == nil || cost.BillingMode != string(BillingModeToken)) {
 		usageLog.RateMultiplier = imageMultiplier
+		applyUsageLogPromotionSnapshot(usageLog, imagePromotion)
+	} else {
+		applyUsageLogPromotionSnapshot(usageLog, textPromotion)
 	}
 	if cost != nil {
 		usageLog.InputCost = cost.InputCost

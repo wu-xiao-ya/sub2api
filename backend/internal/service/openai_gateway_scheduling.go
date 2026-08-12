@@ -612,6 +612,9 @@ func (s *OpenAIGatewayService) selectAccountForModelWithExclusions(ctx context.C
 	selected, compactBlocked := s.selectBestAccount(ctx, groupID, platform, accounts, requestedModel, excludedIDs, requireCompact, requiredCapability, preferLowUpstreamRate)
 
 	if selected == nil {
+		s.logOpenAIAccountSelectionNoCandidates(ctx, groupID, platform, requestedModel, excludedIDs, map[string]int{
+			"legacy_selection_exhausted": len(accounts),
+		})
 		return nil, noAvailableOpenAISelectionError(requestedModel, compactBlocked)
 	}
 

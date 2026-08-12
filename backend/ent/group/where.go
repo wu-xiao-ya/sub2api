@@ -85,6 +85,11 @@ func RateMultiplier(v float64) predicate.Group {
 	return predicate.Group(sql.FieldEQ(FieldRateMultiplier, v))
 }
 
+// ContributorRewardMultiplier applies equality check predicate on the "contributor_reward_multiplier" field. It's identical to ContributorRewardMultiplierEQ.
+func ContributorRewardMultiplier(v float64) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldContributorRewardMultiplier, v))
+}
+
 // PeakRateEnabled applies equality check predicate on the "peak_rate_enabled" field. It's identical to PeakRateEnabledEQ.
 func PeakRateEnabled(v bool) predicate.Group {
 	return predicate.Group(sql.FieldEQ(FieldPeakRateEnabled, v))
@@ -588,6 +593,46 @@ func RateMultiplierLT(v float64) predicate.Group {
 // RateMultiplierLTE applies the LTE predicate on the "rate_multiplier" field.
 func RateMultiplierLTE(v float64) predicate.Group {
 	return predicate.Group(sql.FieldLTE(FieldRateMultiplier, v))
+}
+
+// ContributorRewardMultiplierEQ applies the EQ predicate on the "contributor_reward_multiplier" field.
+func ContributorRewardMultiplierEQ(v float64) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldContributorRewardMultiplier, v))
+}
+
+// ContributorRewardMultiplierNEQ applies the NEQ predicate on the "contributor_reward_multiplier" field.
+func ContributorRewardMultiplierNEQ(v float64) predicate.Group {
+	return predicate.Group(sql.FieldNEQ(FieldContributorRewardMultiplier, v))
+}
+
+// ContributorRewardMultiplierIn applies the In predicate on the "contributor_reward_multiplier" field.
+func ContributorRewardMultiplierIn(vs ...float64) predicate.Group {
+	return predicate.Group(sql.FieldIn(FieldContributorRewardMultiplier, vs...))
+}
+
+// ContributorRewardMultiplierNotIn applies the NotIn predicate on the "contributor_reward_multiplier" field.
+func ContributorRewardMultiplierNotIn(vs ...float64) predicate.Group {
+	return predicate.Group(sql.FieldNotIn(FieldContributorRewardMultiplier, vs...))
+}
+
+// ContributorRewardMultiplierGT applies the GT predicate on the "contributor_reward_multiplier" field.
+func ContributorRewardMultiplierGT(v float64) predicate.Group {
+	return predicate.Group(sql.FieldGT(FieldContributorRewardMultiplier, v))
+}
+
+// ContributorRewardMultiplierGTE applies the GTE predicate on the "contributor_reward_multiplier" field.
+func ContributorRewardMultiplierGTE(v float64) predicate.Group {
+	return predicate.Group(sql.FieldGTE(FieldContributorRewardMultiplier, v))
+}
+
+// ContributorRewardMultiplierLT applies the LT predicate on the "contributor_reward_multiplier" field.
+func ContributorRewardMultiplierLT(v float64) predicate.Group {
+	return predicate.Group(sql.FieldLT(FieldContributorRewardMultiplier, v))
+}
+
+// ContributorRewardMultiplierLTE applies the LTE predicate on the "contributor_reward_multiplier" field.
+func ContributorRewardMultiplierLTE(v float64) predicate.Group {
+	return predicate.Group(sql.FieldLTE(FieldContributorRewardMultiplier, v))
 }
 
 // PeakRateEnabledEQ applies the EQ predicate on the "peak_rate_enabled" field.

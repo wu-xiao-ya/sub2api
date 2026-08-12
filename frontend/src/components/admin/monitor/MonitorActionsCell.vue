@@ -9,6 +9,16 @@
       <span class="text-xs">{{ t('admin.channelMonitor.runNow') }}</span>
     </button>
     <button
+      v-if="row.account_group_id != null"
+      :title="t('admin.channelMonitor.forceFullRunTitle')"
+      @click="$emit('run-full', row)"
+      :disabled="running"
+      class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-amber-50 hover:text-amber-700 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-amber-500/10 dark:hover:text-amber-300"
+    >
+      <Icon name="refresh" size="sm" />
+      <span class="text-xs">{{ t('admin.channelMonitor.forceFullRun') }}</span>
+    </button>
+    <button
       v-if="row.api_mode === 'images'"
       data-testid="monitor-view-image"
       :title="t('admin.channelMonitor.viewLatestImage')"
@@ -61,6 +71,7 @@ const props = defineProps<{
 
 defineEmits<{
   (e: 'run', row: ChannelMonitor): void
+  (e: 'run-full', row: ChannelMonitor): void
   (e: 'view-image', row: ChannelMonitor): void
   (e: 'duplicate', row: ChannelMonitor): void
   (e: 'edit', row: ChannelMonitor): void

@@ -77,6 +77,113 @@ type AccountTestService struct {
 	agentIdentityWS           agentIdentityWSConnectionInvalidator
 }
 
+type accountTestProbeOnlyContextKey struct{}
+
+func withAccountTestProbeOnly(ctx context.Context) context.Context {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return context.WithValue(ctx, accountTestProbeOnlyContextKey{}, true)
+}
+
+func isAccountTestProbeOnly(ctx context.Context) bool {
+	probeOnly, _ := ctx.Value(accountTestProbeOnlyContextKey{}).(bool)
+	return probeOnly
+}
+
+type accountTestProbeOnlyRepository struct {
+	AccountRepository
+}
+
+// The account test service is also reused by adaptive channel monitoring.
+// That path must be observational: an upstream failure during a probe must
+// never disable, rate-limit, pause, or otherwise mutate the production
+// account. Keep the real repository embedded for reads, but explicitly shadow
+// every account-state mutator used by provider test/retry paths.
+func (accountTestProbeOnlyRepository) Update(context.Context, *Account) error {
+	return nil
+}
+
+func (accountTestProbeOnlyRepository) SetError(context.Context, int64, string) error {
+	return nil
+}
+
+func (accountTestProbeOnlyRepository) ClearError(context.Context, int64) error {
+	return nil
+}
+
+func (accountTestProbeOnlyRepository) SetSchedulable(context.Context, int64, bool) error {
+	return nil
+}
+
+func (accountTestProbeOnlyRepository) SetRateLimited(context.Context, int64, time.Time) error {
+	return nil
+}
+
+func (accountTestProbeOnlyRepository) SetModelRateLimit(context.Context, int64, string, time.Time, ...string) error {
+	return nil
+}
+
+func (accountTestProbeOnlyRepository) SetOverloaded(context.Context, int64, time.Time) error {
+	return nil
+}
+
+func (accountTestProbeOnlyRepository) SetTempUnschedulable(context.Context, int64, time.Time, string) error {
+	return nil
+}
+
+func (accountTestProbeOnlyRepository) ClearTempUnschedulable(context.Context, int64) error {
+	return nil
+}
+
+func (accountTestProbeOnlyRepository) ClearRateLimit(context.Context, int64) error {
+	return nil
+}
+
+func (accountTestProbeOnlyRepository) ClearAntigravityQuotaScopes(context.Context, int64) error {
+	return nil
+}
+
+func (accountTestProbeOnlyRepository) ClearModelRateLimits(context.Context, int64) error {
+	return nil
+}
+
+func (accountTestProbeOnlyRepository) UpdateSessionWindow(context.Context, int64, *time.Time, *time.Time, string) error {
+	return nil
+}
+
+func (accountTestProbeOnlyRepository) UpdateSessionWindowEnd(context.Context, int64, time.Time) error {
+	return nil
+}
+
+func (accountTestProbeOnlyRepository) UpdateLastUsed(context.Context, int64) error {
+	return nil
+}
+
+func (accountTestProbeOnlyRepository) BatchUpdateLastUsed(context.Context, map[int64]time.Time) error {
+	return nil
+}
+
+func (accountTestProbeOnlyRepository) UpdateExtra(context.Context, int64, map[string]any) error {
+	return nil
+}
+
+func (accountTestProbeOnlyRepository) BulkUpdate(context.Context, []int64, AccountBulkUpdate) (int64, error) {
+	return 0, nil
+}
+
+func (accountTestProbeOnlyRepository) IncrementQuotaUsed(context.Context, int64, float64) error {
+	return nil
+}
+
+func (accountTestProbeOnlyRepository) ResetQuotaUsed(context.Context, int64) error {
+	return nil
+}
+
+func (accountTestProbeOnlyRepository) RevertProxyFallback(context.Context, int64) error {
+	return nil
+}
+
 // NewAccountTestService creates a new AccountTestService
 func NewAccountTestService(
 	accountRepo AccountRepository,
@@ -98,6 +205,29 @@ func NewAccountTestService(
 		cfg:                       cfg,
 		tlsFPProfileService:       tlsFPProfileService,
 	}
+}
+
+func (s *AccountTestService) buildAgentIdentityAuthenticationHeaders(ctx context.Context, account *Account) (http.Header, error) {
+	if !isAccountTestProbeOnly(ctx) {
+		return buildAgentIdentityAuthenticationHeaders(ctx, s.accountRepo, s.agentIdentityWS, &s.agentIdentityTaskMu, account)
+	}
+	if account == nil || !account.IsOpenAIAgentIdentity() {
+		return nil, errors.New("agent identity account is required")
+	}
+	if strings.TrimSpace(account.GetCredential("task_id")) == "" {
+		return nil, errors.New("agent identity task is unavailable for read-only probe")
+	}
+	key, err := agentIdentityKeyFromAccount(account)
+	if err != nil {
+		return nil, err
+	}
+	assertion, err := buildAgentAssertion(key, time.Now())
+	if err != nil {
+		return nil, err
+	}
+	headers := make(http.Header)
+	headers.Set("Authorization", assertion)
+	return headers, nil
 }
 
 func (s *AccountTestService) validateUpstreamBaseURL(raw string) (string, error) {
@@ -318,7 +448,7 @@ func (s *AccountTestService) testClaudeAccountConnection(c *gin.Context, account
 		errMsg := fmt.Sprintf("API returned %d: %s", resp.StatusCode, string(body))
 
 		// 403 表示账号被上游封禁，标记为 error 状态
-		if resp.StatusCode == http.StatusForbidden {
+		if !isAccountTestProbeOnly(ctx) && resp.StatusCode == http.StatusForbidden {
 			_ = s.accountRepo.SetError(ctx, account.ID, errMsg)
 		}
 
@@ -352,10 +482,15 @@ func (s *AccountTestService) testClaudeVertexServiceAccountConnection(c *gin.Con
 		return s.sendErrorAndEnd(c, fmt.Sprintf("Failed to create Vertex request body: %s", err.Error()))
 	}
 
-	if s.claudeTokenProvider == nil {
-		return s.sendErrorAndEnd(c, "Claude token provider not configured")
+	var accessToken string
+	if isAccountTestProbeOnly(ctx) {
+		accessToken, err = getVertexServiceAccountAccessToken(ctx, nil, account)
+	} else {
+		if s.claudeTokenProvider == nil {
+			return s.sendErrorAndEnd(c, "Claude token provider not configured")
+		}
+		accessToken, err = s.claudeTokenProvider.GetAccessToken(ctx, account)
 	}
-	accessToken, err := s.claudeTokenProvider.GetAccessToken(ctx, account)
 	if err != nil {
 		return s.sendErrorAndEnd(c, fmt.Sprintf("Failed to get service account access token: %s", err.Error()))
 	}
@@ -388,7 +523,7 @@ func (s *AccountTestService) testClaudeVertexServiceAccountConnection(c *gin.Con
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		errMsg := fmt.Sprintf("API returned %d: %s", resp.StatusCode, string(body))
-		if resp.StatusCode == http.StatusForbidden {
+		if !isAccountTestProbeOnly(ctx) && resp.StatusCode == http.StatusForbidden {
 			_ = s.accountRepo.SetError(ctx, account.ID, errMsg)
 		}
 		return s.sendErrorAndEnd(c, errMsg)
@@ -611,7 +746,7 @@ func (s *AccountTestService) testOpenAIAccountConnection(c *gin.Context, account
 	// Set common headers
 	req.Header.Set("Content-Type", "application/json")
 	if credentialAccount.IsOpenAIAgentIdentity() {
-		authHeaders, authErr := buildAgentIdentityAuthenticationHeaders(ctx, s.accountRepo, s.agentIdentityWS, &s.agentIdentityTaskMu, credentialAccount)
+		authHeaders, authErr := s.buildAgentIdentityAuthenticationHeaders(ctx, credentialAccount)
 		if authErr != nil {
 			return s.sendErrorAndEnd(c, "Failed to build Agent Identity authentication")
 		}
@@ -655,7 +790,7 @@ func (s *AccountTestService) testOpenAIAccountConnection(c *gin.Context, account
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	if isOAuth && s.accountRepo != nil {
+	if !isAccountTestProbeOnly(ctx) && isOAuth && s.accountRepo != nil {
 		if updates, err := extractOpenAICodexProbeUpdates(resp); err == nil && len(updates) > 0 {
 			_ = s.accountRepo.UpdateExtra(ctx, account.ID, updates)
 			mergeAccountExtra(account, updates)
@@ -665,7 +800,7 @@ func (s *AccountTestService) testOpenAIAccountConnection(c *gin.Context, account
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		body = redactAgentIdentitySensitiveBodyForAccount(ctx, s.accountRepo, credentialAccount, body)
-		if !agentIdentityTaskRecoveryWasTried(ctx) && credentialAccount.IsOpenAIAgentIdentity() && isAgentIdentityTaskInvalidHTTPResponse(resp.StatusCode, body) {
+		if !isAccountTestProbeOnly(ctx) && !agentIdentityTaskRecoveryWasTried(ctx) && credentialAccount.IsOpenAIAgentIdentity() && isAgentIdentityTaskInvalidHTTPResponse(resp.StatusCode, body) {
 			expectedTaskID := credentialAccount.GetCredential("task_id")
 			if err := ensureAgentIdentityTaskForAccount(ctx, s.accountRepo, s.agentIdentityWS, &s.agentIdentityTaskMu, credentialAccount, expectedTaskID); err != nil {
 				return s.sendErrorAndEnd(c, fmt.Sprintf("Agent Identity task recovery failed: %s", err.Error()))
@@ -677,7 +812,7 @@ func (s *AccountTestService) testOpenAIAccountConnection(c *gin.Context, account
 			s.reconcileOpenAI429State(ctx, account, resp.Header, body)
 		}
 		// 401 Unauthorized: 标记账号为永久错误
-		if resp.StatusCode == http.StatusUnauthorized && s.accountRepo != nil {
+		if !isAccountTestProbeOnly(ctx) && resp.StatusCode == http.StatusUnauthorized && s.accountRepo != nil {
 			errMsg := fmt.Sprintf("Authentication failed (401): %s", string(body))
 			_ = s.accountRepo.SetError(ctx, account.ID, errMsg)
 		}
@@ -707,15 +842,22 @@ func (s *AccountTestService) testGrokAccountConnection(c *gin.Context, account *
 	var authToken string
 	switch account.Type {
 	case AccountTypeOAuth:
-		if s.grokTokenProvider == nil {
-			return s.sendErrorAndEnd(c, "Grok token provider not configured")
-		}
-		var err error
-		// 手动测试不走生产调度资格门：关闭调度、限流/过载/临时冷却中的账号
-		// 也应能被管理员探测（#4598），与 Codex/OpenAI 测试行为一致。
-		authToken, err = s.grokTokenProvider.GetAccessTokenForManualTest(ctx, account)
-		if err != nil {
-			return s.sendErrorAndEnd(c, fmt.Sprintf("Failed to get Grok access token: %s", err.Error()))
+		if isAccountTestProbeOnly(ctx) {
+			authToken = strings.TrimSpace(account.GetGrokAccessToken())
+			if authToken == "" {
+				return s.sendErrorAndEnd(c, "Grok access token is missing")
+			}
+		} else {
+			if s.grokTokenProvider == nil {
+				return s.sendErrorAndEnd(c, "Grok token provider not configured")
+			}
+			var err error
+			// 手动测试不走生产调度资格门：关闭调度、限流/过载/临时冷却中的账号
+			// 也应能被管理员探测（#4598），与 Codex/OpenAI 测试行为一致。
+			authToken, err = s.grokTokenProvider.GetAccessTokenForManualTest(ctx, account)
+			if err != nil {
+				return s.sendErrorAndEnd(c, fmt.Sprintf("Failed to get Grok access token: %s", err.Error()))
+			}
 		}
 	case AccountTypeAPIKey:
 		authToken = strings.TrimSpace(account.GetCredential("api_key"))
@@ -772,7 +914,7 @@ func (s *AccountTestService) testGrokAccountConnection(c *gin.Context, account *
 
 	now := time.Now()
 	snapshot := parseGrokQuotaSnapshot(resp.Header, resp.StatusCode, now)
-	if snapshot != nil && s.accountRepo != nil {
+	if !isAccountTestProbeOnly(ctx) && snapshot != nil && s.accountRepo != nil {
 		resetAt, limited := grokRateLimitResetAtForAccount(account, snapshot, now)
 		if limited {
 			normalizeGrokExhaustedWindowResets(snapshot, resetAt, now)
@@ -785,7 +927,7 @@ func (s *AccountTestService) testGrokAccountConnection(c *gin.Context, account *
 		} else if isSuccessfulGrokRateLimitRecovery(account, snapshot) {
 			clearGrokRateLimitAfterRecovery(ctx, s.accountRepo, account)
 		}
-	} else if s.accountRepo != nil && isSuccessfulGrokRateLimitRecovery(account, &xai.QuotaSnapshot{StatusCode: resp.StatusCode}) {
+	} else if !isAccountTestProbeOnly(ctx) && s.accountRepo != nil && isSuccessfulGrokRateLimitRecovery(account, &xai.QuotaSnapshot{StatusCode: resp.StatusCode}) {
 		clearGrokRateLimitAfterRecovery(ctx, s.accountRepo, account)
 	}
 
@@ -850,7 +992,7 @@ func (s *AccountTestService) testOpenAIChatCompletionsConnection(
 		if resp.StatusCode == http.StatusTooManyRequests {
 			s.reconcileOpenAI429State(ctx, account, resp.Header, body)
 		}
-		if resp.StatusCode == http.StatusUnauthorized && s.accountRepo != nil {
+		if !isAccountTestProbeOnly(ctx) && resp.StatusCode == http.StatusUnauthorized && s.accountRepo != nil {
 			errMsg := fmt.Sprintf("Chat Completions authentication failed (401): %s", string(body))
 			_ = s.accountRepo.SetError(ctx, account.ID, errMsg)
 		}
@@ -925,7 +1067,7 @@ func (s *AccountTestService) testOpenAICompactConnection(c *gin.Context, account
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
 	if credentialAccount.IsOpenAIAgentIdentity() {
-		authHeaders, authErr := buildAgentIdentityAuthenticationHeaders(ctx, s.accountRepo, s.agentIdentityWS, &s.agentIdentityTaskMu, credentialAccount)
+		authHeaders, authErr := s.buildAgentIdentityAuthenticationHeaders(ctx, credentialAccount)
 		if authErr != nil {
 			return s.sendErrorAndEnd(c, "Failed to build Agent Identity authentication")
 		}
@@ -960,7 +1102,7 @@ func (s *AccountTestService) testOpenAICompactConnection(c *gin.Context, account
 
 	resp, err := s.httpUpstream.DoWithTLS(req, proxyURL, account.ID, account.Concurrency, s.tlsFPProfileService.ResolveTLSProfile(account))
 	if err != nil {
-		if s.accountRepo != nil {
+		if !isAccountTestProbeOnly(ctx) && s.accountRepo != nil {
 			updates := buildOpenAICompactProbeExtraUpdates(nil, nil, err, time.Now())
 			_ = s.accountRepo.UpdateExtra(ctx, account.ID, updates)
 			mergeAccountExtra(account, updates)
@@ -971,7 +1113,7 @@ func (s *AccountTestService) testOpenAICompactConnection(c *gin.Context, account
 
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
 	body = redactAgentIdentitySensitiveBodyForAccount(ctx, s.accountRepo, credentialAccount, body)
-	if !agentIdentityTaskRecoveryWasTried(ctx) && credentialAccount.IsOpenAIAgentIdentity() && isAgentIdentityTaskInvalidHTTPResponse(resp.StatusCode, body) {
+	if !isAccountTestProbeOnly(ctx) && !agentIdentityTaskRecoveryWasTried(ctx) && credentialAccount.IsOpenAIAgentIdentity() && isAgentIdentityTaskInvalidHTTPResponse(resp.StatusCode, body) {
 		expectedTaskID := credentialAccount.GetCredential("task_id")
 		if err := ensureAgentIdentityTaskForAccount(ctx, s.accountRepo, s.agentIdentityWS, &s.agentIdentityTaskMu, credentialAccount, expectedTaskID); err != nil {
 			return s.sendErrorAndEnd(c, fmt.Sprintf("Agent Identity task recovery failed: %s", err.Error()))
@@ -980,7 +1122,7 @@ func (s *AccountTestService) testOpenAICompactConnection(c *gin.Context, account
 		return s.testOpenAICompactConnection(c, account, testModelID)
 	}
 
-	if s.accountRepo != nil {
+	if !isAccountTestProbeOnly(ctx) && s.accountRepo != nil {
 		updates := buildOpenAICompactProbeExtraUpdates(resp, body, nil, time.Now())
 		if codexUpdates, err := extractOpenAICodexProbeUpdates(resp); err == nil && len(codexUpdates) > 0 {
 			updates = mergeExtraUpdates(updates, codexUpdates)
@@ -996,7 +1138,7 @@ func (s *AccountTestService) testOpenAICompactConnection(c *gin.Context, account
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		if resp.StatusCode == http.StatusUnauthorized && s.accountRepo != nil {
+		if !isAccountTestProbeOnly(ctx) && resp.StatusCode == http.StatusUnauthorized && s.accountRepo != nil {
 			errMsg := fmt.Sprintf("Authentication failed (401): %s", string(body))
 			_ = s.accountRepo.SetError(ctx, account.ID, errMsg)
 		}
@@ -1009,7 +1151,7 @@ func (s *AccountTestService) testOpenAICompactConnection(c *gin.Context, account
 }
 
 func (s *AccountTestService) reconcileOpenAI429State(ctx context.Context, account *Account, headers http.Header, body []byte) {
-	if s == nil || s.accountRepo == nil || account == nil {
+	if isAccountTestProbeOnly(ctx) || s == nil || s.accountRepo == nil || account == nil {
 		return
 	}
 
@@ -1143,6 +1285,29 @@ func (s *AccountTestService) testAntigravityAccountConnection(c *gin.Context, ac
 		return s.sendErrorAndEnd(c, "Antigravity gateway service not configured")
 	}
 
+	// Adaptive monitoring must not let the retry path mutate the production
+	// account object in memory either. In particular, credits overages and
+	// model-limit bookkeeping inspect/mutate Extra, so give the probe a shallow
+	// account copy with independent top-level maps and overages disabled.
+	probeAccount := account
+	if isAccountTestProbeOnly(ctx) && account != nil {
+		accountCopy := *account
+		if account.Credentials != nil {
+			accountCopy.Credentials = make(map[string]any, len(account.Credentials))
+			for key, value := range account.Credentials {
+				accountCopy.Credentials[key] = value
+			}
+		}
+		if account.Extra != nil {
+			accountCopy.Extra = make(map[string]any, len(account.Extra)+1)
+			for key, value := range account.Extra {
+				accountCopy.Extra[key] = value
+			}
+			accountCopy.Extra["allow_overages"] = false
+		}
+		probeAccount = &accountCopy
+	}
+
 	// Set SSE headers
 	c.Writer.Header().Set("Content-Type", "text/event-stream")
 	c.Writer.Header().Set("Cache-Control", "no-cache")
@@ -1154,7 +1319,26 @@ func (s *AccountTestService) testAntigravityAccountConnection(c *gin.Context, ac
 	s.sendEvent(c, TestEvent{Type: "test_start", Model: testModelID})
 
 	// 调用 AntigravityGatewayService.TestConnection（复用协议转换逻辑）
-	result, err := s.antigravityGatewayService.TestConnection(ctx, account, testModelID)
+	gateway := s.antigravityGatewayService
+	if isAccountTestProbeOnly(ctx) && gateway.tokenProvider != nil {
+		gatewayCopy := *gateway
+		tokenProviderCopy := *gateway.tokenProvider
+		tokenProviderCopy.tokenCache = nil
+		tokenProviderCopy.refreshAPI = nil
+		tokenProviderCopy.executor = nil
+		tokenProviderCopy.antigravityOAuthService = nil
+		tokenProviderCopy.tempUnschedCache = nil
+		probeRepo := accountTestProbeOnlyRepository{AccountRepository: gateway.accountRepo}
+		tokenProviderCopy.accountRepo = probeRepo
+		gatewayCopy.tokenProvider = &tokenProviderCopy
+		gatewayCopy.accountRepo = probeRepo
+		gatewayCopy.rateLimitService = nil
+		gatewayCopy.cache = nil
+		gatewayCopy.schedulerSnapshot = nil
+		gatewayCopy.internal500Cache = nil
+		gateway = &gatewayCopy
+	}
+	result, err := gateway.TestConnection(ctx, probeAccount, testModelID)
 	if err != nil {
 		return s.sendErrorAndEnd(c, err.Error())
 	}
@@ -1201,14 +1385,23 @@ func (s *AccountTestService) buildGeminiAPIKeyRequest(ctx context.Context, accou
 
 // buildGeminiOAuthRequest builds request for Gemini OAuth accounts
 func (s *AccountTestService) buildGeminiOAuthRequest(ctx context.Context, account *Account, modelID string, payload []byte) (*http.Request, error) {
-	if s.geminiTokenProvider == nil {
-		return nil, fmt.Errorf("gemini token provider not configured")
-	}
+	var accessToken string
+	if isAccountTestProbeOnly(ctx) {
+		accessToken = strings.TrimSpace(account.GetCredential("access_token"))
+		if accessToken == "" {
+			return nil, fmt.Errorf("access_token not found in credentials")
+		}
+	} else {
+		if s.geminiTokenProvider == nil {
+			return nil, fmt.Errorf("gemini token provider not configured")
+		}
 
-	// Get access token (auto-refreshes if needed)
-	accessToken, err := s.geminiTokenProvider.GetAccessToken(ctx, account)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get access token: %w", err)
+		// Get access token (auto-refreshes if needed)
+		var err error
+		accessToken, err = s.geminiTokenProvider.GetAccessToken(ctx, account)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get access token: %w", err)
+		}
 	}
 
 	projectID := strings.TrimSpace(account.GetCredential("project_id"))
@@ -1238,10 +1431,16 @@ func (s *AccountTestService) buildGeminiOAuthRequest(ctx context.Context, accoun
 }
 
 func (s *AccountTestService) buildGeminiServiceAccountRequest(ctx context.Context, account *Account, modelID string, payload []byte) (*http.Request, error) {
-	if s.geminiTokenProvider == nil {
-		return nil, fmt.Errorf("gemini token provider not configured")
+	var accessToken string
+	var err error
+	if isAccountTestProbeOnly(ctx) {
+		accessToken, err = getVertexServiceAccountAccessToken(ctx, nil, account)
+	} else {
+		if s.geminiTokenProvider == nil {
+			return nil, fmt.Errorf("gemini token provider not configured")
+		}
+		accessToken, err = s.geminiTokenProvider.GetAccessToken(ctx, account)
 	}
-	accessToken, err := s.geminiTokenProvider.GetAccessToken(ctx, account)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get service account access token: %w", err)
 	}
@@ -1346,11 +1545,13 @@ func createGeminiTestPayload(modelID string, prompt string) []byte {
 // processGeminiStream processes SSE stream from Gemini API
 func (s *AccountTestService) processGeminiStream(c *gin.Context, body io.Reader) error {
 	reader := bufio.NewReader(body)
+	usage := monitorUsage{}
 
 	for {
 		line, err := reader.ReadString('\n')
 		if err != nil {
 			if err == io.EOF {
+				s.sendMonitorUsageEvent(c, usage)
 				s.sendEvent(c, TestEvent{Type: "test_complete", Success: true})
 				return nil
 			}
@@ -1364,6 +1565,7 @@ func (s *AccountTestService) processGeminiStream(c *gin.Context, body io.Reader)
 
 		jsonStr := strings.TrimPrefix(line, "data: ")
 		if jsonStr == "[DONE]" {
+			s.sendMonitorUsageEvent(c, usage)
 			s.sendEvent(c, TestEvent{Type: "test_complete", Success: true})
 			return nil
 		}
@@ -1378,6 +1580,9 @@ func (s *AccountTestService) processGeminiStream(c *gin.Context, body io.Reader)
 		// - Gemini CLI: {"response": {"candidates": [...]}}
 		if resp, ok := data["response"].(map[string]any); ok && resp != nil {
 			data = resp
+		}
+		if observed := monitorUsageFromGeminiPayload(data); observed.Observed {
+			usage = observed
 		}
 		if candidates, ok := data["candidates"].([]any); ok && len(candidates) > 0 {
 			if candidate, ok := candidates[0].(map[string]any); ok {
@@ -1407,6 +1612,7 @@ func (s *AccountTestService) processGeminiStream(c *gin.Context, body io.Reader)
 
 				// Check for completion after extracting content
 				if finishReason, ok := candidate["finishReason"].(string); ok && finishReason != "" {
+					s.sendMonitorUsageEvent(c, usage)
 					s.sendEvent(c, TestEvent{Type: "test_complete", Success: true})
 					return nil
 				}
@@ -1467,18 +1673,21 @@ func createOpenAIChatCompletionsTestPayload(modelID string, prompt string) map[s
 				"content": testPrompt,
 			},
 		},
-		"stream": true,
+		"stream":         true,
+		"stream_options": map[string]any{"include_usage": true},
 	}
 }
 
 // processClaudeStream processes the SSE stream from Claude API
 func (s *AccountTestService) processClaudeStream(c *gin.Context, body io.Reader) error {
 	reader := bufio.NewReader(body)
+	usage := monitorUsage{}
 
 	for {
 		line, err := reader.ReadString('\n')
 		if err != nil {
 			if err == io.EOF {
+				s.sendMonitorUsageEvent(c, usage)
 				s.sendEvent(c, TestEvent{Type: "test_complete", Success: true})
 				return nil
 			}
@@ -1492,6 +1701,7 @@ func (s *AccountTestService) processClaudeStream(c *gin.Context, body io.Reader)
 
 		jsonStr := sseDataPrefix.ReplaceAllString(line, "")
 		if jsonStr == "[DONE]" {
+			s.sendMonitorUsageEvent(c, usage)
 			s.sendEvent(c, TestEvent{Type: "test_complete", Success: true})
 			return nil
 		}
@@ -1504,13 +1714,24 @@ func (s *AccountTestService) processClaudeStream(c *gin.Context, body io.Reader)
 		eventType, _ := data["type"].(string)
 
 		switch eventType {
+		case "message_start":
+			if message, ok := data["message"].(map[string]any); ok {
+				if observed := monitorUsageFromAnthropicPayload(message); observed.Observed {
+					usage = observed
+				}
+			}
 		case "content_block_delta":
 			if delta, ok := data["delta"].(map[string]any); ok {
 				if text, ok := delta["text"].(string); ok {
 					s.sendEvent(c, TestEvent{Type: "content", Text: text})
 				}
 			}
+		case "message_delta":
+			if observed := monitorUsageFromAnthropicPayload(data); observed.Observed {
+				usage = observed
+			}
 		case "message_stop":
+			s.sendMonitorUsageEvent(c, usage)
 			s.sendEvent(c, TestEvent{Type: "test_complete", Success: true})
 			return nil
 		case "error":
@@ -1531,12 +1752,14 @@ func (s *AccountTestService) processOpenAIChatCompletionsStream(c *gin.Context, 
 	reader := bufio.NewReader(body)
 	seenJSON := false
 	seenFinish := false
+	usage := monitorUsage{}
 
 	for {
 		line, err := reader.ReadString('\n')
 		if err != nil {
 			if err == io.EOF {
 				if seenFinish {
+					s.sendMonitorUsageEvent(c, usage)
 					s.sendEvent(c, TestEvent{Type: "status", Text: "已通过 /v1/chat/completions 验证"})
 					s.sendEvent(c, TestEvent{Type: "test_complete", Success: true})
 					return nil
@@ -1556,6 +1779,7 @@ func (s *AccountTestService) processOpenAIChatCompletionsStream(c *gin.Context, 
 
 		jsonStr := sseDataPrefix.ReplaceAllString(line, "")
 		if jsonStr == "[DONE]" {
+			s.sendMonitorUsageEvent(c, usage)
 			s.sendEvent(c, TestEvent{Type: "status", Text: "已通过 /v1/chat/completions 验证"})
 			s.sendEvent(c, TestEvent{Type: "test_complete", Success: true})
 			return nil
@@ -1566,6 +1790,9 @@ func (s *AccountTestService) processOpenAIChatCompletionsStream(c *gin.Context, 
 			return s.sendErrorAndEnd(c, "Invalid Chat Completions response from /v1/chat/completions: expected JSON data")
 		}
 		seenJSON = true
+		if observed := monitorUsageFromOpenAIPayload(data); observed.Observed {
+			usage = observed
+		}
 
 		if errData, ok := data["error"].(map[string]any); ok {
 			errorMsg := "Chat Completions API (/v1/chat/completions) returned an error"
@@ -1647,6 +1874,7 @@ func (s *AccountTestService) processOpenAIStream(c *gin.Context, body io.Reader)
 				s.sendEvent(c, TestEvent{Type: "content", Text: delta})
 			}
 		case "response.completed", "response.done":
+			s.sendMonitorUsageEvent(c, monitorUsageFromPayload(MonitorProviderOpenAI, MonitorAPIModeResponses, data))
 			s.sendEvent(c, TestEvent{Type: "test_complete", Success: true})
 			return nil
 		case "response.failed":
@@ -1764,6 +1992,7 @@ func (s *AccountTestService) testOpenAIImageAPIKey(c *gin.Context, ctx context.C
 		}
 	}
 
+	s.sendMonitorUsageEvent(c, monitorUsage{ImageCount: len(result.Data), Observed: true})
 	s.sendEvent(c, TestEvent{Type: "test_complete", Success: true})
 	return nil
 }
@@ -1815,7 +2044,7 @@ func (s *AccountTestService) testOpenAIImageOAuth(c *gin.Context, ctx context.Co
 	req = req.WithContext(WithHTTPUpstreamProfile(req.Context(), HTTPUpstreamProfileOpenAI))
 	req.Host = "chatgpt.com"
 	if credentialAccount.IsOpenAIAgentIdentity() {
-		authHeaders, authErr := buildAgentIdentityAuthenticationHeaders(ctx, s.accountRepo, s.agentIdentityWS, &s.agentIdentityTaskMu, credentialAccount)
+		authHeaders, authErr := s.buildAgentIdentityAuthenticationHeaders(ctx, credentialAccount)
 		if authErr != nil {
 			return s.sendErrorAndEnd(c, "Failed to build Agent Identity authentication")
 		}
@@ -1889,8 +2118,52 @@ func (s *AccountTestService) testOpenAIImageOAuth(c *gin.Context, ctx context.Co
 		})
 	}
 
+	s.sendMonitorUsageEvent(c, monitorUsage{ImageCount: len(results), Observed: true})
 	s.sendEvent(c, TestEvent{Type: "test_complete", Success: true})
 	return nil
+}
+
+func (s *AccountTestService) sendMonitorUsageEvent(c *gin.Context, usage monitorUsage) {
+	if !usage.hasMeteredUnits() {
+		return
+	}
+	s.sendEvent(c, TestEvent{
+		Type: "usage",
+		Data: map[string]any{
+			"input_tokens":          usage.Tokens.InputTokens,
+			"output_tokens":         usage.Tokens.OutputTokens,
+			"cache_creation_tokens": usage.Tokens.CacheCreationTokens,
+			"cache_read_tokens":     usage.Tokens.CacheReadTokens,
+			"image_count":           usage.ImageCount,
+			"observed":              usage.Observed,
+		},
+	})
+}
+
+func monitorUsageFromTestEventData(data any) monitorUsage {
+	raw, err := json.Marshal(data)
+	if err != nil {
+		return monitorUsage{}
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return monitorUsage{}
+	}
+	observed, _ := payload["observed"].(bool)
+	usage := monitorUsage{
+		Tokens: UsageTokens{
+			InputTokens:         intFromPayload(payload["input_tokens"]),
+			OutputTokens:        intFromPayload(payload["output_tokens"]),
+			CacheCreationTokens: intFromPayload(payload["cache_creation_tokens"]),
+			CacheReadTokens:     intFromPayload(payload["cache_read_tokens"]),
+		},
+		ImageCount: intFromPayload(payload["image_count"]),
+		Observed:   observed,
+	}
+	if usage.hasMeteredUnits() {
+		usage.Observed = true
+	}
+	return usage
 }
 
 func (s *AccountTestService) sendEvent(c *gin.Context, event TestEvent) {

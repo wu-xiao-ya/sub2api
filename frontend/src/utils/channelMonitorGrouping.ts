@@ -32,6 +32,12 @@ export interface GroupedChannelStatus {
   imageMonitorId: number | null
 }
 
+export type GroupedChannelHealth =
+  | 'operational'
+  | 'slow_response'
+  | 'partial'
+  | 'unavailable'
+
 interface MutableGroupedChannelStatus
   extends Omit<GroupedChannelStatus, 'models' | 'leadModel'> {
   modelsByName: Map<string, GroupedChannelModel>
@@ -169,14 +175,40 @@ export function groupedChannelStatus(
   const hasHealthyModel = group.models.some(
     model => model.status === STATUS_OPERATIONAL || model.status === STATUS_DEGRADED,
   )
-  if (
-    group.models.some(model => model.status === STATUS_FAILED || model.status === STATUS_ERROR)
-    && !hasHealthyModel
-  ) {
-    return STATUS_FAILED
+  if (!hasHealthyModel) {
+    if (group.models.some(model => model.status === STATUS_FAILED)) {
+      return STATUS_FAILED
+    }
+    if (group.models.some(model => model.status === STATUS_ERROR)) {
+      return STATUS_ERROR
+    }
   }
   if (group.models.some(model => model.status !== STATUS_OPERATIONAL)) {
     return STATUS_DEGRADED
   }
   return STATUS_OPERATIONAL
+}
+
+/**
+ * Keep user-facing channel health more specific than the persisted monitor
+ * enum. A raw `degraded` probe has succeeded but took too long, whereas a
+ * mixture of usable and failed models should be described as a partial issue.
+ */
+export function groupedChannelHealth(
+  group: Pick<GroupedChannelStatus, 'models'>,
+): GroupedChannelHealth {
+  const hasAvailableModel = group.models.some(
+    model => model.status === STATUS_OPERATIONAL || model.status === STATUS_DEGRADED,
+  )
+  if (!hasAvailableModel) return 'unavailable'
+
+  const hasUnavailableModel = group.models.some(
+    model => model.status !== STATUS_OPERATIONAL && model.status !== STATUS_DEGRADED,
+  )
+  if (hasUnavailableModel) return 'partial'
+
+  if (group.models.some(model => model.status === STATUS_DEGRADED)) {
+    return 'slow_response'
+  }
+  return 'operational'
 }

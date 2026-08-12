@@ -77,12 +77,13 @@ type ChannelMonitorRunner struct {
 
 // scheduledMonitor 单个监控的运行时上下文。
 type scheduledMonitor struct {
-	id         int64
-	name       string
-	monitorIDs []int64
-	interval   time.Duration
-	jitter     time.Duration // 每轮 ± [0, jitter] 的均匀随机偏移；0 = 固定间隔
-	cancel     context.CancelFunc
+	id             int64
+	name           string
+	monitorIDs     []int64
+	interval       time.Duration
+	jitter         time.Duration // 每轮 ± [0, jitter] 的均匀随机偏移；0 = 固定间隔
+	requestTimeout time.Duration
+	cancel         context.CancelFunc
 }
 
 // nextDelay 计算下一次触发的等待时长：interval ± [0, jitter] 的均匀随机偏移。
@@ -225,12 +226,13 @@ func (r *ChannelMonitorRunner) Schedule(m *ChannelMonitor) {
 	}
 	ctx, cancel := context.WithCancel(r.parentCtx)
 	task := &scheduledMonitor{
-		id:         m.ID,
-		name:       m.Name,
-		monitorIDs: []int64{m.ID},
-		interval:   interval,
-		jitter:     jitter,
-		cancel:     cancel,
+		id:             m.ID,
+		name:           m.Name,
+		monitorIDs:     []int64{m.ID},
+		interval:       interval,
+		jitter:         jitter,
+		requestTimeout: monitorRequestTimeoutFor(m),
+		cancel:         cancel,
 	}
 	r.tasks[m.ID] = task
 	r.wg.Add(1)
@@ -262,12 +264,13 @@ func (r *ChannelMonitorRunner) replaceGroupedTasks(monitors []*ChannelMonitor) {
 	for _, spec := range specs {
 		ctx, cancel := context.WithCancel(r.parentCtx)
 		task := &scheduledMonitor{
-			id:         spec.id,
-			name:       spec.name,
-			monitorIDs: append([]int64(nil), spec.monitorIDs...),
-			interval:   spec.interval,
-			jitter:     spec.jitter,
-			cancel:     cancel,
+			id:             spec.id,
+			name:           spec.name,
+			monitorIDs:     append([]int64(nil), spec.monitorIDs...),
+			interval:       spec.interval,
+			jitter:         spec.jitter,
+			requestTimeout: spec.requestTimeout,
+			cancel:         cancel,
 		}
 		r.tasks[task.id] = task
 		r.wg.Add(1)
@@ -284,11 +287,12 @@ func (r *ChannelMonitorRunner) replaceGroupedTasks(monitors []*ChannelMonitor) {
 }
 
 type scheduledMonitorSpec struct {
-	id         int64
-	name       string
-	monitorIDs []int64
-	interval   time.Duration
-	jitter     time.Duration
+	id             int64
+	name           string
+	monitorIDs     []int64
+	interval       time.Duration
+	jitter         time.Duration
+	requestTimeout time.Duration
 }
 
 func buildGroupedScheduledMonitors(monitors []*ChannelMonitor) []scheduledMonitorSpec {
@@ -315,14 +319,33 @@ func buildGroupedScheduledMonitors(monitors []*ChannelMonitor) []scheduledMonito
 			ids = append(ids, m.ID)
 		}
 		out = append(out, scheduledMonitorSpec{
-			id:         leader.ID,
-			name:       monitorGroupDisplayName(leader),
-			monitorIDs: ids,
-			interval:   interval,
-			jitter:     jitter,
+			id:             leader.ID,
+			name:           monitorGroupDisplayName(leader),
+			monitorIDs:     ids,
+			interval:       interval,
+			jitter:         jitter,
+			requestTimeout: monitorGroupRequestTimeout(group),
 		})
 	}
 	return out
+}
+
+func monitorRequestTimeoutFor(m *ChannelMonitor) time.Duration {
+	if m == nil {
+		return monitorRequestTimeout
+	}
+	seconds := defaultRequestTimeoutSeconds(m.APIMode, m.RequestTimeoutSeconds)
+	return time.Duration(seconds) * time.Second
+}
+
+func monitorGroupRequestTimeout(monitors []*ChannelMonitor) time.Duration {
+	timeout := monitorRequestTimeout
+	for _, m := range monitors {
+		if candidate := monitorRequestTimeoutFor(m); candidate > timeout {
+			timeout = candidate
+		}
+	}
+	return timeout
 }
 
 func (r *ChannelMonitorRunner) taskCount() int {
@@ -435,7 +458,11 @@ func (r *ChannelMonitorRunner) runOne(task *scheduledMonitor) {
 	if task == nil {
 		return
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), monitorRequestTimeout+monitorPingTimeout+monitorRunOneBuffer)
+	requestTimeout := task.requestTimeout
+	if requestTimeout <= 0 {
+		requestTimeout = monitorRequestTimeout
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout+monitorPingTimeout+monitorRunOneBuffer)
 	defer cancel()
 
 	defer r.releaseInFlight(task.id)

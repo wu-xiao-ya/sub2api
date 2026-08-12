@@ -289,6 +289,42 @@ func TestOpenAITempUnschedulable_UnknownModelKeepsAccountRuntimeBlock(t *testing
 	require.Empty(t, repo.modelRateLimitCalls)
 }
 
+func TestOpenAIGenericBlocked403_DoesNotRuntimeBlockWholeAccount(t *testing.T) {
+	repo := &modelNotFoundAccountRepoStub{}
+	counter := &openAI403CounterCacheStub{
+		modelDistinct: []int64{1},
+		modelAdded:    []bool{true},
+	}
+	rateLimitService := NewRateLimitService(repo, nil, &config.Config{}, nil, nil)
+	rateLimitService.SetOpenAI403CounterCache(counter)
+	svc := &OpenAIGatewayService{
+		rateLimitService: rateLimitService,
+	}
+	rateLimitService.SetAccountRuntimeBlocker(svc)
+	account := &Account{
+		ID:          49,
+		Name:        "plus-gateway-1",
+		Platform:    PlatformOpenAI,
+		Type:        AccountTypeAPIKey,
+		Status:      StatusActive,
+		Schedulable: true,
+	}
+
+	shouldFailover := svc.handleOpenAIAccountUpstreamError(
+		context.Background(),
+		account,
+		http.StatusForbidden,
+		http.Header{},
+		[]byte(`Your request was blocked.`),
+		"gpt-5.6-terra",
+	)
+
+	require.True(t, shouldFailover)
+	require.False(t, svc.isOpenAIAccountRuntimeBlocked(account))
+	require.Len(t, repo.modelRateLimitCalls, 1)
+	require.Equal(t, "gpt-5.6-terra", repo.modelRateLimitCalls[0].scope)
+}
+
 func TestOpenAIRuntimeBlock_DoesNotShortenExistingBlock(t *testing.T) {
 	svc := &OpenAIGatewayService{}
 	account := &Account{ID: 46, Platform: PlatformOpenAI, Type: AccountTypeOAuth}

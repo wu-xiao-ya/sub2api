@@ -117,6 +117,27 @@ func (_u *GroupUpdate) AddRateMultiplier(v float64) *GroupUpdate {
 	return _u
 }
 
+// SetContributorRewardMultiplier sets the "contributor_reward_multiplier" field.
+func (_u *GroupUpdate) SetContributorRewardMultiplier(v float64) *GroupUpdate {
+	_u.mutation.ResetContributorRewardMultiplier()
+	_u.mutation.SetContributorRewardMultiplier(v)
+	return _u
+}
+
+// SetNillableContributorRewardMultiplier sets the "contributor_reward_multiplier" field if the given value is not nil.
+func (_u *GroupUpdate) SetNillableContributorRewardMultiplier(v *float64) *GroupUpdate {
+	if v != nil {
+		_u.SetContributorRewardMultiplier(*v)
+	}
+	return _u
+}
+
+// AddContributorRewardMultiplier adds value to the "contributor_reward_multiplier" field.
+func (_u *GroupUpdate) AddContributorRewardMultiplier(v float64) *GroupUpdate {
+	_u.mutation.AddContributorRewardMultiplier(v)
+	return _u
+}
+
 // SetPeakRateEnabled sets the "peak_rate_enabled" field.
 func (_u *GroupUpdate) SetPeakRateEnabled(v bool) *GroupUpdate {
 	_u.mutation.SetPeakRateEnabled(v)
@@ -1252,6 +1273,12 @@ func (_u *GroupUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.AddedRateMultiplier(); ok {
 		_spec.AddField(group.FieldRateMultiplier, field.TypeFloat64, value)
 	}
+	if value, ok := _u.mutation.ContributorRewardMultiplier(); ok {
+		_spec.SetField(group.FieldContributorRewardMultiplier, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedContributorRewardMultiplier(); ok {
+		_spec.AddField(group.FieldContributorRewardMultiplier, field.TypeFloat64, value)
+	}
 	if value, ok := _u.mutation.PeakRateEnabled(); ok {
 		_spec.SetField(group.FieldPeakRateEnabled, field.TypeBool, value)
 	}
@@ -1877,6 +1904,27 @@ func (_u *GroupUpdateOne) SetNillableRateMultiplier(v *float64) *GroupUpdateOne 
 // AddRateMultiplier adds value to the "rate_multiplier" field.
 func (_u *GroupUpdateOne) AddRateMultiplier(v float64) *GroupUpdateOne {
 	_u.mutation.AddRateMultiplier(v)
+	return _u
+}
+
+// SetContributorRewardMultiplier sets the "contributor_reward_multiplier" field.
+func (_u *GroupUpdateOne) SetContributorRewardMultiplier(v float64) *GroupUpdateOne {
+	_u.mutation.ResetContributorRewardMultiplier()
+	_u.mutation.SetContributorRewardMultiplier(v)
+	return _u
+}
+
+// SetNillableContributorRewardMultiplier sets the "contributor_reward_multiplier" field if the given value is not nil.
+func (_u *GroupUpdateOne) SetNillableContributorRewardMultiplier(v *float64) *GroupUpdateOne {
+	if v != nil {
+		_u.SetContributorRewardMultiplier(*v)
+	}
+	return _u
+}
+
+// AddContributorRewardMultiplier adds value to the "contributor_reward_multiplier" field.
+func (_u *GroupUpdateOne) AddContributorRewardMultiplier(v float64) *GroupUpdateOne {
+	_u.mutation.AddContributorRewardMultiplier(v)
 	return _u
 }
 
@@ -3044,6 +3092,12 @@ func (_u *GroupUpdateOne) sqlSave(ctx context.Context) (_node *Group, err error)
 	}
 	if value, ok := _u.mutation.AddedRateMultiplier(); ok {
 		_spec.AddField(group.FieldRateMultiplier, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.ContributorRewardMultiplier(); ok {
+		_spec.SetField(group.FieldContributorRewardMultiplier, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedContributorRewardMultiplier(); ok {
+		_spec.AddField(group.FieldContributorRewardMultiplier, field.TypeFloat64, value)
 	}
 	if value, ok := _u.mutation.PeakRateEnabled(); ok {
 		_spec.SetField(group.FieldPeakRateEnabled, field.TypeBool, value)

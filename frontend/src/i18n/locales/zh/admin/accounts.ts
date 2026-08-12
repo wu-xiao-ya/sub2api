@@ -1,4 +1,48 @@
 export default {
+    accountContributions: {
+      title: '贡献账号审核',
+      description: '审核用户提交的 OpenAI OAuth 贡献账号，并绑定到共享分组。',
+      pendingTitle: '贡献账号审核列表',
+      pendingDescription: '可按状态筛选贡献账号；通过后会进入指定分组并允许调度。',
+      statusAll: '全部状态',
+      approve: '通过',
+      reject: '拒绝',
+      rejectConfirm: '确认拒绝这个贡献账号？拒绝后不会参与调度。',
+      approved: '贡献账号已审核通过',
+      rejected: '贡献账号已拒绝',
+      schedulable: '可调度',
+      notSchedulable: '不可调度',
+      columns: {
+        id: 'ID',
+        account: '账号',
+        owner: '贡献用户',
+        plan: '套餐',
+        status: '状态',
+        groups: '分组',
+        submittedAt: '提交时间'
+      },
+      planInfo: {
+        plan: '套餐',
+        email: '邮箱',
+        chatgptAccountId: 'ChatGPT 账号',
+        expiresAt: '到期',
+        unknown: '未知'
+      },
+      approveDialog: {
+        title: '审核通过贡献账号',
+        groups: '绑定分组',
+        noGroups: '暂无可用 OpenAI 分组',
+        concurrency: '并发',
+        priority: '优先级'
+      },
+      errors: {
+        loadFailed: '加载贡献账号失败',
+        loadGroupsFailed: '加载 OpenAI 分组失败',
+        approveFailed: '审核通过失败',
+        rejectFailed: '拒绝贡献账号失败'
+      }
+    },
+
     accounts: {
       title: '账号管理',
       description: '管理 AI 平台账号和 Cookie',

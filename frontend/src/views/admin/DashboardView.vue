@@ -96,7 +96,7 @@
         </div>
 
         <!-- Row 2: Token Stats -->
-        <div class="grid grid-cols-2 gap-4 lg:grid-cols-5">
+        <div class="grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-7">
           <!-- Today Tokens -->
           <div class="card p-4">
             <div class="flex items-center gap-3">
@@ -128,6 +128,31 @@
                     :title="t('admin.dashboard.standard')"
                     >${{ formatCost(stats.today_cost) }}</span
                   >
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Today Monitor Cost -->
+          <div class="card p-4">
+            <div class="flex items-center gap-3">
+              <div class="rounded-lg bg-teal-100 p-2 dark:bg-teal-900/30">
+                <Icon name="beaker" size="md" class="text-teal-600 dark:text-teal-400" :stroke-width="2" />
+              </div>
+              <div>
+                <p class="text-xs font-medium text-gray-500 dark:text-gray-400">
+                  {{ t('admin.dashboard.todayMonitorCost') }}
+                </p>
+                <p class="text-xl font-bold text-gray-900 dark:text-white">
+                  <span :title="t('admin.dashboard.accountCost')">
+                    ${{ formatCost(stats.today_monitor_actual_cost) }}
+                  </span>
+                </p>
+                <p class="text-xs text-gray-500 dark:text-gray-400">
+                  {{ formatNumber(stats.today_monitor_requests) }} {{ t('admin.dashboard.requests') }} /
+                  <span :title="t('admin.dashboard.standard')">
+                    ${{ formatCost(stats.today_monitor_account_cost) }}
+                  </span>
                 </p>
               </div>
             </div>
@@ -169,7 +194,7 @@
             </div>
           </div>
 
-          <!-- Cache Hit Rate -->
+          <!-- Today Cache Hit Rate -->
           <div class="card p-4">
             <div class="flex items-center gap-3">
               <div class="rounded-lg bg-cyan-100 p-2 dark:bg-cyan-900/30">
@@ -177,7 +202,7 @@
               </div>
               <div>
                 <p class="text-xs font-medium text-gray-500 dark:text-gray-400">
-                  {{ t('admin.dashboard.cacheHitRate') }}
+                  {{ t('admin.dashboard.todayCacheHitRate') }}
                 </p>
                 <p
                   data-testid="admin-cache-hit-rate"
@@ -192,7 +217,26 @@
                   }}
                 </p>
                 <p class="text-xs text-gray-500 dark:text-gray-400">
-                  {{ t('common.total') }}:
+                  {{ t('admin.dashboard.cacheReadTokens') }}: {{ formatTokens(stats.today_cache_read_tokens) }}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Historical Cache Hit Rate -->
+          <div class="card p-4">
+            <div class="flex items-center gap-3">
+              <div class="rounded-lg bg-sky-100 p-2 dark:bg-sky-900/30">
+                <Icon name="database" size="md" class="text-sky-600 dark:text-sky-400" :stroke-width="2" />
+              </div>
+              <div>
+                <p class="text-xs font-medium text-gray-500 dark:text-gray-400">
+                  {{ t('admin.dashboard.historicalCacheHitRate') }}
+                </p>
+                <p
+                  data-testid="admin-historical-cache-hit-rate"
+                  class="text-xl font-bold text-sky-600 dark:text-sky-400"
+                >
                   {{
                     formatCacheHitRate(
                       stats.total_input_tokens,
@@ -200,6 +244,9 @@
                       stats.total_cache_read_tokens
                     )
                   }}
+                </p>
+                <p class="text-xs text-gray-500 dark:text-gray-400">
+                  {{ t('admin.dashboard.cacheReadTokens') }}: {{ formatTokens(stats.total_cache_read_tokens) }}
                 </p>
               </div>
             </div>

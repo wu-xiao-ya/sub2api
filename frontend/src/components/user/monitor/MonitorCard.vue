@@ -1,29 +1,39 @@
 <template>
   <article
-    class="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-card transition-colors dark:border-dark-700 dark:bg-dark-800"
+    class="flex min-w-0 flex-col overflow-hidden rounded-md border border-gray-200 bg-white transition-colors dark:border-dark-700 dark:bg-dark-800"
+    :class="cardHeightClass"
   >
-    <section class="flex flex-col gap-4 border-b border-gray-100 px-5 py-4 dark:border-dark-700 sm:flex-row sm:items-center sm:justify-between">
-      <div class="flex min-w-0 items-start gap-3">
+    <section class="flex items-center gap-3 border-b border-gray-100 px-4 py-3 dark:border-dark-700">
+      <div class="flex min-w-0 flex-1 items-center gap-2.5">
         <span
-          class="grid h-10 w-10 flex-none place-items-center rounded-lg border border-black/5 bg-gray-50 dark:border-white/10 dark:bg-dark-900"
+          class="flex h-10 w-1.5 flex-none items-end justify-center rounded-full bg-gray-100 dark:bg-dark-900"
+          :title="channelHealthLabel"
+        >
+          <span
+            class="w-full rounded-full transition-[height] duration-300"
+            :class="[statusHeightClass, statusMarkerClass]"
+          ></span>
+        </span>
+        <span
+          class="grid h-8 w-8 flex-none place-items-center rounded-md border border-black/5 bg-gray-50 dark:border-white/10 dark:bg-dark-900"
           :class="providerTintClass"
         >
-          <ProviderIcon :provider="item.provider" :size="20" />
+          <ProviderIcon :provider="item.provider" :size="17" />
         </span>
         <div class="min-w-0">
-          <div class="truncate text-base font-semibold text-gray-950 dark:text-white">
+          <div class="truncate text-sm font-semibold text-gray-950 dark:text-white">
             {{ item.name }}
           </div>
-          <div class="mt-1 flex flex-wrap items-center gap-1.5">
+          <div class="mt-1 flex min-w-0 flex-wrap items-center gap-1">
             <span
-              class="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium"
+              class="inline-flex items-center rounded px-1.5 py-0.5 text-[9px] font-medium"
               :class="providerBadgeClass(item.provider)"
             >
               {{ providerLabel(item.provider) }}
             </span>
             <span
               v-if="item.groupName && item.groupName !== item.name"
-              class="inline-flex items-center rounded border border-gray-200 bg-gray-50 px-1.5 py-0.5 text-[10px] font-medium text-gray-600 dark:border-dark-600 dark:bg-dark-900 dark:text-gray-300"
+              class="inline-flex max-w-[11rem] truncate rounded border border-gray-200 bg-gray-50 px-1.5 py-0.5 text-[9px] font-medium text-gray-600 dark:border-dark-600 dark:bg-dark-900 dark:text-gray-300"
             >
               {{ item.groupName }}
             </span>
@@ -31,45 +41,45 @@
         </div>
       </div>
 
-      <div class="flex flex-wrap items-center gap-x-5 gap-y-2 sm:flex-none">
-        <div class="border-l border-gray-200 pl-4 dark:border-dark-700">
-          <div class="flex items-center gap-1 text-[10px] font-medium text-gray-400">
+      <div class="flex flex-none items-center gap-3">
+        <div class="text-right">
+          <div class="flex items-center justify-end gap-1 text-[9px] font-medium text-gray-400">
             <Icon name="checkCircle" size="xs" />
             <span>{{ t('channelStatus.availableModels') }}</span>
           </div>
-          <div class="mt-0.5 font-mono text-lg font-semibold tabular-nums text-gray-900 dark:text-gray-100">
-            {{ healthyModels }}<span class="ml-1 text-xs font-medium text-gray-400">/ {{ item.models.length }}</span>
+          <div class="mt-0.5 font-mono text-sm font-semibold tabular-nums text-gray-900 dark:text-gray-100">
+            {{ healthyModels }}<span class="ml-1 text-[10px] font-medium text-gray-400">/ {{ item.models.length }}</span>
           </div>
         </div>
-        <div class="border-l border-gray-200 pl-4 dark:border-dark-700">
-          <div class="flex items-center gap-1 text-[10px] font-medium text-gray-400">
+        <div class="text-right">
+          <div class="flex items-center justify-end gap-1 text-[9px] font-medium text-gray-400">
             <Icon name="bolt" size="xs" />
             <span>{{ t('channelStatus.leadLatency') }}</span>
           </div>
-          <div class="mt-0.5 font-mono text-lg font-semibold tabular-nums text-gray-900 dark:text-gray-100">
-            {{ formatLatency(item.leadModel.latency_ms) }}<span class="ml-0.5 text-[10px] font-medium text-gray-400">ms</span>
+          <div class="mt-0.5 font-mono text-sm font-semibold tabular-nums text-gray-900 dark:text-gray-100">
+            {{ formatLatency(item.leadModel.latency_ms) }}<span class="ml-0.5 text-[9px] font-medium text-gray-400">ms</span>
           </div>
         </div>
         <span
-          class="rounded-full px-2.5 py-1 text-[11px] font-semibold"
-          :class="statusBadgeClass(status)"
+          class="rounded-full px-2 py-1 text-[10px] font-semibold"
+          :class="channelHealthBadgeClass"
         >
-          {{ statusLabel(status) }}
+          {{ channelHealthLabel }}
         </span>
       </div>
     </section>
 
     <section
       v-if="item.imageMonitorId != null"
-      class="border-b border-gray-100 px-5 py-4 dark:border-dark-700"
+      class="border-b border-gray-100 px-4 py-2.5 dark:border-dark-700"
     >
       <div class="flex items-center justify-between gap-3">
-        <span class="text-xs font-semibold text-gray-700 dark:text-gray-200">
+        <span class="text-[10px] font-semibold text-gray-700 dark:text-gray-200">
           {{ t('channelStatus.latestImage') }}
         </span>
       </div>
       <div
-        class="mt-3 aspect-[16/5] overflow-hidden rounded-md border border-gray-200 bg-gray-100 dark:border-dark-700 dark:bg-dark-900"
+        class="mt-2 aspect-[16/4] max-h-24 overflow-hidden rounded border border-gray-200 bg-gray-100 dark:border-dark-700 dark:bg-dark-900"
       >
         <img
           v-if="imageUrl"
@@ -79,7 +89,7 @@
         />
         <div
           v-else
-          class="flex h-full items-center justify-center px-4 text-center text-xs text-gray-500 dark:text-gray-400"
+          class="flex h-full items-center justify-center px-4 text-center text-[10px] text-gray-500 dark:text-gray-400"
         >
           {{ t('channelStatus.latestImageEmpty') }}
         </div>
@@ -88,7 +98,7 @@
 
     <section
       v-else
-      class="border-b border-gray-100 px-5 py-3 dark:border-dark-700"
+      class="border-b border-gray-100 px-4 py-2 dark:border-dark-700"
     >
       <MonitorTimeline
         :buckets="item.leadModel.timeline"
@@ -97,77 +107,54 @@
       />
     </section>
 
-    <section class="min-w-0 p-5">
-        <div class="flex items-center justify-between gap-3">
-          <div class="flex min-w-0 items-baseline gap-2">
-            <div class="text-sm font-semibold text-gray-900 dark:text-gray-100">
-              {{ t('channelStatus.modelMonitoring') }}
-            </div>
-            <div class="text-xs text-gray-500 dark:text-gray-400">
-              {{ t('channelStatus.modelsCount', { n: item.models.length }) }}
-            </div>
+    <section class="min-w-0 flex-1 px-4 py-3">
+      <div class="flex items-center justify-between gap-3">
+        <div class="flex min-w-0 items-baseline gap-2">
+          <div class="text-xs font-semibold text-gray-900 dark:text-gray-100">
+            {{ t('channelStatus.modelMonitoring') }}
           </div>
-          <button
-            type="button"
-            class="flex h-8 w-8 flex-none items-center justify-center rounded-md text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-800 dark:text-gray-400 dark:hover:bg-dark-700 dark:hover:text-gray-100"
-            :title="t('channelStatus.viewDetail')"
-            @click="emit('click')"
-          >
-            <Icon name="externalLink" size="sm" />
-          </button>
+          <div class="text-[10px] text-gray-500 dark:text-gray-400">
+            {{ t('channelStatus.modelsCount', { n: item.models.length }) }}
+          </div>
         </div>
-
-        <div
-          class="mt-4 hidden grid-cols-[minmax(0,1fr)_7rem_6.5rem_6rem] gap-3 border-b border-gray-100 px-3 pb-2 text-[10px] font-semibold text-gray-400 dark:border-dark-700 sm:grid"
+        <button
+          type="button"
+          class="flex h-7 w-7 flex-none items-center justify-center rounded-md text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-800 dark:text-gray-400 dark:hover:bg-dark-700 dark:hover:text-gray-100"
+          :title="t('channelStatus.viewDetail')"
+          @click="emit('click')"
         >
-          <span>{{ t('channelStatus.detailColumns.model') }}</span>
-          <span>{{ t('channelStatus.detailColumns.latestStatus') }}</span>
-          <span class="text-right">{{ t('channelStatus.responseLatency') }}</span>
-          <span class="text-right">{{ availabilityHeading }}</span>
-        </div>
+          <Icon name="externalLink" size="sm" />
+        </button>
+      </div>
 
-        <div class="mt-1 divide-y divide-gray-100 dark:divide-dark-700/80">
-          <div
-            v-for="model in item.models"
-            :key="`${model.monitorId}:${model.model}`"
-            class="grid gap-x-3 gap-y-2 px-3 py-3 sm:grid-cols-[minmax(0,1fr)_7rem_6.5rem_6rem] sm:items-center"
+      <div class="mt-2 grid gap-x-4 sm:grid-cols-2">
+        <div
+          v-for="model in item.models"
+          :key="`${model.monitorId}:${model.model}`"
+          class="flex min-w-0 items-center gap-2 border-b border-gray-100 py-1.5 dark:border-dark-700/80"
+        >
+          <span
+            class="h-1.5 w-1.5 flex-none rounded-full"
+            :class="statusDotClass(model.status)"
+            :title="statusLabel(model.status)"
+          ></span>
+          <span
+            class="min-w-0 flex-1 truncate font-mono text-[11px] font-medium text-gray-800 dark:text-gray-200"
+            :title="model.model"
           >
-            <div class="flex min-w-0 items-center gap-2">
-              <span class="truncate font-mono text-sm font-medium text-gray-900 dark:text-gray-100">
-                {{ model.model }}
-              </span>
-            </div>
-
-            <div class="flex items-center gap-2 sm:block">
-              <span class="text-[10px] font-medium text-gray-400 sm:hidden">
-                {{ t('channelStatus.detailColumns.latestStatus') }}
-              </span>
-              <span
-                class="inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold"
-                :class="statusBadgeClass(model.status)"
-              >
-                {{ statusLabel(model.status) }}
-              </span>
-            </div>
-
-            <div class="flex items-center justify-between gap-2 font-mono text-sm tabular-nums text-gray-700 dark:text-gray-300 sm:justify-end">
-              <span class="text-[10px] font-medium text-gray-400 sm:hidden">
-                {{ t('channelStatus.responseLatency') }}
-              </span>
-              <span>{{ formatLatency(model.latency_ms) }}<span class="ml-0.5 text-[10px] text-gray-400">ms</span></span>
-            </div>
-
-            <div
-              class="flex items-center justify-between gap-2 font-mono text-sm font-semibold tabular-nums sm:justify-end"
-              :style="availabilityStyle(model)"
-            >
-              <span class="text-[10px] font-medium text-gray-400 sm:hidden">
-                {{ availabilityHeading }}
-              </span>
-              <span>{{ formatAvailability(resolveAvailability(model)) }}</span>
-            </div>
-          </div>
+            {{ model.model }}
+          </span>
+          <span class="flex-none font-mono text-[10px] tabular-nums text-gray-500 dark:text-gray-400">
+            {{ formatLatency(model.latency_ms) }}ms
+          </span>
+          <span
+            class="flex-none font-mono text-[10px] font-semibold tabular-nums"
+            :style="availabilityStyle(model)"
+          >
+            {{ formatAvailability(resolveAvailability(model)) }}
+          </span>
         </div>
+      </div>
     </section>
   </article>
 </template>
@@ -176,14 +163,19 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { UserMonitorDetail } from '@/api/channelMonitor'
-import type { GroupedChannelModel, GroupedChannelStatus } from '@/utils/channelMonitorGrouping'
-import { groupedChannelStatus } from '@/utils/channelMonitorGrouping'
+import type {
+  GroupedChannelModel,
+  GroupedChannelStatus,
+} from '@/utils/channelMonitorGrouping'
+import { groupedChannelHealth } from '@/utils/channelMonitorGrouping'
 import {
   hslForPct,
   useChannelMonitorFormat,
 } from '@/composables/useChannelMonitorFormat'
 import {
+  STATUS_ERROR,
   STATUS_DEGRADED,
+  STATUS_FAILED,
   STATUS_OPERATIONAL,
 } from '@/constants/channelMonitor'
 import Icon from '@/components/icons/Icon.vue'
@@ -212,14 +204,72 @@ const emit = defineEmits<{
 const { t } = useI18n()
 const {
   statusLabel,
-  statusBadgeClass,
   providerLabel,
   providerBadgeClass,
   formatLatency,
   formatPercent,
 } = useChannelMonitorFormat()
 
-const status = computed(() => groupedChannelStatus(props.item))
+const channelHealth = computed(() => groupedChannelHealth(props.item))
+const channelHealthLabel = computed(() =>
+  t(`channelStatus.health.${channelHealth.value}`),
+)
+const channelHealthBadgeClass = computed(() => {
+  switch (channelHealth.value) {
+    case 'operational':
+      return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300'
+    case 'slow_response':
+      return 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300'
+    case 'partial':
+      return 'bg-orange-100 text-orange-700 dark:bg-orange-500/15 dark:text-orange-300'
+    case 'unavailable':
+      return 'bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300'
+    default:
+      return 'bg-gray-100 text-gray-700 dark:bg-dark-700 dark:text-dark-300'
+  }
+})
+const cardHeightClass = computed(() => {
+  switch (channelHealth.value) {
+    case STATUS_OPERATIONAL:
+      return 'min-h-[300px]'
+    case 'slow_response':
+      return 'min-h-[276px]'
+    case 'partial':
+      return 'min-h-[252px]'
+    case 'unavailable':
+      return 'min-h-[228px]'
+    default:
+      return 'min-h-[240px]'
+  }
+})
+const statusHeightClass = computed(() => {
+  switch (channelHealth.value) {
+    case STATUS_OPERATIONAL:
+      return 'h-8'
+    case 'slow_response':
+      return 'h-6'
+    case 'partial':
+      return 'h-4'
+    case 'unavailable':
+      return 'h-2'
+    default:
+      return 'h-1'
+  }
+})
+const statusMarkerClass = computed(() => {
+  switch (channelHealth.value) {
+    case STATUS_OPERATIONAL:
+      return 'bg-emerald-500'
+    case 'slow_response':
+      return 'bg-amber-500'
+    case 'partial':
+      return 'bg-orange-500'
+    case 'unavailable':
+      return 'bg-red-500'
+    default:
+      return 'bg-gray-300 dark:bg-dark-600'
+  }
+})
 const providerTintClass = computed(() =>
   PROVIDER_TINT[props.item.provider] ?? 'text-gray-500 dark:text-gray-300'
 )
@@ -228,12 +278,6 @@ const healthyModels = computed(() =>
     model.status === STATUS_OPERATIONAL || model.status === STATUS_DEGRADED
   ).length
 )
-const availabilityHeading = computed(() =>
-  t('channelStatus.windowAvailability', {
-    window: t(`channelStatus.windowTab.${props.window}`),
-  })
-)
-
 function resolveAvailability(model: GroupedChannelModel): number | null {
   if (props.window === '7d') return model.availability_7d
   const detail = props.detailCache[model.monitorId]
@@ -251,5 +295,20 @@ function formatAvailability(value: number | null): string {
 function availabilityStyle(model: GroupedChannelModel): Record<string, string> {
   const color = hslForPct(resolveAvailability(model))
   return { color: color ?? 'rgb(107 114 128)' }
+}
+
+function statusDotClass(statusValue: GroupedChannelModel['status']): string {
+  switch (statusValue) {
+    case STATUS_OPERATIONAL:
+      return 'bg-emerald-500'
+    case STATUS_DEGRADED:
+      return 'bg-amber-500'
+    case STATUS_FAILED:
+      return 'bg-red-500'
+    case STATUS_ERROR:
+      return 'bg-gray-500'
+    default:
+      return 'bg-gray-300 dark:bg-dark-600'
+  }
 }
 </script>

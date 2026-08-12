@@ -25,6 +25,16 @@ const (
 	FieldLatencyMs = "latency_ms"
 	// FieldPingLatencyMs holds the string denoting the ping_latency_ms field in the database.
 	FieldPingLatencyMs = "ping_latency_ms"
+	// FieldAccountID holds the string denoting the account_id field in the database.
+	FieldAccountID = "account_id"
+	// FieldAccountName holds the string denoting the account_name field in the database.
+	FieldAccountName = "account_name"
+	// FieldProbeMode holds the string denoting the probe_mode field in the database.
+	FieldProbeMode = "probe_mode"
+	// FieldCandidateCount holds the string denoting the candidate_count field in the database.
+	FieldCandidateCount = "candidate_count"
+	// FieldHealthyCount holds the string denoting the healthy_count field in the database.
+	FieldHealthyCount = "healthy_count"
 	// FieldMessage holds the string denoting the message field in the database.
 	FieldMessage = "message"
 	// FieldCheckedAt holds the string denoting the checked_at field in the database.
@@ -50,6 +60,11 @@ var Columns = []string{
 	FieldStatus,
 	FieldLatencyMs,
 	FieldPingLatencyMs,
+	FieldAccountID,
+	FieldAccountName,
+	FieldProbeMode,
+	FieldCandidateCount,
+	FieldHealthyCount,
 	FieldMessage,
 	FieldCheckedAt,
 }
@@ -67,6 +82,18 @@ func ValidColumn(column string) bool {
 var (
 	// ModelValidator is a validator for the "model" field. It is called by the builders before save.
 	ModelValidator func(string) error
+	// DefaultAccountName holds the default value on creation for the "account_name" field.
+	DefaultAccountName string
+	// AccountNameValidator is a validator for the "account_name" field. It is called by the builders before save.
+	AccountNameValidator func(string) error
+	// DefaultProbeMode holds the default value on creation for the "probe_mode" field.
+	DefaultProbeMode string
+	// ProbeModeValidator is a validator for the "probe_mode" field. It is called by the builders before save.
+	ProbeModeValidator func(string) error
+	// DefaultCandidateCount holds the default value on creation for the "candidate_count" field.
+	DefaultCandidateCount int
+	// DefaultHealthyCount holds the default value on creation for the "healthy_count" field.
+	DefaultHealthyCount int
 	// DefaultMessage holds the default value on creation for the "message" field.
 	DefaultMessage string
 	// MessageValidator is a validator for the "message" field. It is called by the builders before save.
@@ -131,6 +158,31 @@ func ByLatencyMs(opts ...sql.OrderTermOption) OrderOption {
 // ByPingLatencyMs orders the results by the ping_latency_ms field.
 func ByPingLatencyMs(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldPingLatencyMs, opts...).ToFunc()
+}
+
+// ByAccountID orders the results by the account_id field.
+func ByAccountID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAccountID, opts...).ToFunc()
+}
+
+// ByAccountName orders the results by the account_name field.
+func ByAccountName(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAccountName, opts...).ToFunc()
+}
+
+// ByProbeMode orders the results by the probe_mode field.
+func ByProbeMode(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldProbeMode, opts...).ToFunc()
+}
+
+// ByCandidateCount orders the results by the candidate_count field.
+func ByCandidateCount(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldCandidateCount, opts...).ToFunc()
+}
+
+// ByHealthyCount orders the results by the healthy_count field.
+func ByHealthyCount(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldHealthyCount, opts...).ToFunc()
 }
 
 // ByMessage orders the results by the message field.

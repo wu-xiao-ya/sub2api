@@ -75,6 +75,31 @@ func PingLatencyMs(v int) predicate.ChannelMonitorHistory {
 	return predicate.ChannelMonitorHistory(sql.FieldEQ(FieldPingLatencyMs, v))
 }
 
+// AccountID applies equality check predicate on the "account_id" field. It's identical to AccountIDEQ.
+func AccountID(v int64) predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldEQ(FieldAccountID, v))
+}
+
+// AccountName applies equality check predicate on the "account_name" field. It's identical to AccountNameEQ.
+func AccountName(v string) predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldEQ(FieldAccountName, v))
+}
+
+// ProbeMode applies equality check predicate on the "probe_mode" field. It's identical to ProbeModeEQ.
+func ProbeMode(v string) predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldEQ(FieldProbeMode, v))
+}
+
+// CandidateCount applies equality check predicate on the "candidate_count" field. It's identical to CandidateCountEQ.
+func CandidateCount(v int) predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldEQ(FieldCandidateCount, v))
+}
+
+// HealthyCount applies equality check predicate on the "healthy_count" field. It's identical to HealthyCountEQ.
+func HealthyCount(v int) predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldEQ(FieldHealthyCount, v))
+}
+
 // Message applies equality check predicate on the "message" field. It's identical to MessageEQ.
 func Message(v string) predicate.ChannelMonitorHistory {
 	return predicate.ChannelMonitorHistory(sql.FieldEQ(FieldMessage, v))
@@ -288,6 +313,306 @@ func PingLatencyMsIsNil() predicate.ChannelMonitorHistory {
 // PingLatencyMsNotNil applies the NotNil predicate on the "ping_latency_ms" field.
 func PingLatencyMsNotNil() predicate.ChannelMonitorHistory {
 	return predicate.ChannelMonitorHistory(sql.FieldNotNull(FieldPingLatencyMs))
+}
+
+// AccountIDEQ applies the EQ predicate on the "account_id" field.
+func AccountIDEQ(v int64) predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldEQ(FieldAccountID, v))
+}
+
+// AccountIDNEQ applies the NEQ predicate on the "account_id" field.
+func AccountIDNEQ(v int64) predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldNEQ(FieldAccountID, v))
+}
+
+// AccountIDIn applies the In predicate on the "account_id" field.
+func AccountIDIn(vs ...int64) predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldIn(FieldAccountID, vs...))
+}
+
+// AccountIDNotIn applies the NotIn predicate on the "account_id" field.
+func AccountIDNotIn(vs ...int64) predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldNotIn(FieldAccountID, vs...))
+}
+
+// AccountIDGT applies the GT predicate on the "account_id" field.
+func AccountIDGT(v int64) predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldGT(FieldAccountID, v))
+}
+
+// AccountIDGTE applies the GTE predicate on the "account_id" field.
+func AccountIDGTE(v int64) predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldGTE(FieldAccountID, v))
+}
+
+// AccountIDLT applies the LT predicate on the "account_id" field.
+func AccountIDLT(v int64) predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldLT(FieldAccountID, v))
+}
+
+// AccountIDLTE applies the LTE predicate on the "account_id" field.
+func AccountIDLTE(v int64) predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldLTE(FieldAccountID, v))
+}
+
+// AccountIDIsNil applies the IsNil predicate on the "account_id" field.
+func AccountIDIsNil() predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldIsNull(FieldAccountID))
+}
+
+// AccountIDNotNil applies the NotNil predicate on the "account_id" field.
+func AccountIDNotNil() predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldNotNull(FieldAccountID))
+}
+
+// AccountNameEQ applies the EQ predicate on the "account_name" field.
+func AccountNameEQ(v string) predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldEQ(FieldAccountName, v))
+}
+
+// AccountNameNEQ applies the NEQ predicate on the "account_name" field.
+func AccountNameNEQ(v string) predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldNEQ(FieldAccountName, v))
+}
+
+// AccountNameIn applies the In predicate on the "account_name" field.
+func AccountNameIn(vs ...string) predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldIn(FieldAccountName, vs...))
+}
+
+// AccountNameNotIn applies the NotIn predicate on the "account_name" field.
+func AccountNameNotIn(vs ...string) predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldNotIn(FieldAccountName, vs...))
+}
+
+// AccountNameGT applies the GT predicate on the "account_name" field.
+func AccountNameGT(v string) predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldGT(FieldAccountName, v))
+}
+
+// AccountNameGTE applies the GTE predicate on the "account_name" field.
+func AccountNameGTE(v string) predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldGTE(FieldAccountName, v))
+}
+
+// AccountNameLT applies the LT predicate on the "account_name" field.
+func AccountNameLT(v string) predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldLT(FieldAccountName, v))
+}
+
+// AccountNameLTE applies the LTE predicate on the "account_name" field.
+func AccountNameLTE(v string) predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldLTE(FieldAccountName, v))
+}
+
+// AccountNameContains applies the Contains predicate on the "account_name" field.
+func AccountNameContains(v string) predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldContains(FieldAccountName, v))
+}
+
+// AccountNameHasPrefix applies the HasPrefix predicate on the "account_name" field.
+func AccountNameHasPrefix(v string) predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldHasPrefix(FieldAccountName, v))
+}
+
+// AccountNameHasSuffix applies the HasSuffix predicate on the "account_name" field.
+func AccountNameHasSuffix(v string) predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldHasSuffix(FieldAccountName, v))
+}
+
+// AccountNameIsNil applies the IsNil predicate on the "account_name" field.
+func AccountNameIsNil() predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldIsNull(FieldAccountName))
+}
+
+// AccountNameNotNil applies the NotNil predicate on the "account_name" field.
+func AccountNameNotNil() predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldNotNull(FieldAccountName))
+}
+
+// AccountNameEqualFold applies the EqualFold predicate on the "account_name" field.
+func AccountNameEqualFold(v string) predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldEqualFold(FieldAccountName, v))
+}
+
+// AccountNameContainsFold applies the ContainsFold predicate on the "account_name" field.
+func AccountNameContainsFold(v string) predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldContainsFold(FieldAccountName, v))
+}
+
+// ProbeModeEQ applies the EQ predicate on the "probe_mode" field.
+func ProbeModeEQ(v string) predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldEQ(FieldProbeMode, v))
+}
+
+// ProbeModeNEQ applies the NEQ predicate on the "probe_mode" field.
+func ProbeModeNEQ(v string) predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldNEQ(FieldProbeMode, v))
+}
+
+// ProbeModeIn applies the In predicate on the "probe_mode" field.
+func ProbeModeIn(vs ...string) predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldIn(FieldProbeMode, vs...))
+}
+
+// ProbeModeNotIn applies the NotIn predicate on the "probe_mode" field.
+func ProbeModeNotIn(vs ...string) predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldNotIn(FieldProbeMode, vs...))
+}
+
+// ProbeModeGT applies the GT predicate on the "probe_mode" field.
+func ProbeModeGT(v string) predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldGT(FieldProbeMode, v))
+}
+
+// ProbeModeGTE applies the GTE predicate on the "probe_mode" field.
+func ProbeModeGTE(v string) predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldGTE(FieldProbeMode, v))
+}
+
+// ProbeModeLT applies the LT predicate on the "probe_mode" field.
+func ProbeModeLT(v string) predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldLT(FieldProbeMode, v))
+}
+
+// ProbeModeLTE applies the LTE predicate on the "probe_mode" field.
+func ProbeModeLTE(v string) predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldLTE(FieldProbeMode, v))
+}
+
+// ProbeModeContains applies the Contains predicate on the "probe_mode" field.
+func ProbeModeContains(v string) predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldContains(FieldProbeMode, v))
+}
+
+// ProbeModeHasPrefix applies the HasPrefix predicate on the "probe_mode" field.
+func ProbeModeHasPrefix(v string) predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldHasPrefix(FieldProbeMode, v))
+}
+
+// ProbeModeHasSuffix applies the HasSuffix predicate on the "probe_mode" field.
+func ProbeModeHasSuffix(v string) predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldHasSuffix(FieldProbeMode, v))
+}
+
+// ProbeModeIsNil applies the IsNil predicate on the "probe_mode" field.
+func ProbeModeIsNil() predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldIsNull(FieldProbeMode))
+}
+
+// ProbeModeNotNil applies the NotNil predicate on the "probe_mode" field.
+func ProbeModeNotNil() predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldNotNull(FieldProbeMode))
+}
+
+// ProbeModeEqualFold applies the EqualFold predicate on the "probe_mode" field.
+func ProbeModeEqualFold(v string) predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldEqualFold(FieldProbeMode, v))
+}
+
+// ProbeModeContainsFold applies the ContainsFold predicate on the "probe_mode" field.
+func ProbeModeContainsFold(v string) predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldContainsFold(FieldProbeMode, v))
+}
+
+// CandidateCountEQ applies the EQ predicate on the "candidate_count" field.
+func CandidateCountEQ(v int) predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldEQ(FieldCandidateCount, v))
+}
+
+// CandidateCountNEQ applies the NEQ predicate on the "candidate_count" field.
+func CandidateCountNEQ(v int) predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldNEQ(FieldCandidateCount, v))
+}
+
+// CandidateCountIn applies the In predicate on the "candidate_count" field.
+func CandidateCountIn(vs ...int) predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldIn(FieldCandidateCount, vs...))
+}
+
+// CandidateCountNotIn applies the NotIn predicate on the "candidate_count" field.
+func CandidateCountNotIn(vs ...int) predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldNotIn(FieldCandidateCount, vs...))
+}
+
+// CandidateCountGT applies the GT predicate on the "candidate_count" field.
+func CandidateCountGT(v int) predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldGT(FieldCandidateCount, v))
+}
+
+// CandidateCountGTE applies the GTE predicate on the "candidate_count" field.
+func CandidateCountGTE(v int) predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldGTE(FieldCandidateCount, v))
+}
+
+// CandidateCountLT applies the LT predicate on the "candidate_count" field.
+func CandidateCountLT(v int) predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldLT(FieldCandidateCount, v))
+}
+
+// CandidateCountLTE applies the LTE predicate on the "candidate_count" field.
+func CandidateCountLTE(v int) predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldLTE(FieldCandidateCount, v))
+}
+
+// CandidateCountIsNil applies the IsNil predicate on the "candidate_count" field.
+func CandidateCountIsNil() predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldIsNull(FieldCandidateCount))
+}
+
+// CandidateCountNotNil applies the NotNil predicate on the "candidate_count" field.
+func CandidateCountNotNil() predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldNotNull(FieldCandidateCount))
+}
+
+// HealthyCountEQ applies the EQ predicate on the "healthy_count" field.
+func HealthyCountEQ(v int) predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldEQ(FieldHealthyCount, v))
+}
+
+// HealthyCountNEQ applies the NEQ predicate on the "healthy_count" field.
+func HealthyCountNEQ(v int) predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldNEQ(FieldHealthyCount, v))
+}
+
+// HealthyCountIn applies the In predicate on the "healthy_count" field.
+func HealthyCountIn(vs ...int) predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldIn(FieldHealthyCount, vs...))
+}
+
+// HealthyCountNotIn applies the NotIn predicate on the "healthy_count" field.
+func HealthyCountNotIn(vs ...int) predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldNotIn(FieldHealthyCount, vs...))
+}
+
+// HealthyCountGT applies the GT predicate on the "healthy_count" field.
+func HealthyCountGT(v int) predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldGT(FieldHealthyCount, v))
+}
+
+// HealthyCountGTE applies the GTE predicate on the "healthy_count" field.
+func HealthyCountGTE(v int) predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldGTE(FieldHealthyCount, v))
+}
+
+// HealthyCountLT applies the LT predicate on the "healthy_count" field.
+func HealthyCountLT(v int) predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldLT(FieldHealthyCount, v))
+}
+
+// HealthyCountLTE applies the LTE predicate on the "healthy_count" field.
+func HealthyCountLTE(v int) predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldLTE(FieldHealthyCount, v))
+}
+
+// HealthyCountIsNil applies the IsNil predicate on the "healthy_count" field.
+func HealthyCountIsNil() predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldIsNull(FieldHealthyCount))
+}
+
+// HealthyCountNotNil applies the NotNil predicate on the "healthy_count" field.
+func HealthyCountNotNil() predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldNotNull(FieldHealthyCount))
 }
 
 // MessageEQ applies the EQ predicate on the "message" field.

@@ -135,6 +135,7 @@ type SystemSettings struct {
 	SiteLogo                    string           `json:"site_logo"`
 	SiteSubtitle                string           `json:"site_subtitle"`
 	APIBaseURL                  string           `json:"api_base_url"`
+	APIEndpointProbeInterval    int              `json:"api_endpoint_probe_interval_seconds"`
 	ContactInfo                 string           `json:"contact_info"`
 	DocURL                      string           `json:"doc_url"`
 	HomeContent                 string           `json:"home_content"`
@@ -278,8 +279,9 @@ type SystemSettings struct {
 	AccountQuotaNotifyEmails        []NotifyEmailEntry `json:"account_quota_notify_emails"`
 
 	// Channel Monitor feature switch
-	ChannelMonitorEnabled                bool `json:"channel_monitor_enabled"`
-	ChannelMonitorDefaultIntervalSeconds int  `json:"channel_monitor_default_interval_seconds"`
+	ChannelMonitorEnabled                bool                                       `json:"channel_monitor_enabled"`
+	ChannelMonitorDefaultIntervalSeconds int                                        `json:"channel_monitor_default_interval_seconds"`
+	ChannelMonitorAccountProbeSettings   service.ChannelMonitorAccountProbeSettings `json:"channel_monitor_account_probe_settings"`
 
 	// Available Channels feature switch (user-facing aggregate view)
 	AvailableChannelsEnabled bool `json:"available_channels_enabled"`
@@ -329,6 +331,7 @@ type PublicSettings struct {
 	SiteLogo                         string                   `json:"site_logo"`
 	SiteSubtitle                     string                   `json:"site_subtitle"`
 	APIBaseURL                       string                   `json:"api_base_url"`
+	APIEndpointProbeInterval         int                      `json:"api_endpoint_probe_interval_seconds"`
 	ContactInfo                      string                   `json:"contact_info"`
 	DocURL                           string                   `json:"doc_url"`
 	HomeContent                      string                   `json:"home_content"`
