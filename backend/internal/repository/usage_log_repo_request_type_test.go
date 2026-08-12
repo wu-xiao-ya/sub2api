@@ -651,7 +651,7 @@ func TestUsageLogRepositoryGetGroupStatsUsesTimeAwareUpstreamRateSnapshots(t *te
 	start := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
 	end := start.Add(time.Hour)
 
-	mock.ExpectQuery(`(?s)WITH runtime_settings.*usage_by_account_bucket.*INTERVAL '5 minutes'.*account_upstream_rate_snapshots.*s\.observed_at <= ub\.rate_bucket`).
+	mock.ExpectQuery(`(?s)WITH runtime_settings.*usage_by_account_bucket.*INTERVAL '5 minutes'.*upstream_rate\.source = 'manual_cleared'.*account_upstream_rate_snapshots.*s\.observed_at <= ub\.rate_bucket`).
 		WithArgs(start, end).
 		WillReturnRows(sqlmock.NewRows([]string{
 			"group_id", "group_name", "requests", "total_tokens",

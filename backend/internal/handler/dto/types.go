@@ -87,13 +87,14 @@ type APIKey struct {
 }
 
 type Group struct {
-	ID             int64   `json:"id"`
-	Name           string  `json:"name"`
-	Description    string  `json:"description"`
-	Platform       string  `json:"platform"`
-	RateMultiplier float64 `json:"rate_multiplier"`
-	IsExclusive    bool    `json:"is_exclusive"`
-	Status         string  `json:"status"`
+	ID                          int64   `json:"id"`
+	Name                        string  `json:"name"`
+	Description                 string  `json:"description"`
+	Platform                    string  `json:"platform"`
+	RateMultiplier              float64 `json:"rate_multiplier"`
+	ContributorRewardMultiplier float64 `json:"contributor_reward_multiplier"`
+	IsExclusive                 bool    `json:"is_exclusive"`
+	Status                      string  `json:"status"`
 
 	SubscriptionType string   `json:"subscription_type"`
 	DailyLimitUSD    *float64 `json:"daily_limit_usd"`
@@ -203,6 +204,12 @@ type Account struct {
 	AutoPauseOnExpired      bool            `json:"auto_pause_on_expired"`
 	CreatedAt               time.Time       `json:"created_at"`
 	UpdatedAt               time.Time       `json:"updated_at"`
+
+	OwnerUserID             *int64     `json:"owner_user_id,omitempty"`
+	ContributionStatus      string     `json:"contribution_status,omitempty"`
+	ContributionSubmittedAt *time.Time `json:"contribution_submitted_at,omitempty"`
+	ContributionApprovedAt  *time.Time `json:"contribution_approved_at,omitempty"`
+	ContributionRevokedAt   *time.Time `json:"contribution_revoked_at,omitempty"`
 
 	Schedulable bool `json:"schedulable"`
 

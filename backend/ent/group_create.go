@@ -105,6 +105,20 @@ func (_c *GroupCreate) SetNillableRateMultiplier(v *float64) *GroupCreate {
 	return _c
 }
 
+// SetContributorRewardMultiplier sets the "contributor_reward_multiplier" field.
+func (_c *GroupCreate) SetContributorRewardMultiplier(v float64) *GroupCreate {
+	_c.mutation.SetContributorRewardMultiplier(v)
+	return _c
+}
+
+// SetNillableContributorRewardMultiplier sets the "contributor_reward_multiplier" field if the given value is not nil.
+func (_c *GroupCreate) SetNillableContributorRewardMultiplier(v *float64) *GroupCreate {
+	if v != nil {
+		_c.SetContributorRewardMultiplier(*v)
+	}
+	return _c
+}
+
 // SetPeakRateEnabled sets the "peak_rate_enabled" field.
 func (_c *GroupCreate) SetPeakRateEnabled(v bool) *GroupCreate {
 	_c.mutation.SetPeakRateEnabled(v)
@@ -898,6 +912,10 @@ func (_c *GroupCreate) defaults() error {
 		v := group.DefaultRateMultiplier
 		_c.mutation.SetRateMultiplier(v)
 	}
+	if _, ok := _c.mutation.ContributorRewardMultiplier(); !ok {
+		v := group.DefaultContributorRewardMultiplier
+		_c.mutation.SetContributorRewardMultiplier(v)
+	}
 	if _, ok := _c.mutation.PeakRateEnabled(); !ok {
 		v := group.DefaultPeakRateEnabled
 		_c.mutation.SetPeakRateEnabled(v)
@@ -1035,6 +1053,9 @@ func (_c *GroupCreate) check() error {
 	}
 	if _, ok := _c.mutation.RateMultiplier(); !ok {
 		return &ValidationError{Name: "rate_multiplier", err: errors.New(`ent: missing required field "Group.rate_multiplier"`)}
+	}
+	if _, ok := _c.mutation.ContributorRewardMultiplier(); !ok {
+		return &ValidationError{Name: "contributor_reward_multiplier", err: errors.New(`ent: missing required field "Group.contributor_reward_multiplier"`)}
 	}
 	if _, ok := _c.mutation.PeakRateEnabled(); !ok {
 		return &ValidationError{Name: "peak_rate_enabled", err: errors.New(`ent: missing required field "Group.peak_rate_enabled"`)}
@@ -1228,6 +1249,10 @@ func (_c *GroupCreate) createSpec() (*Group, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.RateMultiplier(); ok {
 		_spec.SetField(group.FieldRateMultiplier, field.TypeFloat64, value)
 		_node.RateMultiplier = value
+	}
+	if value, ok := _c.mutation.ContributorRewardMultiplier(); ok {
+		_spec.SetField(group.FieldContributorRewardMultiplier, field.TypeFloat64, value)
+		_node.ContributorRewardMultiplier = value
 	}
 	if value, ok := _c.mutation.PeakRateEnabled(); ok {
 		_spec.SetField(group.FieldPeakRateEnabled, field.TypeBool, value)
@@ -1652,6 +1677,24 @@ func (u *GroupUpsert) UpdateRateMultiplier() *GroupUpsert {
 // AddRateMultiplier adds v to the "rate_multiplier" field.
 func (u *GroupUpsert) AddRateMultiplier(v float64) *GroupUpsert {
 	u.Add(group.FieldRateMultiplier, v)
+	return u
+}
+
+// SetContributorRewardMultiplier sets the "contributor_reward_multiplier" field.
+func (u *GroupUpsert) SetContributorRewardMultiplier(v float64) *GroupUpsert {
+	u.Set(group.FieldContributorRewardMultiplier, v)
+	return u
+}
+
+// UpdateContributorRewardMultiplier sets the "contributor_reward_multiplier" field to the value that was provided on create.
+func (u *GroupUpsert) UpdateContributorRewardMultiplier() *GroupUpsert {
+	u.SetExcluded(group.FieldContributorRewardMultiplier)
+	return u
+}
+
+// AddContributorRewardMultiplier adds v to the "contributor_reward_multiplier" field.
+func (u *GroupUpsert) AddContributorRewardMultiplier(v float64) *GroupUpsert {
+	u.Add(group.FieldContributorRewardMultiplier, v)
 	return u
 }
 
@@ -2607,6 +2650,27 @@ func (u *GroupUpsertOne) AddRateMultiplier(v float64) *GroupUpsertOne {
 func (u *GroupUpsertOne) UpdateRateMultiplier() *GroupUpsertOne {
 	return u.Update(func(s *GroupUpsert) {
 		s.UpdateRateMultiplier()
+	})
+}
+
+// SetContributorRewardMultiplier sets the "contributor_reward_multiplier" field.
+func (u *GroupUpsertOne) SetContributorRewardMultiplier(v float64) *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetContributorRewardMultiplier(v)
+	})
+}
+
+// AddContributorRewardMultiplier adds v to the "contributor_reward_multiplier" field.
+func (u *GroupUpsertOne) AddContributorRewardMultiplier(v float64) *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.AddContributorRewardMultiplier(v)
+	})
+}
+
+// UpdateContributorRewardMultiplier sets the "contributor_reward_multiplier" field to the value that was provided on create.
+func (u *GroupUpsertOne) UpdateContributorRewardMultiplier() *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateContributorRewardMultiplier()
 	})
 }
 
@@ -3864,6 +3928,27 @@ func (u *GroupUpsertBulk) AddRateMultiplier(v float64) *GroupUpsertBulk {
 func (u *GroupUpsertBulk) UpdateRateMultiplier() *GroupUpsertBulk {
 	return u.Update(func(s *GroupUpsert) {
 		s.UpdateRateMultiplier()
+	})
+}
+
+// SetContributorRewardMultiplier sets the "contributor_reward_multiplier" field.
+func (u *GroupUpsertBulk) SetContributorRewardMultiplier(v float64) *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetContributorRewardMultiplier(v)
+	})
+}
+
+// AddContributorRewardMultiplier adds v to the "contributor_reward_multiplier" field.
+func (u *GroupUpsertBulk) AddContributorRewardMultiplier(v float64) *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.AddContributorRewardMultiplier(v)
+	})
+}
+
+// UpdateContributorRewardMultiplier sets the "contributor_reward_multiplier" field to the value that was provided on create.
+func (u *GroupUpsertBulk) UpdateContributorRewardMultiplier() *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateContributorRewardMultiplier()
 	})
 }
 

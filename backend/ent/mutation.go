@@ -2309,6 +2309,12 @@ type AccountMutation struct {
 	last_used_at                *time.Time
 	expires_at                  *time.Time
 	auto_pause_on_expired       *bool
+	owner_user_id               *int64
+	addowner_user_id            *int64
+	contribution_status         *string
+	contribution_submitted_at   *time.Time
+	contribution_approved_at    *time.Time
+	contribution_revoked_at     *time.Time
 	schedulable                 *bool
 	rate_limited_at             *time.Time
 	rate_limit_reset_at         *time.Time
@@ -3362,6 +3368,259 @@ func (m *AccountMutation) ResetAutoPauseOnExpired() {
 	m.auto_pause_on_expired = nil
 }
 
+// SetOwnerUserID sets the "owner_user_id" field.
+func (m *AccountMutation) SetOwnerUserID(i int64) {
+	m.owner_user_id = &i
+	m.addowner_user_id = nil
+}
+
+// OwnerUserID returns the value of the "owner_user_id" field in the mutation.
+func (m *AccountMutation) OwnerUserID() (r int64, exists bool) {
+	v := m.owner_user_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldOwnerUserID returns the old "owner_user_id" field's value of the Account entity.
+// If the Account object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AccountMutation) OldOwnerUserID(ctx context.Context) (v *int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldOwnerUserID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldOwnerUserID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldOwnerUserID: %w", err)
+	}
+	return oldValue.OwnerUserID, nil
+}
+
+// AddOwnerUserID adds i to the "owner_user_id" field.
+func (m *AccountMutation) AddOwnerUserID(i int64) {
+	if m.addowner_user_id != nil {
+		*m.addowner_user_id += i
+	} else {
+		m.addowner_user_id = &i
+	}
+}
+
+// AddedOwnerUserID returns the value that was added to the "owner_user_id" field in this mutation.
+func (m *AccountMutation) AddedOwnerUserID() (r int64, exists bool) {
+	v := m.addowner_user_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearOwnerUserID clears the value of the "owner_user_id" field.
+func (m *AccountMutation) ClearOwnerUserID() {
+	m.owner_user_id = nil
+	m.addowner_user_id = nil
+	m.clearedFields[account.FieldOwnerUserID] = struct{}{}
+}
+
+// OwnerUserIDCleared returns if the "owner_user_id" field was cleared in this mutation.
+func (m *AccountMutation) OwnerUserIDCleared() bool {
+	_, ok := m.clearedFields[account.FieldOwnerUserID]
+	return ok
+}
+
+// ResetOwnerUserID resets all changes to the "owner_user_id" field.
+func (m *AccountMutation) ResetOwnerUserID() {
+	m.owner_user_id = nil
+	m.addowner_user_id = nil
+	delete(m.clearedFields, account.FieldOwnerUserID)
+}
+
+// SetContributionStatus sets the "contribution_status" field.
+func (m *AccountMutation) SetContributionStatus(s string) {
+	m.contribution_status = &s
+}
+
+// ContributionStatus returns the value of the "contribution_status" field in the mutation.
+func (m *AccountMutation) ContributionStatus() (r string, exists bool) {
+	v := m.contribution_status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldContributionStatus returns the old "contribution_status" field's value of the Account entity.
+// If the Account object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AccountMutation) OldContributionStatus(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldContributionStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldContributionStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldContributionStatus: %w", err)
+	}
+	return oldValue.ContributionStatus, nil
+}
+
+// ResetContributionStatus resets all changes to the "contribution_status" field.
+func (m *AccountMutation) ResetContributionStatus() {
+	m.contribution_status = nil
+}
+
+// SetContributionSubmittedAt sets the "contribution_submitted_at" field.
+func (m *AccountMutation) SetContributionSubmittedAt(t time.Time) {
+	m.contribution_submitted_at = &t
+}
+
+// ContributionSubmittedAt returns the value of the "contribution_submitted_at" field in the mutation.
+func (m *AccountMutation) ContributionSubmittedAt() (r time.Time, exists bool) {
+	v := m.contribution_submitted_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldContributionSubmittedAt returns the old "contribution_submitted_at" field's value of the Account entity.
+// If the Account object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AccountMutation) OldContributionSubmittedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldContributionSubmittedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldContributionSubmittedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldContributionSubmittedAt: %w", err)
+	}
+	return oldValue.ContributionSubmittedAt, nil
+}
+
+// ClearContributionSubmittedAt clears the value of the "contribution_submitted_at" field.
+func (m *AccountMutation) ClearContributionSubmittedAt() {
+	m.contribution_submitted_at = nil
+	m.clearedFields[account.FieldContributionSubmittedAt] = struct{}{}
+}
+
+// ContributionSubmittedAtCleared returns if the "contribution_submitted_at" field was cleared in this mutation.
+func (m *AccountMutation) ContributionSubmittedAtCleared() bool {
+	_, ok := m.clearedFields[account.FieldContributionSubmittedAt]
+	return ok
+}
+
+// ResetContributionSubmittedAt resets all changes to the "contribution_submitted_at" field.
+func (m *AccountMutation) ResetContributionSubmittedAt() {
+	m.contribution_submitted_at = nil
+	delete(m.clearedFields, account.FieldContributionSubmittedAt)
+}
+
+// SetContributionApprovedAt sets the "contribution_approved_at" field.
+func (m *AccountMutation) SetContributionApprovedAt(t time.Time) {
+	m.contribution_approved_at = &t
+}
+
+// ContributionApprovedAt returns the value of the "contribution_approved_at" field in the mutation.
+func (m *AccountMutation) ContributionApprovedAt() (r time.Time, exists bool) {
+	v := m.contribution_approved_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldContributionApprovedAt returns the old "contribution_approved_at" field's value of the Account entity.
+// If the Account object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AccountMutation) OldContributionApprovedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldContributionApprovedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldContributionApprovedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldContributionApprovedAt: %w", err)
+	}
+	return oldValue.ContributionApprovedAt, nil
+}
+
+// ClearContributionApprovedAt clears the value of the "contribution_approved_at" field.
+func (m *AccountMutation) ClearContributionApprovedAt() {
+	m.contribution_approved_at = nil
+	m.clearedFields[account.FieldContributionApprovedAt] = struct{}{}
+}
+
+// ContributionApprovedAtCleared returns if the "contribution_approved_at" field was cleared in this mutation.
+func (m *AccountMutation) ContributionApprovedAtCleared() bool {
+	_, ok := m.clearedFields[account.FieldContributionApprovedAt]
+	return ok
+}
+
+// ResetContributionApprovedAt resets all changes to the "contribution_approved_at" field.
+func (m *AccountMutation) ResetContributionApprovedAt() {
+	m.contribution_approved_at = nil
+	delete(m.clearedFields, account.FieldContributionApprovedAt)
+}
+
+// SetContributionRevokedAt sets the "contribution_revoked_at" field.
+func (m *AccountMutation) SetContributionRevokedAt(t time.Time) {
+	m.contribution_revoked_at = &t
+}
+
+// ContributionRevokedAt returns the value of the "contribution_revoked_at" field in the mutation.
+func (m *AccountMutation) ContributionRevokedAt() (r time.Time, exists bool) {
+	v := m.contribution_revoked_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldContributionRevokedAt returns the old "contribution_revoked_at" field's value of the Account entity.
+// If the Account object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AccountMutation) OldContributionRevokedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldContributionRevokedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldContributionRevokedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldContributionRevokedAt: %w", err)
+	}
+	return oldValue.ContributionRevokedAt, nil
+}
+
+// ClearContributionRevokedAt clears the value of the "contribution_revoked_at" field.
+func (m *AccountMutation) ClearContributionRevokedAt() {
+	m.contribution_revoked_at = nil
+	m.clearedFields[account.FieldContributionRevokedAt] = struct{}{}
+}
+
+// ContributionRevokedAtCleared returns if the "contribution_revoked_at" field was cleared in this mutation.
+func (m *AccountMutation) ContributionRevokedAtCleared() bool {
+	_, ok := m.clearedFields[account.FieldContributionRevokedAt]
+	return ok
+}
+
+// ResetContributionRevokedAt resets all changes to the "contribution_revoked_at" field.
+func (m *AccountMutation) ResetContributionRevokedAt() {
+	m.contribution_revoked_at = nil
+	delete(m.clearedFields, account.FieldContributionRevokedAt)
+}
+
 // SetSchedulable sets the "schedulable" field.
 func (m *AccountMutation) SetSchedulable(b bool) {
 	m.schedulable = &b
@@ -4138,7 +4397,7 @@ func (m *AccountMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *AccountMutation) Fields() []string {
-	fields := make([]string, 0, 31)
+	fields := make([]string, 0, 36)
 	if m.created_at != nil {
 		fields = append(fields, account.FieldCreatedAt)
 	}
@@ -4198,6 +4457,21 @@ func (m *AccountMutation) Fields() []string {
 	}
 	if m.auto_pause_on_expired != nil {
 		fields = append(fields, account.FieldAutoPauseOnExpired)
+	}
+	if m.owner_user_id != nil {
+		fields = append(fields, account.FieldOwnerUserID)
+	}
+	if m.contribution_status != nil {
+		fields = append(fields, account.FieldContributionStatus)
+	}
+	if m.contribution_submitted_at != nil {
+		fields = append(fields, account.FieldContributionSubmittedAt)
+	}
+	if m.contribution_approved_at != nil {
+		fields = append(fields, account.FieldContributionApprovedAt)
+	}
+	if m.contribution_revoked_at != nil {
+		fields = append(fields, account.FieldContributionRevokedAt)
 	}
 	if m.schedulable != nil {
 		fields = append(fields, account.FieldSchedulable)
@@ -4280,6 +4554,16 @@ func (m *AccountMutation) Field(name string) (ent.Value, bool) {
 		return m.ExpiresAt()
 	case account.FieldAutoPauseOnExpired:
 		return m.AutoPauseOnExpired()
+	case account.FieldOwnerUserID:
+		return m.OwnerUserID()
+	case account.FieldContributionStatus:
+		return m.ContributionStatus()
+	case account.FieldContributionSubmittedAt:
+		return m.ContributionSubmittedAt()
+	case account.FieldContributionApprovedAt:
+		return m.ContributionApprovedAt()
+	case account.FieldContributionRevokedAt:
+		return m.ContributionRevokedAt()
 	case account.FieldSchedulable:
 		return m.Schedulable()
 	case account.FieldRateLimitedAt:
@@ -4351,6 +4635,16 @@ func (m *AccountMutation) OldField(ctx context.Context, name string) (ent.Value,
 		return m.OldExpiresAt(ctx)
 	case account.FieldAutoPauseOnExpired:
 		return m.OldAutoPauseOnExpired(ctx)
+	case account.FieldOwnerUserID:
+		return m.OldOwnerUserID(ctx)
+	case account.FieldContributionStatus:
+		return m.OldContributionStatus(ctx)
+	case account.FieldContributionSubmittedAt:
+		return m.OldContributionSubmittedAt(ctx)
+	case account.FieldContributionApprovedAt:
+		return m.OldContributionApprovedAt(ctx)
+	case account.FieldContributionRevokedAt:
+		return m.OldContributionRevokedAt(ctx)
 	case account.FieldSchedulable:
 		return m.OldSchedulable(ctx)
 	case account.FieldRateLimitedAt:
@@ -4522,6 +4816,41 @@ func (m *AccountMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetAutoPauseOnExpired(v)
 		return nil
+	case account.FieldOwnerUserID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetOwnerUserID(v)
+		return nil
+	case account.FieldContributionStatus:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetContributionStatus(v)
+		return nil
+	case account.FieldContributionSubmittedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetContributionSubmittedAt(v)
+		return nil
+	case account.FieldContributionApprovedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetContributionApprovedAt(v)
+		return nil
+	case account.FieldContributionRevokedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetContributionRevokedAt(v)
+		return nil
 	case account.FieldSchedulable:
 		v, ok := value.(bool)
 		if !ok {
@@ -4622,6 +4951,9 @@ func (m *AccountMutation) AddedFields() []string {
 	if m.addrate_multiplier != nil {
 		fields = append(fields, account.FieldRateMultiplier)
 	}
+	if m.addowner_user_id != nil {
+		fields = append(fields, account.FieldOwnerUserID)
+	}
 	return fields
 }
 
@@ -4640,6 +4972,8 @@ func (m *AccountMutation) AddedField(name string) (ent.Value, bool) {
 		return m.AddedPriority()
 	case account.FieldRateMultiplier:
 		return m.AddedRateMultiplier()
+	case account.FieldOwnerUserID:
+		return m.AddedOwnerUserID()
 	}
 	return nil, false
 }
@@ -4684,6 +5018,13 @@ func (m *AccountMutation) AddField(name string, value ent.Value) error {
 		}
 		m.AddRateMultiplier(v)
 		return nil
+	case account.FieldOwnerUserID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddOwnerUserID(v)
+		return nil
 	}
 	return fmt.Errorf("unknown Account numeric field %s", name)
 }
@@ -4715,6 +5056,18 @@ func (m *AccountMutation) ClearedFields() []string {
 	}
 	if m.FieldCleared(account.FieldExpiresAt) {
 		fields = append(fields, account.FieldExpiresAt)
+	}
+	if m.FieldCleared(account.FieldOwnerUserID) {
+		fields = append(fields, account.FieldOwnerUserID)
+	}
+	if m.FieldCleared(account.FieldContributionSubmittedAt) {
+		fields = append(fields, account.FieldContributionSubmittedAt)
+	}
+	if m.FieldCleared(account.FieldContributionApprovedAt) {
+		fields = append(fields, account.FieldContributionApprovedAt)
+	}
+	if m.FieldCleared(account.FieldContributionRevokedAt) {
+		fields = append(fields, account.FieldContributionRevokedAt)
 	}
 	if m.FieldCleared(account.FieldRateLimitedAt) {
 		fields = append(fields, account.FieldRateLimitedAt)
@@ -4780,6 +5133,18 @@ func (m *AccountMutation) ClearField(name string) error {
 		return nil
 	case account.FieldExpiresAt:
 		m.ClearExpiresAt()
+		return nil
+	case account.FieldOwnerUserID:
+		m.ClearOwnerUserID()
+		return nil
+	case account.FieldContributionSubmittedAt:
+		m.ClearContributionSubmittedAt()
+		return nil
+	case account.FieldContributionApprovedAt:
+		m.ClearContributionApprovedAt()
+		return nil
+	case account.FieldContributionRevokedAt:
+		m.ClearContributionRevokedAt()
 		return nil
 	case account.FieldRateLimitedAt:
 		m.ClearRateLimitedAt()
@@ -4875,6 +5240,21 @@ func (m *AccountMutation) ResetField(name string) error {
 		return nil
 	case account.FieldAutoPauseOnExpired:
 		m.ResetAutoPauseOnExpired()
+		return nil
+	case account.FieldOwnerUserID:
+		m.ResetOwnerUserID()
+		return nil
+	case account.FieldContributionStatus:
+		m.ResetContributionStatus()
+		return nil
+	case account.FieldContributionSubmittedAt:
+		m.ResetContributionSubmittedAt()
+		return nil
+	case account.FieldContributionApprovedAt:
+		m.ResetContributionApprovedAt()
+		return nil
+	case account.FieldContributionRevokedAt:
+		m.ResetContributionRevokedAt()
 		return nil
 	case account.FieldSchedulable:
 		m.ResetSchedulable()
@@ -21177,6 +21557,8 @@ type GroupMutation struct {
 	description                             *string
 	rate_multiplier                         *float64
 	addrate_multiplier                      *float64
+	contributor_reward_multiplier           *float64
+	addcontributor_reward_multiplier        *float64
 	peak_rate_enabled                       *bool
 	peak_start                              *string
 	peak_end                                *string
@@ -21632,6 +22014,62 @@ func (m *GroupMutation) AddedRateMultiplier() (r float64, exists bool) {
 func (m *GroupMutation) ResetRateMultiplier() {
 	m.rate_multiplier = nil
 	m.addrate_multiplier = nil
+}
+
+// SetContributorRewardMultiplier sets the "contributor_reward_multiplier" field.
+func (m *GroupMutation) SetContributorRewardMultiplier(f float64) {
+	m.contributor_reward_multiplier = &f
+	m.addcontributor_reward_multiplier = nil
+}
+
+// ContributorRewardMultiplier returns the value of the "contributor_reward_multiplier" field in the mutation.
+func (m *GroupMutation) ContributorRewardMultiplier() (r float64, exists bool) {
+	v := m.contributor_reward_multiplier
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldContributorRewardMultiplier returns the old "contributor_reward_multiplier" field's value of the Group entity.
+// If the Group object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GroupMutation) OldContributorRewardMultiplier(ctx context.Context) (v float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldContributorRewardMultiplier is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldContributorRewardMultiplier requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldContributorRewardMultiplier: %w", err)
+	}
+	return oldValue.ContributorRewardMultiplier, nil
+}
+
+// AddContributorRewardMultiplier adds f to the "contributor_reward_multiplier" field.
+func (m *GroupMutation) AddContributorRewardMultiplier(f float64) {
+	if m.addcontributor_reward_multiplier != nil {
+		*m.addcontributor_reward_multiplier += f
+	} else {
+		m.addcontributor_reward_multiplier = &f
+	}
+}
+
+// AddedContributorRewardMultiplier returns the value that was added to the "contributor_reward_multiplier" field in this mutation.
+func (m *GroupMutation) AddedContributorRewardMultiplier() (r float64, exists bool) {
+	v := m.addcontributor_reward_multiplier
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetContributorRewardMultiplier resets all changes to the "contributor_reward_multiplier" field.
+func (m *GroupMutation) ResetContributorRewardMultiplier() {
+	m.contributor_reward_multiplier = nil
+	m.addcontributor_reward_multiplier = nil
 }
 
 // SetPeakRateEnabled sets the "peak_rate_enabled" field.
@@ -24478,7 +24916,7 @@ func (m *GroupMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *GroupMutation) Fields() []string {
-	fields := make([]string, 0, 54)
+	fields := make([]string, 0, 55)
 	if m.created_at != nil {
 		fields = append(fields, group.FieldCreatedAt)
 	}
@@ -24496,6 +24934,9 @@ func (m *GroupMutation) Fields() []string {
 	}
 	if m.rate_multiplier != nil {
 		fields = append(fields, group.FieldRateMultiplier)
+	}
+	if m.contributor_reward_multiplier != nil {
+		fields = append(fields, group.FieldContributorRewardMultiplier)
 	}
 	if m.peak_rate_enabled != nil {
 		fields = append(fields, group.FieldPeakRateEnabled)
@@ -24661,6 +25102,8 @@ func (m *GroupMutation) Field(name string) (ent.Value, bool) {
 		return m.Description()
 	case group.FieldRateMultiplier:
 		return m.RateMultiplier()
+	case group.FieldContributorRewardMultiplier:
+		return m.ContributorRewardMultiplier()
 	case group.FieldPeakRateEnabled:
 		return m.PeakRateEnabled()
 	case group.FieldPeakStart:
@@ -24778,6 +25221,8 @@ func (m *GroupMutation) OldField(ctx context.Context, name string) (ent.Value, e
 		return m.OldDescription(ctx)
 	case group.FieldRateMultiplier:
 		return m.OldRateMultiplier(ctx)
+	case group.FieldContributorRewardMultiplier:
+		return m.OldContributorRewardMultiplier(ctx)
 	case group.FieldPeakRateEnabled:
 		return m.OldPeakRateEnabled(ctx)
 	case group.FieldPeakStart:
@@ -24924,6 +25369,13 @@ func (m *GroupMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetRateMultiplier(v)
+		return nil
+	case group.FieldContributorRewardMultiplier:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetContributorRewardMultiplier(v)
 		return nil
 	case group.FieldPeakRateEnabled:
 		v, ok := value.(bool)
@@ -25272,6 +25724,9 @@ func (m *GroupMutation) AddedFields() []string {
 	if m.addrate_multiplier != nil {
 		fields = append(fields, group.FieldRateMultiplier)
 	}
+	if m.addcontributor_reward_multiplier != nil {
+		fields = append(fields, group.FieldContributorRewardMultiplier)
+	}
 	if m.addpeak_rate_multiplier != nil {
 		fields = append(fields, group.FieldPeakRateMultiplier)
 	}
@@ -25354,6 +25809,8 @@ func (m *GroupMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
 	case group.FieldRateMultiplier:
 		return m.AddedRateMultiplier()
+	case group.FieldContributorRewardMultiplier:
+		return m.AddedContributorRewardMultiplier()
 	case group.FieldPeakRateMultiplier:
 		return m.AddedPeakRateMultiplier()
 	case group.FieldDailyLimitUsd:
@@ -25417,6 +25874,13 @@ func (m *GroupMutation) AddField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.AddRateMultiplier(v)
+		return nil
+	case group.FieldContributorRewardMultiplier:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddContributorRewardMultiplier(v)
 		return nil
 	case group.FieldPeakRateMultiplier:
 		v, ok := value.(float64)
@@ -25759,6 +26223,9 @@ func (m *GroupMutation) ResetField(name string) error {
 		return nil
 	case group.FieldRateMultiplier:
 		m.ResetRateMultiplier()
+		return nil
+	case group.FieldContributorRewardMultiplier:
+		m.ResetContributorRewardMultiplier()
 		return nil
 	case group.FieldPeakRateEnabled:
 		m.ResetPeakRateEnabled()

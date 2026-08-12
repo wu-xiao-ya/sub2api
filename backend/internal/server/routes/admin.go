@@ -39,6 +39,14 @@ func RegisterAdminRoutes(
 		// 账号管理
 		registerAccountRoutes(admin, h, stepUpAuth)
 
+		// 共享号池审核
+		accountContributions := admin.Group("/account-contributions")
+		{
+			accountContributions.GET("", h.AccountContribution.ListPending)
+			accountContributions.POST("/:id/approve", h.AccountContribution.Approve)
+			accountContributions.POST("/:id/reject", h.AccountContribution.Reject)
+		}
+
 		// 公告管理
 		registerAnnouncementRoutes(admin, h)
 

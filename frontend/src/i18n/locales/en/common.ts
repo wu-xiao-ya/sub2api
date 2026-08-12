@@ -165,6 +165,8 @@ export default {
     usage: 'Usage',
     redeem: 'Redeem',
     affiliate: 'Affiliate Rebates',
+    accountContributions: 'Account Contributions',
+    accountContributionReview: 'Contribution Review',
     affiliateManagement: 'Affiliate Rebates',
     affiliateInviteRecords: 'Invite Records',
     affiliateRebateRecords: 'Rebate Records',

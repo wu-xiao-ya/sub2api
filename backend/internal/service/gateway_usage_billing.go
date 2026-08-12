@@ -316,6 +316,33 @@ func buildUsageBillingCommand(requestID string, usageLog *UsageLog, p *postUsage
 		cmd.AccountQuotaCost = p.Cost.TotalCost * p.AccountRateMultiplier
 	}
 
+	// 贡献账号仅在管理员审核通过后才可能被调度到这里。奖励以原始成本为基数，
+	// 但不会超过这次请求对消费者实际扣除的金额。
+	if p.Account.OwnerUserID != nil &&
+		p.Account.ContributionStatus == ContributionStatusApproved &&
+		p.APIKey.Group != nil &&
+		p.APIKey.Group.ContributorRewardMultiplier > 0 &&
+		p.Cost.TotalCost > 0 &&
+		p.Cost.ActualCost > 0 {
+		reward := p.Cost.TotalCost * p.APIKey.Group.ContributorRewardMultiplier
+		if reward > p.Cost.ActualCost {
+			reward = p.Cost.ActualCost
+		}
+		if reward > 0 {
+			cmd.ContributorOwnerUserID = *p.Account.OwnerUserID
+			cmd.ContributorRewardAccountID = p.Account.ID
+			if p.APIKey.GroupID != nil {
+				cmd.ContributorRewardGroupID = *p.APIKey.GroupID
+			} else {
+				cmd.ContributorRewardGroupID = p.APIKey.Group.ID
+			}
+			cmd.ContributorRewardMultiplier = p.APIKey.Group.ContributorRewardMultiplier
+			cmd.ContributorRewardTotalCost = p.Cost.TotalCost
+			cmd.ContributorRewardActualCost = p.Cost.ActualCost
+			cmd.ContributorRewardAmount = reward
+		}
+	}
+
 	cmd.Normalize()
 	return cmd
 }
@@ -370,6 +397,12 @@ func finalizePostUsageBilling(ctx context.Context, p *postUsageBillingParams, de
 		}
 	} else if p.Cost.ActualCost > 0 && p.User != nil {
 		syncBalanceCacheAfterDeduction(ctx, p, deps, result)
+	}
+
+	if result != nil && result.ContributorRewardApplied && result.ContributorRewardOwnerUserID > 0 && deps.billingCacheService != nil {
+		if err := deps.billingCacheService.InvalidateUserBalance(ctx, result.ContributorRewardOwnerUserID); err != nil {
+			slog.Warn("invalidate contributor balance cache failed", "user_id", result.ContributorRewardOwnerUserID, "error", err)
+		}
 	}
 
 	if p.Cost.ActualCost > 0 && p.APIKey != nil && p.APIKey.HasRateLimits() {

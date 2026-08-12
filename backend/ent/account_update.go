@@ -356,6 +356,107 @@ func (_u *AccountUpdate) SetNillableAutoPauseOnExpired(v *bool) *AccountUpdate {
 	return _u
 }
 
+// SetOwnerUserID sets the "owner_user_id" field.
+func (_u *AccountUpdate) SetOwnerUserID(v int64) *AccountUpdate {
+	_u.mutation.ResetOwnerUserID()
+	_u.mutation.SetOwnerUserID(v)
+	return _u
+}
+
+// SetNillableOwnerUserID sets the "owner_user_id" field if the given value is not nil.
+func (_u *AccountUpdate) SetNillableOwnerUserID(v *int64) *AccountUpdate {
+	if v != nil {
+		_u.SetOwnerUserID(*v)
+	}
+	return _u
+}
+
+// AddOwnerUserID adds value to the "owner_user_id" field.
+func (_u *AccountUpdate) AddOwnerUserID(v int64) *AccountUpdate {
+	_u.mutation.AddOwnerUserID(v)
+	return _u
+}
+
+// ClearOwnerUserID clears the value of the "owner_user_id" field.
+func (_u *AccountUpdate) ClearOwnerUserID() *AccountUpdate {
+	_u.mutation.ClearOwnerUserID()
+	return _u
+}
+
+// SetContributionStatus sets the "contribution_status" field.
+func (_u *AccountUpdate) SetContributionStatus(v string) *AccountUpdate {
+	_u.mutation.SetContributionStatus(v)
+	return _u
+}
+
+// SetNillableContributionStatus sets the "contribution_status" field if the given value is not nil.
+func (_u *AccountUpdate) SetNillableContributionStatus(v *string) *AccountUpdate {
+	if v != nil {
+		_u.SetContributionStatus(*v)
+	}
+	return _u
+}
+
+// SetContributionSubmittedAt sets the "contribution_submitted_at" field.
+func (_u *AccountUpdate) SetContributionSubmittedAt(v time.Time) *AccountUpdate {
+	_u.mutation.SetContributionSubmittedAt(v)
+	return _u
+}
+
+// SetNillableContributionSubmittedAt sets the "contribution_submitted_at" field if the given value is not nil.
+func (_u *AccountUpdate) SetNillableContributionSubmittedAt(v *time.Time) *AccountUpdate {
+	if v != nil {
+		_u.SetContributionSubmittedAt(*v)
+	}
+	return _u
+}
+
+// ClearContributionSubmittedAt clears the value of the "contribution_submitted_at" field.
+func (_u *AccountUpdate) ClearContributionSubmittedAt() *AccountUpdate {
+	_u.mutation.ClearContributionSubmittedAt()
+	return _u
+}
+
+// SetContributionApprovedAt sets the "contribution_approved_at" field.
+func (_u *AccountUpdate) SetContributionApprovedAt(v time.Time) *AccountUpdate {
+	_u.mutation.SetContributionApprovedAt(v)
+	return _u
+}
+
+// SetNillableContributionApprovedAt sets the "contribution_approved_at" field if the given value is not nil.
+func (_u *AccountUpdate) SetNillableContributionApprovedAt(v *time.Time) *AccountUpdate {
+	if v != nil {
+		_u.SetContributionApprovedAt(*v)
+	}
+	return _u
+}
+
+// ClearContributionApprovedAt clears the value of the "contribution_approved_at" field.
+func (_u *AccountUpdate) ClearContributionApprovedAt() *AccountUpdate {
+	_u.mutation.ClearContributionApprovedAt()
+	return _u
+}
+
+// SetContributionRevokedAt sets the "contribution_revoked_at" field.
+func (_u *AccountUpdate) SetContributionRevokedAt(v time.Time) *AccountUpdate {
+	_u.mutation.SetContributionRevokedAt(v)
+	return _u
+}
+
+// SetNillableContributionRevokedAt sets the "contribution_revoked_at" field if the given value is not nil.
+func (_u *AccountUpdate) SetNillableContributionRevokedAt(v *time.Time) *AccountUpdate {
+	if v != nil {
+		_u.SetContributionRevokedAt(*v)
+	}
+	return _u
+}
+
+// ClearContributionRevokedAt clears the value of the "contribution_revoked_at" field.
+func (_u *AccountUpdate) ClearContributionRevokedAt() *AccountUpdate {
+	_u.mutation.ClearContributionRevokedAt()
+	return _u
+}
+
 // SetSchedulable sets the "schedulable" field.
 func (_u *AccountUpdate) SetSchedulable(v bool) *AccountUpdate {
 	_u.mutation.SetSchedulable(v)
@@ -777,6 +878,11 @@ func (_u *AccountUpdate) check() error {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "Account.status": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.ContributionStatus(); ok {
+		if err := account.ContributionStatusValidator(v); err != nil {
+			return &ValidationError{Name: "contribution_status", err: fmt.Errorf(`ent: validator failed for field "Account.contribution_status": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.SessionWindowStatus(); ok {
 		if err := account.SessionWindowStatusValidator(v); err != nil {
 			return &ValidationError{Name: "session_window_status", err: fmt.Errorf(`ent: validator failed for field "Account.session_window_status": %w`, err)}
@@ -891,6 +997,36 @@ func (_u *AccountUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.AutoPauseOnExpired(); ok {
 		_spec.SetField(account.FieldAutoPauseOnExpired, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.OwnerUserID(); ok {
+		_spec.SetField(account.FieldOwnerUserID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedOwnerUserID(); ok {
+		_spec.AddField(account.FieldOwnerUserID, field.TypeInt64, value)
+	}
+	if _u.mutation.OwnerUserIDCleared() {
+		_spec.ClearField(account.FieldOwnerUserID, field.TypeInt64)
+	}
+	if value, ok := _u.mutation.ContributionStatus(); ok {
+		_spec.SetField(account.FieldContributionStatus, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.ContributionSubmittedAt(); ok {
+		_spec.SetField(account.FieldContributionSubmittedAt, field.TypeTime, value)
+	}
+	if _u.mutation.ContributionSubmittedAtCleared() {
+		_spec.ClearField(account.FieldContributionSubmittedAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.ContributionApprovedAt(); ok {
+		_spec.SetField(account.FieldContributionApprovedAt, field.TypeTime, value)
+	}
+	if _u.mutation.ContributionApprovedAtCleared() {
+		_spec.ClearField(account.FieldContributionApprovedAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.ContributionRevokedAt(); ok {
+		_spec.SetField(account.FieldContributionRevokedAt, field.TypeTime, value)
+	}
+	if _u.mutation.ContributionRevokedAtCleared() {
+		_spec.ClearField(account.FieldContributionRevokedAt, field.TypeTime)
 	}
 	if value, ok := _u.mutation.Schedulable(); ok {
 		_spec.SetField(account.FieldSchedulable, field.TypeBool, value)
@@ -1496,6 +1632,107 @@ func (_u *AccountUpdateOne) SetNillableAutoPauseOnExpired(v *bool) *AccountUpdat
 	return _u
 }
 
+// SetOwnerUserID sets the "owner_user_id" field.
+func (_u *AccountUpdateOne) SetOwnerUserID(v int64) *AccountUpdateOne {
+	_u.mutation.ResetOwnerUserID()
+	_u.mutation.SetOwnerUserID(v)
+	return _u
+}
+
+// SetNillableOwnerUserID sets the "owner_user_id" field if the given value is not nil.
+func (_u *AccountUpdateOne) SetNillableOwnerUserID(v *int64) *AccountUpdateOne {
+	if v != nil {
+		_u.SetOwnerUserID(*v)
+	}
+	return _u
+}
+
+// AddOwnerUserID adds value to the "owner_user_id" field.
+func (_u *AccountUpdateOne) AddOwnerUserID(v int64) *AccountUpdateOne {
+	_u.mutation.AddOwnerUserID(v)
+	return _u
+}
+
+// ClearOwnerUserID clears the value of the "owner_user_id" field.
+func (_u *AccountUpdateOne) ClearOwnerUserID() *AccountUpdateOne {
+	_u.mutation.ClearOwnerUserID()
+	return _u
+}
+
+// SetContributionStatus sets the "contribution_status" field.
+func (_u *AccountUpdateOne) SetContributionStatus(v string) *AccountUpdateOne {
+	_u.mutation.SetContributionStatus(v)
+	return _u
+}
+
+// SetNillableContributionStatus sets the "contribution_status" field if the given value is not nil.
+func (_u *AccountUpdateOne) SetNillableContributionStatus(v *string) *AccountUpdateOne {
+	if v != nil {
+		_u.SetContributionStatus(*v)
+	}
+	return _u
+}
+
+// SetContributionSubmittedAt sets the "contribution_submitted_at" field.
+func (_u *AccountUpdateOne) SetContributionSubmittedAt(v time.Time) *AccountUpdateOne {
+	_u.mutation.SetContributionSubmittedAt(v)
+	return _u
+}
+
+// SetNillableContributionSubmittedAt sets the "contribution_submitted_at" field if the given value is not nil.
+func (_u *AccountUpdateOne) SetNillableContributionSubmittedAt(v *time.Time) *AccountUpdateOne {
+	if v != nil {
+		_u.SetContributionSubmittedAt(*v)
+	}
+	return _u
+}
+
+// ClearContributionSubmittedAt clears the value of the "contribution_submitted_at" field.
+func (_u *AccountUpdateOne) ClearContributionSubmittedAt() *AccountUpdateOne {
+	_u.mutation.ClearContributionSubmittedAt()
+	return _u
+}
+
+// SetContributionApprovedAt sets the "contribution_approved_at" field.
+func (_u *AccountUpdateOne) SetContributionApprovedAt(v time.Time) *AccountUpdateOne {
+	_u.mutation.SetContributionApprovedAt(v)
+	return _u
+}
+
+// SetNillableContributionApprovedAt sets the "contribution_approved_at" field if the given value is not nil.
+func (_u *AccountUpdateOne) SetNillableContributionApprovedAt(v *time.Time) *AccountUpdateOne {
+	if v != nil {
+		_u.SetContributionApprovedAt(*v)
+	}
+	return _u
+}
+
+// ClearContributionApprovedAt clears the value of the "contribution_approved_at" field.
+func (_u *AccountUpdateOne) ClearContributionApprovedAt() *AccountUpdateOne {
+	_u.mutation.ClearContributionApprovedAt()
+	return _u
+}
+
+// SetContributionRevokedAt sets the "contribution_revoked_at" field.
+func (_u *AccountUpdateOne) SetContributionRevokedAt(v time.Time) *AccountUpdateOne {
+	_u.mutation.SetContributionRevokedAt(v)
+	return _u
+}
+
+// SetNillableContributionRevokedAt sets the "contribution_revoked_at" field if the given value is not nil.
+func (_u *AccountUpdateOne) SetNillableContributionRevokedAt(v *time.Time) *AccountUpdateOne {
+	if v != nil {
+		_u.SetContributionRevokedAt(*v)
+	}
+	return _u
+}
+
+// ClearContributionRevokedAt clears the value of the "contribution_revoked_at" field.
+func (_u *AccountUpdateOne) ClearContributionRevokedAt() *AccountUpdateOne {
+	_u.mutation.ClearContributionRevokedAt()
+	return _u
+}
+
 // SetSchedulable sets the "schedulable" field.
 func (_u *AccountUpdateOne) SetSchedulable(v bool) *AccountUpdateOne {
 	_u.mutation.SetSchedulable(v)
@@ -1930,6 +2167,11 @@ func (_u *AccountUpdateOne) check() error {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "Account.status": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.ContributionStatus(); ok {
+		if err := account.ContributionStatusValidator(v); err != nil {
+			return &ValidationError{Name: "contribution_status", err: fmt.Errorf(`ent: validator failed for field "Account.contribution_status": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.SessionWindowStatus(); ok {
 		if err := account.SessionWindowStatusValidator(v); err != nil {
 			return &ValidationError{Name: "session_window_status", err: fmt.Errorf(`ent: validator failed for field "Account.session_window_status": %w`, err)}
@@ -2061,6 +2303,36 @@ func (_u *AccountUpdateOne) sqlSave(ctx context.Context) (_node *Account, err er
 	}
 	if value, ok := _u.mutation.AutoPauseOnExpired(); ok {
 		_spec.SetField(account.FieldAutoPauseOnExpired, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.OwnerUserID(); ok {
+		_spec.SetField(account.FieldOwnerUserID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedOwnerUserID(); ok {
+		_spec.AddField(account.FieldOwnerUserID, field.TypeInt64, value)
+	}
+	if _u.mutation.OwnerUserIDCleared() {
+		_spec.ClearField(account.FieldOwnerUserID, field.TypeInt64)
+	}
+	if value, ok := _u.mutation.ContributionStatus(); ok {
+		_spec.SetField(account.FieldContributionStatus, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.ContributionSubmittedAt(); ok {
+		_spec.SetField(account.FieldContributionSubmittedAt, field.TypeTime, value)
+	}
+	if _u.mutation.ContributionSubmittedAtCleared() {
+		_spec.ClearField(account.FieldContributionSubmittedAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.ContributionApprovedAt(); ok {
+		_spec.SetField(account.FieldContributionApprovedAt, field.TypeTime, value)
+	}
+	if _u.mutation.ContributionApprovedAtCleared() {
+		_spec.ClearField(account.FieldContributionApprovedAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.ContributionRevokedAt(); ok {
+		_spec.SetField(account.FieldContributionRevokedAt, field.TypeTime, value)
+	}
+	if _u.mutation.ContributionRevokedAtCleared() {
+		_spec.ClearField(account.FieldContributionRevokedAt, field.TypeTime)
 	}
 	if value, ok := _u.mutation.Schedulable(); ok {
 		_spec.SetField(account.FieldSchedulable, field.TypeBool, value)

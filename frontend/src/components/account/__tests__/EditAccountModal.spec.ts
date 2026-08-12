@@ -606,6 +606,39 @@ describe('EditAccountModal', () => {
     expect(updateAccountMock.mock.calls[0]?.[1]?.extra?.upstream_billing_probe_enabled).toBe(true)
   })
 
+  it('submits a manual upstream billing rate override', async () => {
+    const account = buildAccount()
+    updateAccountMock.mockReset()
+    checkMixedChannelRiskMock.mockReset()
+    checkMixedChannelRiskMock.mockResolvedValue({ has_risk: false })
+    updateAccountMock.mockResolvedValue(account)
+
+    const wrapper = mountModal(account)
+    await wrapper.get('[data-testid="upstream-billing-manual-rate-toggle"]').trigger('click')
+    await wrapper.get('[data-testid="upstream-billing-manual-rate-input"]').setValue('0.07')
+    await wrapper.get('form#edit-account-form').trigger('submit.prevent')
+
+    expect(updateAccountMock).toHaveBeenCalledTimes(1)
+    expect(updateAccountMock.mock.calls[0]?.[1]?.extra?.upstream_billing_manual_rate).toBe(0.07)
+  })
+
+  it('clears a manual upstream billing rate override', async () => {
+    const account = buildAccount()
+    account.extra = { upstream_billing_manual_rate: 0.07 }
+    updateAccountMock.mockReset()
+    checkMixedChannelRiskMock.mockReset()
+    checkMixedChannelRiskMock.mockResolvedValue({ has_risk: false })
+    updateAccountMock.mockResolvedValue(account)
+
+    const wrapper = mountModal(account)
+    expect(wrapper.get('[data-testid="upstream-billing-manual-rate-toggle"]').attributes('aria-checked')).toBe('true')
+    await wrapper.get('[data-testid="upstream-billing-manual-rate-toggle"]').trigger('click')
+    await wrapper.get('form#edit-account-form').trigger('submit.prevent')
+
+    expect(updateAccountMock).toHaveBeenCalledTimes(1)
+    expect(updateAccountMock.mock.calls[0]?.[1]?.extra).not.toHaveProperty('upstream_billing_manual_rate')
+  })
+
   it('clears OpenAI APIKey Responses override when set back to auto', async () => {
     const account = buildAccount()
     account.extra = {

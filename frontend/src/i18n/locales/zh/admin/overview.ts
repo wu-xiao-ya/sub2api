@@ -808,6 +808,7 @@ export default {
         id: 'ID',
         platform: '平台',
         rateMultiplier: '费率倍数',
+        contributorRewardMultiplier: '贡献奖励',
         rpmOverride: 'RPM 覆盖',
         rpmOverrideHint: '该用户在此分组的 RPM 上限；留空 = 使用分组默认；0 = 不限制',
         rateDefault: '默认',
@@ -846,6 +847,7 @@ export default {
         descriptionPlaceholder: '请输入描述（可选）',
         rateMultiplierLabel: '费率倍数',
         rateMultiplierHint: '1.0 = 标准费率，0.5 = 半价，2.0 = 双倍',
+        contributorRewardMultiplier: '贡献奖励倍率',
         rpmLimit: '每分钟请求数 (RPM)',
         rpmLimitPlaceholder: '0 表示不限制',
         rpmLimitHint: '每用户在本分组每分钟最大请求数，0 = 不限制；一旦设置即接管该用户的限流（覆盖用户级 rpm_limit）',
@@ -874,6 +876,7 @@ export default {
           '公开分组费率 0.8，您可以创建一个费率 0.7 的专属分组，手动分配给 VIP 用户，让他们享受更优惠的价格。'
       },
       rateMultiplierHint: '1.0 = 标准费率，0.5 = 半价，2.0 = 双倍',
+      contributorRewardMultiplierHint: '贡献账号被此分组调度时，按原始成本乘此倍率给贡献者加余额；0 表示不奖励。',
       platforms: {
         all: '全部平台',
         anthropic: 'Anthropic',

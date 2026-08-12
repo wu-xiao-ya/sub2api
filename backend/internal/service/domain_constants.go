@@ -575,6 +575,15 @@ const (
 	QuotaDimensionSpark  = "spark"
 )
 
+// Account contribution lifecycle values. An empty status identifies an
+// administrator-managed account and remains compatible with existing pools.
+const (
+	ContributionStatusPending  = "pending"
+	ContributionStatusApproved = "approved"
+	ContributionStatusRejected = "rejected"
+	ContributionStatusRevoked  = "revoked"
+)
+
 // AdminAPIKeyPrefix is the prefix for admin API keys (distinct from user "sk-" keys).
 const AdminAPIKeyPrefix = "admin-"
 

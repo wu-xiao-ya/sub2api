@@ -140,6 +140,27 @@ func (Account) Fields() []ent.Field {
 			Default(true).
 			Comment("Auto pause scheduling when account expires."),
 
+		// User-contributed shared-pool ownership and lifecycle. Normal
+		// administrator-managed accounts keep owner_user_id NULL and status empty.
+		field.Int64("owner_user_id").
+			Optional().
+			Nillable(),
+		field.String("contribution_status").
+			MaxLen(20).
+			Default(""),
+		field.Time("contribution_submitted_at").
+			Optional().
+			Nillable().
+			SchemaType(map[string]string{dialect.Postgres: "timestamptz"}),
+		field.Time("contribution_approved_at").
+			Optional().
+			Nillable().
+			SchemaType(map[string]string{dialect.Postgres: "timestamptz"}),
+		field.Time("contribution_revoked_at").
+			Optional().
+			Nillable().
+			SchemaType(map[string]string{dialect.Postgres: "timestamptz"}),
+
 		// ========== 调度和速率限制相关字段 ==========
 		// 这些字段在 migrations/005_schema_parity.sql 中添加
 
@@ -249,5 +270,7 @@ func (Account) Indexes() []ent.Index {
 		index.Fields("priority", "status"),
 		index.Fields("deleted_at"), // 软删除查询优化
 		index.Fields("parent_account_id"),
+		index.Fields("owner_user_id"),
+		index.Fields("contribution_status"),
 	}
 }

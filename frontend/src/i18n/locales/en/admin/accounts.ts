@@ -1,4 +1,48 @@
 export default {
+    accountContributions: {
+      title: 'Contribution Review',
+      description: 'Review user-submitted OpenAI OAuth accounts and bind approved accounts to shared groups.',
+      pendingTitle: 'Contribution Review List',
+      pendingDescription: 'Filter contributions by status; approved accounts enter selected groups and become schedulable.',
+      statusAll: 'All statuses',
+      approve: 'Approve',
+      reject: 'Reject',
+      rejectConfirm: 'Reject this contributed account? Rejected accounts will not be scheduled.',
+      approved: 'Contribution approved',
+      rejected: 'Contribution rejected',
+      schedulable: 'Schedulable',
+      notSchedulable: 'Not schedulable',
+      columns: {
+        id: 'ID',
+        account: 'Account',
+        owner: 'Owner',
+        plan: 'Plan',
+        status: 'Status',
+        groups: 'Groups',
+        submittedAt: 'Submitted At'
+      },
+      planInfo: {
+        plan: 'Plan',
+        email: 'Email',
+        chatgptAccountId: 'ChatGPT Account',
+        expiresAt: 'Expires',
+        unknown: 'Unknown'
+      },
+      approveDialog: {
+        title: 'Approve Contribution',
+        groups: 'Bind Groups',
+        noGroups: 'No OpenAI groups are available.',
+        concurrency: 'Concurrency',
+        priority: 'Priority'
+      },
+      errors: {
+        loadFailed: 'Failed to load contribution accounts',
+        loadGroupsFailed: 'Failed to load OpenAI groups',
+        approveFailed: 'Failed to approve contribution',
+        rejectFailed: 'Failed to reject contribution'
+      }
+    },
+
     accounts: {
       title: 'Account Management',
       description: 'Manage AI platform accounts and credentials',
@@ -212,6 +256,12 @@ export default {
         trustWarning: 'This rate is declared by the upstream site for the current API key. Sub2API cannot verify that it matches actual charges. The upstream site or an intermediary may return forged, stale, or modified data. Verify it against bills, balance changes, and actual usage.',
         autoProbe: 'Automatically probe upstream declared rate',
         autoProbeHint: 'Probe this account\'s upstream declared rate on the global interval when global probing is enabled.',
+        manualRate: 'Manual upstream cost rate',
+        manualRateHint: 'Used by cost, profit, and low-cost scheduling. It overrides automatic probing and is recorded in the historical rate timeline when saved.',
+        manualRateValue: 'Manual cost rate: {value}x',
+        manualRateApplied: 'Overrides automatic probing. Disable it to fall back to probing or the account\'s existing cost basis.',
+        manualRateInvalid: 'Manual upstream cost rate must be a valid number greater than or equal to 0',
+        manual: 'Manual',
         manualProbe: 'Probe upstream rate now',
         stale: 'Stale',
         unsupported: 'Unsupported',

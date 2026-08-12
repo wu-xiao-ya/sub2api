@@ -1,5 +1,5 @@
 <template>
-  <div v-if="eligible" class="flex h-6 min-w-[7rem] items-center gap-1">
+  <div v-if="eligible || manualRate != null" class="flex h-6 min-w-[7rem] items-center gap-1">
     <HelpTooltip class="-ml-1" width-class="w-max max-w-[calc(100vw-2rem)]" data-testid="upstream-billing-details">
       <template #trigger>
         <span
@@ -11,7 +11,11 @@
         </span>
       </template>
       <div class="space-y-1">
-        <template v-if="hasEffectiveRate && data">
+        <template v-if="manualRate != null">
+          <p>{{ t('admin.accounts.upstreamBilling.manualRateValue', { value: manualRate }) }}</p>
+          <p>{{ t('admin.accounts.upstreamBilling.manualRateApplied') }}</p>
+        </template>
+        <template v-else-if="hasEffectiveRate && data">
           <p>{{ t('admin.accounts.upstreamBilling.groupRate', { value: data.group_rate_multiplier }) }}</p>
           <p v-if="data.user_rate_multiplier != null">
             {{ t('admin.accounts.upstreamBilling.userRate', { value: data.user_rate_multiplier }) }}
@@ -69,6 +73,7 @@
       {{ statusLabel }}
     </span>
     <button
+      v-if="eligible"
       type="button"
       class="inline-flex h-6 w-6 flex-shrink-0 items-center justify-center rounded text-blue-600 transition-colors hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50 dark:text-blue-400 dark:hover:bg-blue-900/30"
       :disabled="probing"
@@ -108,6 +113,12 @@ const CLOCK_SKEW_TOLERANCE_MS = 5 * 60 * 1000
 const eligible = computed(() => props.account.platform === 'openai' && props.account.type === 'apikey')
 const snapshot = computed<UpstreamBillingProbeSnapshot | undefined>(() => props.account.extra?.upstream_billing_probe)
 const data = computed(() => snapshot.value?.data)
+const manualRate = computed(() => {
+  const value = props.account.extra?.upstream_billing_manual_rate
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0
+    ? Number(value.toPrecision(12))
+    : null
+})
 const probeEnabled = computed(() => props.account.extra?.upstream_billing_probe_enabled === true)
 const nextProbeAt = computed(() => {
   const value = snapshot.value?.next_probe_at
@@ -188,11 +199,13 @@ const elapsedSinceLastSuccess = computed(() => {
   return t('admin.accounts.upstreamBilling.daysAgo', { count: Math.floor(elapsedHours / 24) })
 })
 const effectiveRate = computed(() => {
+  if (manualRate.value != null) return `${manualRate.value}x`
   if (!validTimestamps.value || stale.value || !['ok', 'failed'].includes(snapshot.value?.status ?? '')) return '-'
   const value = currentEffectiveRate.value
   return value == null ? '-' : `${Number(value.toPrecision(12))}x`
 })
 const statusLabel = computed(() => {
+  if (manualRate.value != null) return t('admin.accounts.upstreamBilling.manual')
   if (!snapshot.value) return t('admin.accounts.upstreamBilling.notProbed')
   if (snapshot.value.status === 'unsupported') return t('admin.accounts.upstreamBilling.unsupported')
   if (stale.value) return t('admin.accounts.upstreamBilling.stale')

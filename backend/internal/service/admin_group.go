@@ -133,6 +133,9 @@ func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupIn
 	if input.RateMultiplier <= 0 {
 		return nil, errors.New("rate_multiplier must be > 0")
 	}
+	if input.ContributorRewardMultiplier < 0 {
+		return nil, errors.New("contributor_reward_multiplier must be >= 0")
+	}
 
 	platform := input.Platform
 	if platform == "" {
@@ -268,6 +271,7 @@ func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupIn
 		Description:                     input.Description,
 		Platform:                        platform,
 		RateMultiplier:                  input.RateMultiplier,
+		ContributorRewardMultiplier:     input.ContributorRewardMultiplier,
 		IsExclusive:                     input.IsExclusive,
 		Status:                          StatusActive,
 		SubscriptionType:                subscriptionType,
@@ -454,6 +458,12 @@ func (s *adminServiceImpl) UpdateGroup(ctx context.Context, id int64, input *Upd
 			return nil, errors.New("rate_multiplier must be > 0")
 		}
 		group.RateMultiplier = *input.RateMultiplier
+	}
+	if input.ContributorRewardMultiplier != nil {
+		if *input.ContributorRewardMultiplier < 0 {
+			return nil, errors.New("contributor_reward_multiplier must be >= 0")
+		}
+		group.ContributorRewardMultiplier = *input.ContributorRewardMultiplier
 	}
 	if input.IsExclusive != nil {
 		group.IsExclusive = *input.IsExclusive

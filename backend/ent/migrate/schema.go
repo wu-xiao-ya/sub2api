@@ -115,6 +115,11 @@ var (
 		{Name: "last_used_at", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"postgres": "timestamptz"}},
 		{Name: "expires_at", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"postgres": "timestamptz"}},
 		{Name: "auto_pause_on_expired", Type: field.TypeBool, Default: true},
+		{Name: "owner_user_id", Type: field.TypeInt64, Nullable: true},
+		{Name: "contribution_status", Type: field.TypeString, Size: 20, Default: ""},
+		{Name: "contribution_submitted_at", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "contribution_approved_at", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "contribution_revoked_at", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"postgres": "timestamptz"}},
 		{Name: "schedulable", Type: field.TypeBool, Default: true},
 		{Name: "rate_limited_at", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"postgres": "timestamptz"}},
 		{Name: "rate_limit_reset_at", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"postgres": "timestamptz"}},
@@ -136,13 +141,13 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "accounts_proxies_proxy",
-				Columns:    []*schema.Column{AccountsColumns[30]},
+				Columns:    []*schema.Column{AccountsColumns[35]},
 				RefColumns: []*schema.Column{ProxiesColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
 				Symbol:     "accounts_accounts_children",
-				Columns:    []*schema.Column{AccountsColumns[31]},
+				Columns:    []*schema.Column{AccountsColumns[36]},
 				RefColumns: []*schema.Column{AccountsColumns[0]},
 				OnDelete:   schema.Restrict,
 			},
@@ -166,7 +171,7 @@ var (
 			{
 				Name:    "account_proxy_id",
 				Unique:  false,
-				Columns: []*schema.Column{AccountsColumns[30]},
+				Columns: []*schema.Column{AccountsColumns[35]},
 			},
 			{
 				Name:    "account_priority",
@@ -181,22 +186,22 @@ var (
 			{
 				Name:    "account_schedulable",
 				Unique:  false,
-				Columns: []*schema.Column{AccountsColumns[20]},
+				Columns: []*schema.Column{AccountsColumns[25]},
 			},
 			{
 				Name:    "account_rate_limited_at",
 				Unique:  false,
-				Columns: []*schema.Column{AccountsColumns[21]},
+				Columns: []*schema.Column{AccountsColumns[26]},
 			},
 			{
 				Name:    "account_rate_limit_reset_at",
 				Unique:  false,
-				Columns: []*schema.Column{AccountsColumns[22]},
+				Columns: []*schema.Column{AccountsColumns[27]},
 			},
 			{
 				Name:    "account_overload_until",
 				Unique:  false,
-				Columns: []*schema.Column{AccountsColumns[23]},
+				Columns: []*schema.Column{AccountsColumns[28]},
 			},
 			{
 				Name:    "account_platform_priority",
@@ -216,7 +221,17 @@ var (
 			{
 				Name:    "account_parent_account_id",
 				Unique:  false,
-				Columns: []*schema.Column{AccountsColumns[31]},
+				Columns: []*schema.Column{AccountsColumns[36]},
+			},
+			{
+				Name:    "account_owner_user_id",
+				Unique:  false,
+				Columns: []*schema.Column{AccountsColumns[20]},
+			},
+			{
+				Name:    "account_contribution_status",
+				Unique:  false,
+				Columns: []*schema.Column{AccountsColumns[21]},
 			},
 		},
 	}
@@ -843,6 +858,7 @@ var (
 		{Name: "name", Type: field.TypeString, Size: 100},
 		{Name: "description", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "text"}},
 		{Name: "rate_multiplier", Type: field.TypeFloat64, Default: 1, SchemaType: map[string]string{"postgres": "decimal(10,4)"}},
+		{Name: "contributor_reward_multiplier", Type: field.TypeFloat64, Default: 0, SchemaType: map[string]string{"postgres": "decimal(10,4)"}},
 		{Name: "peak_rate_enabled", Type: field.TypeBool, Default: false},
 		{Name: "peak_start", Type: field.TypeString, Size: 5, Default: ""},
 		{Name: "peak_end", Type: field.TypeString, Size: 5, Default: ""},
@@ -901,22 +917,22 @@ var (
 			{
 				Name:    "group_status",
 				Unique:  false,
-				Columns: []*schema.Column{GroupsColumns[12]},
+				Columns: []*schema.Column{GroupsColumns[13]},
 			},
 			{
 				Name:    "group_platform",
 				Unique:  false,
-				Columns: []*schema.Column{GroupsColumns[14]},
+				Columns: []*schema.Column{GroupsColumns[15]},
 			},
 			{
 				Name:    "group_subscription_type",
 				Unique:  false,
-				Columns: []*schema.Column{GroupsColumns[15]},
+				Columns: []*schema.Column{GroupsColumns[16]},
 			},
 			{
 				Name:    "group_is_exclusive",
 				Unique:  false,
-				Columns: []*schema.Column{GroupsColumns[11]},
+				Columns: []*schema.Column{GroupsColumns[12]},
 			},
 			{
 				Name:    "group_deleted_at",
@@ -926,12 +942,12 @@ var (
 			{
 				Name:    "group_sort_order",
 				Unique:  false,
-				Columns: []*schema.Column{GroupsColumns[47]},
+				Columns: []*schema.Column{GroupsColumns[48]},
 			},
 			{
 				Name:    "idx_groups_duplicate_operation_id_active",
 				Unique:  true,
-				Columns: []*schema.Column{GroupsColumns[13]},
+				Columns: []*schema.Column{GroupsColumns[14]},
 				Annotation: &entsql.IndexAnnotation{
 					Where: "duplicate_operation_id IS NOT NULL AND deleted_at IS NULL",
 				},

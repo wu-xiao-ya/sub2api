@@ -19,6 +19,12 @@ type duplicateAccountRepoStub struct {
 	*sparkShadowRepoStub
 	atomicCreateErr error
 	accountGroupsOf map[int64][]AccountGroup
+	manualRateEdits []manualRateSnapshotEdit
+}
+
+type manualRateSnapshotEdit struct {
+	accountID int64
+	rate      *float64
 }
 
 func newDuplicateAccountRepoStub() *duplicateAccountRepoStub {
@@ -68,6 +74,16 @@ func (s *duplicateAccountRepoStub) FindByExtraField(_ context.Context, key strin
 		}
 	}
 	return matches, nil
+}
+
+func (s *duplicateAccountRepoStub) RecordUpstreamBillingManualRateSnapshot(_ context.Context, account *Account, rate *float64) error {
+	edit := manualRateSnapshotEdit{accountID: account.ID}
+	if rate != nil {
+		value := *rate
+		edit.rate = &value
+	}
+	s.manualRateEdits = append(s.manualRateEdits, edit)
+	return nil
 }
 
 func TestDuplicateAccountCopiesConfigurationAndResetsRuntimeState(t *testing.T) {
@@ -121,6 +137,7 @@ func TestDuplicateAccountCopiesConfigurationAndResetsRuntimeState(t *testing.T) 
 			"grok_usage_snapshot":             map[string]any{"status_code": 429},
 			"openai_responses_supported":      false,
 			"openai_compact_checked_at":       "2026-07-15T00:00:00Z",
+			UpstreamBillingManualRateExtraKey: 0.07,
 			"session_window_utilization":      0.8,
 			"passive_usage_sampled_at":        "2026-07-15T00:00:00Z",
 			"antigravity_force_token_refresh": true,
@@ -157,11 +174,16 @@ func TestDuplicateAccountCopiesConfigurationAndResetsRuntimeState(t *testing.T) 
 	require.Equal(t, source.GroupIDs, duplicate.GroupIDs)
 	require.Equal(t, source.Credentials, duplicate.Credentials)
 	require.Equal(t, map[string]any{
-		"config":         map[string]any{"region": "us-east-1"},
-		"items":          []any{map[string]any{"enabled": true}},
-		"quota_limit":    float64(1000),
-		"codex_cli_only": true,
+		"config":                          map[string]any{"region": "us-east-1"},
+		"items":                           []any{map[string]any{"enabled": true}},
+		"quota_limit":                     float64(1000),
+		"codex_cli_only":                  true,
+		UpstreamBillingManualRateExtraKey: 0.07,
 	}, duplicate.Extra)
+	require.Len(t, repo.manualRateEdits, 1)
+	require.Equal(t, duplicate.ID, repo.manualRateEdits[0].accountID)
+	require.NotNil(t, repo.manualRateEdits[0].rate)
+	require.InDelta(t, 0.07, *repo.manualRateEdits[0].rate, 1e-12)
 	require.NotNil(t, duplicate.ExpiresAt)
 	require.True(t, source.ExpiresAt.Equal(*duplicate.ExpiresAt))
 	require.Equal(t, source.Notes, duplicate.Notes)

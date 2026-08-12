@@ -42,6 +42,14 @@ type UsageBillingCommand struct {
 	APIKeyQuotaCost     float64
 	APIKeyRateLimitCost float64
 	AccountQuotaCost    float64
+
+	ContributorOwnerUserID      int64
+	ContributorRewardAccountID  int64
+	ContributorRewardGroupID    int64
+	ContributorRewardMultiplier float64
+	ContributorRewardTotalCost  float64
+	ContributorRewardActualCost float64
+	ContributorRewardAmount     float64
 }
 
 func (c *UsageBillingCommand) Normalize() {
@@ -69,6 +77,10 @@ func (c *UsageBillingCommand) quantizeMonetaryFields() {
 	c.APIKeyQuotaCost = QuantizeUsageBillingAmount(c.APIKeyQuotaCost)
 	c.APIKeyRateLimitCost = QuantizeUsageBillingAmount(c.APIKeyRateLimitCost)
 	c.AccountQuotaCost = QuantizeUsageBillingAmount(c.AccountQuotaCost)
+	c.ContributorRewardMultiplier = QuantizeUsageBillingAmount(c.ContributorRewardMultiplier)
+	c.ContributorRewardTotalCost = QuantizeUsageBillingAmount(c.ContributorRewardTotalCost)
+	c.ContributorRewardActualCost = QuantizeUsageBillingAmount(c.ContributorRewardActualCost)
+	c.ContributorRewardAmount = QuantizeUsageBillingAmount(c.ContributorRewardAmount)
 }
 
 // QuantizeUsageBillingAmount uses PostgreSQL NUMERIC-compatible decimal
@@ -86,7 +98,7 @@ func buildUsageBillingFingerprint(c *UsageBillingCommand) string {
 		return ""
 	}
 	raw := fmt.Sprintf(
-		"%d|%d|%d|%s|%s|%s|%s|%d|%d|%d|%d|%d|%d|%s|%d|%0.10f|%0.10f|%0.10f|%0.10f|%0.10f",
+		"%d|%d|%d|%s|%s|%s|%s|%d|%d|%d|%d|%d|%d|%s|%d|%0.10f|%0.10f|%0.10f|%0.10f|%0.10f|%d|%d|%d|%0.10f|%0.10f|%0.10f|%0.10f",
 		c.UserID,
 		c.AccountID,
 		c.APIKeyID,
@@ -107,6 +119,13 @@ func buildUsageBillingFingerprint(c *UsageBillingCommand) string {
 		c.APIKeyQuotaCost,
 		c.APIKeyRateLimitCost,
 		c.AccountQuotaCost,
+		c.ContributorOwnerUserID,
+		c.ContributorRewardAccountID,
+		c.ContributorRewardGroupID,
+		c.ContributorRewardMultiplier,
+		c.ContributorRewardTotalCost,
+		c.ContributorRewardActualCost,
+		c.ContributorRewardAmount,
 	)
 	if payloadHash := strings.TrimSpace(c.RequestPayloadHash); payloadHash != "" {
 		raw += "|" + payloadHash
@@ -151,6 +170,9 @@ type UsageBillingApplyResult struct {
 	ConsumptionConcurrencyDelta   int
 	ConsumptionLifetimeUSD        float64
 	ConsumptionConcurrencyTier    int
+	ContributorRewardApplied      bool
+	ContributorRewardOwnerUserID  int64
+	ContributorRewardAmount       float64
 }
 
 // BatchImageBalanceHoldCommand describes an idempotent balance hold operation.

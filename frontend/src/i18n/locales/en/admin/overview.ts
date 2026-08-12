@@ -815,6 +815,7 @@ export default {
         id: 'ID',
         platform: 'Platform',
         rateMultiplier: 'Rate Multiplier',
+        contributorRewardMultiplier: 'Contribution Reward',
         rpmOverride: 'RPM Override',
         rpmOverrideHint: 'Per-user RPM cap in this group; empty = group default; 0 = unlimited',
         rateDefault: 'default',
@@ -864,6 +865,7 @@ export default {
         descriptionPlaceholder: 'Enter description (optional)',
         rateMultiplierLabel: 'Rate Multiplier',
         rateMultiplierHint: '1.0 = standard rate, 0.5 = half price, 2.0 = double',
+        contributorRewardMultiplier: 'Contribution Reward Multiplier',
         rpmLimit: 'Requests Per Minute (RPM)',
         rpmLimitPlaceholder: '0 = unlimited',
         rpmLimitHint: 'Max requests per minute for each user in this group; 0 = unlimited. Once set, it takes over per-user rate limiting in this group (overrides the user-level rpm_limit fallback).',
@@ -892,6 +894,7 @@ export default {
       groupUpdatedSuccess: 'Group updated successfully',
       groupDeletedSuccess: 'Group deleted successfully',
       rateMultiplierHint: 'Cost multiplier for this group (e.g., 1.5 = 150% of base cost)',
+      contributorRewardMultiplierHint: 'When a contributed account is scheduled in this group, its owner earns raw cost times this multiplier. 0 disables rewards.',
       exclusiveHint: 'Exclusive group, manually assign to specific users',
       exclusiveTooltip: {
         title: 'What is an exclusive group?',

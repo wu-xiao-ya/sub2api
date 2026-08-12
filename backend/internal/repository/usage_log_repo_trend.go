@@ -648,12 +648,13 @@ func (r *usageLogRepository) getGroupStatsWithFilters(ctx context.Context, start
 				ub.actual_cost,
 				CASE
 					WHEN upstream_rate.effective_rate_multiplier IS NULL
+						OR upstream_rate.source = 'manual_cleared'
 					THEN ub.legacy_account_cost
 					ELSE ub.standard_cost * upstream_rate.effective_rate_multiplier
 				END AS account_cost
 			FROM usage_by_account_bucket ub
 			LEFT JOIN LATERAL (
-				SELECT s.effective_rate_multiplier
+				SELECT s.effective_rate_multiplier, s.source
 				FROM account_upstream_rate_snapshots s
 				WHERE s.account_id = ub.account_id
 					AND s.group_id = COALESCE(ub.group_id, 0)

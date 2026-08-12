@@ -1669,6 +1669,36 @@
         />
       </div>
 
+      <div class="border-t border-gray-200 pt-4 dark:border-dark-600">
+        <div class="flex items-center justify-between gap-4">
+          <div>
+            <label class="input-label mb-0">{{ t('admin.accounts.upstreamBilling.manualRate') }}</label>
+            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              {{ t('admin.accounts.upstreamBilling.manualRateHint') }}
+            </p>
+          </div>
+          <Toggle
+            v-model="upstreamBillingManualRateEnabled"
+            data-testid="upstream-billing-manual-rate-toggle"
+            :aria-label="t('admin.accounts.upstreamBilling.manualRate')"
+          />
+        </div>
+        <div v-if="upstreamBillingManualRateEnabled" class="mt-3 max-w-xs">
+          <label class="input-label">{{ t('admin.accounts.upstreamBilling.manualRate') }}</label>
+          <div class="relative">
+            <input
+              v-model.number="upstreamBillingManualRate"
+              type="number"
+              min="0"
+              step="0.0001"
+              class="input pr-8 font-mono"
+              data-testid="upstream-billing-manual-rate-input"
+            />
+            <span class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-gray-500 dark:text-gray-400">x</span>
+          </div>
+        </div>
+      </div>
+
       <!-- Anthropic API Key 自动透传开关 -->
       <div
         v-if="account?.platform === 'anthropic' && account?.type === 'apikey'"
@@ -2824,6 +2854,8 @@ const autoPause7dThreshold = ref<number | null>(null)
 const autoPause5hDisabled = ref(false)
 const autoPause7dDisabled = ref(false)
 const upstreamBillingAutoProbeEnabled = ref(false)
+const upstreamBillingManualRateEnabled = ref(false)
+const upstreamBillingManualRate = ref<number | null>(null)
 const mixedScheduling = ref(false) // For antigravity accounts: enable mixed scheduling
 const allowOverages = ref(false) // For antigravity accounts: enable AI Credits overages
 const antigravityProjectId = ref('')
@@ -3200,7 +3232,7 @@ const form = reactive({
 
 const poolGroupOptions = computed(() => [
   { value: null, label: t('admin.accounts.accountPoolGroup.none') },
-  ...props.poolGroups.map(group => ({
+  ...(props.poolGroups ?? []).map(group => ({
     value: group.id,
     label: group.upstream_key ? `${group.name} · ${group.upstream_key}` : group.name
   }))
@@ -3322,6 +3354,13 @@ const syncFormFromAccount = (newAccount: Account | null) => {
 	autoPause5hDisabled.value = extra?.auto_pause_5h_disabled === true
 	autoPause7dDisabled.value = extra?.auto_pause_7d_disabled === true
 	upstreamBillingAutoProbeEnabled.value = extra?.upstream_billing_probe_enabled === true
+	const manualRate = extra?.upstream_billing_manual_rate
+	const normalizedManualRate =
+		typeof manualRate === 'number' && Number.isFinite(manualRate) && manualRate >= 0
+			? manualRate
+			: null
+	upstreamBillingManualRateEnabled.value = normalizedManualRate != null
+	upstreamBillingManualRate.value = normalizedManualRate
 
   // Load OpenAI passthrough toggle (OpenAI OAuth/SetupToken/API Key)
   openaiPassthroughEnabled.value = false
@@ -4776,6 +4815,21 @@ const handleSubmit = async () => {
       writeQuotaNotifyToExtra(newExtra, 'update')
       updatePayload.extra = newExtra
     }
+
+    const currentExtra = (updatePayload.extra as Record<string, unknown>) ||
+      (props.account.extra as Record<string, unknown>) || {}
+    const upstreamBillingExtra: Record<string, unknown> = { ...currentExtra }
+    if (upstreamBillingManualRateEnabled.value) {
+      const manualRate = upstreamBillingManualRate.value
+      if (manualRate == null || !Number.isFinite(manualRate) || manualRate < 0) {
+        appStore.showError(t('admin.accounts.upstreamBilling.manualRateInvalid'))
+        return
+      }
+      upstreamBillingExtra.upstream_billing_manual_rate = manualRate
+    } else {
+      delete upstreamBillingExtra.upstream_billing_manual_rate
+    }
+    updatePayload.extra = upstreamBillingExtra
 
     const canContinue = await ensureAntigravityMixedChannelConfirmed(async () => {
       await submitUpdateAccount(accountID, updatePayload)

@@ -45,6 +45,13 @@ type Account struct {
 	CreatedAt          time.Time
 	UpdatedAt          time.Time
 
+	// Contribution lifecycle: normal admin accounts keep both fields empty.
+	OwnerUserID             *int64
+	ContributionStatus      string
+	ContributionSubmittedAt *time.Time
+	ContributionApprovedAt  *time.Time
+	ContributionRevokedAt   *time.Time
+
 	Schedulable bool
 
 	RateLimitedAt    *time.Time
@@ -139,6 +146,18 @@ func (a *Account) IsActive() bool {
 	return a.Status == StatusActive
 }
 
+// IsContributionSchedulable closes the scheduler to all contributed accounts
+// until a reviewer approves them. Non-contribution accounts are unaffected.
+func (a *Account) IsContributionSchedulable() bool {
+	if a == nil {
+		return false
+	}
+	if a.OwnerUserID == nil {
+		return a.ContributionStatus == ""
+	}
+	return a.ContributionStatus == ContributionStatusApproved
+}
+
 // IsSyntheticUITest identifies an isolated UI-test account that must never
 // reach a provider with placeholder credentials.
 func (a *Account) IsSyntheticUITest() bool {
@@ -177,7 +196,7 @@ func (a *Account) EffectiveLoadFactor() int {
 }
 
 func (a *Account) IsSchedulable() bool {
-	if !a.IsActive() || !a.Schedulable {
+	if !a.IsActive() || !a.Schedulable || !a.IsContributionSchedulable() {
 		return false
 	}
 	now := time.Now()

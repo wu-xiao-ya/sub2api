@@ -280,6 +280,27 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/account-contributions',
+    name: 'AccountContributions',
+    component: () => import('@/views/user/AccountContributionsView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: false,
+      titleKey: 'accountContributions.title',
+      descriptionKey: 'accountContributions.description'
+    }
+  },
+  {
+    path: '/account-contributions/callback',
+    name: 'AccountContributionCallback',
+    component: () => import('@/views/user/AccountContributionCallbackView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: false,
+      titleKey: 'accountContributions.callbackTitle'
+    }
+  },
+  {
     path: '/subscriptions',
     name: 'Subscriptions',
     component: () => import('@/views/user/SubscriptionsView.vue'),
@@ -513,6 +534,17 @@ const routes: RouteRecordRaw[] = [
       title: 'Account Management',
       titleKey: 'admin.accounts.title',
       descriptionKey: 'admin.accounts.description'
+    }
+  },
+  {
+    path: '/admin/account-contributions',
+    name: 'AdminAccountContributions',
+    component: () => import('@/views/admin/AccountContributionsView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      titleKey: 'admin.accountContributions.title',
+      descriptionKey: 'admin.accountContributions.description'
     }
   },
   {

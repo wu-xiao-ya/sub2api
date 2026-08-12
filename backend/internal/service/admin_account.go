@@ -342,6 +342,13 @@ func (s *adminServiceImpl) DuplicateAccount(ctx context.Context, id int64, actor
 	if err := s.accountDuplicateRepo.CreateWithAccountGroups(ctx, duplicate, groups); err != nil {
 		return nil, fmt.Errorf("create duplicate account: %w", err)
 	}
+	if manualRate, ok := UpstreamBillingManualRate(duplicate.Extra); ok {
+		if recorder, supportsSnapshots := s.accountRepo.(upstreamBillingManualRateSnapshotRecorder); supportsSnapshots {
+			if err := recorder.RecordUpstreamBillingManualRateSnapshot(ctx, duplicate, &manualRate); err != nil {
+				return nil, fmt.Errorf("record duplicate account manual upstream billing rate: %w", err)
+			}
+		}
+	}
 	for i := range groups {
 		groups[i].AccountID = duplicate.ID
 	}
@@ -481,6 +488,9 @@ func (s *adminServiceImpl) CreateAccount(ctx context.Context, input *CreateAccou
 	if err != nil {
 		return nil, err
 	}
+	if err := ValidateUpstreamBillingManualRateExtra(accountExtra); err != nil {
+		return nil, err
+	}
 
 	// 绑定分组
 	groupIDs := input.GroupIDs
@@ -530,6 +540,14 @@ func (s *adminServiceImpl) CreateAccount(ctx context.Context, input *CreateAccou
 			return nil, err
 		}
 	}
+	account.GroupIDs = append([]int64(nil), groupIDs...)
+	if manualRate, ok := UpstreamBillingManualRate(account.Extra); ok {
+		if recorder, supportsSnapshots := s.accountRepo.(upstreamBillingManualRateSnapshotRecorder); supportsSnapshots {
+			if err := recorder.RecordUpstreamBillingManualRateSnapshot(ctx, account, &manualRate); err != nil {
+				return nil, err
+			}
+		}
+	}
 
 	// OAuth 账号：创建后异步设置隐私。
 	// 使用 Ensure（幂等）而非 Force：新建账号 Extra 为空时效果相同，但更安全。
@@ -563,11 +581,16 @@ type accountProbeEnabledAtomicUpdater interface {
 	UpdateWithUpstreamBillingProbeEnabled(context.Context, *Account, bool) error
 }
 
+type upstreamBillingManualRateSnapshotRecorder interface {
+	RecordUpstreamBillingManualRateSnapshot(context.Context, *Account, *float64) error
+}
+
 func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *UpdateAccountInput) (*Account, error) {
 	account, err := s.accountRepo.GetByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
+	previousManualRate, previousManualRateSet := UpstreamBillingManualRate(account.Extra)
 	var normalizedExtra map[string]any
 	if input.Extra != nil {
 		normalizedExtra, err = normalizeOpenAILongContextBillingUpdateExtra(account, input)
@@ -576,6 +599,9 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 		}
 		normalizedExtra, err = normalizeGrokMediaEligibilityUpdateExtra(account, input, normalizedExtra)
 		if err != nil {
+			return nil, err
+		}
+		if err := ValidateUpstreamBillingManualRateExtra(normalizedExtra); err != nil {
 			return nil, err
 		}
 	}
@@ -747,6 +773,10 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 	if input.AutoPauseOnExpired != nil {
 		account.AutoPauseOnExpired = *input.AutoPauseOnExpired
 	}
+	nextManualRate, nextManualRateSet := UpstreamBillingManualRate(account.Extra)
+	manualRateChanged := input.Extra != nil &&
+		(previousManualRateSet != nextManualRateSet || (previousManualRateSet && previousManualRate != nextManualRate))
+	manualRateSnapshotNeeded := manualRateChanged || (input.GroupIDs != nil && nextManualRateSet)
 
 	// 先验证分组是否存在（在任何写操作之前）
 	if input.GroupIDs != nil {
@@ -803,6 +833,19 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 	updated, err := s.accountRepo.GetByID(ctx, id)
 	if err != nil {
 		return nil, err
+	}
+	if manualRateSnapshotNeeded {
+		recorder, ok := s.accountRepo.(upstreamBillingManualRateSnapshotRecorder)
+		if !ok {
+			return updated, nil
+		}
+		var rate *float64
+		if nextManualRateSet {
+			rate = &nextManualRate
+		}
+		if err := recorder.RecordUpstreamBillingManualRateSnapshot(ctx, updated, rate); err != nil {
+			return nil, err
+		}
 	}
 	return updated, nil
 }

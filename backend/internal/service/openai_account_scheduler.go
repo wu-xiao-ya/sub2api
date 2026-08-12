@@ -2667,6 +2667,22 @@ func (o openAILegacyUpstreamRateOrder) compare(a, b *Account) int {
 }
 
 func openAIFreshUpstreamBillingRate(account *Account, now time.Time) (float64, bool) {
+	return CurrentUpstreamBillingRate(account, now)
+}
+
+// CurrentUpstreamBillingRate resolves an operator override before a fresh
+// upstream probe. The override works for every account type so cost/profit
+// reporting can cover upstreams that expose no probe endpoint.
+func CurrentUpstreamBillingRate(account *Account, now time.Time) (float64, bool) {
+	if account != nil {
+		if rate, ok := UpstreamBillingManualRate(account.Extra); ok {
+			return rate, true
+		}
+	}
+	return openAIProbedUpstreamBillingRate(account, now)
+}
+
+func openAIProbedUpstreamBillingRate(account *Account, now time.Time) (float64, bool) {
 	if !isUpstreamBillingProbeAccount(account) {
 		return 0, false
 	}
