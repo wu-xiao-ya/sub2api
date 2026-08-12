@@ -515,6 +515,9 @@ func (s *OpenAIGatewayService) applyGrokUpstreamFailureDecision(
 	case GrokFailureEmptyUpstream:
 		reason = "grok empty model output"
 	case GrokFailureModelCapacity:
+		if persistGrokTransientModelCooldown(account, decision) {
+			return true
+		}
 		reason = "grok model capacity"
 	case GrokFailureUnavailable:
 		reason = "grok upstream temporary error"
