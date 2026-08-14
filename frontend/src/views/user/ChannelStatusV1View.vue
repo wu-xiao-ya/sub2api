@@ -78,7 +78,7 @@ const trafficMetrics = ref<Record<string, Record<string, {
   successRate: number
   ttftP50Ms: number | null
   cacheRate: number
-}>>({})
+}>>>({})
 const showDetail = ref(false)
 const detailTarget = ref<GroupedChannelStatus | null>(null)
 
