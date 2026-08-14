@@ -531,6 +531,9 @@ func (s *ChannelMonitorService) RunCheck(ctx context.Context, id int64) ([]*Chec
 // still run a live active probe so administrators can diagnose an upstream
 // immediately instead of seeing an older end-user request observation.
 func (s *ChannelMonitorService) RunScheduledCheck(ctx context.Context, id int64) ([]*CheckResult, error) {
+	if !s.probeRuntime(ctx).ActiveProbesAllowed() {
+		return nil, ErrChannelMonitorDisabled
+	}
 	m, err := s.Get(ctx, id)
 	if err != nil {
 		return nil, err

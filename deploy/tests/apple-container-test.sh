@@ -27,43 +27,47 @@ assert_missing() {
     [[ ! -e "$1" ]] || fail "Expected path to be absent: $1"
 }
 
+run_script() {
+    /bin/bash "${SCRIPT}" "$@"
+}
+
 export FAKE_CONTAINER_STATE="${STATE_DIR}"
 export PATH="${TEST_DIR}/fixtures/bin:${PATH}"
 export SUB2API_ENV_FILE="${ENV_FILE}"
 
 mkdir -p "${STATE_DIR}"
 
-"${SCRIPT}" init
+run_script init
 [[ "$(stat -f '%Lp' "${ENV_FILE}")" == "600" ]] || fail "init did not create a mode-600 env file"
 grep -q '^POSTGRES_PASSWORD=change_this_secure_password$' "${ENV_FILE}" && fail "init retained the placeholder password"
 
 chmod 644 "${ENV_FILE}"
-if "${SCRIPT}" up >/dev/null 2>&1; then
+if run_script up >/dev/null 2>&1; then
     fail "up accepted an insecure env file"
 fi
 chmod 600 "${ENV_FILE}"
 
-"${SCRIPT}" up
+run_script up
 assert_exists "${STATE_DIR}/containers/sub2api-apple"
 assert_exists "${STATE_DIR}/containers/sub2api-apple-postgres"
 assert_exists "${STATE_DIR}/containers/sub2api-apple-redis"
 assert_exists "${STATE_DIR}/running/sub2api-apple"
-"${SCRIPT}" status >/dev/null
+run_script status >/dev/null
 
-"${SCRIPT}" up --recreate
+run_script up --recreate
 assert_exists "${STATE_DIR}/running/sub2api-apple"
-"${SCRIPT}" down
+run_script down
 assert_missing "${STATE_DIR}/running/sub2api-apple"
 assert_missing "${STATE_DIR}/running/sub2api-apple-postgres"
 assert_missing "${STATE_DIR}/running/sub2api-apple-redis"
 
-"${SCRIPT}" destroy --yes
+run_script destroy --yes
 assert_missing "${STATE_DIR}/containers/sub2api-apple"
 assert_missing "${STATE_DIR}/networks/sub2api-apple"
 assert_exists "${STATE_DIR}/volumes/sub2api-apple-data"
 
-"${SCRIPT}" up
-"${SCRIPT}" destroy --volumes --yes
+run_script up
+run_script destroy --volumes --yes
 assert_missing "${STATE_DIR}/volumes/sub2api-apple-data"
 assert_missing "${STATE_DIR}/volumes/sub2api-apple-postgres-data"
 assert_missing "${STATE_DIR}/volumes/sub2api-apple-redis-data"
@@ -71,7 +75,7 @@ assert_missing "${STATE_DIR}/volumes/sub2api-apple-redis-data"
 touch "${STATE_DIR}/system-running"
 touch "${STATE_DIR}/containers/sub2api-apple"
 touch "${STATE_DIR}/unowned/container/sub2api-apple"
-if "${SCRIPT}" status >/dev/null 2>&1; then
+if run_script status >/dev/null 2>&1; then
     fail "status accepted an unowned same-name container"
 fi
 
