@@ -43,13 +43,22 @@ describe('useModelWhitelist', () => {
     expect(getModelsByPlatform('antigravity')).toContain('claude-opus-4-8')
   })
 
-  it('xAI 模型列表包含 Grok 4.5 官方模型和别名', () => {
+  it('xAI 模型列表包含 Grok 4.5/4.6 模型和别名', () => {
     const models = getModelsByPlatform('grok')
 
+    expect(models).toContain('grok-4.6')
+    expect(models).toContain('grok-4.6-latest')
     expect(models).toContain('grok-4.5')
     expect(models).toContain('grok-4.5-latest')
     expect(models).toContain('grok-build-latest')
     expect(models).toContain('grok-imagine-video-1.5-preview')
+  })
+
+  it('国产模型列表包含当前 DeepSeek、Kimi 和 GLM 型号', () => {
+    expect(getModelsByPlatform('deepseek')).toContain('deepseek-v4-pro')
+    expect(getModelsByPlatform('moonshot')).toContain('kimi-k3')
+    expect(getModelsByPlatform('moonshot')).toContain('k3-256k')
+    expect(getModelsByPlatform('zhipu')).toContain('glm-5.2')
   })
 
   it('combined 模式支持 Grok 4.5 官方别名映射', () => {

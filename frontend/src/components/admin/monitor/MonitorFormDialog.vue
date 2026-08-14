@@ -30,7 +30,7 @@
         </div>
       </div>
 
-      <div v-if="form.provider === PROVIDER_OPENAI" class="rounded-lg border border-blue-100 bg-blue-50/50 p-3 dark:border-blue-500/20 dark:bg-blue-500/10">
+      <div v-if="supportsSelectableAPIMode(form.provider)" class="rounded-lg border border-blue-100 bg-blue-50/50 p-3 dark:border-blue-500/20 dark:bg-blue-500/10">
         <label class="input-label">{{ t('admin.channelMonitor.form.apiMode') }}</label>
         <div class="grid gap-3 sm:grid-cols-2">
           <button
@@ -234,6 +234,9 @@ import {
   PROVIDER_GEMINI,
   PROVIDER_GROK,
   PROVIDER_ANTIGRAVITY,
+  PROVIDER_DEEPSEEK,
+  PROVIDER_KIMI,
+  PROVIDER_GLM,
   API_MODE_CHAT_COMPLETIONS,
   API_MODE_RESPONSES,
   API_MODE_MODELS,
@@ -241,6 +244,7 @@ import {
   DEFAULT_GROK_ENDPOINT,
   DEFAULT_GROK_MODEL,
   DEFAULT_INTERVAL_SECONDS,
+  supportsSelectableAPIMode,
 } from '@/constants/channelMonitor'
 
 const props = defineProps<{
@@ -334,7 +338,7 @@ const accountGroupsLoading = ref(false)
 const templateOptions = computed(() => {
   const items = templatesCache.value.filter((t) => {
     if (t.provider !== form.provider) return false
-    if (form.provider !== PROVIDER_OPENAI) return true
+    if (!supportsSelectableAPIMode(form.provider)) return true
     return normalizeAPIMode(t.api_mode) === form.api_mode
   })
   return [
@@ -421,7 +425,7 @@ function apiModeButtonClass(mode: APIMode): string {
 }
 
 function templateOptionLabel(tpl: ChannelMonitorTemplate): string {
-  if (tpl.provider !== PROVIDER_OPENAI) return tpl.name
+  if (!supportsSelectableAPIMode(tpl.provider)) return tpl.name
   const labelKey = normalizeAPIMode(tpl.api_mode) === API_MODE_RESPONSES
     ? 'admin.channelMonitor.form.apiModeResponses'
     : normalizeAPIMode(tpl.api_mode) === API_MODE_MODELS
@@ -449,7 +453,10 @@ const providerOptions = computed<ProviderOption[]>(() => [
   { value: PROVIDER_OPENAI, label: t('monitorCommon.providers.openai') },
   { value: PROVIDER_GEMINI, label: t('monitorCommon.providers.gemini') },
   { value: PROVIDER_GROK, label: t('monitorCommon.providers.grok') },
-  { value: PROVIDER_ANTIGRAVITY, label: t('admin.channelMonitor.form.providerAntigravity') },
+  { value: PROVIDER_ANTIGRAVITY, label: t('monitorCommon.providers.antigravity') },
+  { value: PROVIDER_DEEPSEEK, label: t('monitorCommon.providers.deepseek') },
+  { value: PROVIDER_KIMI, label: t('monitorCommon.providers.kimi') },
+  { value: PROVIDER_GLM, label: t('monitorCommon.providers.glm') },
 ])
 
 const accountGroupOptions = computed(() => [
@@ -522,7 +529,7 @@ watch(() => form.provider, () => {
   if (suppressFormWatchers) return
   form.api_key = ''
   form.account_group_id = null
-  if (form.provider !== PROVIDER_OPENAI) {
+  if (!supportsSelectableAPIMode(form.provider)) {
     form.api_mode = API_MODE_CHAT_COMPLETIONS
   }
   clearRequestSnapshot()
@@ -531,7 +538,7 @@ watch(() => form.provider, () => {
 
 watch(() => form.api_mode, () => {
   if (suppressFormWatchers) return
-  if (form.provider === PROVIDER_OPENAI) {
+  if (supportsSelectableAPIMode(form.provider)) {
     clearRequestSnapshot()
   }
 }, { flush: 'sync' })
@@ -653,7 +660,7 @@ function buildPayload(): CreateParams {
   return {
     name: form.name.trim(),
     provider: form.provider,
-    api_mode: form.provider === PROVIDER_OPENAI ? form.api_mode : API_MODE_CHAT_COMPLETIONS,
+    api_mode: supportsSelectableAPIMode(form.provider) ? form.api_mode : API_MODE_CHAT_COMPLETIONS,
     endpoint: form.endpoint.trim(),
     api_key: form.api_key.trim(),
     primary_model: form.primary_model.trim(),

@@ -32,6 +32,13 @@
               {{ providerLabel(item.provider) }}
             </span>
             <span
+              v-if="sourceLabel"
+              class="inline-flex items-center rounded px-1.5 py-0.5 text-[9px] font-medium"
+              :class="sourceBadgeClass"
+            >
+              {{ sourceLabel }}
+            </span>
+            <span
               v-if="item.groupName && item.groupName !== item.name"
               class="inline-flex max-w-[11rem] truncate rounded border border-gray-200 bg-gray-50 px-1.5 py-0.5 text-[9px] font-medium text-gray-600 dark:border-dark-600 dark:bg-dark-900 dark:text-gray-300"
             >
@@ -138,14 +145,30 @@
             :class="statusDotClass(model.status)"
             :title="statusLabel(model.status)"
           ></span>
+          <div class="flex min-w-0 flex-1 items-center gap-1.5">
+            <span
+              class="min-w-0 truncate font-mono text-[11px] font-medium text-gray-800 dark:text-gray-200"
+              :title="model.model"
+            >
+              {{ model.model }}
+            </span>
+            <span
+              v-if="model.source"
+              class="inline-flex flex-none items-center rounded px-1.5 py-0.5 text-[9px] font-medium leading-none"
+              :class="modelSourceClass(model.source)"
+              :title="modelSourceTooltip(model.source)"
+            >
+              {{ modelSourceLabel(model.source) }}
+            </span>
+          </div>
           <span
-            class="min-w-0 flex-1 truncate font-mono text-[11px] font-medium text-gray-800 dark:text-gray-200"
-            :title="model.model"
+            class="flex-none font-mono text-[10px] tabular-nums text-gray-500 dark:text-gray-400"
+            :title="modelLatencyTooltip(model)"
           >
-            {{ model.model }}
-          </span>
-          <span class="flex-none font-mono text-[10px] tabular-nums text-gray-500 dark:text-gray-400">
-            {{ formatLatency(model.latency_ms) }}ms
+            {{ formatLatency(model.latency_ms) }}ms<span
+              v-if="model.source"
+              class="ml-0.5 font-sans text-[9px] font-medium"
+            >{{ modelLatencyKind(model.source) }}</span>
           </span>
           <span
             class="flex-none font-mono text-[10px] font-semibold tabular-nums"
@@ -187,6 +210,10 @@ const PROVIDER_TINT: Record<string, string> = {
   anthropic: 'text-orange-600 dark:text-orange-300',
   gemini: 'text-sky-600 dark:text-sky-300',
   grok: 'text-zinc-700 dark:text-zinc-200',
+  antigravity: 'text-cyan-600 dark:text-cyan-300',
+  deepseek: 'text-blue-600 dark:text-blue-300',
+  kimi: 'text-cyan-700 dark:text-cyan-300',
+  glm: 'text-indigo-600 dark:text-indigo-300',
 }
 
 const props = defineProps<{
@@ -211,6 +238,26 @@ const {
 } = useChannelMonitorFormat()
 
 const channelHealth = computed(() => groupedChannelHealth(props.item))
+const sourceLabel = computed(() => {
+  if (!props.item.source) return ''
+  if (props.item.source === 'mixed') return t('channelStatus.source.mixed')
+  return props.item.source === 'traffic'
+    ? t('channelStatus.source.traffic')
+    : t('channelStatus.source.probe')
+})
+const sourceBadgeClass = computed(() => {
+  if (!props.item.source) {
+    return 'border border-gray-200 bg-gray-50 text-gray-700 dark:border-dark-600 dark:bg-dark-700 dark:text-gray-200'
+  }
+  switch (props.item.source) {
+    case 'traffic':
+      return 'border border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-500/20 dark:bg-sky-500/10 dark:text-sky-300'
+    case 'probe':
+      return 'border border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-500/20 dark:bg-violet-500/10 dark:text-violet-300'
+    default:
+      return 'border border-gray-200 bg-gray-50 text-gray-700 dark:border-dark-600 dark:bg-dark-700 dark:text-gray-200'
+  }
+})
 const channelHealthLabel = computed(() =>
   t(`channelStatus.health.${channelHealth.value}`),
 )
@@ -310,5 +357,34 @@ function statusDotClass(statusValue: GroupedChannelModel['status']): string {
     default:
       return 'bg-gray-300 dark:bg-dark-600'
   }
+}
+
+function modelSourceLabel(source: NonNullable<GroupedChannelModel['source']>): string {
+  return source === 'traffic'
+    ? t('channelStatus.source.traffic')
+    : t('channelStatus.source.probe')
+}
+
+function modelSourceClass(source: NonNullable<GroupedChannelModel['source']>): string {
+  return source === 'traffic'
+    ? 'border border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-500/20 dark:bg-sky-500/10 dark:text-sky-300'
+    : 'border border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-500/20 dark:bg-violet-500/10 dark:text-violet-300'
+}
+
+function modelSourceTooltip(source: NonNullable<GroupedChannelModel['source']>): string {
+  return source === 'traffic'
+    ? t('channelStatus.latencyMetric.traffic')
+    : t('channelStatus.latencyMetric.probe')
+}
+
+function modelLatencyTooltip(model: GroupedChannelModel): string {
+  if (!model.source) return t('channelStatus.latencyMetric.unknown')
+  return modelSourceTooltip(model.source)
+}
+
+function modelLatencyKind(source: NonNullable<GroupedChannelModel['source']>): string {
+  return source === 'traffic'
+    ? t('channelStatus.latencyKind.firstToken')
+    : t('channelStatus.latencyKind.probe')
 }
 </script>

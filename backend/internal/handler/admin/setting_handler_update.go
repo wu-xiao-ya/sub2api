@@ -303,9 +303,10 @@ type UpdateSettingsRequest struct {
 	PaymentAlipayForceQRCode *bool `json:"payment_alipay_force_qrcode"`
 
 	// Channel Monitor feature switch
-	ChannelMonitorEnabled                *bool                                       `json:"channel_monitor_enabled"`
-	ChannelMonitorDefaultIntervalSeconds *int                                        `json:"channel_monitor_default_interval_seconds"`
-	ChannelMonitorAccountProbeSettings   *service.ChannelMonitorAccountProbeSettings `json:"channel_monitor_account_probe_settings"`
+	ChannelMonitorEnabled                    *bool                                             `json:"channel_monitor_enabled"`
+	ChannelMonitorDefaultIntervalSeconds     *int                                              `json:"channel_monitor_default_interval_seconds"`
+	ChannelMonitorAccountProbeSettings       *service.ChannelMonitorAccountProbeSettings       `json:"channel_monitor_account_probe_settings"`
+	ChannelMonitorTrafficObservationSettings *service.ChannelMonitorTrafficObservationSettings `json:"channel_monitor_traffic_observation_settings"`
 
 	// Grok model mapping policy
 	GrokDefaultTextModel           *string `json:"grok_default_text_model"`
@@ -1638,6 +1639,12 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 			}
 			return previousSettings.ChannelMonitorAccountProbeSettings
 		}(),
+		ChannelMonitorTrafficObservationSettings: func() service.ChannelMonitorTrafficObservationSettings {
+			if req.ChannelMonitorTrafficObservationSettings != nil {
+				return *req.ChannelMonitorTrafficObservationSettings
+			}
+			return previousSettings.ChannelMonitorTrafficObservationSettings
+		}(),
 		AvailableChannelsEnabled: func() bool {
 			if req.AvailableChannelsEnabled != nil {
 				return *req.AvailableChannelsEnabled
@@ -2028,9 +2035,10 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		PaymentCancelRateLimitMode:                             updatedPaymentCfg.CancelRateLimitMode,
 		PaymentAlipayForceQRCode:                               updatedPaymentCfg.AlipayForceQRCode,
 
-		ChannelMonitorEnabled:                updatedSettings.ChannelMonitorEnabled,
-		ChannelMonitorDefaultIntervalSeconds: updatedSettings.ChannelMonitorDefaultIntervalSeconds,
-		ChannelMonitorAccountProbeSettings:   updatedSettings.ChannelMonitorAccountProbeSettings,
+		ChannelMonitorEnabled:                    updatedSettings.ChannelMonitorEnabled,
+		ChannelMonitorDefaultIntervalSeconds:     updatedSettings.ChannelMonitorDefaultIntervalSeconds,
+		ChannelMonitorAccountProbeSettings:       updatedSettings.ChannelMonitorAccountProbeSettings,
+		ChannelMonitorTrafficObservationSettings: updatedSettings.ChannelMonitorTrafficObservationSettings,
 
 		GrokDefaultTextModel:           updatedSettings.GrokDefaultTextModel,
 		GrokCrossClientModelMapEnabled: updatedSettings.GrokCrossClientModelMapEnabled,

@@ -15,6 +15,7 @@ export interface GroupedChannelModel {
   model: string
   status: MonitorStatus | ''
   latency_ms: number | null
+  source: ChannelMonitorSource | null
   availability_7d: number | null
   timeline: UserMonitorView['timeline']
   isPrimary: boolean
@@ -26,6 +27,7 @@ export interface GroupedChannelStatus {
   groupName: string
   provider: UserMonitorView['provider']
   apiMode: UserMonitorView['api_mode']
+  source: ChannelSourceGroup
   monitorIds: number[]
   models: GroupedChannelModel[]
   leadModel: GroupedChannelModel
@@ -43,9 +45,24 @@ interface MutableGroupedChannelStatus
   modelsByName: Map<string, GroupedChannelModel>
 }
 
+export type ChannelMonitorSource = NonNullable<UserMonitorView['primary_source']>
+export type ChannelSourceGroup = ChannelMonitorSource | 'mixed' | null
+
 function channelKey(item: UserMonitorView): string {
   const displayName = item.group_name.trim() || item.name.trim() || `monitor-${item.id}`
   return [item.provider, item.api_mode, displayName].join('\u0000')
+}
+
+function normalizeSource(source?: ChannelMonitorSource): ChannelMonitorSource | null {
+  if (source === 'traffic') return 'traffic'
+  if (source === 'probe') return 'probe'
+  return null
+}
+
+function mergeSources(sources: Set<ChannelMonitorSource>): ChannelSourceGroup {
+  if (sources.size === 0) return null
+  if (sources.size === 1) return [...sources][0]
+  return 'mixed'
 }
 
 function statusRank(status: MonitorStatus | ''): number {
@@ -85,6 +102,7 @@ function extraModelRow(item: UserMonitorView, extra: UserMonitorExtraModel): Gro
     model: extra.model,
     status: extra.status,
     latency_ms: extra.latency_ms,
+    source: normalizeSource(extra.source),
     availability_7d: extra.availability_7d ?? null,
     timeline: [],
     isPrimary: false,
@@ -97,6 +115,7 @@ function primaryModelRow(item: UserMonitorView): GroupedChannelModel {
     model: item.primary_model,
     status: item.primary_status,
     latency_ms: item.primary_latency_ms,
+    source: normalizeSource(item.primary_source),
     availability_7d: item.availability_7d ?? null,
     timeline: item.timeline ?? [],
     isPrimary: true,
@@ -123,6 +142,7 @@ export function groupChannelMonitorViews(items: UserMonitorView[]): GroupedChann
         groupName: item.group_name.trim(),
         provider: item.provider,
         apiMode: item.api_mode,
+        source: null,
         monitorIds: [],
         imageMonitorId: null,
         modelsByName: new Map(),
@@ -153,12 +173,18 @@ export function groupChannelMonitorViews(items: UserMonitorView[]): GroupedChann
         if (a.isPrimary !== b.isPrimary) return a.isPrimary ? -1 : 1
         return a.model.localeCompare(b.model)
       })
+      const sources = new Set(
+        models
+          .map(model => model.source)
+          .filter((source): source is ChannelMonitorSource => source != null),
+      )
       return {
         key: group.key,
         name: group.name,
         groupName: group.groupName,
         provider: group.provider,
         apiMode: group.apiMode,
+        source: mergeSources(sources),
         monitorIds: group.monitorIds,
         imageMonitorId: group.imageMonitorId,
         models,
@@ -187,6 +213,18 @@ export function groupedChannelStatus(
     return STATUS_DEGRADED
   }
   return STATUS_OPERATIONAL
+}
+
+export function resolveChannelSourceGroup(
+  sources: Array<ChannelMonitorSource | null | undefined>,
+): ChannelSourceGroup {
+  const normalized = new Set<ChannelMonitorSource>()
+  for (const source of sources) {
+    if (!source) continue
+    const value = normalizeSource(source)
+    if (value) normalized.add(value)
+  }
+  return mergeSources(normalized)
 }
 
 /**

@@ -499,6 +499,12 @@ const baseSettingsResponse = {
     parallelism: 5,
     allow_image_fanout: false,
   },
+  channel_monitor_traffic_observation_settings: {
+    enabled: false,
+    fallback_idle_seconds: 1800,
+    aggregation_window_seconds: 300,
+    minimum_samples: 1,
+  },
   // 平台限额嵌套字段（新后端契约）
   default_platform_quotas: {
     anthropic:   { daily: null, weekly: null, monthly: null },
@@ -1177,6 +1183,12 @@ describe("admin SettingsView channel monitor adaptive account probing", () => {
         parallelism: 4,
         allow_image_fanout: true,
       },
+      channel_monitor_traffic_observation_settings: {
+        enabled: true,
+        fallback_idle_seconds: 1200,
+        aggregation_window_seconds: 180,
+        minimum_samples: 2,
+      },
     });
     updateSettings.mockImplementation(async (payload) => ({
       ...baseSettingsResponse,
@@ -1306,6 +1318,18 @@ describe("admin SettingsView channel monitor adaptive account probing", () => {
     await card
       .get('[data-testid="channel-monitor-account-probe-allow-image-fanout"]')
       .setValue(false);
+    await wrapper
+      .get('[data-testid="channel-monitor-traffic-observation-enabled"]')
+      .setValue(true);
+    await wrapper
+      .get('[data-testid="channel-monitor-traffic-idle"]')
+      .setValue(1200);
+    await wrapper
+      .get('[data-testid="channel-monitor-traffic-window"]')
+      .setValue(180);
+    await wrapper
+      .get('[data-testid="channel-monitor-traffic-samples"]')
+      .setValue(2);
 
     await wrapper.find("form").trigger("submit.prevent");
     await flushPromises();
@@ -1319,6 +1343,12 @@ describe("admin SettingsView channel monitor adaptive account probing", () => {
           max_candidates: 12,
           parallelism: 3,
           allow_image_fanout: false,
+        },
+        channel_monitor_traffic_observation_settings: {
+          enabled: true,
+          fallback_idle_seconds: 1200,
+          aggregation_window_seconds: 180,
+          minimum_samples: 2,
         },
       }),
     );

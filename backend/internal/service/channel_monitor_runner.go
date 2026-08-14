@@ -31,10 +31,21 @@ type monitorRunnerSvc interface {
 	RunCheck(ctx context.Context, id int64) ([]*CheckResult, error)
 }
 
+// scheduledMonitorRunnerSvc is optional so legacy runner test doubles retain
+// their small contract while production can distinguish scheduled work from
+// an administrator's explicit diagnostic check.
+type scheduledMonitorRunnerSvc interface {
+	RunScheduledCheck(ctx context.Context, id int64) ([]*CheckResult, error)
+}
+
 // groupedMonitorRunnerSvc is intentionally optional so lightweight legacy test
 // doubles only need the original single-line methods.
 type groupedMonitorRunnerSvc interface {
 	RunGroupCheck(ctx context.Context, ids []int64) (*MonitorGroupCheckSummary, error)
+}
+
+type scheduledGroupedMonitorRunnerSvc interface {
+	RunScheduledGroupCheck(ctx context.Context, ids []int64) (*MonitorGroupCheckSummary, error)
 }
 
 // ChannelMonitorRunner 渠道监控调度器。
@@ -475,6 +486,21 @@ func (r *ChannelMonitorRunner) runOne(task *scheduledMonitor) {
 	}()
 
 	if len(task.monitorIDs) > 1 {
+		if scheduledGroupedSvc, ok := r.svc.(scheduledGroupedMonitorRunnerSvc); ok {
+			summary, err := scheduledGroupedSvc.RunScheduledGroupCheck(ctx, task.monitorIDs)
+			if err != nil {
+				slog.Warn("channel_monitor: scheduled grouped run check failed",
+					"monitor_id", task.id, "name", task.name, "error", err)
+				return
+			}
+			if summary != nil {
+				slog.Debug("channel_monitor: scheduled grouped run selected best line",
+					"group", summary.GroupName,
+					"best_monitor_id", summary.BestMonitorID,
+					"best_status", summary.BestStatus)
+			}
+			return
+		}
 		if groupedSvc, ok := r.svc.(groupedMonitorRunnerSvc); ok {
 			summary, err := groupedSvc.RunGroupCheck(ctx, task.monitorIDs)
 			if err != nil {
@@ -492,6 +518,14 @@ func (r *ChannelMonitorRunner) runOne(task *scheduledMonitor) {
 		}
 		slog.Warn("channel_monitor: grouped runner service unavailable, falling back to leader",
 			"monitor_id", task.id, "name", task.name)
+	}
+
+	if scheduledSvc, ok := r.svc.(scheduledMonitorRunnerSvc); ok {
+		if _, err := scheduledSvc.RunScheduledCheck(ctx, task.id); err != nil {
+			slog.Warn("channel_monitor: scheduled run check failed",
+				"monitor_id", task.id, "name", task.name, "error", err)
+		}
+		return
 	}
 
 	if _, err := r.svc.RunCheck(ctx, task.id); err != nil {

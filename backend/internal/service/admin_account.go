@@ -439,7 +439,7 @@ func buildAccountForCreate(input *CreateAccountInput, accountExtra map[string]an
 		Schedulable: true,
 	}
 	if input.ProbeEnabled != nil && *input.ProbeEnabled {
-		if !isUpstreamBillingProbeAccount(account) {
+		if !isAutomaticUpstreamBillingProbeAccount(account) {
 			return nil, ErrUpstreamBillingProbeAccountInvalid
 		}
 		if account.Extra == nil {
@@ -687,7 +687,7 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 			}
 		}
 		if hasRequestedProbeEnabled {
-			if isUpstreamBillingProbeAccount(account) {
+			if isAutomaticUpstreamBillingProbeAccount(account) {
 				normalizedExtra[UpstreamBillingProbeEnabledExtraKey] = requestedProbeEnabled
 			} else {
 				delete(normalizedExtra, UpstreamBillingProbeEnabledExtraKey)
@@ -725,7 +725,7 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 	}
 	if !reflect.DeepEqual(previousProbeIdentity, upstreamBillingProbeIdentity(account)) && account.Extra != nil {
 		delete(account.Extra, UpstreamBillingProbeExtraKey)
-		if !isUpstreamBillingProbeAccount(account) {
+		if !isAutomaticUpstreamBillingProbeAccount(account) {
 			delete(account.Extra, UpstreamBillingProbeEnabledExtraKey)
 		}
 	}
@@ -793,7 +793,7 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 	}
 
 	probeEnabledAppliedAtomically := false
-	if requestedProbeEnabledUpdate != nil && isUpstreamBillingProbeAccount(account) {
+	if requestedProbeEnabledUpdate != nil && isAutomaticUpstreamBillingProbeAccount(account) {
 		if updater, ok := s.accountRepo.(accountProbeEnabledAtomicUpdater); ok {
 			if err := updater.UpdateWithUpstreamBillingProbeEnabled(ctx, account, *requestedProbeEnabledUpdate); err != nil {
 				return nil, err
@@ -805,7 +805,7 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 		if err := s.accountRepo.Update(ctx, account); err != nil {
 			return nil, err
 		}
-		if requestedProbeEnabledUpdate != nil && isUpstreamBillingProbeAccount(account) {
+		if requestedProbeEnabledUpdate != nil && isAutomaticUpstreamBillingProbeAccount(account) {
 			if err := s.accountRepo.UpdateExtra(ctx, account.ID, map[string]any{
 				UpstreamBillingProbeEnabledExtraKey: *requestedProbeEnabledUpdate,
 			}); err != nil {
@@ -903,6 +903,7 @@ func (s *adminServiceImpl) BulkUpdateAccounts(ctx context.Context, input *BulkUp
 
 	needMixedChannelCheck := input.GroupIDs != nil && !input.SkipMixedChannelCheck
 	_, hasLongContextBillingUpdate := input.Extra[openAILongContextBillingEnabledKey]
+	_, hasAnthropicAPIKeyAuthSchemeUpdate := input.Extra[anthropicAPIKeyAuthSchemeExtraKey]
 
 	// 预取所有目标账号，供凭据守卫/代理守卫/混合渠道检查共用，避免多次 DB 查询。
 	var cachedTargets []*Account
@@ -925,7 +926,7 @@ func (s *adminServiceImpl) BulkUpdateAccounts(ctx context.Context, input *BulkUp
 			if !ok {
 				return nil, ErrAccountNotFound
 			}
-			if !isUpstreamBillingProbeAccount(account) {
+			if !isAutomaticUpstreamBillingProbeAccount(account) {
 				return nil, ErrUpstreamBillingProbeAccountInvalid
 			}
 		}
@@ -1016,7 +1017,9 @@ func (s *adminServiceImpl) BulkUpdateAccounts(ctx context.Context, input *BulkUp
 		}
 		repoUpdates.Extra[UpstreamBillingProbeEnabledExtraKey] = *input.ProbeEnabled
 	}
-	if updatesUpstreamBillingProbeIdentity(input.Credentials) || input.ProxyID != nil {
+	if updatesUpstreamBillingProbeIdentity(input.Credentials) ||
+		input.ProxyID != nil ||
+		hasAnthropicAPIKeyAuthSchemeUpdate {
 		if repoUpdates.Extra == nil {
 			repoUpdates.Extra = make(map[string]any)
 		}
@@ -1125,6 +1128,9 @@ func upstreamBillingProbeIdentity(account *Account) map[string]any {
 		if value, ok := account.Credentials[key]; ok {
 			identity[key] = value
 		}
+	}
+	if account.Platform == PlatformAnthropic && account.Type == AccountTypeAPIKey {
+		identity[anthropicAPIKeyAuthSchemeExtraKey] = account.GetAnthropicAPIKeyAuthScheme()
 	}
 	return identity
 }

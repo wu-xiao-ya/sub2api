@@ -442,7 +442,11 @@ export default {
       openai: 'OpenAI',
       anthropic: 'Anthropic',
       gemini: 'Gemini',
-      grok: 'Grok'
+      grok: 'Grok',
+      antigravity: 'Antigravity',
+      deepseek: 'DeepSeek',
+      kimi: 'Kimi',
+      glm: 'GLM'
     },
     extraModelsHeader: 'Extra Models',
     extraModelsEmpty: 'No extra models',
@@ -478,6 +482,21 @@ export default {
     modelsCount: '{n} models',
     availableModels: 'Available models',
     leadLatency: 'Current latency',
+    sourceLabel: 'Source',
+    source: {
+      traffic: 'User request',
+      probe: 'System probe',
+      mixed: 'Mixed source',
+    },
+    latencyMetric: {
+      traffic: 'User request: median time to first token of recent successful requests; falls back to total duration when first token is missing',
+      probe: 'System probe: full response duration of the latest probe',
+      unknown: 'Current latency',
+    },
+    latencyKind: {
+      firstToken: 'TTFT',
+      probe: 'Probe',
+    },
     primaryModel: 'Direct probe',
     responseLatency: 'Response latency',
     windowAvailability: '{window} availability',
@@ -512,6 +531,7 @@ export default {
     },
     detailColumns: {
       model: 'Model',
+      source: 'Data Source',
       latestStatus: 'Latest Status',
       latestLatency: 'Latest Latency (ms)',
       availability7d: '7d Availability',

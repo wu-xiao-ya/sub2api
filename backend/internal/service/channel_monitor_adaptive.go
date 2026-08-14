@@ -110,14 +110,27 @@ func (s *ChannelMonitorService) runAdaptiveAccountGroupProbeIfConfigured(
 	m *ChannelMonitor,
 	forceFull bool,
 ) ([]*CheckResult, bool) {
-	if s == nil || m == nil || m.AccountGroupID == nil || s.accountProbeRepo == nil || s.accountProbeExecutor == nil {
+	if s == nil || m == nil || m.AccountGroupID == nil || s.accountProbeRepo == nil {
 		return nil, false
 	}
 	settings := s.adaptiveAccountProbeSettings(ctx)
 	if !settings.Enabled {
 		return nil, false
 	}
-	accounts, err := s.accountProbeRepo.ListSchedulableByGroupIDAndPlatform(ctx, *m.AccountGroupID, m.Provider)
+	groupPlatform, err := s.accountProbeRepo.GetGroupPlatform(ctx, *m.AccountGroupID)
+	if err != nil {
+		result := newAdaptiveProbeResult(m.PrimaryModel, accountProbeModeFull, fmt.Sprintf("account group platform lookup failed: %v", err))
+		return []*CheckResult{result}, true
+	}
+	if !monitorProviderSupportsAccountPlatform(m.Provider, groupPlatform) {
+		result := newAdaptiveProbeResult(
+			m.PrimaryModel,
+			accountProbeModeFull,
+			fmt.Sprintf("account group platform %q is incompatible with monitor provider %q", groupPlatform, m.Provider),
+		)
+		return []*CheckResult{result}, true
+	}
+	accounts, err := s.accountProbeRepo.ListSchedulableByGroupIDAndPlatform(ctx, *m.AccountGroupID, groupPlatform)
 	if err != nil {
 		result := newAdaptiveProbeResult(m.PrimaryModel, accountProbeModeFull, fmt.Sprintf("account group lookup failed: %v", err))
 		return []*CheckResult{result}, true
@@ -140,6 +153,18 @@ func (s *ChannelMonitorService) runAdaptiveAccountGroupProbeIfConfigured(
 		results = append(results, result)
 	}
 	return results, true
+}
+
+func monitorProviderSupportsAccountPlatform(provider, platform string) bool {
+	provider = strings.TrimSpace(provider)
+	platform = strings.TrimSpace(platform)
+	if provider == MonitorProviderOpenAI {
+		return IsOpenAICompatiblePlatform(platform)
+	}
+	if provider == MonitorProviderDeepSeek || provider == MonitorProviderKimi || provider == MonitorProviderGLM {
+		return provider == platform
+	}
+	return provider != "" && provider == platform
 }
 
 func sortAdaptiveProbeAccounts(accounts []Account) []Account {
@@ -382,38 +407,30 @@ func (s *ChannelMonitorService) probeAdaptiveAccount(
 	}
 	accountID := account.ID
 	result.AccountID = &accountID
-	probe, err := s.accountProbeExecutor.ProbeForChannelMonitor(ctx, account.ID, account.GetMappedModel(model))
-	if err != nil {
-		result.monitorRequestAttempted = true
-		result.monitorCostModel = account.GetMappedModel(model)
-		s.recordMonitorCost(ctx, monitor, result, &account)
-		result.Status = MonitorStatusError
-		result.Message = truncateMessage(fmt.Sprintf("account %d: %v", account.ID, err))
-		return result
+	// Adaptive selection still uses the account-management group, but the
+	// outbound request must stay on the low-cost monitor challenge path.
+	probed := s.runLowCostAdaptiveAccountProbe(ctx, monitor, model, &account)
+	if probed != nil {
+		probed.ProbeMode = mode
+		probed.AccountID = &accountID
+		probed.AccountName = account.Name
+		probed.Model = model
+		if probed.monitorCostModel == "" {
+			probed.monitorCostModel = account.GetMappedModel(model)
+		}
+		if probed.Status == MonitorStatusOperational && probed.LatencyMs != nil && *probed.LatencyMs >= settings.DegradedThresholdMs {
+			probed.Status = MonitorStatusDegraded
+			if strings.TrimSpace(probed.Message) == "" {
+				probed.Message = fmt.Sprintf("slow response: %dms", *probed.LatencyMs)
+			}
+		}
+		return probed
 	}
-	result.monitorUsage = probe.Usage
-	result.monitorRequestAttempted = probe.RequestAttempted
+	result.monitorRequestAttempted = true
 	result.monitorCostModel = account.GetMappedModel(model)
 	s.recordMonitorCost(ctx, monitor, result, &account)
-	latency := probe.LatencyMs
-	result.LatencyMs = &latency
-	result.Message = truncateMessage(probe.Message)
-	if !probe.Success {
-		result.Status = MonitorStatusFailed
-		if result.Message == "" {
-			result.Message = "account probe returned an invalid response"
-		}
-		return result
-	}
-	threshold := settings.DegradedThresholdMs
-	if latency >= threshold {
-		result.Status = MonitorStatusDegraded
-		if result.Message == "" {
-			result.Message = fmt.Sprintf("slow response: %dms", latency)
-		}
-		return result
-	}
-	result.Status = MonitorStatusOperational
+	result.Status = MonitorStatusError
+	result.Message = truncateMessage(fmt.Sprintf("account %d: low-cost adaptive probe returned no result", account.ID))
 	return result
 }
 
@@ -493,10 +510,92 @@ func (s *ChannelMonitorService) persistAdaptiveState(
 		state.LastFullSweepAt = &now
 	}
 	if stateRepo, ok := s.repo.(channelMonitorAccountProbeStateRepository); ok {
-		if err := stateRepo.UpsertAccountProbeState(ctx, state); err != nil {
+		persistCtx, cancel := monitorPersistenceContext(ctx)
+		err := stateRepo.UpsertAccountProbeState(persistCtx, state)
+		cancel()
+		if err != nil {
 			slog.Error("channel_monitor: persist adaptive probe state failed",
 				"monitor_id", monitor.ID, "model", model, "error", err)
 		}
 	}
+	return result
+}
+
+func (s *ChannelMonitorService) runLowCostAdaptiveAccountProbe(
+	ctx context.Context,
+	monitor *ChannelMonitor,
+	model string,
+	account *Account,
+) *CheckResult {
+	if s == nil || monitor == nil || account == nil {
+		return nil
+	}
+	if s.httpUpstream == nil {
+		return s.runLegacyAdaptiveAccountTestProbe(ctx, monitor, model, account)
+	}
+	if account.IsOpenAICompatible() && account.Type == AccountTypeAPIKey {
+		scoped := *monitor
+		scoped.PrimaryModel = model
+		scoped.ExtraModels = nil
+		result := s.runOpenAIAPIKeyAccountProbe(ctx, &scoped, account)
+		s.recordMonitorCost(ctx, monitor, result, account)
+		return result
+	}
+	result := &CheckResult{
+		Model:                   model,
+		Status:                  MonitorStatusError,
+		CheckedAt:               time.Now(),
+		AccountName:             account.Name,
+		monitorRequestAttempted: false,
+		monitorCostModel:        account.GetMappedModel(model),
+	}
+	accountID := account.ID
+	result.AccountID = &accountID
+	result.Message = truncateMessage(fmt.Sprintf("account %d does not support low-cost adaptive probing", account.ID))
+	return result
+}
+
+func (s *ChannelMonitorService) runLegacyAdaptiveAccountTestProbe(
+	ctx context.Context,
+	monitor *ChannelMonitor,
+	model string,
+	account *Account,
+) *CheckResult {
+	if s.accountProbeExecutor == nil || account == nil {
+		return nil
+	}
+	probe, err := s.accountProbeExecutor.ProbeForChannelMonitor(ctx, account.ID, model)
+	result := &CheckResult{
+		Model:            model,
+		CheckedAt:        time.Now(),
+		AccountName:      account.Name,
+		monitorCostModel: account.GetMappedModel(model),
+	}
+	accountID := account.ID
+	result.AccountID = &accountID
+	if err != nil {
+		result.monitorRequestAttempted = true
+		s.recordMonitorCost(ctx, monitor, result, account)
+		result.Status = MonitorStatusError
+		result.Message = truncateMessage(fmt.Sprintf("account %d: %v", account.ID, err))
+		return result
+	}
+	if probe == nil {
+		return nil
+	}
+	result.monitorUsage = probe.Usage
+	result.monitorRequestAttempted = probe.RequestAttempted
+	s.recordMonitorCost(ctx, monitor, result, account)
+	latency := probe.LatencyMs
+	result.LatencyMs = &latency
+	result.Message = truncateMessage(probe.Message)
+	if !probe.Success {
+		result.Status = MonitorStatusFailed
+		if result.Message == "" {
+			result.Message = "account probe returned an invalid response"
+		}
+		return result
+	}
+	result.Status = MonitorStatusOperational
 	return result
 }

@@ -208,6 +208,7 @@ type UserMonitorView struct {
 	PrimaryStatus        string
 	PrimaryLatencyMs     *int
 	PrimaryPingLatencyMs *int    // 主模型最近一次 ping 延迟
+	PrimarySource        string  // traffic / probe；空表示尚无检测记录
 	Availability7d       float64 // 0-100
 	ExtraModels          []ExtraModelStatus
 	Timeline             []UserMonitorTimelinePoint // 主模型最近 N 个历史点（按 checked_at DESC，最新在前）
@@ -226,6 +227,7 @@ type ExtraModelStatus struct {
 	Model          string
 	Status         string
 	LatencyMs      *int
+	Source         string
 	Availability7d float64
 }
 
@@ -243,6 +245,7 @@ type ModelDetail struct {
 	Model           string
 	LatestStatus    string
 	LatestLatencyMs *int
+	Source          string
 	Availability7d  float64 // 0-100
 	Availability15d float64
 	Availability30d float64

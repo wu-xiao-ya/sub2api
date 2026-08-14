@@ -125,6 +125,13 @@ func RegisterAdminRoutes(
 		// 邀请返利（专属用户管理）
 		registerAffiliateRoutes(admin, h)
 
+		// 财务资金流水
+		finance := admin.Group("/finance")
+		{
+			finance.GET("/ledger", h.Admin.Payment.ListFinanceLedger)
+			finance.GET("/ledger/export", h.Admin.Payment.ExportFinanceLedger)
+		}
+
 		// 操作审计日志
 		registerAuditLogRoutes(admin, h, stepUpAuth)
 	}

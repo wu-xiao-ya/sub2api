@@ -114,6 +114,8 @@ func defaultModelsListCandidateIDs(platform string) []string {
 		return ids
 	case PlatformGrok:
 		return xai.DefaultModelIDs()
+	case PlatformDeepSeek, PlatformKimi, PlatformGLM:
+		return defaultOpenAICompatibleModelIDs(platform)
 	default:
 		ids := make([]string, 0, len(claude.DefaultModels))
 		for _, model := range claude.DefaultModels {
@@ -121,6 +123,52 @@ func defaultModelsListCandidateIDs(platform string) []string {
 		}
 		return ids
 	}
+}
+
+func defaultOpenAICompatibleModelIDs(platform string) []string {
+	switch platform {
+	case PlatformDeepSeek:
+		return []string{
+			"deepseek-v4-pro",
+			"deepseek-v4-flash",
+			"deepseek-chat",
+			"deepseek-reasoner",
+		}
+	case PlatformKimi:
+		return []string{
+			"kimi-k3",
+			"kimi-k2.6",
+			"kimi-for-coding",
+			"kimi-k2.5",
+			"kimi-k2-thinking",
+			"kimi-k2",
+			"moonshot-v1-8k",
+			"moonshot-v1-32k",
+			"moonshot-v1-128k",
+		}
+	case PlatformGLM:
+		return []string{
+			"glm-5.2",
+			"glm-5.1",
+			"glm-5",
+			"glm-5-turbo",
+			"glm-4.7",
+			"glm-4.7-flash",
+			"glm-4.7-flashx",
+			"glm-4.6",
+			"glm-4.5",
+		}
+	default:
+		return nil
+	}
+}
+
+// DefaultOpenAICompatibleModelIDs returns a defensive copy of the maintained
+// model list for third-party OpenAI-compatible platforms. Admin surfaces such
+// as groups and channel pricing share this source so their model catalogs do
+// not drift apart.
+func DefaultOpenAICompatibleModelIDs(platform string) []string {
+	return append([]string(nil), defaultOpenAICompatibleModelIDs(platform)...)
 }
 
 func defaultAllowImageGenerationForPlatform(platform string) bool {

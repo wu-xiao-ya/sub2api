@@ -12,6 +12,8 @@ func TestDefaultModelMappingExcludesCrossClientWildcards(t *testing.T) {
 	SetRuntimeModelMappingOptions(ModelMappingOptions{})
 	mapping := DefaultModelMapping()
 
+	require.Equal(t, "grok-4.6", mapping["grok-4.6"])
+	require.Equal(t, "grok-4.6", mapping["grok-4.6-latest"])
 	require.Equal(t, "grok-4.5", mapping["grok"])
 	require.Equal(t, "grok-4.5", mapping["grok-latest"])
 	require.Equal(t, "grok-build-0.1", mapping["grok-build"])
@@ -51,6 +53,7 @@ func TestCanonicalImagineVideoModel(t *testing.T) {
 
 func TestIsGrokModelID(t *testing.T) {
 	t.Parallel()
+	require.True(t, IsGrokModelID("grok-4.6"))
 	require.True(t, IsGrokModelID("grok-4.5"))
 	require.True(t, IsGrokModelID("x-ai/grok-4.3"))
 	require.False(t, IsGrokModelID("gpt-5"))
@@ -60,6 +63,7 @@ func TestIsGrokModelID(t *testing.T) {
 func TestResolveGrokTextResponsesModelID(t *testing.T) {
 	t.Parallel()
 	require.Equal(t, "grok-4.5", ResolveGrokTextResponsesModelID(""))
+	require.Equal(t, "grok-4.6", ResolveGrokTextResponsesModelID("grok-4.6-latest"))
 	require.Equal(t, "grok-4.3", ResolveGrokTextResponsesModelID("grok", "grok-4.3"))
 	require.Equal(t, "grok-4.20-multi-agent-0309", ResolveGrokTextResponsesModelID("grok-4.20-multi-agent"))
 }

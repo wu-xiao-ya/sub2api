@@ -277,6 +277,78 @@ func TestGatewayModels_CustomModelsListFiltersAndOrdersMappedModels(t *testing.T
 	require.Equal(t, []string{"gpt-5.5", "gpt-5.4"}, modelIDsForTest(got.Data))
 }
 
+func TestGatewayModels_OpenAICompatiblePlatformsReturnOpenAIStyleModelsList(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	cases := []struct {
+		name     string
+		platform string
+		wantIDs  []string
+	}{
+		{
+			name:     "deepseek",
+			platform: service.PlatformDeepSeek,
+			wantIDs:  []string{"deepseek-v4-pro", "deepseek-v4-flash", "deepseek-chat", "deepseek-reasoner"},
+		},
+		{
+			name:     "kimi",
+			platform: service.PlatformKimi,
+			wantIDs:  []string{"kimi-k3", "kimi-k2.6", "kimi-for-coding", "kimi-k2.5", "kimi-k2-thinking", "kimi-k2", "moonshot-v1-8k", "moonshot-v1-32k", "moonshot-v1-128k"},
+		},
+		{
+			name:     "glm",
+			platform: service.PlatformGLM,
+			wantIDs:  []string{"glm-5.2", "glm-5.1", "glm-5", "glm-5-turbo", "glm-4.7", "glm-4.7-flash", "glm-4.7-flashx", "glm-4.6", "glm-4.5"},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			h := newGatewayModelsHandlerForTest(&gatewayModelsAccountRepoStub{})
+
+			rec := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(rec)
+			c.Request = httptest.NewRequest(http.MethodGet, "/v1/models", nil)
+			c.Set(string(middleware2.ContextKeyAPIKey), &service.APIKey{
+				Group: &service.Group{
+					ID:       31,
+					Platform: tc.platform,
+				},
+			})
+
+			h.Models(c)
+
+			require.Equal(t, http.StatusOK, rec.Code)
+
+			var got struct {
+				Object string `json:"object"`
+				Data   []struct {
+					ID          string `json:"id"`
+					Object      string `json:"object"`
+					OwnedBy     string `json:"owned_by"`
+					Type        string `json:"type"`
+					DisplayName string `json:"display_name"`
+					Created     int64  `json:"created"`
+				} `json:"data"`
+			}
+			require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &got))
+			require.Equal(t, "list", got.Object)
+			require.Equal(t, tc.wantIDs, func() []string {
+				ids := make([]string, 0, len(got.Data))
+				for _, item := range got.Data {
+					require.Equal(t, "model", item.Object)
+					require.Equal(t, "openai", item.OwnedBy)
+					require.Equal(t, "model", item.Type)
+					require.Equal(t, item.ID, item.DisplayName)
+					require.NotZero(t, item.Created)
+					ids = append(ids, item.ID)
+				}
+				return ids
+			}())
+		})
+	}
+}
+
 func TestGatewayModels_CustomModelsListKeepsConcreteModelAllowedByWildcardMapping(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 

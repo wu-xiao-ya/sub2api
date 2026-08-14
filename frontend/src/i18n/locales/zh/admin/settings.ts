@@ -38,6 +38,16 @@ export default {
             allowImageFanout: '多账号生图探测',
             allowImageFanoutHint: '开启后，生图监控会向多个候选账号发送请求，可能产生额外计次成本。',
           },
+          trafficObservation: {
+            title: '真实请求观测',
+            description: '仅对已绑定账号分组的文本监控生效。优先使用用户最近成功调用的实际延迟；分组长时间没有真实请求时，才回退到低消耗主动探测。静态端点和生图监控保持原有主动检测。',
+            fallbackIdle: '空闲后回退主动检测（秒）',
+            fallbackIdleHint: '在此时间内没有符合条件的成功真实请求，才执行原有低消耗探测。范围 60 - 86400。',
+            aggregationWindow: '延迟聚合窗口（秒）',
+            aggregationWindowHint: '用该时间窗口内的成功真实请求计算展示的延迟中位数。范围 30 - 3600。',
+            minimumSamples: '最少成功请求数',
+            minimumSamplesHint: '达到该数量后，定时任务才会跳过主动探测。范围 1 - 20。',
+          },
         },
         availableChannels: {
           title: '可用渠道',

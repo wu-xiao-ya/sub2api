@@ -6393,6 +6393,89 @@
                 </div>
               </div>
             </div>
+
+            <div
+              v-if="form.channel_monitor_enabled"
+              data-testid="channel-monitor-traffic-observation-settings"
+              class="border-t border-gray-100 pt-5 dark:border-dark-700"
+            >
+              <div class="flex items-start justify-between gap-4">
+                <div class="min-w-0">
+                  <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    {{ t('admin.settings.features.channelMonitor.trafficObservation.title') }}
+                  </h3>
+                  <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                    {{ t('admin.settings.features.channelMonitor.trafficObservation.description') }}
+                  </p>
+                </div>
+                <Toggle
+                  v-model="form.channel_monitor_traffic_observation_settings.enabled"
+                  data-testid="channel-monitor-traffic-observation-enabled"
+                />
+              </div>
+
+              <div
+                v-if="form.channel_monitor_traffic_observation_settings.enabled"
+                class="mt-5 grid grid-cols-1 gap-4 md:grid-cols-3"
+              >
+                <div>
+                  <label for="channel-monitor-traffic-idle" class="input-label">
+                    {{ t('admin.settings.features.channelMonitor.trafficObservation.fallbackIdle') }}
+                  </label>
+                  <input
+                    id="channel-monitor-traffic-idle"
+                    v-model.number="form.channel_monitor_traffic_observation_settings.fallback_idle_seconds"
+                    data-testid="channel-monitor-traffic-idle"
+                    type="number"
+                    min="60"
+                    max="86400"
+                    step="60"
+                    class="input"
+                  />
+                  <p class="mt-1 text-xs text-gray-400">
+                    {{ t('admin.settings.features.channelMonitor.trafficObservation.fallbackIdleHint') }}
+                  </p>
+                </div>
+
+                <div>
+                  <label for="channel-monitor-traffic-window" class="input-label">
+                    {{ t('admin.settings.features.channelMonitor.trafficObservation.aggregationWindow') }}
+                  </label>
+                  <input
+                    id="channel-monitor-traffic-window"
+                    v-model.number="form.channel_monitor_traffic_observation_settings.aggregation_window_seconds"
+                    data-testid="channel-monitor-traffic-window"
+                    type="number"
+                    min="30"
+                    max="3600"
+                    step="30"
+                    class="input"
+                  />
+                  <p class="mt-1 text-xs text-gray-400">
+                    {{ t('admin.settings.features.channelMonitor.trafficObservation.aggregationWindowHint') }}
+                  </p>
+                </div>
+
+                <div>
+                  <label for="channel-monitor-traffic-samples" class="input-label">
+                    {{ t('admin.settings.features.channelMonitor.trafficObservation.minimumSamples') }}
+                  </label>
+                  <input
+                    id="channel-monitor-traffic-samples"
+                    v-model.number="form.channel_monitor_traffic_observation_settings.minimum_samples"
+                    data-testid="channel-monitor-traffic-samples"
+                    type="number"
+                    min="1"
+                    max="20"
+                    step="1"
+                    class="input"
+                  />
+                  <p class="mt-1 text-xs text-gray-400">
+                    {{ t('admin.settings.features.channelMonitor.trafficObservation.minimumSamplesHint') }}
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -8908,6 +8991,12 @@ const form = reactive<SettingsForm>({
     parallelism: 5,
     allow_image_fanout: false,
   },
+  channel_monitor_traffic_observation_settings: {
+    enabled: false,
+    fallback_idle_seconds: 1800,
+    aggregation_window_seconds: 300,
+    minimum_samples: 1,
+  },
   // Available Channels feature switch
   available_channels_enabled: false,
   // Affiliate (邀请返利) feature switch
@@ -10507,6 +10596,42 @@ async function saveSettings() {
         ),
         allow_image_fanout: Boolean(
           form.channel_monitor_account_probe_settings.allow_image_fanout,
+        ),
+      },
+      channel_monitor_traffic_observation_settings: {
+        enabled: Boolean(form.channel_monitor_traffic_observation_settings.enabled),
+        fallback_idle_seconds: Math.min(
+          86400,
+          Math.max(
+            60,
+            Math.floor(
+              Number(
+                form.channel_monitor_traffic_observation_settings.fallback_idle_seconds,
+              ) || 1800,
+            ),
+          ),
+        ),
+        aggregation_window_seconds: Math.min(
+          3600,
+          Math.max(
+            30,
+            Math.floor(
+              Number(
+                form.channel_monitor_traffic_observation_settings.aggregation_window_seconds,
+              ) || 300,
+            ),
+          ),
+        ),
+        minimum_samples: Math.min(
+          20,
+          Math.max(
+            1,
+            Math.floor(
+              Number(
+                form.channel_monitor_traffic_observation_settings.minimum_samples,
+              ) || 1,
+            ),
+          ),
         ),
       },
       // Available Channels feature switch

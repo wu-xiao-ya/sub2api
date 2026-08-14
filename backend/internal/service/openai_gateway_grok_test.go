@@ -56,6 +56,7 @@ func TestPatchGrokResponsesBodySanitizesComposerReasoningParameters(t *testing.T
 		{name: "composer legacy alias", upstreamModel: "composer-2.5"},
 		{name: "provider-prefixed composer", upstreamModel: "xai/grok-composer-2.5-fast"},
 		{name: "grok 4.5", upstreamModel: "grok-4.5", wantReasoning: true},
+		{name: "grok 4.6", upstreamModel: "grok-4.6", wantReasoning: true},
 	}
 
 	bodyTemplate := []byte(`{
@@ -75,7 +76,7 @@ func TestPatchGrokResponsesBodySanitizesComposerReasoningParameters(t *testing.T
 
 			if tt.wantReasoning {
 				require.Equal(t, "medium", gjson.GetBytes(patched, "reasoning.effort").String())
-				require.Equal(t, "medium", gjson.GetBytes(patched, "reasoning_effort").String())
+				require.False(t, gjson.GetBytes(patched, "reasoning_effort").Exists())
 				require.False(t, gjson.GetBytes(patched, "reasoningEffort").Exists())
 				return
 			}
@@ -161,14 +162,15 @@ func TestPatchGrokResponsesBodyNormalizesReasoningEffortAliases(t *testing.T) {
 		want string
 	}{
 		{name: "minimal nested", body: `{"input":"hi","reasoning":{"effort":"minimal"}}`, path: "reasoning.effort", want: "low"},
-		{name: "xhigh snake", body: `{"input":"hi","reasoning_effort":"xhigh"}`, path: "reasoning_effort", want: "high"},
-		{name: "max camel", body: `{"input":"hi","reasoningEffort":"max"}`, path: "reasoning_effort", want: "high"},
+		{name: "xhigh snake", body: `{"input":"hi","reasoning_effort":"xhigh"}`, path: "reasoning.effort", want: "high"},
+		{name: "max camel", body: `{"input":"hi","reasoningEffort":"max"}`, path: "reasoning.effort", want: "high"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			patched, err := patchGrokResponsesBody([]byte(tt.body), "grok-4.5")
 			require.NoError(t, err)
 			require.Equal(t, tt.want, gjson.GetBytes(patched, tt.path).String(), string(patched))
+			require.False(t, gjson.GetBytes(patched, "reasoning_effort").Exists())
 			require.False(t, gjson.GetBytes(patched, "reasoningEffort").Exists())
 		})
 	}
@@ -1700,7 +1702,8 @@ func TestForwardGrokResponsesStreamingDefaultsEmptyModelTo45AndSnapshots(t *test
 	require.Equal(t, "web_search", gjson.GetBytes(upstream.lastBody, "tools.0.type").String())
 	require.Equal(t, "x_search", gjson.GetBytes(upstream.lastBody, "tools.1.type").String())
 	require.Equal(t, "none", gjson.GetBytes(upstream.lastBody, "tool_choice").String())
-	require.Equal(t, "high", gjson.GetBytes(upstream.lastBody, "reasoning_effort").String())
+	require.Equal(t, "high", gjson.GetBytes(upstream.lastBody, "reasoning.effort").String())
+	require.False(t, gjson.GetBytes(upstream.lastBody, "reasoning_effort").Exists())
 	require.True(t, gjson.GetBytes(upstream.lastBody, "stream").Bool())
 	require.True(t, result.Stream)
 	require.Equal(t, "resp_grok", result.ResponseID)
@@ -3215,6 +3218,31 @@ func TestFailoverOpenAIUpstreamHTTPErrorUsesOnlyGrokRateLimitPolicy(t *testing.T
 	require.NotNil(t, failoverErr)
 	require.Equal(t, 1, repo.rateLimitedCalls)
 	require.Zero(t, repo.tempUnschedCalls)
+}
+
+func TestFailoverOpenAIUpstreamHTTPErrorGrokUnavailable400FailsOver(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	repo := &grokQuotaAccountRepo{}
+	svc := &OpenAIGatewayService{accountRepo: repo}
+	account := &Account{ID: 71, Platform: PlatformGrok, Type: AccountTypeOAuth}
+	resp := &http.Response{
+		StatusCode: http.StatusBadRequest,
+		Header:     http.Header{"Xai-Request-Id": []string{"relay-unavailable"}},
+	}
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
+	body := []byte(`{"error":{"code":"upstream_unavailable","message":"upstream unavailable"}}`)
+
+	failoverErr := svc.failoverOpenAIUpstreamHTTPError(
+		context.Background(), c, account, resp, body, "upstream unavailable", "grok-4.3",
+	)
+
+	require.NotNil(t, failoverErr)
+	require.Equal(t, http.StatusBadRequest, failoverErr.StatusCode)
+	require.Equal(t, "relay-unavailable", failoverErr.ResponseHeaders.Get("Xai-Request-Id"))
+	require.Equal(t, 1, repo.tempUnschedCalls)
+	require.Zero(t, repo.rateLimitedCalls)
 }
 
 func TestPatchGrokResponsesBody_StripsReasoningContentNull(t *testing.T) {

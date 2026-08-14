@@ -38,6 +38,16 @@ export default {
             allowImageFanout: 'Multi-account image probing',
             allowImageFanoutHint: 'When enabled, image monitor checks can send requests to multiple candidate accounts and incur additional billed usage.',
           },
+          trafficObservation: {
+            title: 'Real Request Observation',
+            description: 'For text monitors linked to an account group, use recent successful user requests as the latency signal and only fall back to a paid active probe after the group becomes idle. Static endpoint monitors and image monitors keep their existing active checks.',
+            fallbackIdle: 'Active-probe fallback after idle (seconds)',
+            fallbackIdleHint: 'Run the normal low-cost probe only when no eligible successful request has appeared within this period. Range 60 - 86400.',
+            aggregationWindow: 'Latency aggregation window (seconds)',
+            aggregationWindowHint: 'Use successful requests from this recent window to calculate the displayed median latency. Range 30 - 3600.',
+            minimumSamples: 'Minimum successful requests',
+            minimumSamplesHint: 'Minimum usable real requests required before scheduled active probing is skipped. Range 1 - 20.',
+          },
         },
         availableChannels: {
           title: 'Available Channels',

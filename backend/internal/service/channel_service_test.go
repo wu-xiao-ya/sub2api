@@ -1970,6 +1970,12 @@ func TestIsPlatformPricingMatch(t *testing.T) {
 		{"gemini matches gemini", PlatformGemini, PlatformGemini, true},
 		{"gemini does NOT match antigravity", PlatformGemini, PlatformAntigravity, false},
 		{"gemini does NOT match anthropic", PlatformGemini, PlatformAnthropic, false},
+		{"deepseek matches deepseek", PlatformDeepSeek, PlatformDeepSeek, true},
+		{"deepseek does NOT match openai", PlatformDeepSeek, PlatformOpenAI, false},
+		{"kimi matches kimi", PlatformKimi, PlatformKimi, true},
+		{"kimi does NOT match openai", PlatformKimi, PlatformOpenAI, false},
+		{"glm matches glm", PlatformGLM, PlatformGLM, true},
+		{"glm does NOT match openai", PlatformGLM, PlatformOpenAI, false},
 		{"empty string matches nothing", "", PlatformAnthropic, false},
 		{"empty string matches empty", "", "", true},
 	}
@@ -1995,6 +2001,9 @@ func TestMatchingPlatforms(t *testing.T) {
 		{"anthropic returns itself", PlatformAnthropic, []string{PlatformAnthropic}},
 		{"gemini returns itself", PlatformGemini, []string{PlatformGemini}},
 		{"openai returns itself", PlatformOpenAI, []string{PlatformOpenAI}},
+		{"deepseek returns itself", PlatformDeepSeek, []string{PlatformDeepSeek}},
+		{"kimi returns itself", PlatformKimi, []string{PlatformKimi}},
+		{"glm returns itself", PlatformGLM, []string{PlatformGLM}},
 	}
 
 	for _, tt := range tests {
@@ -2002,6 +2011,54 @@ func TestMatchingPlatforms(t *testing.T) {
 			result := matchingPlatforms(tt.groupPlatform)
 			require.Equal(t, tt.want, result)
 		})
+	}
+}
+
+func TestGetChannelModelPricingOpenAICompatiblePlatformsRemainIsolated(t *testing.T) {
+	prices := map[string]float64{
+		PlatformOpenAI:   1,
+		PlatformDeepSeek: 2,
+		PlatformKimi:     3,
+		PlatformGLM:      4,
+	}
+	groupIDs := map[string]int64{
+		PlatformOpenAI:   101,
+		PlatformDeepSeek: 102,
+		PlatformKimi:     103,
+		PlatformGLM:      104,
+	}
+
+	pricing := make([]ChannelModelPricing, 0, len(prices))
+	channelGroupIDs := make([]int64, 0, len(prices))
+	for platform, inputPrice := range prices {
+		price := inputPrice
+		pricing = append(pricing, ChannelModelPricing{
+			Platform:    platform,
+			Models:      []string{"shared-compatible-model"},
+			BillingMode: BillingModeToken,
+			InputPrice:  &price,
+		})
+		channelGroupIDs = append(channelGroupIDs, groupIDs[platform])
+	}
+	groupPlatforms := make(map[int64]string, len(groupIDs))
+	for platform, groupID := range groupIDs {
+		groupPlatforms[groupID] = platform
+	}
+	repo := makeStandardRepo(Channel{
+		ID:           1,
+		Name:         "compatible-platform-pricing",
+		Status:       StatusActive,
+		GroupIDs:     channelGroupIDs,
+		ModelPricing: pricing,
+	}, groupPlatforms)
+	service := newTestChannelService(repo)
+
+	for platform, want := range prices {
+		got := service.GetChannelModelPricing(context.Background(), groupIDs[platform], "shared-compatible-model")
+		require.NotNil(t, got, "platform=%s", platform)
+		require.NotNil(t, got.InputPrice, "platform=%s", platform)
+		require.Equal(t, want, *got.InputPrice, "platform=%s", platform)
+		require.Equal(t, platform, got.Platform, "platform=%s", platform)
 	}
 }
 

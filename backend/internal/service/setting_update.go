@@ -350,6 +350,14 @@ func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, setting
 		return nil, fmt.Errorf("marshal channel monitor account probe settings: %w", err)
 	}
 	updates[SettingKeyChannelMonitorAccountProbeSettings] = string(accountProbeJSON)
+	trafficObservationSettings := normalizeChannelMonitorTrafficObservationSettings(
+		settings.ChannelMonitorTrafficObservationSettings,
+	)
+	trafficObservationJSON, err := json.Marshal(trafficObservationSettings)
+	if err != nil {
+		return nil, fmt.Errorf("marshal channel monitor traffic observation settings: %w", err)
+	}
+	updates[SettingKeyChannelMonitorTrafficObservationSettings] = string(trafficObservationJSON)
 
 	// Grok model mapping policy
 	if v := strings.TrimSpace(settings.GrokDefaultTextModel); v != "" {

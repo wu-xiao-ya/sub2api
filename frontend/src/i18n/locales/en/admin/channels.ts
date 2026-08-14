@@ -563,7 +563,8 @@ export default {
         static: 'Static',
         sticky: 'Sticky',
         confirm: 'Confirm',
-        full: 'Full'
+        full: 'Full',
+        traffic: 'Real request'
       },
       noMonitorsYet: 'No monitors yet',
       createFirstMonitor: 'Create your first monitor to track channel availability',

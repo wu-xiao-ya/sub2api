@@ -279,9 +279,10 @@ type SystemSettings struct {
 	AccountQuotaNotifyEmails        []NotifyEmailEntry `json:"account_quota_notify_emails"`
 
 	// Channel Monitor feature switch
-	ChannelMonitorEnabled                bool                                       `json:"channel_monitor_enabled"`
-	ChannelMonitorDefaultIntervalSeconds int                                        `json:"channel_monitor_default_interval_seconds"`
-	ChannelMonitorAccountProbeSettings   service.ChannelMonitorAccountProbeSettings `json:"channel_monitor_account_probe_settings"`
+	ChannelMonitorEnabled                    bool                                             `json:"channel_monitor_enabled"`
+	ChannelMonitorDefaultIntervalSeconds     int                                              `json:"channel_monitor_default_interval_seconds"`
+	ChannelMonitorAccountProbeSettings       service.ChannelMonitorAccountProbeSettings       `json:"channel_monitor_account_probe_settings"`
+	ChannelMonitorTrafficObservationSettings service.ChannelMonitorTrafficObservationSettings `json:"channel_monitor_traffic_observation_settings"`
 
 	// Grok model mapping policy (admin settings; empty account mapping falls back to these).
 	GrokDefaultTextModel           string `json:"grok_default_text_model"`

@@ -132,7 +132,13 @@ const ratePillClass = computed(() => {
       return 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400'
     case 'gemini':
       return 'bg-sky-50 text-sky-700 dark:bg-sky-900/20 dark:text-sky-400'
-    default: // antigravity and others
+    case 'deepseek':
+      return 'bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400'
+    case 'kimi':
+      return 'bg-cyan-50 text-cyan-700 dark:bg-cyan-900/20 dark:text-cyan-300'
+    case 'glm':
+      return 'bg-indigo-50 text-indigo-700 dark:bg-indigo-900/20 dark:text-indigo-300'
+    default:
       return 'bg-violet-50 text-violet-700 dark:bg-violet-900/20 dark:text-violet-400'
   }
 })

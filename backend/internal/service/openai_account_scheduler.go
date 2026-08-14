@@ -2720,7 +2720,7 @@ func CurrentUpstreamBillingRate(account *Account, now time.Time) (float64, bool)
 }
 
 func openAIProbedUpstreamBillingRate(account *Account, now time.Time) (float64, bool) {
-	if !isUpstreamBillingProbeAccount(account) {
+	if !isAutomaticUpstreamBillingProbeAccount(account) {
 		return 0, false
 	}
 	snapshot := decodeUpstreamBillingProbeSnapshot(account.Extra)

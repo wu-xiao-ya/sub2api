@@ -4,24 +4,33 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import MonitorFormDialog from '@/components/admin/monitor/MonitorFormDialog.vue'
 import {
+  API_MODE_CHAT_COMPLETIONS,
+  API_MODE_RESPONSES,
   DEFAULT_GROK_ENDPOINT,
   DEFAULT_GROK_MODEL,
   PROVIDERS,
+  PROVIDER_DEEPSEEK,
+  PROVIDER_GLM,
   PROVIDER_GROK,
+  PROVIDER_KIMI,
 } from '@/constants/channelMonitor'
 
-const { listTemplates } = vi.hoisted(() => ({
+const { createMonitor, listTemplates } = vi.hoisted(() => ({
+  createMonitor: vi.fn(),
   listTemplates: vi.fn(),
 }))
 
 vi.mock('@/api/admin', () => ({
   adminAPI: {
     channelMonitor: {
-      create: vi.fn(),
+      create: createMonitor,
       update: vi.fn(),
     },
     channelMonitorTemplate: {
       list: listTemplates,
+    },
+    groups: {
+      getByPlatform: vi.fn().mockResolvedValue([]),
     },
   },
 }))
@@ -71,9 +80,10 @@ function mountDialog() {
   })
 }
 
-describe('channel monitor Grok provider', () => {
+describe('channel monitor provider options', () => {
   beforeEach(() => {
     listTemplates.mockReset().mockResolvedValue({ items: [] })
+    createMonitor.mockReset().mockResolvedValue({})
   })
 
   it('offers Grok in the responsive provider grid and prefills its official defaults', async () => {
@@ -82,7 +92,7 @@ describe('channel monitor Grok provider', () => {
 
     expect(PROVIDERS).toContain(PROVIDER_GROK)
     const providerButtons = wrapper.findAll('[data-testid^="monitor-provider-"]')
-    expect(providerButtons).toHaveLength(5)
+    expect(providerButtons).toHaveLength(8)
     expect(providerButtons[0].element.parentElement?.className).toContain('grid-cols-2')
     expect(providerButtons[0].element.parentElement?.className).toContain('sm:grid-cols-4')
 
@@ -133,4 +143,39 @@ describe('channel monitor Grok provider', () => {
     expect((endpoint.element as HTMLInputElement).value).toBe(DEFAULT_GROK_ENDPOINT)
     expect((model.element as HTMLInputElement).value).toBe('grok-custom')
   })
+
+  it.each([
+    [PROVIDER_DEEPSEEK, 'deepseek'],
+    [PROVIDER_KIMI, 'kimi'],
+    [PROVIDER_GLM, 'glm'],
+  ] as const)(
+    'offers %s with an icon and forces chat completions on create',
+    async (provider, providerName) => {
+      const wrapper = mountDialog()
+      await flushPromises()
+
+      expect(PROVIDERS).toContain(provider)
+      const providerButton = wrapper.get(`[data-testid="monitor-provider-${provider}"]`)
+      expect(providerButton.find('svg').exists()).toBe(true)
+      expect(providerButton.text()).toContain(`monitorCommon.providers.${providerName}`)
+
+      await wrapper.get('[data-testid="monitor-provider-openai"]').trigger('click')
+      expect(wrapper.text()).toContain('admin.channelMonitor.form.apiModeResponses')
+      await providerButton.trigger('click')
+      expect(wrapper.text()).not.toContain('admin.channelMonitor.form.apiModeResponses')
+
+      await wrapper.get('[data-testid="monitor-endpoint"]').setValue(`https://${provider}.example.com`)
+      await wrapper.get('[data-testid="monitor-primary-model"]').setValue(`${provider}-chat`)
+      await wrapper.get('input[type="text"]').setValue(`${provider} monitor`)
+      await wrapper.get('form').trigger('submit')
+
+      expect(createMonitor).toHaveBeenCalledWith(expect.objectContaining({
+        provider,
+        api_mode: API_MODE_CHAT_COMPLETIONS,
+      }))
+      expect(createMonitor).not.toHaveBeenCalledWith(expect.objectContaining({
+        api_mode: API_MODE_RESPONSES,
+      }))
+    },
+  )
 })

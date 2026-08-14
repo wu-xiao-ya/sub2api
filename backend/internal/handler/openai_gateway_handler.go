@@ -121,8 +121,8 @@ func wrapUsageRecordTaskContext(parent context.Context, task service.UsageRecord
 }
 
 func openAICompatibleRequestPlatform(apiKey *service.APIKey) string {
-	if apiKey != nil && apiKey.Group != nil && apiKey.Group.Platform == service.PlatformGrok {
-		return service.PlatformGrok
+	if apiKey != nil && apiKey.Group != nil && service.IsOpenAICompatiblePlatform(apiKey.Group.Platform) {
+		return apiKey.Group.Platform
 	}
 	return service.PlatformOpenAI
 }

@@ -324,6 +324,57 @@ func TestOpenAIGatewayServiceRecordUsage_ZeroUsageStillWritesUsageLog(t *testing
 	require.Zero(t, billingRepo.lastCmd.AccountQuotaCost)
 }
 
+func TestOpenAIGatewayServiceRecordUsage_Grok46BillsTokensCacheAndSearch(t *testing.T) {
+	usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
+	userRepo := &openAIRecordUsageUserRepoStub{}
+	svc := newOpenAIRecordUsageServiceForTest(
+		usageRepo,
+		userRepo,
+		&openAIRecordUsageSubRepoStub{},
+		nil,
+	)
+	groupID := int64(460)
+
+	err := svc.RecordUsage(context.Background(), &OpenAIRecordUsageInput{
+		Result: &OpenAIForwardResult{
+			RequestID:     "grok-46-billing",
+			Model:         "grok-4.6",
+			UpstreamModel: "grok-4.6",
+			Usage: OpenAIUsage{
+				InputTokens:          100,
+				OutputTokens:         10,
+				CacheReadInputTokens: 20,
+			},
+			SearchCount: 1,
+			Duration:    time.Second,
+		},
+		APIKey: &APIKey{
+			ID:      1460,
+			GroupID: &groupID,
+			Group: &Group{
+				ID:             groupID,
+				Platform:       PlatformGrok,
+				RateMultiplier: 1,
+			},
+		},
+		User:    &User{ID: 2460},
+		Account: &Account{ID: 3460, Platform: PlatformGrok},
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, usageRepo.lastLog)
+	require.Equal(t, 80, usageRepo.lastLog.InputTokens)
+	require.Equal(t, 20, usageRepo.lastLog.CacheReadTokens)
+	require.Equal(t, 10, usageRepo.lastLog.OutputTokens)
+
+	wantTokenCost := float64(80)*2e-6 + float64(20)*0.5e-6 + float64(10)*6e-6
+	wantTotal := wantTokenCost + 0.01
+	require.InDelta(t, wantTotal, usageRepo.lastLog.TotalCost, 1e-12)
+	require.InDelta(t, wantTotal, usageRepo.lastLog.ActualCost, 1e-12)
+	require.Equal(t, 1, userRepo.deductCalls)
+	require.InDelta(t, wantTotal, userRepo.lastAmount, 1e-12)
+}
+
 func TestOpenAIGatewayServiceRecordUsage_MissingPricingRecordsZeroCostUsageLog(t *testing.T) {
 	usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
 	billingRepo := &openAIRecordUsageBillingRepoStub{result: &UsageBillingApplyResult{Applied: true}}

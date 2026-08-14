@@ -127,7 +127,7 @@ func runCheckForModel(ctx context.Context, provider, endpoint, apiKey, model str
 		return finalizeOperationalOrDegraded(res, latency, latencyMs)
 	}
 
-	if !validateChallenge(respText, challenge.Expected) {
+	if !validateMonitorChallengeResponse(provider, respText, []byte(rawBody), challenge.Expected, opts) {
 		res.Status = MonitorStatusFailed
 		res.Message = truncateMessage(sanitizeErrorMessage(fmt.Sprintf("challenge mismatch (expected %s, got %q)", challenge.Expected, respText)))
 		return res
@@ -264,8 +264,11 @@ type providerAdapter struct {
 //
 //nolint:gochecknoglobals // 适配器表是只读静态数据，初始化后不变更。
 var providerAdapters = map[string]providerAdapter{
-	MonitorProviderOpenAI: providerOpenAIChatAdapter,
-	MonitorProviderGrok:   providerGrokChatAdapter,
+	MonitorProviderOpenAI:   providerOpenAIChatAdapter,
+	MonitorProviderGrok:     providerGrokChatAdapter,
+	MonitorProviderDeepSeek: providerOpenAIChatAdapter,
+	MonitorProviderKimi:     providerOpenAIChatAdapter,
+	MonitorProviderGLM:      providerOpenAIChatAdapter,
 	MonitorProviderAnthropic: {
 		buildPath: func(string) string { return providerAnthropicPath },
 		buildBody: func(model, prompt string, maxTokens int) ([]byte, error) {
@@ -661,9 +664,20 @@ func buildRequestBody(adapter providerAdapter, provider, apiMode, model, prompt 
 		return body, nil
 	}
 
-	defaultBody, err := adapter.buildBody(model, prompt, monitorOutputTokenLimit(opts))
+	defaultBody, err := adapter.buildBody(model, prompt, monitorOutputTokenLimit(provider, opts))
 	if err != nil {
 		return nil, fmt.Errorf("marshal default body: %w", err)
+	}
+	if isLowCostCheck(opts) && provider == MonitorProviderKimi {
+		var defaultMap map[string]any
+		if err := json.Unmarshal(defaultBody, &defaultMap); err != nil {
+			return nil, fmt.Errorf("unmarshal default Kimi low-cost body: %w", err)
+		}
+		applyLowCostOutputLimit(provider, apiMode, defaultMap)
+		defaultBody, err = json.Marshal(defaultMap)
+		if err != nil {
+			return nil, fmt.Errorf("marshal default Kimi low-cost body: %w", err)
+		}
 	}
 	if mode != MonitorBodyOverrideModeMerge || opts == nil || len(opts.BodyOverride) == 0 {
 		return defaultBody, nil
@@ -690,15 +704,57 @@ func buildRequestBody(adapter providerAdapter, provider, apiMode, model, prompt 
 	return merged, nil
 }
 
-func monitorOutputTokenLimit(opts *CheckOptions) int {
+func monitorOutputTokenLimit(provider string, opts *CheckOptions) int {
 	if isLowCostCheck(opts) {
-		return monitorLowCostMaxTokens
+		return lowCostOutputTokenLimit(provider)
 	}
 	return monitorChallengeMaxTokens
 }
 
 func isLowCostCheck(opts *CheckOptions) bool {
 	return opts != nil && opts.LowCost
+}
+
+// validateMonitorChallengeResponse accepts the regular challenge answer. For
+// low-cost compatible reasoning probes, a non-empty reasoning field also
+// proves that the upstream accepted and processed the request even when the
+// tiny output budget ends before a client-visible final answer is emitted.
+func validateMonitorChallengeResponse(
+	provider, responseText string,
+	rawBody []byte,
+	expected string,
+	opts *CheckOptions,
+) bool {
+	if validateChallenge(responseText, expected) {
+		return true
+	}
+	return isLowCostCheck(opts) &&
+		isCompatibleReasoningMonitorProvider(provider) &&
+		hasCompatibleReasoningOutput(rawBody)
+}
+
+func isCompatibleReasoningMonitorProvider(provider string) bool {
+	switch provider {
+	case MonitorProviderDeepSeek, MonitorProviderKimi, MonitorProviderGLM:
+		return true
+	default:
+		return false
+	}
+}
+
+func hasCompatibleReasoningOutput(rawBody []byte) bool {
+	for _, path := range []string{
+		"choices.0.message.reasoning_content",
+		"choices.0.message.reasoning",
+		"choices.0.delta.reasoning_content",
+		"choices.0.delta.reasoning",
+	} {
+		value := gjson.GetBytes(rawBody, path)
+		if value.Exists() && strings.TrimSpace(value.String()) != "" {
+			return true
+		}
+	}
+	return false
 }
 
 func cloneMonitorRequestBody(body map[string]any) (map[string]any, error) {
@@ -721,12 +777,12 @@ func applyLowCostOutputLimit(provider, apiMode string, body map[string]any) {
 		return
 	}
 	switch provider {
-	case MonitorProviderOpenAI:
+	case MonitorProviderOpenAI, MonitorProviderDeepSeek, MonitorProviderKimi, MonitorProviderGLM:
 		if defaultAPIMode(apiMode) == MonitorAPIModeResponses {
-			body["max_output_tokens"] = monitorLowCostMaxTokens
+			body["max_output_tokens"] = lowCostOutputTokenLimit(provider)
 			return
 		}
-		body["max_tokens"] = monitorLowCostMaxTokens
+		body["max_tokens"] = lowCostOutputTokenLimit(provider)
 	case MonitorProviderAnthropic, MonitorProviderGrok:
 		body["max_tokens"] = monitorLowCostMaxTokens
 	case MonitorProviderGemini:
@@ -736,6 +792,22 @@ func applyLowCostOutputLimit(provider, apiMode string, body map[string]any) {
 			body["generationConfig"] = config
 		}
 		config["maxOutputTokens"] = monitorLowCostMaxTokens
+	}
+	if provider == MonitorProviderKimi {
+		// Kimi reasoning models can spend the complete short output budget on
+		// hidden reasoning and return HTTP 2xx with no visible answer. Channel
+		// probes only need a one-character liveness response, so disable
+		// thinking for this private low-cost request.
+		body["thinking"] = map[string]any{"type": "disabled"}
+	}
+}
+
+func lowCostOutputTokenLimit(provider string) int {
+	switch provider {
+	case MonitorProviderDeepSeek, MonitorProviderKimi, MonitorProviderGLM:
+		return monitorCompatibleLowCostMaxTokens
+	default:
+		return monitorLowCostMaxTokens
 	}
 }
 
@@ -748,6 +820,9 @@ var bodyMergeKeyDenyList = map[string]map[string]bool{
 	MonitorProviderOpenAI + ":" + MonitorAPIModeChatCompletions: {"model": true, "messages": true, "stream": true},
 	MonitorProviderOpenAI + ":" + MonitorAPIModeResponses:       {"model": true, "instructions": true, "input": true, "stream": true},
 	MonitorProviderGrok:      {"model": true, "messages": true, "stream": true},
+	MonitorProviderDeepSeek:  {"model": true, "messages": true, "stream": true},
+	MonitorProviderKimi:      {"model": true, "messages": true, "stream": true},
+	MonitorProviderGLM:       {"model": true, "messages": true, "stream": true},
 	MonitorProviderAnthropic: {"model": true, "messages": true},
 	MonitorProviderGemini:    {"contents": true},
 }
@@ -767,7 +842,7 @@ func bodyMergeDenyKey(provider, apiMode string) string {
 }
 
 func validateReplaceRequestBody(provider, apiMode string, body map[string]any) error {
-	if provider != MonitorProviderOpenAI && provider != MonitorProviderGrok {
+	if !isOpenAICompatibleMonitorProvider(provider) {
 		return nil
 	}
 	switch defaultAPIMode(apiMode) {
@@ -781,6 +856,15 @@ func validateReplaceRequestBody(provider, apiMode string, body map[string]any) e
 		}
 	}
 	return nil
+}
+
+func isOpenAICompatibleMonitorProvider(provider string) bool {
+	switch provider {
+	case MonitorProviderOpenAI, MonitorProviderGrok, MonitorProviderDeepSeek, MonitorProviderKimi, MonitorProviderGLM:
+		return true
+	default:
+		return false
+	}
 }
 
 func stringFromAny(v any) string {

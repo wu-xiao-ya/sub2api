@@ -36,6 +36,7 @@ import riskControlAPI from './riskControl'
 import adminComplianceAPI from './compliance'
 import adminAccountContributionsAPI from './accountContributions'
 import auditAPI from './audit'
+import financeAPI from './finance'
 
 /**
  * Unified admin API object for convenient access
@@ -73,7 +74,8 @@ export const adminAPI = {
   riskControl: riskControlAPI,
   compliance: adminComplianceAPI,
   accountContributions: adminAccountContributionsAPI,
-  audit: auditAPI
+  audit: auditAPI,
+  finance: financeAPI
 }
 
 export {
@@ -109,7 +111,8 @@ export {
   riskControlAPI,
   adminComplianceAPI,
   adminAccountContributionsAPI,
-  auditAPI
+  auditAPI,
+  financeAPI
 }
 
 export default adminAPI
@@ -121,3 +124,11 @@ export type { ErrorPassthroughRule, CreateRuleRequest, UpdateRuleRequest } from 
 export type { BackupAgentHealth, DataManagementConfig } from './dataManagement'
 export type { TLSFingerprintProfile, CreateProfileRequest, UpdateProfileRequest } from './tlsFingerprintProfile'
 export type { ContentModerationConfig, ContentModerationLog, ModerationMode } from './riskControl'
+export type {
+  FinanceLedgerDirection,
+  FinanceLedgerEntry,
+  FinanceLedgerQuery,
+  FinanceLedgerResponse,
+  FinanceLedgerSource,
+  FinanceLedgerSummary,
+} from './finance'

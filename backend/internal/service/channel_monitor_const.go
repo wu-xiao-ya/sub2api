@@ -81,6 +81,9 @@ const (
 	MonitorProviderGemini      = "gemini"
 	MonitorProviderGrok        = "grok"
 	MonitorProviderAntigravity = "antigravity"
+	MonitorProviderDeepSeek    = "deepseek"
+	MonitorProviderKimi        = "kimi"
+	MonitorProviderGLM         = "glm"
 
 	// MonitorDefaultGrokModel 是新增 Grok 监控未显式指定模型时使用的轻量测活模型。
 	MonitorDefaultGrokModel = "grok-4.5"
@@ -119,6 +122,15 @@ const (
 	monitorChallengeMaxTokens = 50
 	// monitorLowCostMaxTokens 同组并发探测的最大输出 token。
 	monitorLowCostMaxTokens = 1
+	// monitorCompatibleLowCostMaxTokens gives independently managed
+	// OpenAI-compatible reasoning providers enough room to emit the final
+	// confirmation token. A one-token limit can be consumed before content is
+	// emitted, producing a valid 2xx response with an empty message.
+	monitorCompatibleLowCostMaxTokens = 16
+	// monitorPersistenceTimeout is deliberately independent from the outbound
+	// probe deadline so a slow monitor run can still save its final result,
+	// adaptive state, and cost observation.
+	monitorPersistenceTimeout = 10 * time.Second
 	// monitorGroupProbeMaxCandidates 同组单次最多探测的线路数。
 	monitorGroupProbeMaxCandidates = 5
 	// monitorGroupProbeParallelism 同组候选线路的并发上限。
@@ -148,7 +160,7 @@ var (
 		"CHANNEL_MONITOR_NOT_FOUND", "channel monitor not found",
 	)
 	ErrChannelMonitorInvalidProvider = infraerrors.BadRequest(
-		"CHANNEL_MONITOR_INVALID_PROVIDER", "provider must be one of openai/anthropic/gemini/grok",
+		"CHANNEL_MONITOR_INVALID_PROVIDER", "provider must be one of openai/anthropic/gemini/grok/deepseek/kimi/glm",
 	)
 	ErrChannelMonitorInvalidAPIMode = infraerrors.BadRequest(
 		"CHANNEL_MONITOR_INVALID_API_MODE", "api_mode must be chat_completions, responses, models, or images; responses, models, and images are only supported for openai",

@@ -4,9 +4,12 @@ package service
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/Wei-Shaw/sub2api/internal/config"
 )
 
 type adaptiveProbeCall struct {
@@ -165,8 +168,8 @@ func newAdaptiveMonitorTestService(
 		repo.states[adaptiveStateKey(state.MonitorID, state.Model)] = state
 	}
 	accounts := &accountProbeRepoStub{accounts: []Account{
-		{ID: 1, Name: "line-1", Platform: PlatformOpenAI, Type: AccountTypeAPIKey, Priority: 1, Status: StatusActive, Schedulable: true},
-		{ID: 2, Name: "line-2", Platform: PlatformOpenAI, Type: AccountTypeAPIKey, Priority: 2, Status: StatusActive, Schedulable: true},
+		openAIProbeAccount(1, "line-1", 1, nil),
+		openAIProbeAccount(2, "line-2", 2, nil),
 	}}
 	svc := NewChannelMonitorService(repo, groupProbeEncryptor{})
 	svc.SetAccountProbeDependencies(accounts, nil, nil, nil)
@@ -201,13 +204,288 @@ func TestAdaptiveAccountProbeUsesStickyAccountWhenHealthy(t *testing.T) {
 		t.Fatalf("RunCheck: %v", err)
 	}
 	if len(results) != 1 || results[0].ProbeMode != accountProbeModeSticky {
-		t.Fatalf("result = %#v, want one sticky probe", results)
+		detail := ""
+		if len(results) == 1 && results[0] != nil {
+			detail = results[0].Status + " " + results[0].Message
+		}
+		t.Fatalf("result = %#v (%s), want one sticky probe", results, detail)
 	}
 	if executor.count(1) != 1 || executor.count(2) != 0 {
 		t.Fatalf("calls = line1:%d line2:%d, want 1/0", executor.count(1), executor.count(2))
 	}
 	if len(repo.rows) != 1 || repo.rows[0].AccountName != "line-1" {
 		t.Fatalf("persisted history = %#v, want sticky account source", repo.rows)
+	}
+}
+
+func TestAdaptiveAccountProbePassesPublicModelAndAttributesMappedCostModel(t *testing.T) {
+	executor := &adaptiveProbeExecutorStub{
+		results: map[int64][]AccountMonitorProbeResult{
+			1: {{Success: true, LatencyMs: 30, RequestAttempted: true}},
+		},
+		callIndex: map[int64]int{},
+	}
+	svc, _ := newAdaptiveMonitorTestService(t, nil, executor)
+	account := Account{
+		ID:       1,
+		Name:     "deepseek-line",
+		Platform: PlatformDeepSeek,
+		Type:     AccountTypeAPIKey,
+		Credentials: map[string]any{
+			"api_key": "sk-deepseek",
+			"model_mapping": map[string]any{
+				"public-model":   "upstream-model",
+				"upstream-model": "incorrect-second-map",
+			},
+		},
+	}
+
+	result := svc.probeAdaptiveAccount(
+		context.Background(),
+		&ChannelMonitor{ID: 11, Provider: MonitorProviderDeepSeek, PrimaryModel: "public-model"},
+		"public-model",
+		account,
+		accountProbeModeFull,
+		ChannelMonitorAccountProbeSettings{DegradedThresholdMs: 6000},
+	)
+
+	if len(executor.calls) != 1 || executor.calls[0].model != "public-model" {
+		t.Fatalf("executor calls = %#v, want one public-model probe", executor.calls)
+	}
+	if result.monitorCostModel != "upstream-model" {
+		t.Fatalf("monitorCostModel = %q, want mapped upstream model", result.monitorCostModel)
+	}
+}
+
+func TestAdaptiveAccountProbeUsesLowCostChatCompletionsForGroupedAccounts(t *testing.T) {
+	accountID := int64(1)
+	executor := &adaptiveProbeExecutorStub{results: map[int64][]AccountMonitorProbeResult{}, callIndex: map[int64]int{}}
+	svc, repo := newAdaptiveMonitorTestService(t, &ChannelMonitorAccountProbeState{
+		MonitorID: 11, Model: "gpt-test", AccountID: &accountID, AccountName: "line-1",
+		FinalStatus: MonitorStatusOperational,
+	}, executor)
+	accountRepo := svc.accountProbeRepo.(*accountProbeRepoStub)
+	accountRepo.accounts = []Account{
+		openAIProbeAccount(1, "line-1", 1, map[string]any{"gpt-test": "upstream-gpt-test"}),
+		openAIProbeAccount(2, "line-2", 2, nil),
+	}
+	upstream := &accountProbeHTTPStub{}
+	svc.SetAccountProbeDependencies(accountRepo, upstream, &config.Config{}, nil)
+
+	results, err := svc.RunCheck(context.Background(), 11)
+	if err != nil {
+		t.Fatalf("RunCheck: %v", err)
+	}
+	if len(results) != 1 || results[0].ProbeMode != accountProbeModeSticky || results[0].Status != MonitorStatusOperational {
+		t.Fatalf("results = %#v, want one sticky operational probe", results)
+	}
+	if len(executor.calls) != 0 {
+		t.Fatalf("legacy account-test executor should stay unused, calls=%#v", executor.calls)
+	}
+	upstream.mu.Lock()
+	defer upstream.mu.Unlock()
+	req := upstream.requests[1]
+	if req.path != "/v1/chat/completions" {
+		t.Fatalf("path = %q, want /v1/chat/completions", req.path)
+	}
+	if req.auth != "Bearer sk-line-1" {
+		t.Fatalf("auth = %q, want grouped account API key", req.auth)
+	}
+	if req.body["model"] != "upstream-gpt-test" {
+		t.Fatalf("model = %#v, want mapped upstream model", req.body["model"])
+	}
+	if req.body["max_tokens"] != float64(monitorLowCostMaxTokens) {
+		t.Fatalf("max_tokens = %#v, want %d", req.body["max_tokens"], monitorLowCostMaxTokens)
+	}
+	if req.body["stream"] != false {
+		t.Fatalf("stream = %#v, want false", req.body["stream"])
+	}
+	if _, ok := req.body["instructions"]; ok {
+		t.Fatalf("low-cost probe must not send full instructions: %#v", req.body)
+	}
+	if len(repo.rows) != 1 || repo.rows[0].AccountName != "line-1" {
+		t.Fatalf("persisted history = %#v, want sticky grouped account", repo.rows)
+	}
+}
+
+func TestAdaptiveAccountProbeUsesLinkedGroupPlatformForCompatibleProvider(t *testing.T) {
+	executor := &adaptiveProbeExecutorStub{
+		results: map[int64][]AccountMonitorProbeResult{
+			1: {{Success: true, LatencyMs: 30}},
+			2: {{Success: true, LatencyMs: 20}},
+		},
+		callIndex: map[int64]int{},
+	}
+	svc, _ := newAdaptiveMonitorTestService(t, nil, executor)
+	accountRepo := svc.accountProbeRepo.(*accountProbeRepoStub)
+	accountRepo.groupPlatform = PlatformDeepSeek
+	for i := range accountRepo.accounts {
+		accountRepo.accounts[i].Platform = PlatformDeepSeek
+	}
+
+	results, err := svc.RunCheck(context.Background(), 11)
+	if err != nil {
+		t.Fatalf("RunCheck: %v", err)
+	}
+	if len(results) != 1 || results[0].Status != MonitorStatusOperational {
+		t.Fatalf("results = %#v, want one operational result", results)
+	}
+	if len(accountRepo.calls) != 1 || accountRepo.calls[0].platform != PlatformDeepSeek {
+		t.Fatalf("account repo calls = %#v, want linked DeepSeek group platform", accountRepo.calls)
+	}
+}
+
+func TestAdaptiveAccountProbeExplicitCompatibleProviderRequiresMatchingAccountPlatform(t *testing.T) {
+	for _, provider := range []string{
+		MonitorProviderDeepSeek,
+		MonitorProviderKimi,
+		MonitorProviderGLM,
+	} {
+		t.Run(provider, func(t *testing.T) {
+			executor := &adaptiveProbeExecutorStub{
+				results: map[int64][]AccountMonitorProbeResult{
+					1: {{Success: true, LatencyMs: 30}},
+					2: {{Success: true, LatencyMs: 20}},
+				},
+				callIndex: map[int64]int{},
+			}
+			svc, _ := newAdaptiveMonitorTestService(t, nil, executor)
+			accountRepo := svc.accountProbeRepo.(*accountProbeRepoStub)
+			accountRepo.groupPlatform = provider
+			for i := range accountRepo.accounts {
+				accountRepo.accounts[i].Platform = provider
+			}
+
+			monitor := svc.repo.(*adaptiveMonitorRepoStub).monitors[11]
+			monitor.Provider = provider
+
+			results, err := svc.RunCheck(context.Background(), 11)
+			if err != nil {
+				t.Fatalf("RunCheck: %v", err)
+			}
+			if len(results) != 1 || results[0].Status != MonitorStatusOperational {
+				t.Fatalf("results = %#v, want one operational result", results)
+			}
+			if len(accountRepo.calls) != 1 || accountRepo.calls[0].platform != provider {
+				t.Fatalf("account repo calls = %#v, want platform %q", accountRepo.calls, provider)
+			}
+		})
+	}
+}
+
+func TestAdaptiveAccountProbeCompatibleProviderUsesShortStableOutputBudget(t *testing.T) {
+	for _, provider := range []string{
+		MonitorProviderDeepSeek,
+		MonitorProviderKimi,
+		MonitorProviderGLM,
+	} {
+		t.Run(provider, func(t *testing.T) {
+			executor := &adaptiveProbeExecutorStub{results: map[int64][]AccountMonitorProbeResult{}, callIndex: map[int64]int{}}
+			svc, _ := newAdaptiveMonitorTestService(t, nil, executor)
+			accountRepo := svc.accountProbeRepo.(*accountProbeRepoStub)
+			accountRepo.groupPlatform = provider
+			accountRepo.accounts = []Account{openAIProbeAccount(1, "compatible-line", 1, nil)}
+			accountRepo.accounts[0].Platform = provider
+			upstream := &accountProbeHTTPStub{}
+			svc.SetAccountProbeDependencies(accountRepo, upstream, &config.Config{}, nil)
+
+			monitor := svc.repo.(*adaptiveMonitorRepoStub).monitors[11]
+			monitor.Provider = provider
+
+			results, err := svc.RunCheck(context.Background(), 11)
+			if err != nil {
+				t.Fatalf("RunCheck: %v", err)
+			}
+			if len(results) != 1 || results[0].Status != MonitorStatusOperational {
+				t.Fatalf("results = %#v, want one operational result", results)
+			}
+
+			upstream.mu.Lock()
+			defer upstream.mu.Unlock()
+			req := upstream.requests[1]
+			if req.body["max_tokens"] != float64(monitorCompatibleLowCostMaxTokens) {
+				t.Fatalf("max_tokens = %#v, want %d", req.body["max_tokens"], monitorCompatibleLowCostMaxTokens)
+			}
+		})
+	}
+}
+
+func TestAdaptiveAccountProbeOpenAIProviderUsesLinkedCompatibleAccountBudget(t *testing.T) {
+	executor := &adaptiveProbeExecutorStub{results: map[int64][]AccountMonitorProbeResult{}, callIndex: map[int64]int{}}
+	svc, _ := newAdaptiveMonitorTestService(t, nil, executor)
+	accountRepo := svc.accountProbeRepo.(*accountProbeRepoStub)
+	accountRepo.groupPlatform = PlatformDeepSeek
+	accountRepo.accounts = []Account{openAIProbeAccount(1, "deepseek-line", 1, nil)}
+	accountRepo.accounts[0].Platform = PlatformDeepSeek
+	upstream := &accountProbeHTTPStub{}
+	svc.SetAccountProbeDependencies(accountRepo, upstream, &config.Config{}, nil)
+
+	monitor := svc.repo.(*adaptiveMonitorRepoStub).monitors[11]
+	monitor.Provider = MonitorProviderOpenAI
+
+	results, err := svc.RunCheck(context.Background(), 11)
+	if err != nil {
+		t.Fatalf("RunCheck: %v", err)
+	}
+	if len(results) != 1 || results[0].Status != MonitorStatusOperational {
+		t.Fatalf("results = %#v, want one operational result", results)
+	}
+
+	upstream.mu.Lock()
+	defer upstream.mu.Unlock()
+	req := upstream.requests[1]
+	if req.body["max_tokens"] != float64(monitorCompatibleLowCostMaxTokens) {
+		t.Fatalf("max_tokens = %#v, want %d", req.body["max_tokens"], monitorCompatibleLowCostMaxTokens)
+	}
+}
+
+func TestAdaptiveAccountProbeExplicitCompatibleProviderRejectsDifferentAccountPlatform(t *testing.T) {
+	executor := &adaptiveProbeExecutorStub{
+		results:   map[int64][]AccountMonitorProbeResult{},
+		callIndex: map[int64]int{},
+	}
+	svc, _ := newAdaptiveMonitorTestService(t, nil, executor)
+	accountRepo := svc.accountProbeRepo.(*accountProbeRepoStub)
+	accountRepo.groupPlatform = PlatformKimi
+	for i := range accountRepo.accounts {
+		accountRepo.accounts[i].Platform = PlatformKimi
+	}
+
+	monitor := svc.repo.(*adaptiveMonitorRepoStub).monitors[11]
+	monitor.Provider = MonitorProviderDeepSeek
+
+	results, err := svc.RunCheck(context.Background(), 11)
+	if err != nil {
+		t.Fatalf("RunCheck: %v", err)
+	}
+	if len(results) != 1 || results[0].Status != MonitorStatusError ||
+		!strings.Contains(results[0].Message, "incompatible") {
+		t.Fatalf("results = %#v, want incompatible-platform error", results)
+	}
+	if len(accountRepo.calls) != 0 {
+		t.Fatalf("account lookup calls = %#v, want none after platform rejection", accountRepo.calls)
+	}
+}
+
+func TestAdaptiveAccountProbeRejectsIncompatibleLinkedGroupPlatform(t *testing.T) {
+	executor := &adaptiveProbeExecutorStub{
+		results:   map[int64][]AccountMonitorProbeResult{},
+		callIndex: map[int64]int{},
+	}
+	svc, _ := newAdaptiveMonitorTestService(t, nil, executor)
+	accountRepo := svc.accountProbeRepo.(*accountProbeRepoStub)
+	accountRepo.groupPlatform = PlatformAnthropic
+
+	results, err := svc.RunCheck(context.Background(), 11)
+	if err != nil {
+		t.Fatalf("RunCheck: %v", err)
+	}
+	if len(results) != 1 || results[0].Status != MonitorStatusError ||
+		!strings.Contains(results[0].Message, "incompatible") {
+		t.Fatalf("results = %#v, want incompatible-platform error", results)
+	}
+	if len(accountRepo.calls) != 0 {
+		t.Fatalf("account lookup calls = %#v, want none after platform rejection", accountRepo.calls)
 	}
 }
 

@@ -290,7 +290,25 @@ func (a *Account) IsGrokOAuth() bool {
 }
 
 func (a *Account) IsOpenAICompatible() bool {
-	return a != nil && (a.Platform == PlatformOpenAI || a.Platform == PlatformGrok)
+	return a != nil && IsOpenAICompatiblePlatform(a.Platform)
+}
+
+// ShouldUseOpenAIResponsesAPI preserves the OpenAI-compatible routing contract
+// while keeping third-party API-key providers on Chat Completions by default.
+// DeepSeek, Kimi, and GLM expose OpenAI-compatible chat endpoints but do not
+// generally expose the OpenAI Responses endpoint.
+func ShouldUseOpenAIResponsesAPI(account *Account) bool {
+	if account == nil {
+		return true
+	}
+	if account.Type == AccountTypeAPIKey {
+		switch account.Platform {
+		case PlatformDeepSeek, PlatformKimi, PlatformGLM:
+			mode, _ := account.Extra[openai_compat.ExtraKeyResponsesMode].(string)
+			return openai_compat.NormalizeResponsesSupportMode(mode) == openai_compat.ResponsesSupportModeForceResponses
+		}
+	}
+	return openai_compat.ShouldUseResponsesAPI(account.Extra)
 }
 
 func (a *Account) GeminiOAuthType() string {
@@ -1288,7 +1306,7 @@ func (a *Account) IsOpenAIApiKey() bool {
 }
 
 func (a *Account) GetOpenAIBaseURL() string {
-	if !a.IsOpenAI() {
+	if a == nil || !IsOpenAICompatiblePlatform(a.Platform) {
 		return ""
 	}
 	if a.Type == AccountTypeAPIKey {
@@ -1404,14 +1422,14 @@ func (a *Account) GetOpenAIIDToken() string {
 }
 
 func (a *Account) GetOpenAIApiKey() string {
-	if !a.IsOpenAIApiKey() {
+	if a == nil || a.Type != AccountTypeAPIKey || !IsOpenAICompatiblePlatform(a.Platform) {
 		return ""
 	}
 	return a.GetCredential("api_key")
 }
 
 func (a *Account) GetOpenAIUserAgent() string {
-	if !a.IsOpenAI() {
+	if a == nil || !a.IsOpenAICompatible() {
 		return ""
 	}
 	return a.GetCredential("user_agent")
@@ -1498,7 +1516,7 @@ func (a *Account) SupportsOpenAIEndpointCapability(capability OpenAIEndpointCapa
 		// credentials 能力集。已探测确认不支持 /v1/responses 的 APIKey 上游
 		// 必须排除——否则会在 forward 阶段被静默降级为 Chat Completions，
 		// 无法完成生图（#4417）。未探测/OAuth 账号保留旧行为（不排除）。
-		if a.Type == AccountTypeAPIKey && !openai_compat.ShouldUseResponsesAPI(a.Extra) {
+		if a.Type == AccountTypeAPIKey && !ShouldUseOpenAIResponsesAPI(a) {
 			return false
 		}
 		// 支持 Responses 的上游同样需具备 chat 能力：复用下方 chat_completions

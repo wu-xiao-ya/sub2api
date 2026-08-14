@@ -434,6 +434,29 @@ func (s *SettingService) GetChannelMonitorAccountProbeSettings(ctx context.Conte
 	return parseChannelMonitorAccountProbeSettings(value)
 }
 
+// GetChannelMonitorTrafficObservationSettings returns the optional mode that
+// prefers successful real user traffic over paid scheduled active probes.
+func (s *SettingService) GetChannelMonitorTrafficObservationSettings(
+	ctx context.Context,
+) ChannelMonitorTrafficObservationSettings {
+	value, err := s.settingRepo.GetValue(ctx, SettingKeyChannelMonitorTrafficObservationSettings)
+	if err != nil {
+		return DefaultChannelMonitorTrafficObservationSettings()
+	}
+	return parseChannelMonitorTrafficObservationSettings(value)
+}
+
+func parseChannelMonitorTrafficObservationSettings(raw string) ChannelMonitorTrafficObservationSettings {
+	settings := DefaultChannelMonitorTrafficObservationSettings()
+	if strings.TrimSpace(raw) == "" {
+		return settings
+	}
+	if err := json.Unmarshal([]byte(raw), &settings); err != nil {
+		return DefaultChannelMonitorTrafficObservationSettings()
+	}
+	return normalizeChannelMonitorTrafficObservationSettings(settings)
+}
+
 func parseChannelMonitorAccountProbeSettings(raw string) ChannelMonitorAccountProbeSettings {
 	settings := DefaultChannelMonitorAccountProbeSettings()
 	if strings.TrimSpace(raw) == "" {

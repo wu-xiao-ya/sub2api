@@ -66,7 +66,7 @@
                 {{ modeLabel(tpl.body_override_mode) }}
               </span>
               <span
-                v-if="tpl.provider === PROVIDER_OPENAI"
+              v-if="supportsSelectableAPIMode(tpl.provider)"
                 class="inline-flex items-center rounded-md px-1.5 py-0.5 text-xs"
                 :class="apiModeBadgeClass(tpl.api_mode)"
               >
@@ -144,7 +144,7 @@
         </div>
       </div>
 
-      <div v-if="form.provider === PROVIDER_OPENAI" class="rounded-lg border border-blue-100 bg-blue-50/50 p-3 dark:border-blue-500/20 dark:bg-blue-500/10">
+      <div v-if="supportsSelectableAPIMode(form.provider)" class="rounded-lg border border-blue-100 bg-blue-50/50 p-3 dark:border-blue-500/20 dark:bg-blue-500/10">
         <label class="input-label">{{ t('admin.channelMonitor.form.apiMode') }}</label>
         <div class="grid gap-3 sm:grid-cols-2">
           <button
@@ -250,10 +250,14 @@ import {
   PROVIDER_GEMINI,
   PROVIDER_GROK,
   PROVIDER_ANTIGRAVITY,
+  PROVIDER_DEEPSEEK,
+  PROVIDER_KIMI,
+  PROVIDER_GLM,
   API_MODE_CHAT_COMPLETIONS,
   API_MODE_RESPONSES,
   API_MODE_MODELS,
   API_MODE_IMAGES,
+  supportsSelectableAPIMode,
 } from '@/constants/channelMonitor'
 
 const props = defineProps<{ show: boolean }>()
@@ -272,7 +276,10 @@ const providerTabs = computed<{ value: Provider; label: string }[]>(() => [
   { value: PROVIDER_OPENAI, label: t('monitorCommon.providers.openai') },
   { value: PROVIDER_GEMINI, label: t('monitorCommon.providers.gemini') },
   { value: PROVIDER_GROK, label: t('monitorCommon.providers.grok') },
-  { value: PROVIDER_ANTIGRAVITY, label: t('admin.channelMonitor.form.providerAntigravity') },
+  { value: PROVIDER_ANTIGRAVITY, label: t('monitorCommon.providers.antigravity') },
+  { value: PROVIDER_DEEPSEEK, label: t('monitorCommon.providers.deepseek') },
+  { value: PROVIDER_KIMI, label: t('monitorCommon.providers.kimi') },
+  { value: PROVIDER_GLM, label: t('monitorCommon.providers.glm') },
 ])
 
 const activeProvider = ref<Provider>(PROVIDER_ANTHROPIC)
@@ -290,6 +297,9 @@ const countByProvider = computed<Record<Provider, number>>(() => {
     gemini: 0,
     grok: 0,
     antigravity: 0,
+    deepseek: 0,
+    kimi: 0,
+    glm: 0,
   }
   for (const t of templates.value) out[t.provider]++
   return out
@@ -386,7 +396,7 @@ async function handleSubmit() {
       await adminAPI.channelMonitorTemplate.create({
         name: form.name.trim(),
         provider: form.provider,
-        api_mode: form.provider === PROVIDER_OPENAI ? form.api_mode : API_MODE_CHAT_COMPLETIONS,
+        api_mode: supportsSelectableAPIMode(form.provider) ? form.api_mode : API_MODE_CHAT_COMPLETIONS,
         description: form.description.trim(),
         extra_headers: form.extra_headers,
         body_override_mode: form.body_override_mode,
@@ -396,7 +406,7 @@ async function handleSubmit() {
     } else if (typeof editing.value === 'number') {
       await adminAPI.channelMonitorTemplate.update(editing.value, {
         name: form.name.trim(),
-        api_mode: form.provider === PROVIDER_OPENAI ? form.api_mode : API_MODE_CHAT_COMPLETIONS,
+        api_mode: supportsSelectableAPIMode(form.provider) ? form.api_mode : API_MODE_CHAT_COMPLETIONS,
         description: form.description.trim(),
         extra_headers: form.extra_headers,
         body_override_mode: form.body_override_mode,
@@ -511,7 +521,7 @@ const apiModeOptions = computed<{ value: APIMode; label: string; hint: string }[
 ])
 
 watch(() => form.provider, (provider) => {
-  if (provider !== PROVIDER_OPENAI) {
+  if (!supportsSelectableAPIMode(provider)) {
     form.api_mode = API_MODE_CHAT_COMPLETIONS
   }
 })

@@ -208,7 +208,9 @@ const iconKey = computed(() => {
   if (modelLower.includes('grok')) return 'xai'
 
   // Moonshot
-  if (modelLower.includes('moonshot') || modelLower.includes('kimi')) return 'moonshot'
+  if (modelLower.includes('moonshot') || modelLower.includes('kimi') ||
+      modelLower === 'k3' || modelLower === 'k3-256k' ||
+      modelLower.endsWith('/k3') || modelLower.endsWith('/k3-256k')) return 'moonshot'
 
   // Doubao (ByteDance)
   if (modelLower.includes('doubao')) return 'doubao'

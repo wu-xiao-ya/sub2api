@@ -43,10 +43,26 @@ const (
 	PlatformGemini      = domain.PlatformGemini
 	PlatformAntigravity = domain.PlatformAntigravity
 	PlatformGrok        = domain.PlatformGrok
+	PlatformDeepSeek    = domain.PlatformDeepSeek
+	PlatformKimi        = domain.PlatformKimi
+	PlatformGLM         = domain.PlatformGLM
 	// PlatformKiro is retained for unsupported-platform threshold tests and legacy
 	// account rows. Scheduling-threshold evaluation never pauses kiro accounts.
 	PlatformKiro = "kiro"
 )
+
+// IsOpenAICompatiblePlatform reports whether a platform uses the OpenAI
+// compatible API-key execution path while retaining its own admin/group
+// identity. This keeps provider pools isolated instead of collapsing them into
+// the generic OpenAI platform.
+func IsOpenAICompatiblePlatform(platform string) bool {
+	switch platform {
+	case PlatformOpenAI, PlatformGrok, PlatformDeepSeek, PlatformKimi, PlatformGLM:
+		return true
+	default:
+		return false
+	}
+}
 
 // AllowedQuotaPlatforms 是允许设置 user × platform quota 的平台列表（单一权威来源）。
 // ent/schema/user_platform_quota.go 的 Validate 函数独立维护（构建期约束），
@@ -57,6 +73,9 @@ var AllowedQuotaPlatforms = []string{
 	PlatformGemini,
 	PlatformAntigravity,
 	PlatformGrok,
+	PlatformDeepSeek,
+	PlatformKimi,
+	PlatformGLM,
 }
 
 // AllowedSchedulingThresholdPlatforms 是允许设置账号自动停调阈值的平台列表。
@@ -411,6 +430,10 @@ const (
 	// SettingKeyChannelMonitorAccountProbeSettings stores adaptive account probe
 	// limits and retry behavior as a single JSON value.
 	SettingKeyChannelMonitorAccountProbeSettings = "channel_monitor_account_probe_settings"
+
+	// SettingKeyChannelMonitorTrafficObservationSettings stores the optional
+	// real-request observation mode for account-group channel monitors.
+	SettingKeyChannelMonitorTrafficObservationSettings = "channel_monitor_traffic_observation_settings"
 
 	// SettingKeyAvailableChannelsEnabled is a DB-backed soft switch for the "Available Channels"
 	// user-facing aggregate view. When false: user endpoint returns an empty list and the

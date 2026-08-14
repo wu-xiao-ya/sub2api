@@ -563,7 +563,8 @@ export default {
         static: '静态',
         sticky: '粘性',
         confirm: '确认',
-        full: '全量'
+        full: '全量',
+        traffic: '真实请求'
       },
       noMonitorsYet: '暂无监控',
       createFirstMonitor: '创建第一个监控来跟踪渠道可用性',

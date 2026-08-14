@@ -160,7 +160,33 @@
             <PlatformIcon platform="grok" size="sm" />
             Grok
           </button>
+          <button
+            v-for="provider in [
+              { value: 'deepseek', label: 'DeepSeek' },
+              { value: 'kimi', label: 'Kimi' },
+              { value: 'glm', label: 'GLM' }
+            ]"
+            :key="provider.value"
+            type="button"
+            @click="form.platform = provider.value as AccountPlatform"
+            :class="[
+              'flex flex-1 items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-medium transition-all',
+              form.platform === provider.value
+                ? 'bg-white text-primary-600 shadow-sm dark:bg-dark-600 dark:text-primary-400'
+                : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200'
+            ]"
+          >
+            <PlatformIcon :platform="provider.value as AccountPlatform" size="sm" />
+            {{ provider.label }}
+          </button>
         </div>
+      </div>
+
+      <div
+        v-if="isAPIKeyOnlyPlatform"
+        class="rounded-lg border border-purple-200 bg-purple-50 px-3 py-2 text-xs text-purple-800 dark:border-purple-800/40 dark:bg-purple-900/20 dark:text-purple-200"
+      >
+        API Key
       </div>
 
       <!-- Account Type Selection (Anthropic) -->
@@ -3696,6 +3722,7 @@ interface TempUnschedRuleForm {
 const step = ref(1)
 const submitting = ref(false)
 const accountCategory = ref<'oauth-based' | 'apikey' | 'bedrock' | 'service_account'>('oauth-based') // UI selection for account category
+const isAPIKeyOnlyPlatform = computed(() => ['deepseek', 'kimi', 'glm'].includes(form.platform))
 const addMethod = ref<AddMethod>('oauth') // For oauth-based: 'oauth' or 'setup-token'
 const apiKeyBaseUrl = ref('https://api.anthropic.com')
 const apiKeyValue = ref('')
@@ -4198,6 +4225,12 @@ watch(
     apiKeyBaseUrl.value =
       (newPlatform === 'openai')
         ? 'https://api.openai.com'
+        : newPlatform === 'deepseek'
+          ? 'https://api.deepseek.com'
+          : newPlatform === 'kimi'
+            ? 'https://api.moonshot.cn/v1'
+            : newPlatform === 'glm'
+              ? 'https://open.bigmodel.cn/api/paas/v4'
         : newPlatform === 'gemini'
           ? 'https://generativelanguage.googleapis.com'
           : newPlatform === 'grok'
@@ -4227,6 +4260,13 @@ watch(
       addMethod.value = 'oauth'
       modelRestrictionMode.value = 'mapping'
       form.concurrency = 1
+      form.load_factor = null
+    }
+    if (newPlatform === 'deepseek' || newPlatform === 'kimi' || newPlatform === 'glm') {
+      accountCategory.value = 'apikey'
+      addMethod.value = 'oauth'
+      form.type = 'apikey'
+      form.concurrency = 10
       form.load_factor = null
     }
     if (newPlatform !== 'gemini' && newPlatform !== 'anthropic' && accountCategory.value === 'service_account') {
@@ -5066,6 +5106,11 @@ const handleSubmit = async () => {
     return
   }
 
+  if (form.platform === 'deepseek' || form.platform === 'kimi' || form.platform === 'glm') {
+    accountCategory.value = 'apikey'
+    form.type = 'apikey'
+  }
+
   // For apikey type, create directly
   if (!apiKeyValue.value.trim()) {
     appStore.showError(t('admin.accounts.pleaseEnterApiKey'))
@@ -5076,11 +5121,17 @@ const handleSubmit = async () => {
   const defaultBaseUrl =
     form.platform === 'openai'
       ? 'https://api.openai.com'
-      : form.platform === 'gemini'
-        ? 'https://generativelanguage.googleapis.com'
-        : form.platform === 'grok'
-          ? 'https://api.x.ai/v1'
-          : 'https://api.anthropic.com'
+      : form.platform === 'deepseek'
+        ? 'https://api.deepseek.com'
+        : form.platform === 'kimi'
+          ? 'https://api.moonshot.cn/v1'
+          : form.platform === 'glm'
+            ? 'https://open.bigmodel.cn/api/paas/v4'
+            : form.platform === 'gemini'
+              ? 'https://generativelanguage.googleapis.com'
+              : form.platform === 'grok'
+                ? 'https://api.x.ai/v1'
+                : 'https://api.anthropic.com'
 
   // Build credentials with optional model mapping
   const credentials: Record<string, unknown> = {

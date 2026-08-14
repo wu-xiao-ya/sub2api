@@ -88,8 +88,10 @@ func (s *ChannelMonitorService) recordMonitorCost(
 		return
 	}
 
-	event := s.buildMonitorCostEvent(ctx, monitor, result, account)
-	if err := repo.InsertCostEvents(ctx, []*ChannelMonitorCostEvent{event}); err != nil {
+	persistCtx, cancel := monitorPersistenceContext(ctx)
+	defer cancel()
+	event := s.buildMonitorCostEvent(persistCtx, monitor, result, account)
+	if err := repo.InsertCostEvents(persistCtx, []*ChannelMonitorCostEvent{event}); err != nil {
 		slog.Error("channel_monitor: insert cost event failed",
 			"monitor_id", monitor.ID,
 			"model", event.Model,
@@ -217,7 +219,7 @@ func monitorUsageFromResponse(provider, apiMode string, response []byte) monitor
 
 func monitorUsageFromPayload(provider, apiMode string, payload map[string]any) monitorUsage {
 	switch provider {
-	case MonitorProviderOpenAI, MonitorProviderGrok:
+	case MonitorProviderOpenAI, MonitorProviderGrok, MonitorProviderDeepSeek, MonitorProviderKimi, MonitorProviderGLM:
 		if defaultAPIMode(apiMode) == MonitorAPIModeResponses {
 			if response, ok := payload["response"].(map[string]any); ok {
 				return monitorUsageFromOpenAIPayload(response)

@@ -625,13 +625,22 @@ func lockAndMergeAccountProbeExtra(ctx context.Context, client *dbent.Client, ac
 			platform = $2
 			AND type = $3
 			AND credentials = $4::jsonb
-			AND proxy_id IS NOT DISTINCT FROM $5,
+			AND proxy_id IS NOT DISTINCT FROM $5
+			AND (
+				platform <> 'anthropic'
+				OR type <> 'apikey'
+				OR CASE
+					WHEN extra ->> 'anthropic_apikey_auth_scheme' = 'authorization_bearer'
+					THEN 'authorization_bearer'
+					ELSE 'x_api_key'
+				END = $6
+			),
 			extra -> 'upstream_billing_probe_enabled',
 			extra -> 'upstream_billing_probe'
 		FROM accounts
 		WHERE id = $1 AND deleted_at IS NULL
 		FOR NO KEY UPDATE
-	`, account.ID, account.Platform, account.Type, string(credentials), proxyID)
+	`, account.ID, account.Platform, account.Type, string(credentials), proxyID, account.GetAnthropicAPIKeyAuthScheme())
 	if err != nil {
 		return nil, err
 	}
@@ -659,11 +668,13 @@ func lockAndMergeAccountProbeExtra(ctx context.Context, client *dbent.Client, ac
 	delete(extra, service.UpstreamBillingProbeEnabledExtraKey)
 	delete(extra, service.UpstreamBillingProbeExtraKey)
 	probeExplicitlyDisabled := false
-	probeAccount := account.Platform == service.PlatformOpenAI && account.Type == service.AccountTypeAPIKey
-	if probeAccount && explicitProbeEnabled != nil {
+	automaticProbeAccount := account.Platform == service.PlatformOpenAI && account.Type == service.AccountTypeAPIKey
+	manualProbeAccount := account.Type == service.AccountTypeAPIKey &&
+		(account.Platform == service.PlatformOpenAI || account.Platform == service.PlatformAnthropic)
+	if automaticProbeAccount && explicitProbeEnabled != nil {
 		extra[service.UpstreamBillingProbeEnabledExtraKey] = *explicitProbeEnabled
 		probeExplicitlyDisabled = !*explicitProbeEnabled
-	} else if probeAccount && len(currentEnabled) > 0 && string(currentEnabled) != "null" {
+	} else if automaticProbeAccount && len(currentEnabled) > 0 && string(currentEnabled) != "null" {
 		var enabled any
 		if err := json.Unmarshal(currentEnabled, &enabled); err != nil {
 			return nil, err
@@ -673,7 +684,8 @@ func lockAndMergeAccountProbeExtra(ctx context.Context, client *dbent.Client, ac
 			probeExplicitlyDisabled = true
 		}
 	}
-	if !identityUnchanged || probeExplicitlyDisabled || len(currentSnapshot) == 0 || string(currentSnapshot) == "null" {
+	if !manualProbeAccount || !identityUnchanged || probeExplicitlyDisabled ||
+		len(currentSnapshot) == 0 || string(currentSnapshot) == "null" {
 		return extra, nil
 	}
 	var snapshot any
@@ -712,7 +724,7 @@ func (r *accountRepository) UpdateCredentials(ctx context.Context, id int64, cre
 		SET
 			credentials = $1::jsonb,
 			extra = CASE
-				WHEN platform = 'openai'
+				WHEN platform IN ('openai', 'anthropic')
 					AND type = 'apikey'
 					AND credentials IS DISTINCT FROM $1::jsonb
 				THEN COALESCE(extra, '{}'::jsonb) - 'upstream_billing_probe'
@@ -1940,6 +1952,20 @@ func (r *accountRepository) ListSchedulableByGroupIDAndPlatform(ctx context.Cont
 	})
 }
 
+func (r *accountRepository) GetGroupPlatform(ctx context.Context, groupID int64) (string, error) {
+	platform, err := r.client.Group.Query().
+		Where(
+			dbgroup.IDEQ(groupID),
+			dbgroup.DeletedAtIsNil(),
+		).
+		Select(dbgroup.FieldPlatform).
+		String(ctx)
+	if err != nil {
+		return "", translatePersistenceError(err, service.ErrGroupNotFound, nil)
+	}
+	return strings.TrimSpace(platform), nil
+}
+
 func (r *accountRepository) ListSchedulableByGroupNameAndPlatform(ctx context.Context, groupName, platform string) ([]service.Account, error) {
 	groupName = strings.TrimSpace(groupName)
 	platform = strings.TrimSpace(platform)
@@ -2648,8 +2674,18 @@ func (r *accountRepository) updateUpstreamBillingProbeSnapshotInTx(
 			AND proxy_id IS NOT DISTINCT FROM $6
 			AND COALESCE(extra -> 'upstream_billing_probe', 'null'::jsonb) = $7::jsonb
 			AND COALESCE(extra -> 'upstream_billing_probe_enabled', 'null'::jsonb) = $8::jsonb
+			AND (
+				platform <> 'anthropic'
+				OR type <> 'apikey'
+				OR CASE
+					WHEN extra ->> 'anthropic_apikey_auth_scheme' = 'authorization_bearer'
+					THEN 'authorization_bearer'
+					ELSE 'x_api_key'
+				END = $9
+			)
 			AND deleted_at IS NULL
-	`, string(payload), account.ID, account.Platform, account.Type, string(credentials), proxyID, string(expectedSnapshotJSON), string(expectedEnabledJSON))
+	`, string(payload), account.ID, account.Platform, account.Type, string(credentials), proxyID,
+		string(expectedSnapshotJSON), string(expectedEnabledJSON), account.GetAnthropicAPIKeyAuthScheme())
 	if err != nil {
 		return err
 	}

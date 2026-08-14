@@ -268,6 +268,7 @@ func buildStatusSummary(
 		if l, ok := latestByModel[model]; ok {
 			entry.Status = l.Status
 			entry.LatencyMs = l.LatencyMs
+			entry.Source = publicChannelMonitorSource(l)
 		}
 		if a, ok := availByModel[model]; ok {
 			entry.Availability7d = a.AvailabilityPct
@@ -294,6 +295,7 @@ func buildUserViewFromSummary(
 		PrimaryModel:     m.PrimaryModel,
 		PrimaryStatus:    summary.PrimaryStatus,
 		PrimaryLatencyMs: summary.PrimaryLatencyMs,
+		PrimarySource:    publicChannelMonitorSource(primaryLatest),
 		Availability7d:   summary.Availability7d,
 		ExtraModels:      summary.ExtraModels,
 		Timeline:         buildTimelinePoints(timelineEntries),
@@ -333,6 +335,7 @@ func mergeModelDetails(
 		if l, ok := latestByModel[model]; ok {
 			d.LatestStatus = l.Status
 			d.LatestLatencyMs = l.LatencyMs
+			d.Source = publicChannelMonitorSource(l)
 		}
 		if a, ok := availMap[monitorAvailability7Days][model]; ok {
 			d.Availability7d = a.AvailabilityPct
@@ -347,4 +350,16 @@ func mergeModelDetails(
 		out = append(out, d)
 	}
 	return out
+}
+
+// publicChannelMonitorSource collapses internal adaptive probe modes so the
+// user-facing API reveals only how the status data was collected.
+func publicChannelMonitorSource(latest *ChannelMonitorLatest) string {
+	if latest == nil {
+		return ""
+	}
+	if latest.ProbeMode == accountProbeModeTraffic {
+		return accountProbeModeTraffic
+	}
+	return "probe"
 }

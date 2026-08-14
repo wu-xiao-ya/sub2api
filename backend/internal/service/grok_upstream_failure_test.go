@@ -81,6 +81,32 @@ func TestShouldFailoverGrokUpstreamError_FreeUsageBody(t *testing.T) {
 	require.True(t, svc.shouldFailoverGrokUpstreamError(http.StatusBadRequest, body))
 }
 
+func TestClassifyGrokUpstreamFailure_CompatibleRelayUnavailable400(t *testing.T) {
+	body := []byte(`{"error":{"code":"upstream_unavailable","message":"上游服务暂时不可用。 原因：上游服务、网络链路或代理返回异常响应。"}}`)
+
+	d := classifyGrokUpstreamFailure(http.StatusBadRequest, body, "grok-4.6")
+
+	require.Equal(t, GrokFailureUnavailable, d.Class)
+	require.True(t, d.ShouldCooldown)
+	require.True(t, d.ShouldFailover)
+	require.Equal(t, 2*time.Minute, d.Cooldown)
+	require.True(t, (&OpenAIGatewayService{}).shouldFailoverGrokUpstreamError(http.StatusBadRequest, body))
+}
+
+func TestHandleGrokAccountUpstreamError_CompatibleRelayUnavailable400CoolsAccount(t *testing.T) {
+	repo := &grokQuotaAccountRepo{}
+	svc := &OpenAIGatewayService{accountRepo: repo}
+	account := &Account{ID: 9106, Platform: PlatformGrok, Type: AccountTypeAPIKey}
+	before := time.Now()
+	body := []byte(`{"error":{"code":"upstream_unavailable","message":"上游服务暂时不可用"}}`)
+
+	svc.handleGrokAccountUpstreamError(context.Background(), account, http.StatusBadRequest, nil, body)
+
+	require.Equal(t, 1, repo.tempUnschedCalls)
+	require.Equal(t, "grok upstream temporary error", repo.lastTempUnschedReason)
+	require.WithinDuration(t, before.Add(2*time.Minute), repo.lastTempUnschedUntil, time.Second)
+}
+
 func TestShouldFailoverGrokUpstreamError_ContentPolicyStillNoFailover(t *testing.T) {
 	svc := &OpenAIGatewayService{}
 	body := []byte(`{"error":{"code":"new_sensitive","message":"text is sensitive"}}`)

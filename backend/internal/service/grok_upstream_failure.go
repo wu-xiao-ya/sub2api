@@ -23,6 +23,7 @@ const (
 	GrokFailureBilling       GrokUpstreamFailureClass = "billing_quota"
 	GrokFailureEmptyUpstream GrokUpstreamFailureClass = "empty_upstream"
 	GrokFailureModelCapacity GrokUpstreamFailureClass = "model_capacity"
+	GrokFailureUnavailable   GrokUpstreamFailureClass = "upstream_unavailable"
 	GrokFailureRateLimit     GrokUpstreamFailureClass = "rate_limit"
 	GrokFailureAuth          GrokUpstreamFailureClass = "auth_error"
 	GrokFailureServer        GrokUpstreamFailureClass = "server_error"
@@ -134,6 +135,20 @@ func classifyGrokUpstreamFailure(statusCode int, responseBody []byte, requestedM
 			ShouldFailover: true,
 			BlockModel:     false,
 			Reason:         firstNonEmpty(text, "model capacity"),
+		}
+	}
+
+	// Some compatible Grok relays report their own upstream/network failures as
+	// HTTP 400 with code upstream_unavailable. This is account/line scoped, not
+	// a client validation error, so it must participate in normal failover.
+	if isGrokUpstreamUnavailableText(low, code) {
+		return GrokUpstreamFailureDecision{
+			Class:          GrokFailureUnavailable,
+			Model:          model,
+			Cooldown:       2 * time.Minute,
+			ShouldCooldown: true,
+			ShouldFailover: true,
+			Reason:         firstNonEmpty(text, code, "upstream unavailable"),
 		}
 	}
 
@@ -372,6 +387,17 @@ func isGrokModelCapacityText(low string) bool {
 		strings.Contains(low, "engine_overloaded")
 }
 
+func isGrokUpstreamUnavailableText(low, code string) bool {
+	combined := strings.ToLower(strings.TrimSpace(code + " " + low))
+	if combined == "" {
+		return false
+	}
+	return strings.Contains(combined, "upstream_unavailable") ||
+		strings.Contains(combined, "upstream unavailable") ||
+		strings.Contains(combined, "上游服务暂时不可用") ||
+		strings.Contains(combined, "上游服务、网络链路或代理返回异常响应")
+}
+
 func isGrokRateLimitText(low string) bool {
 	return strings.Contains(low, "rate limit") ||
 		strings.Contains(low, "rate_limit") ||
@@ -490,6 +516,8 @@ func (s *OpenAIGatewayService) applyGrokUpstreamFailureDecision(
 		reason = "grok empty model output"
 	case GrokFailureModelCapacity:
 		reason = "grok model capacity"
+	case GrokFailureUnavailable:
+		reason = "grok upstream temporary error"
 	case GrokFailureRateLimit:
 		// Pure 429 without free-usage language keeps the existing rate-limit
 		// snapshot path (Retry-After / quota headers). Body-only rate-limit

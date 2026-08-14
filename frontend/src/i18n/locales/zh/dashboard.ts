@@ -447,7 +447,11 @@ export default {
       openai: 'OpenAI',
       anthropic: 'Anthropic',
       gemini: 'Gemini',
-      grok: 'Grok'
+      grok: 'Grok',
+      antigravity: 'Antigravity',
+      deepseek: 'DeepSeek',
+      kimi: 'Kimi',
+      glm: 'GLM'
     },
     extraModelsHeader: '附加模型',
     extraModelsEmpty: '无附加模型',
@@ -483,6 +487,21 @@ export default {
     modelsCount: '{n} 个模型',
     availableModels: '可用模型',
     leadLatency: '当前延迟',
+    sourceLabel: '来源',
+    source: {
+      traffic: '用户请求',
+      probe: '站内探测',
+      mixed: '混合来源',
+    },
+    latencyMetric: {
+      traffic: '用户请求：近期成功请求的首字延迟中位数；没有首字记录时回退总耗时',
+      probe: '站内探测：本次探测的完整响应耗时',
+      unknown: '当前延迟',
+    },
+    latencyKind: {
+      firstToken: '首字',
+      probe: '探测',
+    },
     primaryModel: '独立监测',
     responseLatency: '响应延迟',
     windowAvailability: '{window} 可用率',
@@ -517,6 +536,7 @@ export default {
     },
     detailColumns: {
       model: '模型',
+      source: '数据来源',
       latestStatus: '最新状态',
       latestLatency: '最新延迟 (ms)',
       availability7d: '7 天可用率',

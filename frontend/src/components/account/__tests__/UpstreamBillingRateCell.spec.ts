@@ -268,9 +268,51 @@ describe('UpstreamBillingRateCell', () => {
     await wrapper.get('[data-testid="upstream-billing-probe"]').trigger('click')
     expect(wrapper.emitted('probe')).toHaveLength(1)
 
+    await wrapper.setProps({ account: makeAccount({ platform: 'anthropic' }) })
+    expect(wrapper.get('[data-testid="upstream-billing-probe"]').exists()).toBe(true)
+    expect(wrapper.get('[data-testid="upstream-billing-rate"]').text()).toBe(
+      'admin.accounts.upstreamBilling.notProbed'
+    )
+
     await wrapper.setProps({ account: makeAccount({ type: 'oauth' }) })
     expect(wrapper.findAll('button')).toHaveLength(0)
     expect(wrapper.text()).toBe('-')
+  })
+
+  it('shows manual probe entry for anthropic apikey accounts without auto probe state details', async () => {
+    const wrapper = mount(UpstreamBillingRateCell, {
+      attachTo: document.body,
+      props: {
+        account: makeAccount({
+          platform: 'anthropic',
+          extra: {
+            upstream_billing_probe_enabled: true,
+            upstream_billing_probe: {
+              status: 'ok',
+              data: billingData,
+              received_at: '2026-07-13T00:00:00Z',
+              fresh_until: '2026-07-14T00:00:00Z',
+              last_attempt_at: '2026-07-13T00:00:00Z',
+              next_probe_at: '2026-07-13T00:30:00Z'
+            }
+          }
+        }),
+        now: Date.now()
+      }
+    })
+
+    expect(wrapper.get('[data-testid="upstream-billing-probe"]').exists()).toBe(true)
+    await wrapper.get('[data-testid="upstream-billing-details"]').trigger('mouseenter')
+    await flushPromises()
+
+    const tooltips = document.body.querySelectorAll('[role="tooltip"]')
+    const tooltip = tooltips[tooltips.length - 1] as HTMLElement
+    expect(tooltip.textContent).toContain('admin.accounts.upstreamBilling.groupRate:0.8')
+    expect(tooltip.textContent).toContain('admin.accounts.upstreamBilling.effectiveRate:0.6')
+    expect(tooltip.querySelector('[data-testid="upstream-billing-next-probe"]')).toBeNull()
+    expect(tooltip.querySelector('[data-testid="upstream-billing-probe-state"]')).toBeNull()
+    expect(tooltip.querySelector('[data-testid="upstream-billing-global-probe-state"]')).toBeNull()
+    wrapper.unmount()
   })
 
   it('fails neutral for malformed data and timestamps', async () => {

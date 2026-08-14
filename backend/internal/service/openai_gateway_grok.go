@@ -463,7 +463,7 @@ func patchGrokResponsesBodyBase(body []byte, upstreamModel string) ([]byte, erro
 			}
 		}
 	}
-	if strings.EqualFold(upstreamModel, "grok-4.5") {
+	if isGrok45CompatibleTextModel(upstreamModel) {
 		for _, unsupportedField := range []string{"presence_penalty", "presencePenalty", "frequency_penalty", "frequencyPenalty", "stop"} {
 			if gjson.GetBytes(out, unsupportedField).Exists() {
 				out, err = sjson.DeleteBytes(out, unsupportedField)
@@ -504,6 +504,16 @@ func patchGrokResponsesBodyBase(body []byte, upstreamModel string) ([]byte, erro
 		return nil, err
 	}
 	return out, nil
+}
+
+func isGrok45CompatibleTextModel(model string) bool {
+	model = strings.ToLower(strings.TrimSpace(xai.StripGrokProviderPrefix(model)))
+	switch model {
+	case "grok-4.5", "grok-4.5-latest", "grok-4.6", "grok-4.6-latest":
+		return true
+	default:
+		return false
+	}
 }
 
 // xAI's Grok 4.20 family and newer models do not support OpenAI's logprobs
@@ -553,31 +563,56 @@ func normalizeGrokResponsesReasoningEffort(body []byte, upstreamModel string) ([
 	supportsEffort := grokSupportsReasoningEffort(upstreamModel)
 	out := body
 	var err error
-	for _, field := range []string{"reasoning.effort", "reasoning_effort"} {
-		value := gjson.GetBytes(out, field)
-		if !value.Exists() {
+	// xAI Responses expects the effort under the nested Responses shape:
+	// {"reasoning":{"effort":"low|medium|high"}}.  The gateway accepts both
+	// OpenAI-compatible flat aliases and the native nested form, but must not
+	// leave the flat field on the wire because xAI silently ignores it.
+	raw := strings.TrimSpace(gjson.GetBytes(out, "reasoning.effort").String())
+	if raw == "" {
+		raw = strings.TrimSpace(gjson.GetBytes(out, "reasoning_effort").String())
+	}
+	if raw == "" {
+		raw = strings.TrimSpace(gjson.GetBytes(out, "reasoningEffort").String())
+	}
+	normalized, keep := normalizeGrokReasoningEffortValue(raw)
+	keep = keep && supportsEffort
+
+	for _, field := range []string{"reasoning_effort", "reasoningEffort"} {
+		if !gjson.GetBytes(out, field).Exists() {
 			continue
 		}
-		normalized, keep := normalizeGrokReasoningEffortValue(value.String())
-		if !supportsEffort || !keep {
-			out, err = sjson.DeleteBytes(out, field)
-		} else {
-			out, err = sjson.SetBytes(out, field, normalized)
-		}
+		out, err = sjson.DeleteBytes(out, field)
 		if err != nil {
-			return nil, fmt.Errorf("normalize Grok reasoning field %s: %w", field, err)
+			return nil, fmt.Errorf("remove Grok %s: %w", field, err)
 		}
 	}
-	if camel := gjson.GetBytes(out, "reasoningEffort"); camel.Exists() {
-		normalized, keep := normalizeGrokReasoningEffortValue(camel.String())
-		out, err = sjson.DeleteBytes(out, "reasoningEffort")
+
+	if keep {
+		out, err = sjson.SetBytes(out, "reasoning.effort", normalized)
 		if err != nil {
-			return nil, fmt.Errorf("remove Grok reasoningEffort: %w", err)
+			return nil, fmt.Errorf("set Grok reasoning.effort: %w", err)
 		}
-		if supportsEffort && keep && !gjson.GetBytes(out, "reasoning_effort").Exists() {
-			out, err = sjson.SetBytes(out, "reasoning_effort", normalized)
+	} else if reasoning := gjson.GetBytes(out, "reasoning"); reasoning.Exists() {
+		// Keep unrelated native reasoning fields only when they are meaningful;
+		// otherwise remove an empty/invalid reasoning object instead of sending a
+		// shape that can trigger an upstream deserialization error.
+		if reasoning.IsObject() {
+			if gjson.GetBytes(out, "reasoning.effort").Exists() {
+				out, err = sjson.DeleteBytes(out, "reasoning.effort")
+				if err != nil {
+					return nil, fmt.Errorf("remove invalid Grok reasoning.effort: %w", err)
+				}
+			}
+			if len(gjson.GetBytes(out, "reasoning").Map()) == 0 {
+				out, err = sjson.DeleteBytes(out, "reasoning")
+				if err != nil {
+					return nil, fmt.Errorf("remove empty Grok reasoning: %w", err)
+				}
+			}
+		} else {
+			out, err = sjson.DeleteBytes(out, "reasoning")
 			if err != nil {
-				return nil, fmt.Errorf("set Grok reasoning_effort: %w", err)
+				return nil, fmt.Errorf("remove invalid Grok reasoning: %w", err)
 			}
 		}
 	}
@@ -591,7 +626,10 @@ func normalizeGrokResponsesReasoningEffort(body []byte, upstreamModel string) ([
 }
 
 func normalizeGrokChatReasoningEffort(body []byte, upstreamModel string) ([]byte, error) {
-	raw := strings.TrimSpace(gjson.GetBytes(body, "reasoning_effort").String())
+	raw := strings.TrimSpace(gjson.GetBytes(body, "reasoning.effort").String())
+	if raw == "" {
+		raw = strings.TrimSpace(gjson.GetBytes(body, "reasoning_effort").String())
+	}
 	if raw == "" {
 		raw = strings.TrimSpace(gjson.GetBytes(body, "reasoningEffort").String())
 	}
@@ -599,6 +637,12 @@ func normalizeGrokChatReasoningEffort(body []byte, upstreamModel string) ([]byte
 	keep = keep && grokSupportsReasoningEffort(upstreamModel)
 	out := body
 	var err error
+	if gjson.GetBytes(out, "reasoning").Exists() {
+		out, err = sjson.DeleteBytes(out, "reasoning")
+		if err != nil {
+			return nil, err
+		}
+	}
 	if gjson.GetBytes(out, "reasoningEffort").Exists() {
 		out, err = sjson.DeleteBytes(out, "reasoningEffort")
 		if err != nil {
@@ -632,7 +676,7 @@ func normalizeGrokReasoningEffortValue(raw string) (string, bool) {
 func grokSupportsReasoningEffort(model string) bool {
 	model = strings.ToLower(xai.StripGrokProviderPrefix(strings.TrimSpace(model)))
 	switch model {
-	case xai.DefaultTextModel, "grok-4.5-latest", "grok-4.3", "grok-4.3-latest",
+	case xai.DefaultTextModel, "grok-4.5-latest", "grok-4.6", "grok-4.6-latest", "grok-4.3", "grok-4.3-latest",
 		"grok-3-mini", "grok-3-mini-fast", "grok-4.20-0309-reasoning",
 		"grok-4.20-reasoning", "grok-4.20-multi-agent-0309":
 		return true

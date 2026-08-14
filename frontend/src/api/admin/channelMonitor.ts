@@ -5,7 +5,15 @@
 
 import { apiClient } from '../client'
 
-export type Provider = 'openai' | 'anthropic' | 'gemini' | 'grok' | 'antigravity'
+export type Provider =
+  | 'openai'
+  | 'anthropic'
+  | 'gemini'
+  | 'grok'
+  | 'antigravity'
+  | 'deepseek'
+  | 'kimi'
+  | 'glm'
 export type MonitorStatus = 'operational' | 'degraded' | 'failed' | 'error'
 export type BodyOverrideMode = 'off' | 'merge' | 'replace'
 export type APIMode = 'chat_completions' | 'responses' | 'models' | 'images'
@@ -45,7 +53,7 @@ export interface ChannelMonitor {
   /** Admin-only metadata for the most recent primary-model probe. */
   primary_account_id?: number | null
   primary_account_name?: string
-  primary_probe_mode?: 'static' | 'sticky' | 'confirm' | 'full'
+  primary_probe_mode?: 'static' | 'sticky' | 'confirm' | 'full' | 'traffic'
   primary_candidate_count?: number
   primary_healthy_count?: number
   primary_checked_at?: string | null
@@ -116,7 +124,7 @@ export interface CheckResult {
   ping_latency_ms: number | null
   account_id?: number | null
   account_name?: string
-  probe_mode?: 'static' | 'sticky' | 'confirm' | 'full'
+  probe_mode?: 'static' | 'sticky' | 'confirm' | 'full' | 'traffic'
   candidate_count?: number
   healthy_count?: number
   message: string
@@ -135,7 +143,7 @@ export interface HistoryItem {
   ping_latency_ms: number | null
   account_id?: number | null
   account_name?: string
-  probe_mode?: 'static' | 'sticky' | 'confirm' | 'full'
+  probe_mode?: 'static' | 'sticky' | 'confirm' | 'full' | 'traffic'
   candidate_count?: number
   healthy_count?: number
   message: string

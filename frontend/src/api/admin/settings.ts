@@ -25,6 +25,13 @@ export interface ChannelMonitorAccountProbeSettings {
   allow_image_fanout: boolean;
 }
 
+export interface ChannelMonitorTrafficObservationSettings {
+  enabled: boolean;
+  fallback_idle_seconds: number;
+  aggregation_window_seconds: number;
+  minimum_samples: number;
+}
+
 // ── 平台限额类型 ──────────────────────────────────────────────────
 export type PlatformType = "anthropic" | "openai" | "gemini" | "antigravity" | "grok"
 export type QuotaWindowType = "daily" | "weekly" | "monthly"
@@ -699,6 +706,7 @@ export interface SystemSettings {
   channel_monitor_enabled: boolean;
   channel_monitor_default_interval_seconds: number;
   channel_monitor_account_probe_settings: ChannelMonitorAccountProbeSettings;
+  channel_monitor_traffic_observation_settings: ChannelMonitorTrafficObservationSettings;
 
   // Available Channels feature switch
   available_channels_enabled: boolean;
@@ -974,6 +982,7 @@ export interface UpdateSettingsRequest {
   channel_monitor_enabled?: boolean;
   channel_monitor_default_interval_seconds?: number;
   channel_monitor_account_probe_settings?: ChannelMonitorAccountProbeSettings;
+  channel_monitor_traffic_observation_settings?: ChannelMonitorTrafficObservationSettings;
 
   // Available Channels feature switch
   available_channels_enabled?: boolean;

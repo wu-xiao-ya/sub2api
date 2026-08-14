@@ -341,9 +341,10 @@ func (h *SettingHandler) GetSettings(c *gin.Context) {
 		PaymentCancelRateLimitMode:                             paymentCfg.CancelRateLimitMode,
 		PaymentAlipayForceQRCode:                               paymentCfg.AlipayForceQRCode,
 
-		ChannelMonitorEnabled:                settings.ChannelMonitorEnabled,
-		ChannelMonitorDefaultIntervalSeconds: settings.ChannelMonitorDefaultIntervalSeconds,
-		ChannelMonitorAccountProbeSettings:   settings.ChannelMonitorAccountProbeSettings,
+		ChannelMonitorEnabled:                    settings.ChannelMonitorEnabled,
+		ChannelMonitorDefaultIntervalSeconds:     settings.ChannelMonitorDefaultIntervalSeconds,
+		ChannelMonitorAccountProbeSettings:       settings.ChannelMonitorAccountProbeSettings,
+		ChannelMonitorTrafficObservationSettings: settings.ChannelMonitorTrafficObservationSettings,
 
 		GrokDefaultTextModel:           settings.GrokDefaultTextModel,
 		GrokCrossClientModelMapEnabled: settings.GrokCrossClientModelMapEnabled,

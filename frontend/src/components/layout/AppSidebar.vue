@@ -819,7 +819,7 @@ const adminNavItems = computed((): NavItem[] => {
     },
     {
       path: '/admin/orders',
-      label: t('nav.orderManagement'),
+      label: t('nav.financeManagement'),
       icon: OrderIcon,
       hideInSimpleMode: true,
       expandOnly: true,
@@ -828,6 +828,7 @@ const adminNavItems = computed((): NavItem[] => {
         { path: '/admin/orders/dashboard', label: t('nav.paymentDashboard'), icon: ChartIcon },
         { path: '/admin/orders', label: t('nav.orderManagement'), icon: OrderIcon },
         { path: '/admin/orders/plans', label: t('nav.paymentPlans'), icon: CreditCardIcon },
+        { path: '/admin/finance/ledger', label: t('nav.financeLedger'), icon: CreditCardIcon },
       ],
     },
     { path: '/admin/usage', label: t('nav.usage'), icon: ChartIcon },

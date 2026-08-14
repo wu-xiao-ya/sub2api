@@ -1,11 +1,15 @@
 package admin
 
 import (
+	"encoding/csv"
+	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/timezone"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 
 	"github.com/gin-gonic/gin"
@@ -42,6 +46,173 @@ func (h *PaymentHandler) GetDashboard(c *gin.Context) {
 		return
 	}
 	response.Success(c, stats)
+}
+
+// ListFinanceLedger returns the merged balance ledger for the administrator.
+// GET /api/v1/admin/finance/ledger
+func (h *PaymentHandler) ListFinanceLedger(c *gin.Context) {
+	query, startDate, endDate := financeLedgerQueryFromRequest(c)
+	result, err := h.paymentService.ListFinanceLedger(c.Request.Context(), query)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, gin.H{
+		"items":      result.Items,
+		"total":      result.Total,
+		"page":       result.Page,
+		"page_size":  result.PageSize,
+		"start_date": startDate,
+		"end_date":   endDate,
+		"summary":    result.Summary,
+	})
+}
+
+// ExportFinanceLedger exports every result matching the active filter as CSV.
+// GET /api/v1/admin/finance/ledger/export
+func (h *PaymentHandler) ExportFinanceLedger(c *gin.Context) {
+	query, startDate, endDate := financeLedgerQueryFromRequest(c)
+	result, err := h.paymentService.ListFinanceLedger(c.Request.Context(), query)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	c.Header("Content-Type", "text/csv; charset=utf-8")
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=finance_ledger_%s_%s.csv", startDate, endDate))
+	c.Writer.WriteString("\xEF\xBB\xBF")
+	writer := csv.NewWriter(c.Writer)
+	if err := writer.Write([]string{"start_date", startDate}); err != nil {
+		return
+	}
+	if err := writer.Write([]string{"end_date", endDate}); err != nil {
+		return
+	}
+	if err := writer.Write([]string{"timezone", c.Query("timezone")}); err != nil {
+		return
+	}
+	if err := writer.Write([]string{"income", fmt.Sprintf("%.8f", result.Summary.Income)}); err != nil {
+		return
+	}
+	if err := writer.Write([]string{"deduction", fmt.Sprintf("%.8f", result.Summary.Deduction)}); err != nil {
+		return
+	}
+	if err := writer.Write([]string{"net", fmt.Sprintf("%.8f", result.Summary.Net)}); err != nil {
+		return
+	}
+	if err := writer.Write([]string{"record_count", strconv.FormatInt(result.Summary.Count, 10)}); err != nil {
+		return
+	}
+	if err := writer.Write([]string{}); err != nil {
+		return
+	}
+	if err := writer.Write([]string{
+		"time",
+		"user_id",
+		"user_email",
+		"user_name",
+		"source",
+		"amount",
+		"direction",
+		"reference",
+		"payment_type",
+		"notes",
+		"status",
+	}); err != nil {
+		_ = c.Error(err)
+		return
+	}
+
+	err = h.paymentService.StreamFinanceLedger(c.Request.Context(), query, func(entry service.FinanceLedgerEntry) error {
+		return writer.Write([]string{
+			entry.OccurredAt.Format("2006-01-02 15:04:05"),
+			strconv.FormatInt(entry.UserID, 10),
+			entry.UserEmail,
+			entry.UserName,
+			entry.Source,
+			fmt.Sprintf("%.8f", entry.Amount),
+			entry.Direction,
+			entry.Reference,
+			entry.PaymentType,
+			entry.Notes,
+			entry.Status,
+		})
+	})
+	if err != nil {
+		_ = c.Error(err)
+		return
+	}
+	writer.Flush()
+	if err := writer.Error(); err != nil {
+		_ = c.Error(err)
+	}
+}
+
+func financeLedgerQueryFromRequest(c *gin.Context) (service.FinanceLedgerQuery, string, string) {
+	userTZ := c.Query("timezone")
+	now := timezone.NowInUserLocation(userTZ)
+	startDate := c.Query("start_date")
+	endDate := c.Query("end_date")
+	if startDate == "" {
+		startDate = timezone.StartOfDayInUserLocation(now.AddDate(0, 0, -1), userTZ).Format("2006-01-02")
+	}
+	if endDate == "" {
+		endDate = timezone.StartOfDayInUserLocation(now, userTZ).Format("2006-01-02")
+	}
+
+	startTime, err := timezone.ParseInUserLocation("2006-01-02", startDate, userTZ)
+	if err != nil {
+		startTime = timezone.StartOfDayInUserLocation(now.AddDate(0, 0, -1), userTZ)
+		startDate = startTime.Format("2006-01-02")
+	}
+	endTime, err := timezone.ParseInUserLocation("2006-01-02", endDate, userTZ)
+	if err != nil {
+		endTime = timezone.StartOfDayInUserLocation(now, userTZ)
+		endDate = endTime.Format("2006-01-02")
+	}
+	if endTime.Before(startTime) {
+		startTime, endTime = endTime, startTime
+		startDate, endDate = endDate, startDate
+	}
+
+	page, pageSize := response.ParsePagination(c)
+	return service.FinanceLedgerQuery{
+		StartTime:    startTime,
+		EndTime:      endTime.AddDate(0, 0, 1),
+		Page:         page,
+		PageSize:     pageSize,
+		User:         c.Query("user"),
+		ExcludeUsers: parseFinanceLedgerExcludedUsers(c),
+		Source:       c.Query("source"),
+		Direction:    c.Query("direction"),
+		PaymentType:  c.Query("payment_type"),
+		Keyword:      c.Query("keyword"),
+	}, startDate, endDate
+}
+
+func parseFinanceLedgerExcludedUsers(c *gin.Context) []string {
+	rawValues := append([]string{}, c.QueryArray("exclude_users")...)
+	if len(rawValues) == 0 {
+		if raw := c.Query("exclude_users"); raw != "" {
+			rawValues = []string{raw}
+		}
+	}
+	out := make([]string, 0, len(rawValues))
+	for _, raw := range rawValues {
+		for _, value := range strings.FieldsFunc(raw, func(r rune) bool {
+			switch r {
+			case ',', ';', '，', '；', '\n', '\r', '\t', ' ':
+				return true
+			default:
+				return false
+			}
+		}) {
+			if value = strings.TrimSpace(value); value != "" {
+				out = append(out, value)
+			}
+		}
+	}
+	return out
 }
 
 // --- Orders ---

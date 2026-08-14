@@ -7,11 +7,13 @@ import { apiClient } from './client'
 import type { APIMode, Provider, MonitorStatus } from './admin/channelMonitor'
 
 export type { APIMode, Provider, MonitorStatus } from './admin/channelMonitor'
+export type ChannelMonitorSource = 'traffic' | 'probe'
 
 export interface UserMonitorExtraModel {
   model: string
   status: MonitorStatus | ''
   latency_ms: number | null
+  source?: ChannelMonitorSource
   availability_7d: number
 }
 
@@ -32,6 +34,7 @@ export interface UserMonitorView {
   primary_status: MonitorStatus
   primary_latency_ms: number | null
   primary_ping_latency_ms: number | null
+  primary_source?: ChannelMonitorSource
   availability_7d: number
   extra_models: UserMonitorExtraModel[]
   timeline: MonitorTimelinePoint[]
@@ -45,6 +48,7 @@ export interface UserMonitorModelDetail {
   model: string
   latest_status: MonitorStatus
   latest_latency_ms: number | null
+  source?: ChannelMonitorSource
   availability_7d: number
   availability_15d: number
   availability_30d: number

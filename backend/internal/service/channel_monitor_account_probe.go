@@ -19,6 +19,7 @@ import (
 type channelMonitorAccountProbeRepository interface {
 	ListSchedulableByGroupNameAndPlatform(ctx context.Context, groupName, platform string) ([]Account, error)
 	ListSchedulableByGroupIDAndPlatform(ctx context.Context, groupID int64, platform string) ([]Account, error)
+	GetGroupPlatform(ctx context.Context, groupID int64) (string, error)
 }
 
 func (s *ChannelMonitorService) SetAccountProbeDependencies(
@@ -100,13 +101,25 @@ func (s *ChannelMonitorService) resolveBusinessGroupProbeAccounts(
 		return nil, groupName, false, nil
 	}
 
-	accounts, err := s.accountProbeRepo.ListSchedulableByGroupNameAndPlatform(ctx, groupName, PlatformOpenAI)
+	var (
+		accounts []Account
+		err      error
+	)
+	if m.AccountGroupID != nil && *m.AccountGroupID > 0 {
+		platform, platformErr := s.accountProbeRepo.GetGroupPlatform(ctx, *m.AccountGroupID)
+		if platformErr != nil {
+			return nil, groupName, true, platformErr
+		}
+		accounts, err = s.accountProbeRepo.ListSchedulableByGroupIDAndPlatform(ctx, *m.AccountGroupID, platform)
+	} else {
+		accounts, err = s.accountProbeRepo.ListSchedulableByGroupNameAndPlatform(ctx, groupName, PlatformOpenAI)
+	}
 	if err != nil {
 		return nil, groupName, true, err
 	}
 	eligible := make([]Account, 0, len(accounts))
 	for _, account := range accounts {
-		if account.Platform != PlatformOpenAI || account.Type != AccountTypeAPIKey {
+		if !account.IsOpenAICompatible() || account.Type != AccountTypeAPIKey {
 			continue
 		}
 		if strings.TrimSpace(account.GetOpenAIApiKey()) == "" {
@@ -202,7 +215,7 @@ func (s *ChannelMonitorService) runOpenAIAPIKeyAccountProbe(
 		res.Message = truncateMessage(sanitizeErrorMessage(fmt.Sprintf("read body: %v", readErr)))
 		return res
 	}
-	res.monitorUsage = monitorUsageFromResponse(MonitorProviderOpenAI, apiMode, respBytes)
+	res.monitorUsage = monitorUsageFromResponse(accountProbeProvider(m, account), apiMode, respBytes)
 	res.monitorCostModel = strings.TrimSpace(account.GetMappedModel(m.PrimaryModel))
 	if res.monitorCostModel == "" {
 		res.monitorCostModel = m.PrimaryModel
@@ -223,7 +236,7 @@ func (s *ChannelMonitorService) runOpenAIAPIKeyAccountProbe(
 		}
 		return finalizeOperationalOrDegraded(res, latency, latencyMs)
 	}
-	if !validateChallenge(respText, challenge.Expected) {
+	if !validateMonitorChallengeResponse(accountProbeProvider(m, account), respText, respBytes, challenge.Expected, opts) {
 		res.Status = MonitorStatusFailed
 		res.Message = truncateMessage(sanitizeErrorMessage(fmt.Sprintf(
 			"challenge mismatch (expected %s, got %q)", challenge.Expected, respText,
@@ -275,7 +288,8 @@ func buildOpenAIAccountProbeRequest(
 	default:
 		return nil, "", fmt.Errorf("account group probe does not support api_mode %q", opts.APIMode)
 	}
-	adapter, apiMode, ok := providerAdapterFor(MonitorProviderOpenAI, requestedAPIMode)
+	provider := accountProbeProvider(m, account)
+	adapter, apiMode, ok := providerAdapterFor(provider, requestedAPIMode)
 	if !ok {
 		return nil, "", fmt.Errorf("account group probe does not support api_mode %q", opts.APIMode)
 	}
@@ -283,7 +297,7 @@ func buildOpenAIAccountProbeRequest(
 	if model == "" {
 		model = strings.TrimSpace(m.PrimaryModel)
 	}
-	body, err := buildRequestBody(adapter, MonitorProviderOpenAI, apiMode, model, prompt, opts)
+	body, err := buildRequestBody(adapter, provider, apiMode, model, prompt, opts)
 	if err != nil {
 		return nil, "", err
 	}
@@ -309,6 +323,35 @@ func buildOpenAIAccountProbeRequest(
 	account.ApplyHeaderOverrides(req.Header)
 	usagesource.SetChannelMonitor(req.Header)
 	return req, apiMode, nil
+}
+
+func accountProbeProvider(m *ChannelMonitor, account *Account) string {
+	if m == nil {
+		return MonitorProviderOpenAI
+	}
+	provider := strings.TrimSpace(m.Provider)
+	switch provider {
+	case MonitorProviderOpenAI,
+		MonitorProviderGrok,
+		MonitorProviderDeepSeek,
+		MonitorProviderKimi,
+		MonitorProviderGLM:
+		if provider != MonitorProviderOpenAI || account == nil {
+			return provider
+		}
+		switch account.Platform {
+		case PlatformDeepSeek:
+			return MonitorProviderDeepSeek
+		case PlatformKimi:
+			return MonitorProviderKimi
+		case PlatformGLM:
+			return MonitorProviderGLM
+		default:
+			return provider
+		}
+	default:
+		return MonitorProviderOpenAI
+	}
 }
 
 func (s *ChannelMonitorService) doAccountProbeRequest(req *http.Request, account *Account) (*http.Response, error) {

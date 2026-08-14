@@ -18,9 +18,10 @@ import (
 )
 
 type accountProbeRepoStub struct {
-	calls    []accountProbeRepoCall
-	accounts []Account
-	err      error
+	calls         []accountProbeRepoCall
+	accounts      []Account
+	err           error
+	groupPlatform string
 }
 
 type accountProbeRepoCall struct {
@@ -42,12 +43,23 @@ func (r *accountProbeRepoStub) ListSchedulableByGroupNameAndPlatform(
 func (r *accountProbeRepoStub) ListSchedulableByGroupIDAndPlatform(
 	_ context.Context,
 	_ int64,
-	_ string,
+	platform string,
 ) ([]Account, error) {
+	r.calls = append(r.calls, accountProbeRepoCall{platform: platform})
 	if r.err != nil {
 		return nil, r.err
 	}
 	return append([]Account(nil), r.accounts...), nil
+}
+
+func (r *accountProbeRepoStub) GetGroupPlatform(_ context.Context, _ int64) (string, error) {
+	if r.err != nil {
+		return "", r.err
+	}
+	if r.groupPlatform != "" {
+		return r.groupPlatform, nil
+	}
+	return PlatformOpenAI, nil
 }
 
 type accountProbeHTTPStub struct {

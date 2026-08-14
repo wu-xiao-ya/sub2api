@@ -175,9 +175,39 @@ func TestGrokChatResponsesBridgeEligibility(t *testing.T) {
 			reason: "invalid_parallel_tool_calls",
 		},
 		{
-			name:   "reasoning effort falls back because conversion adds summary",
-			body:   `{"model":"grok","messages":[{"role":"user","content":"hi"}],"reasoning_effort":"high"}`,
+			name: "reasoning effort bridges",
+			body: `{"model":"grok","messages":[{"role":"user","content":"hi"}],"reasoning_effort":"high"}`,
+			want: true,
+		},
+		{
+			name: "xhigh reasoning effort bridges",
+			body: `{"model":"grok","messages":[{"role":"user","content":"hi"}],"reasoning_effort":"xhigh"}`,
+			want: true,
+		},
+		{
+			name: "camelCase reasoningEffort bridges",
+			body: `{"model":"grok","messages":[{"role":"user","content":"hi"}],"reasoningEffort":"max"}`,
+			want: true,
+		},
+		{
+			name: "nested reasoning.effort bridges",
+			body: `{"model":"grok","messages":[{"role":"user","content":"hi"}],"reasoning":{"effort":"high"}}`,
+			want: true,
+		},
+		{
+			name:   "unknown reasoning effort falls back",
+			body:   `{"model":"grok","messages":[{"role":"user","content":"hi"}],"reasoning_effort":"banana"}`,
 			reason: "unsupported_reasoning_effort",
+		},
+		{
+			name:   "nested reasoning extra field falls back",
+			body:   `{"model":"grok","messages":[{"role":"user","content":"hi"}],"reasoning":{"effort":"high","summary":"auto"}}`,
+			reason: "unsupported_reasoning_field_summary",
+		},
+		{
+			name:   "non string reasoning effort falls back",
+			body:   `{"model":"grok","messages":[{"role":"user","content":"hi"}],"reasoning_effort":{"value":"high"}}`,
+			reason: "invalid_reasoning_effort",
 		},
 		{
 			name:   "both token limits fall back",
@@ -271,6 +301,86 @@ func TestForwardGrokChatViaResponsesNonStreamingCachesAndReturnsChat(t *testing.
 	require.Equal(t, "cached ok", gjson.Get(recorder.Body.String(), "choices.0.message.content").String())
 	require.Equal(t, int64(9856), gjson.Get(recorder.Body.String(), "usage.prompt_tokens_details.cached_tokens").Int())
 	require.NotNil(t, repo.updates[account.ID][grokQuotaSnapshotExtraKey])
+}
+
+func TestForwardGrokChatViaResponsesForwardsReasoningEffort(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	body := []byte(`{"model":"grok-4.6","messages":[{"role":"user","content":"think carefully"}],"stream":false,"reasoning_effort":"xhigh","prompt_cache_key":"stable-session"}`)
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	c.Request = httptest.NewRequest(http.MethodPost, grokChatRawEndpoint, bytes.NewReader(body))
+	c.Set("api_key", &APIKey{ID: 7201})
+
+	account := grokChatBridgeTestAccount(72)
+	repo := &grokQuotaAccountRepo{mockAccountRepoForPlatform: &mockAccountRepoForPlatform{
+		accountsByID: map[int64]*Account{account.ID: account},
+	}}
+	upstream := &httpUpstreamRecorder{resp: grokChatBridgeCompletedResponse("resp_grok_chat_effort", 128)}
+	svc := &OpenAIGatewayService{
+		httpUpstream:      upstream,
+		grokTokenProvider: NewGrokTokenProvider(repo, nil),
+		accountRepo:       repo,
+	}
+
+	result, err := svc.ForwardAsChatCompletions(context.Background(), c, account, body, "", "")
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.Equal(t, xai.DefaultCLIBaseURL+"/responses", upstream.lastReq.URL.String())
+	require.Equal(t, grokChatResponsesEndpoint, result.UpstreamEndpoint)
+	require.Equal(t, "grok-4.6", result.UpstreamModel)
+	require.Equal(t, "high", gjson.GetBytes(upstream.lastBody, "reasoning.effort").String())
+	require.False(t, gjson.GetBytes(upstream.lastBody, "reasoning.summary").Exists())
+	require.False(t, gjson.GetBytes(upstream.lastBody, "reasoning_effort").Exists())
+	require.NotNil(t, result.ReasoningEffort)
+	require.Equal(t, "high", *result.ReasoningEffort)
+}
+
+func TestForwardGrokChatViaResponsesForwardsNestedAndCamelReasoningEffort(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	tests := []struct {
+		name string
+		body string
+	}{
+		{
+			name: "camelCase",
+			body: `{"model":"grok-4.6","messages":[{"role":"user","content":"think carefully"}],"stream":false,"reasoningEffort":"max","prompt_cache_key":"stable-session"}`,
+		},
+		{
+			name: "nested",
+			body: `{"model":"grok-4.6","messages":[{"role":"user","content":"think carefully"}],"stream":false,"reasoning":{"effort":"xhigh"},"prompt_cache_key":"stable-session"}`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			recorder := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(recorder)
+			c.Request = httptest.NewRequest(http.MethodPost, grokChatRawEndpoint, bytes.NewReader([]byte(tt.body)))
+			c.Set("api_key", &APIKey{ID: 7202})
+
+			account := grokChatBridgeTestAccount(73)
+			repo := &grokQuotaAccountRepo{mockAccountRepoForPlatform: &mockAccountRepoForPlatform{
+				accountsByID: map[int64]*Account{account.ID: account},
+			}}
+			upstream := &httpUpstreamRecorder{resp: grokChatBridgeCompletedResponse("resp_grok_chat_effort_alias", 128)}
+			svc := &OpenAIGatewayService{
+				httpUpstream:      upstream,
+				grokTokenProvider: NewGrokTokenProvider(repo, nil),
+				accountRepo:       repo,
+			}
+
+			result, err := svc.ForwardAsChatCompletions(context.Background(), c, account, []byte(tt.body), "", "")
+			require.NoError(t, err)
+			require.NotNil(t, result)
+			require.Equal(t, xai.DefaultCLIBaseURL+"/responses", upstream.lastReq.URL.String())
+			require.Equal(t, "high", gjson.GetBytes(upstream.lastBody, "reasoning.effort").String())
+			require.False(t, gjson.GetBytes(upstream.lastBody, "reasoning.summary").Exists())
+			require.NotNil(t, result.ReasoningEffort)
+			require.Equal(t, "high", *result.ReasoningEffort)
+		})
+	}
 }
 
 func TestForwardGrokChatViaResponsesTraeToolHistoryKeepsCacheRoute(t *testing.T) {
@@ -513,6 +623,44 @@ func TestForwardGrokChatViaResponses429UsesGrokRateLimitPolicy(t *testing.T) {
 	require.True(t, svc.isOpenAIAccountRuntimeBlocked(account))
 }
 
+func TestForwardGrokChatViaResponses400UpstreamUnavailableFailsOver(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	body := []byte(`{"model":"grok","messages":[{"role":"user","content":"hi"}],"stream":false}`)
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	c.Request = httptest.NewRequest(http.MethodPost, grokChatRawEndpoint, bytes.NewReader(body))
+	c.Set("api_key", &APIKey{ID: 7521})
+
+	account := grokChatBridgeTestAccount(752)
+	repo := &grokQuotaAccountRepo{mockAccountRepoForPlatform: &mockAccountRepoForPlatform{
+		accountsByID: map[int64]*Account{account.ID: account},
+	}}
+	upstream := &httpUpstreamRecorder{resp: &http.Response{
+		StatusCode: http.StatusBadRequest,
+		Header:     http.Header{"Content-Type": []string{"application/json"}},
+		Body: io.NopCloser(strings.NewReader(
+			`{"error":{"code":"upstream_unavailable","message":"upstream unavailable"}}`,
+		)),
+	}}
+	svc := &OpenAIGatewayService{
+		httpUpstream:      upstream,
+		grokTokenProvider: NewGrokTokenProvider(repo, nil),
+		accountRepo:       repo,
+	}
+
+	result, err := svc.ForwardAsChatCompletions(context.Background(), c, account, body, "", "")
+
+	require.Error(t, err)
+	require.Nil(t, result)
+	var failoverErr *UpstreamFailoverError
+	require.ErrorAs(t, err, &failoverErr)
+	require.Equal(t, http.StatusBadRequest, failoverErr.StatusCode)
+	require.Equal(t, xai.DefaultCLIBaseURL+"/responses", upstream.lastReq.URL.String())
+	require.Equal(t, grokChatResponsesEndpoint, GetActualOpenAIUpstreamEndpoint(c))
+	require.Equal(t, 1, repo.tempUnschedCalls)
+}
+
 func TestForwardGrokRawChat429PreservesRetryAfter(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
@@ -550,6 +698,44 @@ func TestForwardGrokRawChat429PreservesRetryAfter(t *testing.T) {
 	require.Equal(t, http.StatusTooManyRequests, failoverErr.StatusCode)
 	require.Equal(t, "45", failoverErr.ResponseHeaders.Get("Retry-After"))
 	require.Equal(t, xai.DefaultCLIBaseURL+"/chat/completions", upstream.lastReq.URL.String())
+}
+
+func TestForwardGrokRawChat400UpstreamUnavailableFailsOver(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	body := []byte(`{"model":"grok","messages":[{"role":"user","content":"hi"}],"stream":false,"stop":"done"}`)
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	c.Request = httptest.NewRequest(http.MethodPost, grokChatRawEndpoint, bytes.NewReader(body))
+	c.Set("api_key", &APIKey{ID: 7571})
+
+	account := grokChatBridgeTestAccount(757)
+	repo := &grokQuotaAccountRepo{mockAccountRepoForPlatform: &mockAccountRepoForPlatform{
+		accountsByID: map[int64]*Account{account.ID: account},
+	}}
+	upstream := &httpUpstreamRecorder{resp: &http.Response{
+		StatusCode: http.StatusBadRequest,
+		Header:     http.Header{"Content-Type": []string{"application/json"}},
+		Body: io.NopCloser(strings.NewReader(
+			`{"error":{"code":"upstream_unavailable","message":"upstream unavailable"}}`,
+		)),
+	}}
+	svc := &OpenAIGatewayService{
+		httpUpstream:      upstream,
+		grokTokenProvider: NewGrokTokenProvider(repo, nil),
+		accountRepo:       repo,
+	}
+
+	result, err := svc.ForwardAsChatCompletions(context.Background(), c, account, body, "", "")
+
+	require.Error(t, err)
+	require.Nil(t, result)
+	var failoverErr *UpstreamFailoverError
+	require.ErrorAs(t, err, &failoverErr)
+	require.Equal(t, http.StatusBadRequest, failoverErr.StatusCode)
+	require.Equal(t, xai.DefaultCLIBaseURL+"/chat/completions", upstream.lastReq.URL.String())
+	require.Equal(t, grokChatRawEndpoint, GetActualOpenAIUpstreamEndpoint(c))
+	require.Equal(t, 1, repo.tempUnschedCalls)
 }
 
 func TestForwardGrokRawChatErrorRecordsActualEndpoint(t *testing.T) {

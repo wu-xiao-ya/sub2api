@@ -852,6 +852,7 @@ func ProvideChannelMonitorService(
 	accountTestService *AccountTestService,
 	channelService *ChannelService,
 	billingService *BillingService,
+	usageLogRepo UsageLogRepository,
 ) *ChannelMonitorService {
 	svc := NewChannelMonitorService(repo, encryptor)
 	if probeRepo, ok := accountRepo.(channelMonitorAccountProbeRepository); ok {
@@ -860,6 +861,7 @@ func ProvideChannelMonitorService(
 	svc.SetAccountProbeSettingsProvider(settingService)
 	svc.SetAccountProbeExecutor(accountTestService)
 	svc.SetCostDependencies(settingService, channelService, billingService)
+	svc.SetTrafficObservationDependencies(usageLogRepo, settingService)
 	return svc
 }
 

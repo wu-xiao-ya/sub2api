@@ -1,5 +1,5 @@
 <template>
-  <div v-if="eligible || manualRate != null" class="flex h-6 min-w-[7rem] items-center gap-1">
+  <div v-if="manualProbeEligible || manualRate != null" class="flex h-6 min-w-[7rem] items-center gap-1">
     <HelpTooltip class="-ml-1" width-class="w-max max-w-[calc(100vw-2rem)]" data-testid="upstream-billing-details">
       <template #trigger>
         <span
@@ -47,33 +47,35 @@
           </p>
         </template>
         <p v-else>{{ statusLabel || '-' }}</p>
-        <p
-          v-if="probeEnabled && globalProbeEnabled !== false && nextProbeAt"
-          data-testid="upstream-billing-next-probe"
-        >
-          {{ t('admin.accounts.upstreamBilling.nextProbeAt', { value: formatDate(nextProbeAt) }) }}
-        </p>
-        <p class="mt-2 border-t border-white/15 pt-2" data-testid="upstream-billing-probe-state">
-          {{ t('admin.accounts.upstreamBilling.accountProbeState') }}
-          <span :class="probeEnabled ? 'text-emerald-400' : 'text-red-400'">
-            {{ probeEnabled ? t('admin.accounts.upstreamBilling.enabled') : t('admin.accounts.upstreamBilling.disabled') }}
-          </span>
-        </p>
-        <p
-          v-if="globalProbeEnabled === false"
-          class="mt-1"
-          data-testid="upstream-billing-global-probe-state"
-        >
-          {{ t('admin.accounts.upstreamBilling.globalProbeState') }}
-          <span class="text-red-400">{{ t('admin.accounts.upstreamBilling.disabled') }}</span>
-        </p>
+        <template v-if="autoProbeEligible">
+          <p
+            v-if="probeEnabled && globalProbeEnabled !== false && nextProbeAt"
+            data-testid="upstream-billing-next-probe"
+          >
+            {{ t('admin.accounts.upstreamBilling.nextProbeAt', { value: formatDate(nextProbeAt) }) }}
+          </p>
+          <p class="mt-2 border-t border-white/15 pt-2" data-testid="upstream-billing-probe-state">
+            {{ t('admin.accounts.upstreamBilling.accountProbeState') }}
+            <span :class="probeEnabled ? 'text-emerald-400' : 'text-red-400'">
+              {{ probeEnabled ? t('admin.accounts.upstreamBilling.enabled') : t('admin.accounts.upstreamBilling.disabled') }}
+            </span>
+          </p>
+          <p
+            v-if="globalProbeEnabled === false"
+            class="mt-1"
+            data-testid="upstream-billing-global-probe-state"
+          >
+            {{ t('admin.accounts.upstreamBilling.globalProbeState') }}
+            <span class="text-red-400">{{ t('admin.accounts.upstreamBilling.disabled') }}</span>
+          </p>
+        </template>
       </div>
     </HelpTooltip>
     <span v-if="hasEffectiveRate && statusLabel" :class="statusClass" class="whitespace-nowrap text-[10px] font-medium">
       {{ statusLabel }}
     </span>
     <button
-      v-if="eligible"
+      v-if="manualProbeEligible"
       type="button"
       class="inline-flex h-6 w-6 flex-shrink-0 items-center justify-center rounded text-blue-600 transition-colors hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50 dark:text-blue-400 dark:hover:bg-blue-900/30"
       :disabled="probing"
@@ -110,7 +112,8 @@ defineEmits<{
 
 const { t } = useI18n()
 const CLOCK_SKEW_TOLERANCE_MS = 5 * 60 * 1000
-const eligible = computed(() => props.account.platform === 'openai' && props.account.type === 'apikey')
+const manualProbeEligible = computed(() => ['openai', 'anthropic'].includes(props.account.platform) && props.account.type === 'apikey')
+const autoProbeEligible = computed(() => props.account.platform === 'openai' && props.account.type === 'apikey')
 const snapshot = computed<UpstreamBillingProbeSnapshot | undefined>(() => props.account.extra?.upstream_billing_probe)
 const data = computed(() => snapshot.value?.data)
 const manualRate = computed(() => {

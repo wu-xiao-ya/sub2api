@@ -196,6 +196,8 @@ export default {
     docs: '文档',
     myOrders: '我的订单',
     orderManagement: '订单管理',
+    financeManagement: '财务管理',
+    financeLedger: '资金流水',
     paymentDashboard: '支付概览',
     paymentConfig: '支付配置',
     paymentPlans: '订阅套餐',

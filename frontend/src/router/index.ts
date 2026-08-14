@@ -736,6 +736,18 @@ const routes: RouteRecordRaw[] = [
       requiresPayment: true
     }
   },
+  {
+    path: '/admin/finance/ledger',
+    name: 'AdminFinanceLedger',
+    component: () => import('@/views/admin/finance/AdminFinanceLedgerView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'Balance Ledger',
+      titleKey: 'nav.financeLedger',
+      requiresPayment: true
+    }
+  },
 
   // ==================== 404 Not Found ====================
   {

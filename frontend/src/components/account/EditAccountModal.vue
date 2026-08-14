@@ -37,6 +37,12 @@
             :placeholder="
               account.platform === 'openai'
                 ? 'https://api.openai.com'
+                : account.platform === 'deepseek'
+                  ? 'https://api.deepseek.com'
+                  : account.platform === 'kimi'
+                    ? 'https://api.moonshot.cn/v1'
+                    : account.platform === 'glm'
+                      ? 'https://open.bigmodel.cn/api/paas/v4'
                 : account.platform === 'gemini'
                   ? 'https://generativelanguage.googleapis.com'
                   : account.platform === 'antigravity'
@@ -66,6 +72,12 @@
             :placeholder="
               account.platform === 'openai'
                 ? 'sk-proj-...'
+                : account.platform === 'deepseek'
+                  ? 'sk-...'
+                  : account.platform === 'kimi'
+                    ? 'sk-...'
+                    : account.platform === 'glm'
+                      ? 'id.secret'
                 : account.platform === 'gemini'
                   ? 'AIza...'
                   : account.platform === 'antigravity'
@@ -3204,6 +3216,9 @@ const tempUnschedPresets = computed(() => [
 // Computed: default base URL based on platform
 const defaultBaseUrl = computed(() => {
   if (props.account?.platform === 'openai') return 'https://api.openai.com'
+  if (props.account?.platform === 'deepseek') return 'https://api.deepseek.com'
+  if (props.account?.platform === 'kimi') return 'https://api.moonshot.cn/v1'
+  if (props.account?.platform === 'glm') return 'https://open.bigmodel.cn/api/paas/v4'
   if (props.account?.platform === 'gemini') return 'https://generativelanguage.googleapis.com'
   if (props.account?.platform === 'grok') return 'https://api.x.ai/v1'
   return 'https://api.anthropic.com'

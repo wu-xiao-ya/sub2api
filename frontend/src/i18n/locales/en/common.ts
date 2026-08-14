@@ -196,6 +196,8 @@ export default {
     docs: 'Docs',
     myOrders: 'My Orders',
     orderManagement: 'Orders',
+    financeManagement: 'Finance',
+    financeLedger: 'Balance Ledger',
     paymentDashboard: 'Payment Dashboard',
     paymentConfig: 'Payment Config',
     paymentPlans: 'Plans',

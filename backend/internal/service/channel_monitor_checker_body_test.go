@@ -274,6 +274,88 @@ func TestRunCheckForModel_Grok_DefaultChatRequest(t *testing.T) {
 	}
 }
 
+func TestRunCheckForModel_OpenAICompatibleProvidersUseLowCostChatCompletions(t *testing.T) {
+	for _, provider := range []string{
+		MonitorProviderDeepSeek,
+		MonitorProviderKimi,
+		MonitorProviderGLM,
+	} {
+		t.Run(provider, func(t *testing.T) {
+			h := &openAICaptureHandler{}
+			endpoint := setupFakeOpenAI(t, h)
+
+			res := runCheckForModel(context.Background(), provider, endpoint, "sk-compatible", provider+"-test", &CheckOptions{
+				LowCost: true,
+			})
+
+			if res.Status != MonitorStatusOperational {
+				t.Fatalf("status = %s message=%q, want operational", res.Status, res.Message)
+			}
+			if h.lastPath != providerOpenAIPath {
+				t.Fatalf("path = %q, want %q", h.lastPath, providerOpenAIPath)
+			}
+			if h.lastHeaders.Get("Authorization") != "Bearer sk-compatible" {
+				t.Fatalf("authorization = %q", h.lastHeaders.Get("Authorization"))
+			}
+			if h.lastBody["model"] != provider+"-test" {
+				t.Fatalf("model = %#v", h.lastBody["model"])
+			}
+			if h.lastBody["max_tokens"] != float64(monitorCompatibleLowCostMaxTokens) {
+				t.Fatalf("max_tokens = %#v, want %d", h.lastBody["max_tokens"], monitorCompatibleLowCostMaxTokens)
+			}
+			if provider == MonitorProviderKimi {
+				thinking, ok := h.lastBody["thinking"].(map[string]any)
+				if !ok || thinking["type"] != "disabled" {
+					t.Fatalf("Kimi low-cost probe must disable thinking, got %#v", h.lastBody["thinking"])
+				}
+			} else if _, exists := h.lastBody["thinking"]; exists {
+				t.Fatalf("provider %q must not receive Kimi thinking override: %#v", provider, h.lastBody["thinking"])
+			}
+			if h.lastBody["stream"] != false {
+				t.Fatalf("stream = %#v, want false", h.lastBody["stream"])
+			}
+		})
+	}
+}
+
+func TestRunCheckForModel_CompatibleLowCostReasoningCountsAsLiveness(t *testing.T) {
+	for _, provider := range []string{
+		MonitorProviderDeepSeek,
+		MonitorProviderKimi,
+		MonitorProviderGLM,
+	} {
+		t.Run(provider, func(t *testing.T) {
+			h := &openAICaptureHandler{
+				rawResponse: `{"choices":[{"message":{"content":"","reasoning_content":"short internal reasoning"}}]}`,
+			}
+			endpoint := setupFakeOpenAI(t, h)
+
+			res := runCheckForModel(context.Background(), provider, endpoint, "sk-compatible", provider+"-test", &CheckOptions{
+				LowCost: true,
+			})
+
+			if res.Status != MonitorStatusOperational {
+				t.Fatalf("status = %s message=%q, want operational", res.Status, res.Message)
+			}
+		})
+	}
+}
+
+func TestRunCheckForModel_CompatibleLowCostEmptyResponseStillFails(t *testing.T) {
+	h := &openAICaptureHandler{
+		rawResponse: `{"choices":[{"message":{"content":""}}]}`,
+	}
+	endpoint := setupFakeOpenAI(t, h)
+
+	res := runCheckForModel(context.Background(), MonitorProviderGLM, endpoint, "sk-compatible", "glm-test", &CheckOptions{
+		LowCost: true,
+	})
+
+	if res.Status != MonitorStatusFailed {
+		t.Fatalf("status = %s message=%q, want failed", res.Status, res.Message)
+	}
+}
+
 func TestRunCheckForModel_Grok_UpstreamFailure(t *testing.T) {
 	h := &openAICaptureHandler{status: http.StatusTooManyRequests}
 	endpoint := setupFakeOpenAI(t, h)

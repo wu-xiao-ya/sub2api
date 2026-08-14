@@ -528,6 +528,9 @@ func diffSettings(before *service.SystemSettings, after *service.SystemSettings,
 	if before.ChannelMonitorAccountProbeSettings != after.ChannelMonitorAccountProbeSettings {
 		changed = append(changed, "channel_monitor_account_probe_settings")
 	}
+	if before.ChannelMonitorTrafficObservationSettings != after.ChannelMonitorTrafficObservationSettings {
+		changed = append(changed, "channel_monitor_traffic_observation_settings")
+	}
 	if before.AvailableChannelsEnabled != after.AvailableChannelsEnabled {
 		changed = append(changed, "available_channels_enabled")
 	}

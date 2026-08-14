@@ -69,12 +69,16 @@ type ChannelMonitorService struct {
 	accountProbeRepo             channelMonitorAccountProbeRepository
 	accountProbeExecutor         channelMonitorAccountProbeExecutor
 	accountProbeSettingsProvider channelMonitorAccountProbeSettingsProvider
+	trafficUsageRepo             channelMonitorTrafficUsageRepository
+	trafficSettingsProvider      channelMonitorTrafficSettingsProvider
 	httpUpstream                 HTTPUpstream
 	cfg                          *config.Config
 	tlsFPProfileService          *TLSFingerprintProfileService
 	settingService               *SettingService
 	channelService               *ChannelService
 	billingService               *BillingService
+	trafficObservationMu         sync.Mutex
+	trafficObservationWrites     map[string]time.Time
 	// scheduler 由 wire 通过 SetScheduler 注入；CRUD 后调用对应钩子即时同步任务。
 	// 测试或未注入场景下保持 nil，所有钩子调用变为 no-op。
 	scheduler MonitorScheduler
@@ -90,7 +94,11 @@ const ChannelMonitorDuplicateOperationIDMetadataKey = "sub2api:duplicate_operati
 
 // NewChannelMonitorService 创建渠道监控服务实例。
 func NewChannelMonitorService(repo ChannelMonitorRepository, encryptor SecretEncryptor) *ChannelMonitorService {
-	return &ChannelMonitorService{repo: repo, encryptor: encryptor}
+	return &ChannelMonitorService{
+		repo:                     repo,
+		encryptor:                encryptor,
+		trafficObservationWrites: make(map[string]time.Time),
+	}
 }
 
 // ---------- CRUD ----------
@@ -491,6 +499,63 @@ func (s *ChannelMonitorService) RunCheck(ctx context.Context, id int64) ([]*Chec
 	return s.RunCheckWithOptions(ctx, id, false)
 }
 
+// RunScheduledCheck is reserved for the background scheduler. Manual checks
+// still run a live active probe so administrators can diagnose an upstream
+// immediately instead of seeing an older end-user request observation.
+func (s *ChannelMonitorService) RunScheduledCheck(ctx context.Context, id int64) ([]*CheckResult, error) {
+	m, err := s.Get(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	trafficResults, missingModels, trafficApplicable := s.collectTrafficObservations(ctx, m)
+	if trafficApplicable && len(trafficResults) > 0 {
+		if s.shouldPersistTrafficObservation(m.ID, trafficResults) {
+			s.persistCheckResults(ctx, m, trafficResults, nil)
+		}
+		if len(missingModels) == 0 {
+			return trafficResults, nil
+		}
+	}
+	if m.APIKeyDecryptFailed {
+		return nil, ErrChannelMonitorAPIKeyDecryptFailed
+	}
+	if len(trafficResults) == 0 {
+		return s.runCheckForMonitor(ctx, m, false)
+	}
+
+	activeMonitor := monitorWithModels(m, missingModels)
+	activeResults, err := s.runCheckForMonitor(ctx, activeMonitor, false)
+	return orderCheckResults(uniqueMonitorModels(m), trafficResults, activeResults), err
+}
+
+func monitorWithModels(m *ChannelMonitor, models []string) *ChannelMonitor {
+	if m == nil || len(models) == 0 {
+		return m
+	}
+	clone := *m
+	clone.PrimaryModel = models[0]
+	clone.ExtraModels = append([]string(nil), models[1:]...)
+	return &clone
+}
+
+func orderCheckResults(models []string, resultSets ...[]*CheckResult) []*CheckResult {
+	byModel := make(map[string]*CheckResult, len(models))
+	for _, results := range resultSets {
+		for _, result := range results {
+			if result != nil && strings.TrimSpace(result.Model) != "" {
+				byModel[result.Model] = result
+			}
+		}
+	}
+	ordered := make([]*CheckResult, 0, len(byModel))
+	for _, model := range models {
+		if result := byModel[model]; result != nil {
+			ordered = append(ordered, result)
+		}
+	}
+	return ordered
+}
+
 // RunCheckWithOptions synchronously probes one monitor. forceFull is only
 // meaningful for monitors explicitly bound to an account-management group.
 func (s *ChannelMonitorService) RunCheckWithOptions(ctx context.Context, id int64, forceFull bool) ([]*CheckResult, error) {
@@ -501,6 +566,14 @@ func (s *ChannelMonitorService) RunCheckWithOptions(ctx context.Context, id int6
 	if m.APIKeyDecryptFailed {
 		return nil, ErrChannelMonitorAPIKeyDecryptFailed
 	}
+	return s.runCheckForMonitor(ctx, m, forceFull)
+}
+
+func (s *ChannelMonitorService) runCheckForMonitor(
+	ctx context.Context,
+	m *ChannelMonitor,
+	forceFull bool,
+) ([]*CheckResult, error) {
 	if results, handled := s.runAdaptiveAccountGroupProbeIfConfigured(ctx, m, forceFull); handled {
 		s.persistCheckResults(ctx, m, results, nil)
 		return results, nil
@@ -557,6 +630,50 @@ func (s *ChannelMonitorService) RunGroupCheck(ctx context.Context, ids []int64) 
 		)
 	}
 	return summary, nil
+}
+
+// RunScheduledGroupCheck preserves the existing all-lines active-probe fallback
+// for a logical monitor group. It skips that billable group probe only when
+// every compatible line has a fresh real-request observation of its own.
+func (s *ChannelMonitorService) RunScheduledGroupCheck(
+	ctx context.Context,
+	ids []int64,
+) (*MonitorGroupCheckSummary, error) {
+	monitors := s.loadGroupProbeMonitors(ctx, ids)
+	if len(monitors) == 0 {
+		return nil, ErrChannelMonitorNotFound
+	}
+
+	groupKey := monitorProbeGroupKey(monitors[0])
+	compatible := make([]*ChannelMonitor, 0, len(monitors))
+	for _, m := range monitors {
+		if monitorProbeGroupKey(m) == groupKey && defaultAPIMode(m.APIMode) != MonitorAPIModeImages {
+			compatible = append(compatible, m)
+		}
+	}
+	compatible = limitMonitorCandidates(compatible)
+	if len(compatible) == 0 {
+		return nil, ErrChannelMonitorNotFound
+	}
+
+	observed := make([]groupProbeResult, 0, len(compatible))
+	for _, monitor := range compatible {
+		results, handled := s.runTrafficObservationIfConfigured(ctx, monitor)
+		if !handled || len(results) == 0 {
+			return s.RunGroupCheck(ctx, ids)
+		}
+		observed = append(observed, groupProbeResult{
+			monitor: monitor,
+			result:  results[0],
+		})
+	}
+
+	for _, probe := range observed {
+		if s.shouldPersistTrafficObservation(probe.monitor.ID, []*CheckResult{probe.result}) {
+			s.persistCheckResults(ctx, probe.monitor, []*CheckResult{probe.result}, nil)
+		}
+	}
+	return selectBestGroupProbe(observed), nil
 }
 
 type groupProbeResult struct {
@@ -719,8 +836,11 @@ func (s *ChannelMonitorService) persistCheckResults(
 	results []*CheckResult,
 	latestImage *monitorLatestImagePayload,
 ) {
+	persistCtx, cancel := monitorPersistenceContext(ctx)
+	defer cancel()
+
 	for _, result := range results {
-		s.recordMonitorCost(ctx, m, result, nil)
+		s.recordMonitorCost(persistCtx, m, result, nil)
 	}
 	rows := make([]*ChannelMonitorHistoryRow, 0, len(results))
 	for _, r := range results {
@@ -739,15 +859,22 @@ func (s *ChannelMonitorService) persistCheckResults(
 			CheckedAt:      r.CheckedAt,
 		})
 	}
-	if err := s.repo.InsertHistoryBatch(ctx, rows); err != nil {
+	if err := s.repo.InsertHistoryBatch(persistCtx, rows); err != nil {
 		slog.Error("channel_monitor: insert history failed",
 			"monitor_id", m.ID, "name", m.Name, "error", err)
 	}
-	if err := s.repo.MarkChecked(ctx, m.ID, time.Now()); err != nil {
+	if err := s.repo.MarkChecked(persistCtx, m.ID, time.Now()); err != nil {
 		slog.Error("channel_monitor: mark checked failed",
 			"monitor_id", m.ID, "error", err)
 	}
-	s.persistLatestImage(ctx, m.ID, latestImage)
+	s.persistLatestImage(persistCtx, m.ID, latestImage)
+}
+
+func monitorPersistenceContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return context.WithTimeout(context.WithoutCancel(ctx), monitorPersistenceTimeout)
 }
 
 // runChecksConcurrent 对 primary + extra 模型并发执行检测。

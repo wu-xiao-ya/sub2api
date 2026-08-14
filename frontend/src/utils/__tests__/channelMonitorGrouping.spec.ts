@@ -4,6 +4,7 @@ import {
   groupedChannelHealth,
   groupChannelMonitorViews,
   groupedChannelStatus,
+  resolveChannelSourceGroup,
 } from '@/utils/channelMonitorGrouping'
 
 function monitor(overrides: Partial<UserMonitorView> = {}): UserMonitorView {
@@ -116,5 +117,39 @@ describe('groupChannelMonitorViews', () => {
       { model: 'gpt-5.6-sol', isPrimary: true },
       { model: 'gpt-5.5', isPrimary: false, availability_7d: 99.2 },
     ])
+  })
+
+  it('leaves source empty when the legacy API omits it entirely', () => {
+    expect(resolveChannelSourceGroup([undefined, null])).toBeNull()
+  })
+
+  it('treats mixed traffic and probe sources as mixed', () => {
+    expect(resolveChannelSourceGroup(['traffic', 'probe'])).toBe('mixed')
+  })
+
+  it('derives a traffic source from the displayed model data', () => {
+    const [group] = groupChannelMonitorViews([
+      monitor({ primary_source: 'traffic' }),
+    ])
+
+    expect(group.source).toBe('traffic')
+    expect(group.models[0].source).toBe('traffic')
+  })
+
+  it('marks a channel mixed when displayed models use different sources', () => {
+    const [group] = groupChannelMonitorViews([
+      monitor({
+        primary_source: 'traffic',
+        extra_models: [{
+          model: 'gpt-5.5',
+          status: 'operational',
+          latency_ms: 95,
+          source: 'probe',
+          availability_7d: 99.2,
+        }],
+      }),
+    ])
+
+    expect(group.source).toBe('mixed')
   })
 })
