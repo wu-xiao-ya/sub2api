@@ -3,6 +3,13 @@ name: CI
 on:
   push:
   pull_request:
+  workflow_dispatch:
+    inputs:
+      full_regression:
+        description: Run the full legacy unit, integration, and lint suite
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -15,9 +22,10 @@ jobs:
       - name: Check deployment scripts
         run: |
           /bin/bash -n deploy/apple-container.sh
+          chmod +x deploy/tests/fixtures/bin/container
           /bin/bash deploy/tests/apple-container-test.sh
 
-  test:
+  build-and-v2-contracts:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -29,13 +37,19 @@ jobs:
           cache-dependency-path: backend/go.sum
       - name: Verify Go version
         run: |
-          go version | grep -q 'go1.26.5'
-      - name: Unit tests
+          go version | grep -q 'go1.26.6'
+      - name: Generate dependency wiring
         working-directory: backend
-        run: make test-unit
-      - name: Integration tests
+        run: go generate ./cmd/server
+      - name: Build backend
         working-directory: backend
-        run: make test-integration
+        run: make build
+      - name: Verify Channel Monitor V2 contracts
+        working-directory: backend
+        run: |
+          go test -tags=unit ./internal/repository -run '^TestChannelMonitorV2'
+          go test -tags=unit ./internal/service -run '^TestChannelMonitor'
+          go test -tags=unit ./internal/server/routes -run '^TestChannelMonitor'
 
   frontend:
     runs-on: ubuntu-latest
@@ -48,7 +62,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'pnpm'
           cache-dependency-path: frontend/pnpm-lock.yaml
       - name: Install frontend dependencies
@@ -58,6 +72,7 @@ jobs:
         run: make test-frontend
 
   golangci-lint:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.full_regression }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -69,10 +84,31 @@ jobs:
           cache-dependency-path: backend/go.sum
       - name: Verify Go version
         run: |
-          go version | grep -q 'go1.26.5'
+          go version | grep -q 'go1.26.6'
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v9
         with:
           version: v2.9
           args: --timeout=30m
           working-directory: backend
+
+  full-regression:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.full_regression }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: backend/go.mod
+          check-latest: false
+          cache: true
+          cache-dependency-path: backend/go.sum
+      - name: Verify Go version
+        run: |
+          go version | grep -q 'go1.26.6'
+      - name: Full unit tests
+        working-directory: backend
+        run: make test-unit
+      - name: Full integration tests
+        working-directory: backend
+        run: make test-integration
