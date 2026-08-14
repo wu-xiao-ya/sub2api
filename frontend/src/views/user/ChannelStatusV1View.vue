@@ -1,5 +1,5 @@
 <template>
-  <AppLayout>
+  <component :is="props.embedded ? 'div' : AppLayout" :class="props.embedded ? 'contents' : ''">
     <MonitorHero
       :overall-status="overallStatus"
       :interval-seconds="DEFAULT_INTERVAL_SECONDS"
@@ -26,7 +26,7 @@
       :title="detailTitle"
       @close="closeDetail"
     />
-  </AppLayout>
+  </component>
 </template>
 
 <script setup lang="ts">
@@ -55,6 +55,12 @@ import MonitorCardGrid from '@/components/user/monitor/MonitorCardGrid.vue'
 import MonitorDetailDialog from '@/components/user/MonitorDetailDialog.vue'
 import { DEFAULT_INTERVAL_SECONDS } from '@/constants/channelMonitor'
 import { useAutoRefresh } from '@/composables/useAutoRefresh'
+
+const props = withDefaults(defineProps<{
+  embedded?: boolean
+}>(), {
+  embedded: false,
+})
 
 const { t } = useI18n()
 const appStore = useAppStore()

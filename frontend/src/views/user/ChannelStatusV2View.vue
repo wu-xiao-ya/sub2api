@@ -688,6 +688,7 @@ function parseTrendView(value: unknown): TrendView {
 function syncQuery() {
   void router.replace({
     query: {
+      view: route.query.view,
       range: filter.value.range,
       platform: filter.value.platforms.join(',') || undefined,
       group: filter.value.groupIds.join(',') || undefined,

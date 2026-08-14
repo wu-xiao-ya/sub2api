@@ -173,6 +173,18 @@ describe('ChannelMonitorView duplicate action', () => {
     wrapper.unmount()
   })
 
+  it('opens V2 settings from the legacy view when the gear button is clicked', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="v2-dashboard"]').exists()).toBe(false)
+    await wrapper.get('[title="channelMonitorV2.admin.showSettings"]').trigger('click')
+
+    expect(wrapper.get('[data-testid="v2-dashboard"]').attributes('data-embedded')).toBe('true')
+    expect(wrapper.find('[data-testid="v2-settings"]').exists()).toBe(true)
+    wrapper.unmount()
+  })
+
   it('keeps a successful duplicate successful when the follow-up refresh fails', async () => {
     listMonitors
       .mockResolvedValueOnce({

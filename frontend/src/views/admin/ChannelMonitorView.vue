@@ -46,7 +46,7 @@
             :class="showV2Settings ? 'btn-primary' : ''"
             :title="t(showV2Settings ? 'channelMonitorV2.admin.hideSettings' : 'channelMonitorV2.admin.showSettings')"
             :aria-label="t(showV2Settings ? 'channelMonitorV2.admin.hideSettings' : 'channelMonitorV2.admin.showSettings')"
-            @click="showV2Settings = !showV2Settings"
+            @click="toggleV2Settings"
           >
             <Icon name="cog" size="sm" />
           </button>
@@ -321,6 +321,15 @@ function bestAccountTitle(row: ChannelMonitor): string {
 
 function probeModeLabel(mode: NonNullable<ChannelMonitor['primary_probe_mode']>): string {
   return t(`admin.channelMonitor.probeModes.${mode}`)
+}
+
+function toggleV2Settings() {
+  if (adminMonitorTab.value !== 'v2') {
+    adminMonitorTab.value = 'v2'
+    showV2Settings.value = true
+    return
+  }
+  showV2Settings.value = !showV2Settings.value
 }
 
 async function reload() {

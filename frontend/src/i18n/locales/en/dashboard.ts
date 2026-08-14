@@ -471,6 +471,9 @@ export default {
   // Channel Status (user-facing read-only view)
   channelStatus: {
     title: 'Channel Status',
+    viewAria: 'Channel monitor view',
+    viewV2: 'V2 request telemetry',
+    viewV1: 'V1 active diagnostics',
     description: 'Inspect channel availability, latency and recent status',
     searchPlaceholder: 'Search channels...',
     allProviders: 'All Providers',
