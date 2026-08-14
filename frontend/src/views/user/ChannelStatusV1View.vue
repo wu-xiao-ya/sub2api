@@ -59,6 +59,13 @@ import { DEFAULT_INTERVAL_SECONDS } from '@/constants/channelMonitor'
 import { useAutoRefresh } from '@/composables/useAutoRefresh'
 import { getMatrix, type MonitorMatrixRow } from '@/api/channelMonitorV2'
 
+type TrafficMetric = {
+  successRate: number
+  ttftP50Ms: number | null
+  cacheRate: number
+}
+type TrafficMetricsByCard = Record<string, Record<string, TrafficMetric>>
+
 const props = withDefaults(defineProps<{
   embedded?: boolean
 }>(), {
@@ -74,11 +81,7 @@ const loading = ref(false)
 const currentWindow = ref<MonitorWindow>('7d')
 const detailCache = reactive<Record<number, UserMonitorDetail>>({})
 const imageUrls = reactive<Record<number, string>>({})
-const trafficMetrics = ref<Record<string, Record<string, {
-  successRate: number
-  ttftP50Ms: number | null
-  cacheRate: number
-}>>>({})
+const trafficMetrics = ref<TrafficMetricsByCard>({})
 const showDetail = ref(false)
 const detailTarget = ref<GroupedChannelStatus | null>(null)
 
@@ -165,11 +168,7 @@ async function loadTrafficMetrics(rows: UserMonitorView[], signal: AbortSignal) 
 }
 
 function trafficMetricsFromRows(rows: MonitorMatrixRow[]) {
-  const next: Record<string, Record<string, {
-    successRate: number
-    ttftP50Ms: number | null
-    cacheRate: number
-  }>> = {}
+  const next: TrafficMetricsByCard = {}
   for (const row of rows) {
     if (!row.group_id || !row.model || row.model === '__other__' || row.metrics.request_count <= 0) continue
     const successRate = Math.max(0, Math.min(100, 100 - row.metrics.error_rate))
@@ -180,11 +179,7 @@ function trafficMetricsFromRows(rows: MonitorMatrixRow[]) {
       cacheRate: row.metrics.cache_rate,
     }
   }
-  const byCard: Record<string, Record<string, {
-    successRate: number
-    ttftP50Ms: number | null
-    cacheRate: number
-  }> = {}
+  const byCard: TrafficMetricsByCard = {}
   for (const group of channelGroups.value) {
     if (group.accountGroupId == null) continue
     const metrics = next[String(group.accountGroupId)]
