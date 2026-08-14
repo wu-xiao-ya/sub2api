@@ -304,9 +304,11 @@ type UpdateSettingsRequest struct {
 
 	// Channel Monitor feature switch
 	ChannelMonitorEnabled                    *bool                                             `json:"channel_monitor_enabled"`
+	ChannelMonitorMode                       *string                                           `json:"channel_monitor_mode"`
 	ChannelMonitorDefaultIntervalSeconds     *int                                              `json:"channel_monitor_default_interval_seconds"`
 	ChannelMonitorAccountProbeSettings       *service.ChannelMonitorAccountProbeSettings       `json:"channel_monitor_account_probe_settings"`
 	ChannelMonitorTrafficObservationSettings *service.ChannelMonitorTrafficObservationSettings `json:"channel_monitor_traffic_observation_settings"`
+	ChannelMonitorHideThroughput             *bool                                             `json:"channel_monitor_hide_throughput"`
 
 	// Grok model mapping policy
 	GrokDefaultTextModel           *string `json:"grok_default_text_model"`
@@ -1609,6 +1611,12 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 			}
 			return previousSettings.ChannelMonitorEnabled
 		}(),
+		ChannelMonitorMode: func() string {
+			if req.ChannelMonitorMode != nil {
+				return *req.ChannelMonitorMode
+			}
+			return previousSettings.ChannelMonitorMode
+		}(),
 		ChannelMonitorDefaultIntervalSeconds: func() int {
 			if req.ChannelMonitorDefaultIntervalSeconds != nil {
 				return *req.ChannelMonitorDefaultIntervalSeconds
@@ -1644,6 +1652,12 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 				return *req.ChannelMonitorTrafficObservationSettings
 			}
 			return previousSettings.ChannelMonitorTrafficObservationSettings
+		}(),
+		ChannelMonitorHideThroughput: func() bool {
+			if req.ChannelMonitorHideThroughput != nil {
+				return *req.ChannelMonitorHideThroughput
+			}
+			return previousSettings.ChannelMonitorHideThroughput
 		}(),
 		AvailableChannelsEnabled: func() bool {
 			if req.AvailableChannelsEnabled != nil {
@@ -2036,9 +2050,11 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		PaymentAlipayForceQRCode:                               updatedPaymentCfg.AlipayForceQRCode,
 
 		ChannelMonitorEnabled:                    updatedSettings.ChannelMonitorEnabled,
+		ChannelMonitorMode:                       updatedSettings.ChannelMonitorMode,
 		ChannelMonitorDefaultIntervalSeconds:     updatedSettings.ChannelMonitorDefaultIntervalSeconds,
 		ChannelMonitorAccountProbeSettings:       updatedSettings.ChannelMonitorAccountProbeSettings,
 		ChannelMonitorTrafficObservationSettings: updatedSettings.ChannelMonitorTrafficObservationSettings,
+		ChannelMonitorHideThroughput:             updatedSettings.ChannelMonitorHideThroughput,
 
 		GrokDefaultTextModel:           updatedSettings.GrokDefaultTextModel,
 		GrokCrossClientModelMapEnabled: updatedSettings.GrokCrossClientModelMapEnabled,

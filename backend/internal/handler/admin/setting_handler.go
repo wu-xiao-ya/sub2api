@@ -342,9 +342,11 @@ func (h *SettingHandler) GetSettings(c *gin.Context) {
 		PaymentAlipayForceQRCode:                               paymentCfg.AlipayForceQRCode,
 
 		ChannelMonitorEnabled:                    settings.ChannelMonitorEnabled,
+		ChannelMonitorMode:                       settings.ChannelMonitorMode,
 		ChannelMonitorDefaultIntervalSeconds:     settings.ChannelMonitorDefaultIntervalSeconds,
 		ChannelMonitorAccountProbeSettings:       settings.ChannelMonitorAccountProbeSettings,
 		ChannelMonitorTrafficObservationSettings: settings.ChannelMonitorTrafficObservationSettings,
+		ChannelMonitorHideThroughput:             settings.ChannelMonitorHideThroughput,
 
 		GrokDefaultTextModel:           settings.GrokDefaultTextModel,
 		GrokCrossClientModelMapEnabled: settings.GrokCrossClientModelMapEnabled,

@@ -147,5 +147,17 @@ func RegisterUserRoutes(
 			contributions.GET("/:id/today-stats", h.AccountContribution.GetTodayStats)
 			contributions.DELETE("/:id", h.AccountContribution.Revoke)
 		}
+
+		// V2 passive views complement active V1 diagnostics in hybrid mode.
+		monitorV2 := authenticated.Group("/channel-monitor-v2")
+		monitorV2.Use(channelMonitorAdminFeatureGuard(settingService))
+		{
+			monitorV2.GET("/dimensions", h.ChannelMonitorV2.Dimensions)
+			monitorV2.GET("/snapshot", h.ChannelMonitorV2.Snapshot)
+			monitorV2.GET("/models", h.ChannelMonitorV2.Models)
+			monitorV2.GET("/matrix", h.ChannelMonitorV2.Matrix)
+			monitorV2.GET("/errors", h.ChannelMonitorV2.Errors)
+			monitorV2.GET("/users", h.ChannelMonitorV2.Users)
+		}
 	}
 }

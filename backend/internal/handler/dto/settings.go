@@ -280,9 +280,11 @@ type SystemSettings struct {
 
 	// Channel Monitor feature switch
 	ChannelMonitorEnabled                    bool                                             `json:"channel_monitor_enabled"`
+	ChannelMonitorMode                       string                                           `json:"channel_monitor_mode"`
 	ChannelMonitorDefaultIntervalSeconds     int                                              `json:"channel_monitor_default_interval_seconds"`
 	ChannelMonitorAccountProbeSettings       service.ChannelMonitorAccountProbeSettings       `json:"channel_monitor_account_probe_settings"`
 	ChannelMonitorTrafficObservationSettings service.ChannelMonitorTrafficObservationSettings `json:"channel_monitor_traffic_observation_settings"`
+	ChannelMonitorHideThroughput             bool                                             `json:"channel_monitor_hide_throughput"`
 
 	// Grok model mapping policy (admin settings; empty account mapping falls back to these).
 	GrokDefaultTextModel           string `json:"grok_default_text_model"`
@@ -374,8 +376,10 @@ type PublicSettings struct {
 	BalanceLowNotifyThreshold   float64 `json:"balance_low_notify_threshold"`
 	BalanceLowNotifyRechargeURL string  `json:"balance_low_notify_recharge_url"`
 
-	ChannelMonitorEnabled                bool `json:"channel_monitor_enabled"`
-	ChannelMonitorDefaultIntervalSeconds int  `json:"channel_monitor_default_interval_seconds"`
+	ChannelMonitorEnabled                bool   `json:"channel_monitor_enabled"`
+	ChannelMonitorMode                   string `json:"channel_monitor_mode"`
+	ChannelMonitorDefaultIntervalSeconds int    `json:"channel_monitor_default_interval_seconds"`
+	ChannelMonitorHideThroughput         bool   `json:"channel_monitor_hide_throughput"`
 
 	AvailableChannelsEnabled bool `json:"available_channels_enabled"`
 

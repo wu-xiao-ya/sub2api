@@ -410,6 +410,14 @@ const (
 	// When false: runner skips scheduling and user-facing endpoints return an empty list.
 	SettingKeyChannelMonitorEnabled = "channel_monitor_enabled"
 
+	// SettingKeyChannelMonitorMode controls which user-facing monitor view is
+	// preferred. The hybrid implementation keeps active probes running in both
+	// modes while V2 adds passive real-request aggregation.
+	SettingKeyChannelMonitorMode = "channel_monitor_mode"
+
+	ChannelMonitorModeV1 = "v1"
+	ChannelMonitorModeV2 = "v2"
+
 	// SettingKeyChannelMonitorDefaultIntervalSeconds controls the default interval (seconds)
 	// pre-filled when creating a new channel monitor from the admin UI. Range: [15, 3600].
 	SettingKeyChannelMonitorDefaultIntervalSeconds = "channel_monitor_default_interval_seconds"
@@ -434,6 +442,10 @@ const (
 	// SettingKeyChannelMonitorTrafficObservationSettings stores the optional
 	// real-request observation mode for account-group channel monitors.
 	SettingKeyChannelMonitorTrafficObservationSettings = "channel_monitor_traffic_observation_settings"
+
+	// SettingKeyChannelMonitorHideThroughput hides absolute RPM/TPM signals
+	// from non-admin V2 monitor responses.
+	SettingKeyChannelMonitorHideThroughput = "channel_monitor_hide_throughput"
 
 	// SettingKeyAvailableChannelsEnabled is a DB-backed soft switch for the "Available Channels"
 	// user-facing aggregate view. When false: user endpoint returns an empty list and the
