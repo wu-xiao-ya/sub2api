@@ -31,14 +31,16 @@ func NewChannelMonitorUserHandler(
 	}
 }
 
-// featureEnabled 返回当前渠道监控功能是否开启。
-// settingService 为 nil（测试场景）视为启用。
+// featureEnabled returns whether the channel monitor feature is enabled.
+// In hybrid mode the user-facing legacy diagnostics remain readable regardless
+// of channel_monitor_mode; the mode only selects a preferred view.
+// A nil setting service (tests) is treated as enabled.
 func (h *ChannelMonitorUserHandler) featureEnabled(c *gin.Context) bool {
 	if h.settingService == nil {
 		return true
 	}
 	runtime := h.settingService.GetChannelMonitorRuntime(c.Request.Context())
-	return runtime.Enabled && runtime.Mode == service.ChannelMonitorModeV1
+	return runtime.Enabled
 }
 
 // --- Response ---

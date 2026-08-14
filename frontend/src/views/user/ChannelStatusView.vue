@@ -42,7 +42,7 @@ import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import AppLayout from '@/components/layout/AppLayout.vue'
-import { getChannelMonitorMode, type ChannelMonitorMode } from '@/utils/featureFlags'
+import type { ChannelMonitorMode } from '@/utils/featureFlags'
 import ChannelStatusV1View from './ChannelStatusV1View.vue'
 import ChannelStatusV2View from './ChannelStatusV2View.vue'
 
@@ -51,7 +51,7 @@ const route = useRoute()
 const router = useRouter()
 
 function parseView(value: unknown): ChannelMonitorMode {
-  return value === 'v1' || value === 'v2' ? value : getChannelMonitorMode()
+  return value === 'v2' ? 'v2' : 'v1'
 }
 
 const activeView = ref<ChannelMonitorMode>(parseView(route.query.view))
