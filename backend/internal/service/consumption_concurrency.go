@@ -2,7 +2,6 @@ package service
 
 const (
 	ConsumptionConcurrencyDefault = 10
-	ConsumptionConcurrencyStep    = 5
 )
 
 // ConsumptionConcurrencyTier returns the highest lifetime-consumption tier
@@ -23,8 +22,16 @@ func ConsumptionConcurrencyTier(lifetimeUSD float64) int {
 }
 
 func ConsumptionConcurrencyBonus(tier int) int {
-	if tier < 0 {
+	switch {
+	case tier >= 4:
+		return 30
+	case tier == 3:
+		return 20
+	case tier == 2:
+		return 10
+	case tier == 1:
+		return 5
+	default:
 		return 0
 	}
-	return tier * ConsumptionConcurrencyStep
 }

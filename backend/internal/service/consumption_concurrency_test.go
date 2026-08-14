@@ -25,7 +25,21 @@ func TestConsumptionConcurrencyTier(t *testing.T) {
 }
 
 func TestConsumptionConcurrencyBonus(t *testing.T) {
-	if got := ConsumptionConcurrencyBonus(4); got != 20 {
-		t.Fatalf("ConsumptionConcurrencyBonus(4) = %d, want 20", got)
+	tests := []struct {
+		tier int
+		want int
+	}{
+		{tier: -1, want: 0},
+		{tier: 0, want: 0},
+		{tier: 1, want: 5},
+		{tier: 2, want: 10},
+		{tier: 3, want: 20},
+		{tier: 4, want: 30},
+		{tier: 9, want: 30},
+	}
+	for _, tt := range tests {
+		if got := ConsumptionConcurrencyBonus(tt.tier); got != tt.want {
+			t.Fatalf("ConsumptionConcurrencyBonus(%d) = %d, want %d", tt.tier, got, tt.want)
+		}
 	}
 }
