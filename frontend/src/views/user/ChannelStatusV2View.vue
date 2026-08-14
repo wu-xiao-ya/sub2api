@@ -1,5 +1,5 @@
 <template>
-  <AppLayout>
+  <component :is="props.embedded ? 'div' : AppLayout" :class="props.embedded ? 'contents' : ''">
     <div class="space-y-6 pb-12">
       <!-- Ops-style elevated shell: title toolbar + filters (mirrors OpsDashboardHeader) -->
       <section
@@ -454,7 +454,7 @@
         </div>
       </section>
     </div>
-  </AppLayout>
+  </component>
 </template>
 
 <script setup lang="ts">
@@ -499,6 +499,12 @@ import {
   healthScoreClass,
   monitorErrorCategoryLabel,
 } from '@/features/channel-monitor-v2/monitorFormat'
+
+const props = withDefaults(defineProps<{
+  embedded?: boolean
+}>(), {
+  embedded: false,
+})
 
 type Tab = 'models' | 'errors' | 'users'
 type HealthMode = 'overall' | 'success' | 'ttft' | 'cache'

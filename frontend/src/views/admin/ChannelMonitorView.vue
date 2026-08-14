@@ -11,13 +11,9 @@
           {{ t('admin.channelMonitor.title') }}
         </h1>
         <p class="page-description mt-1.5 text-xs text-gray-500 dark:text-gray-400">
-          {{
-            isV1Mode
-              ? t('channelMonitorV2.admin.descriptionV1')
-              : t('channelMonitorV2.admin.descriptionV2')
-          }}
+          {{ t('channelMonitorV2.admin.descriptionHybrid') }}
         </p>
-        <div class="mt-4 border-t border-gray-100 pt-4 dark:border-dark-700">
+        <div class="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 pt-4 dark:border-dark-700">
           <div
             class="tabs inline-flex w-full max-w-xl flex-wrap sm:w-auto"
             role="tablist"
@@ -31,7 +27,7 @@
               :aria-selected="adminMonitorTab === 'v2'"
               @click="adminMonitorTab = 'v2'"
             >
-              {{ t('channelMonitorV2.admin.tabV2') }}
+              {{ t('channelMonitorV2.admin.tabV2View') }}
             </button>
             <button
               type="button"
@@ -41,13 +37,26 @@
               :aria-selected="adminMonitorTab === 'legacy'"
               @click="adminMonitorTab = 'legacy'"
             >
-              {{ isV1Mode ? t('channelMonitorV2.admin.tabV1Active') : t('channelMonitorV2.admin.tabV1History') }}
+              {{ t('channelMonitorV2.admin.tabV1') }}
             </button>
           </div>
+          <button
+            type="button"
+            class="btn btn-secondary btn-icon h-9 w-9"
+            :class="showV2Settings ? 'btn-primary' : ''"
+            :title="t(showV2Settings ? 'channelMonitorV2.admin.hideSettings' : 'channelMonitorV2.admin.showSettings')"
+            :aria-label="t(showV2Settings ? 'channelMonitorV2.admin.hideSettings' : 'channelMonitorV2.admin.showSettings')"
+            @click="showV2Settings = !showV2Settings"
+          >
+            <Icon name="cog" size="sm" />
+          </button>
         </div>
       </header>
 
-      <MonitorSettingsPanel v-if="adminMonitorTab === 'v2'" />
+      <template v-if="adminMonitorTab === 'v2'">
+        <ChannelStatusV2View embedded />
+        <MonitorSettingsPanel v-if="showV2Settings" />
+      </template>
 
       <TablePageLayout v-else>
       <template #filters>
@@ -232,12 +241,13 @@ import MonitorActionsCell from '@/components/admin/monitor/MonitorActionsCell.vu
 import { getPersistedPageSize } from '@/composables/usePersistedPageSize'
 import { useChannelMonitorFormat } from '@/composables/useChannelMonitorFormat'
 import MonitorSettingsPanel from '@/features/channel-monitor-v2/MonitorSettingsPanel.vue'
+import ChannelStatusV2View from '@/views/user/ChannelStatusV2View.vue'
 import { isChannelMonitorV1Mode } from '@/utils/featureFlags'
 
 const { t } = useI18n()
 const appStore = useAppStore()
-const isV1Mode = computed(() => isChannelMonitorV1Mode())
 const adminMonitorTab = ref<'v2' | 'legacy'>(isChannelMonitorV1Mode() ? 'legacy' : 'v2')
+const showV2Settings = ref(false)
 const {
   providerLabel,
   providerBadgeClass,

@@ -131,6 +131,11 @@ export default {
       },
     },
     admin: {
+      descriptionHybrid: '可在被动请求数据监控与主动账号诊断之间切换；两套采集会在后台持续运行。',
+      tabV2View: 'V2 请求数据监控',
+      tabV1: 'V1 主动账号诊断',
+      showSettings: '显示 V2 监控设置',
+      hideSettings: '隐藏 V2 监控设置',
       descriptionV1: '当前系统设置为 V1 主动探测：可管理监控项并立即检测；V2 聚合不会运行。',
       descriptionV2: '当前系统设置为 V2 被动监控：配置聚合维度；V1 主动探测不会运行。',
       tabAria: '监控管理',

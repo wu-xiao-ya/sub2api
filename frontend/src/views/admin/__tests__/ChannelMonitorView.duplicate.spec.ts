@@ -29,6 +29,14 @@ vi.mock('@/features/channel-monitor-v2/MonitorSettingsPanel.vue', () => ({
   default: { name: 'MonitorSettingsPanel', template: '<div data-testid="v2-settings" />' },
 }))
 
+vi.mock('@/views/user/ChannelStatusV2View.vue', () => ({
+  default: {
+    name: 'ChannelStatusV2View',
+    props: { embedded: { type: Boolean, default: false } },
+    template: '<div data-testid="v2-dashboard" :data-embedded="embedded" />',
+  },
+}))
+
 vi.mock('@/api/admin', () => ({
   adminAPI: {
     channelMonitor: {
@@ -149,6 +157,19 @@ describe('ChannelMonitorView duplicate action', () => {
     expect(duplicateMonitor).toHaveBeenCalledWith(42)
     expect(showSuccess).toHaveBeenCalledWith('admin.channelMonitor.duplicateSuccess')
     expect(listMonitors.mock.calls.length).toBeGreaterThan(1)
+    wrapper.unmount()
+  })
+
+  it('switches from legacy diagnostics to the embedded V2 telemetry dashboard', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="v2-dashboard"]').exists()).toBe(false)
+    const tabs = wrapper.findAll('[role="tab"]')
+    await tabs[0].trigger('click')
+
+    const dashboard = wrapper.get('[data-testid="v2-dashboard"]')
+    expect(dashboard.attributes('data-embedded')).toBe('true')
     wrapper.unmount()
   })
 
