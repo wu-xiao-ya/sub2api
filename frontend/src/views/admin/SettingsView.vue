@@ -9048,7 +9048,7 @@ const form = reactive<SettingsForm>({
     aggregation_window_seconds: 300,
     minimum_samples: 1,
   },
-  channel_monitor_hide_throughput: false,
+  channel_monitor_hide_throughput: true,
   // Available Channels feature switch
   available_channels_enabled: false,
   // Affiliate (邀请返利) feature switch
