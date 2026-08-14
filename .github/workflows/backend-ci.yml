@@ -22,7 +22,7 @@ jobs:
       - name: Check deployment scripts
         run: |
           /bin/bash -n deploy/apple-container.sh
-          chmod +x deploy/tests/fixtures/bin/container
+          chmod +x deploy/tests/fixtures/bin/container deploy/tests/fixtures/bin/curl
           /bin/bash deploy/tests/apple-container-test.sh
 
   build-and-v2-contracts:
