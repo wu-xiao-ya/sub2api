@@ -114,6 +114,22 @@
       />
     </section>
 
+    <section
+      v-if="leadTrafficMetrics"
+      class="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-sky-100 bg-sky-50/60 px-4 py-2 text-[10px] dark:border-sky-500/15 dark:bg-sky-500/5"
+    >
+      <span class="font-semibold text-sky-800 dark:text-sky-200">{{ t('channelStatus.realTraffic24h') }}</span>
+      <span class="font-mono tabular-nums text-sky-700 dark:text-sky-300">
+        {{ t('channelStatus.trafficSuccess', { value: formatTrafficPercent(leadTrafficMetrics.successRate) }) }}
+      </span>
+      <span class="font-mono tabular-nums text-sky-700 dark:text-sky-300">
+        {{ t('channelStatus.trafficTtft', { value: formatTrafficLatency(leadTrafficMetrics.ttftP50Ms) }) }}
+      </span>
+      <span class="font-mono tabular-nums text-sky-700 dark:text-sky-300">
+        {{ t('channelStatus.trafficCache', { value: formatTrafficPercent(leadTrafficMetrics.cacheRate) }) }}
+      </span>
+    </section>
+
     <section class="min-w-0 flex-1 px-4 py-3">
       <div class="flex items-center justify-between gap-3">
         <div class="flex min-w-0 items-baseline gap-2">
@@ -216,13 +232,20 @@ const PROVIDER_TINT: Record<string, string> = {
   glm: 'text-indigo-600 dark:text-indigo-300',
 }
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   item: GroupedChannelStatus
   window: '7d' | '15d' | '30d'
   detailCache: Record<number, UserMonitorDetail>
   countdownSeconds: number
   imageUrl?: string
-}>()
+  trafficMetrics?: Record<string, {
+    successRate: number
+    ttftP50Ms: number | null
+    cacheRate: number
+  }>
+}>(), {
+  trafficMetrics: () => ({}),
+})
 
 const emit = defineEmits<{
   (e: 'click'): void
@@ -325,6 +348,7 @@ const healthyModels = computed(() =>
     model.status === STATUS_OPERATIONAL || model.status === STATUS_DEGRADED
   ).length
 )
+const leadTrafficMetrics = computed(() => props.trafficMetrics[props.item.leadModel.model])
 function resolveAvailability(model: GroupedChannelModel): number | null {
   if (props.window === '7d') return model.availability_7d
   const detail = props.detailCache[model.monitorId]
@@ -337,6 +361,15 @@ function resolveAvailability(model: GroupedChannelModel): number | null {
 
 function formatAvailability(value: number | null): string {
   return formatPercent(value)
+}
+
+function formatTrafficPercent(value: number): string {
+  return `${Math.max(0, Math.min(100, value)).toFixed(1)}%`
+}
+
+function formatTrafficLatency(value: number | null): string {
+  if (value == null || value < 0) return '-'
+  return value >= 1000 ? `${(value / 1000).toFixed(2)}s` : `${Math.round(value)}ms`
 }
 
 function availabilityStyle(model: GroupedChannelModel): Record<string, string> {

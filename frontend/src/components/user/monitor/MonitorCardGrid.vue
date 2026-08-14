@@ -39,6 +39,7 @@
         :countdown-seconds="countdownSeconds"
         :detail-cache="detailCache"
         :image-url="item.imageMonitorId == null ? undefined : imageUrls[item.imageMonitorId]"
+        :traffic-metrics="props.trafficMetrics[item.key] || {}"
         @click="emit('cardClick', item)"
       />
     </div>
@@ -52,14 +53,21 @@ import type { GroupedChannelStatus } from '@/utils/channelMonitorGrouping'
 import EmptyState from '@/components/common/EmptyState.vue'
 import MonitorCard from './MonitorCard.vue'
 
-defineProps<{
+const props = withDefaults(defineProps<{
   items: GroupedChannelStatus[]
   window: '7d' | '15d' | '30d'
   countdownSeconds: number
   loading: boolean
   detailCache: Record<number, UserMonitorDetail>
   imageUrls: Record<number, string>
-}>()
+  trafficMetrics?: Record<string, Record<string, {
+    successRate: number
+    ttftP50Ms: number | null
+    cacheRate: number
+  }>>
+}>(), {
+  trafficMetrics: () => ({}),
+})
 
 const emit = defineEmits<{
   (e: 'cardClick', item: GroupedChannelStatus): void

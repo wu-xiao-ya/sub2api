@@ -25,6 +25,7 @@ export interface GroupedChannelStatus {
   key: string
   name: string
   groupName: string
+  accountGroupId: number | null
   provider: UserMonitorView['provider']
   apiMode: UserMonitorView['api_mode']
   source: ChannelSourceGroup
@@ -50,7 +51,7 @@ export type ChannelSourceGroup = ChannelMonitorSource | 'mixed' | null
 
 function channelKey(item: UserMonitorView): string {
   const displayName = item.group_name.trim() || item.name.trim() || `monitor-${item.id}`
-  return [item.provider, item.api_mode, displayName].join('\u0000')
+  return [item.provider, item.api_mode, item.account_group_id ?? displayName].join('\u0000')
 }
 
 function normalizeSource(source?: ChannelMonitorSource): ChannelMonitorSource | null {
@@ -140,6 +141,7 @@ export function groupChannelMonitorViews(items: UserMonitorView[]): GroupedChann
         key,
         name: displayName,
         groupName: item.group_name.trim(),
+        accountGroupId: item.account_group_id ?? null,
         provider: item.provider,
         apiMode: item.api_mode,
         source: null,
@@ -182,6 +184,7 @@ export function groupChannelMonitorViews(items: UserMonitorView[]): GroupedChann
         key: group.key,
         name: group.name,
         groupName: group.groupName,
+        accountGroupId: group.accountGroupId,
         provider: group.provider,
         apiMode: group.apiMode,
         source: mergeSources(sources),

@@ -51,6 +51,7 @@ type channelMonitorUserListItem struct {
 	Provider             string                               `json:"provider"`
 	APIMode              string                               `json:"api_mode"`
 	GroupName            string                               `json:"group_name"`
+	AccountGroupID       *int64                               `json:"account_group_id,omitempty"`
 	PrimaryModel         string                               `json:"primary_model"`
 	PrimaryStatus        string                               `json:"primary_status"`
 	PrimaryLatencyMs     *int                                 `json:"primary_latency_ms"`
@@ -115,6 +116,7 @@ func userMonitorViewToItem(v *service.UserMonitorView) channelMonitorUserListIte
 		Provider:             v.Provider,
 		APIMode:              v.APIMode,
 		GroupName:            v.GroupName,
+		AccountGroupID:       v.AccountGroupID,
 		PrimaryModel:         v.PrimaryModel,
 		PrimaryStatus:        v.PrimaryStatus,
 		PrimaryLatencyMs:     v.PrimaryLatencyMs,

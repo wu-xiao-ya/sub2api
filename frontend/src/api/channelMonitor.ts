@@ -30,6 +30,7 @@ export interface UserMonitorView {
   provider: Provider
   api_mode: APIMode
   group_name: string
+  account_group_id?: number
   primary_model: string
   primary_status: MonitorStatus
   primary_latency_ms: number | null

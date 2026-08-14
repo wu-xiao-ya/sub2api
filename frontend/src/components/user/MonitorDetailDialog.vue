@@ -68,6 +68,23 @@
         </tbody>
       </table>
     </div>
+    <section
+      v-if="errorRows.length > 0"
+      class="mt-5 border-t border-gray-100 pt-4 dark:border-dark-700"
+    >
+      <h3 class="text-xs font-semibold text-gray-800 dark:text-gray-100">
+        {{ t('channelStatus.realTrafficErrors') }}
+      </h3>
+      <div class="mt-2 flex flex-wrap gap-2">
+        <span
+          v-for="row in errorRows"
+          :key="row.category"
+          class="inline-flex items-center rounded border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] font-medium text-amber-800 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-200"
+        >
+          {{ errorLabel(row.category) }} {{ formatPercent(row.rate) }}
+        </span>
+      </div>
+    </section>
 
     <template #footer>
       <div class="flex justify-end">
@@ -88,6 +105,7 @@ import {
   status as fetchChannelMonitorDetail,
   type UserMonitorDetail,
 } from '@/api/channelMonitor'
+import { getErrors, type MonitorErrorRow } from '@/api/channelMonitorV2'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import { useChannelMonitorFormat } from '@/composables/useChannelMonitorFormat'
 import { resolveChannelSourceGroup } from '@/utils/channelMonitorGrouping'
@@ -95,6 +113,7 @@ import { resolveChannelSourceGroup } from '@/utils/channelMonitorGrouping'
 const props = defineProps<{
   show: boolean
   monitorIds: number[]
+  accountGroupId: number | null
   title: string
 }>()
 
@@ -131,6 +150,7 @@ const sourceBadgeClass = computed(() => {
 })
 
 const details = ref<UserMonitorDetail[]>([])
+const errorRows = ref<MonitorErrorRow[]>([])
 const loading = ref(false)
 
 const models = computed(() => {
@@ -181,6 +201,10 @@ function isMoreUseful(
   return candidateLatency < currentLatency
 }
 
+function errorLabel(category: string): string {
+  return t(`channelMonitorV2.errorCategories.${category}`)
+}
+
 async function load(ids: number[]) {
   details.value = []
   loading.value = true
@@ -193,14 +217,32 @@ async function load(ids: number[]) {
   }
 }
 
+async function loadTrafficErrors(accountGroupId: number | null) {
+  errorRows.value = []
+  if (accountGroupId == null || accountGroupId <= 0) return
+  try {
+    const result = await getErrors(
+      { range: '24h', platforms: [], groupIds: [accountGroupId], models: [] },
+      false,
+    )
+    errorRows.value = (result.items || []).filter(row => row.count > 0 && !row.ignored)
+  } catch {
+    errorRows.value = []
+  }
+}
+
 watch(
-  () => [props.show, props.monitorIds] as const,
-  ([show, ids]) => {
+  () => [props.show, props.monitorIds, props.accountGroupId] as const,
+  ([show, ids, accountGroupId]) => {
     if (!show) {
       details.value = []
+      errorRows.value = []
       return
     }
-    if (ids.length > 0) void load(ids)
+    if (ids.length > 0) {
+      void load(ids)
+      void loadTrafficErrors(accountGroupId)
+    }
   },
   { deep: true, immediate: true },
 )

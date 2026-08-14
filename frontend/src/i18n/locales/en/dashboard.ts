@@ -471,6 +471,11 @@ export default {
   // Channel Status (user-facing read-only view)
   channelStatus: {
     title: 'Channel Status',
+    realTraffic24h: 'Real traffic (24h)',
+    trafficSuccess: 'Success {value}',
+    trafficTtft: 'TTFT {value}',
+    trafficCache: 'Cache {value}',
+    realTrafficErrors: 'Real traffic errors (24h)',
     viewAria: 'Channel monitor view',
     viewV2: 'V2 request telemetry',
     viewV1: 'V1 active diagnostics',

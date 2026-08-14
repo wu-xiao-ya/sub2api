@@ -292,6 +292,7 @@ func buildUserViewFromSummary(
 		Provider:         m.Provider,
 		APIMode:          m.APIMode,
 		GroupName:        m.GroupName,
+		AccountGroupID:   m.AccountGroupID,
 		PrimaryModel:     m.PrimaryModel,
 		PrimaryStatus:    summary.PrimaryStatus,
 		PrimaryLatencyMs: summary.PrimaryLatencyMs,

@@ -204,6 +204,7 @@ type UserMonitorView struct {
 	Provider             string
 	APIMode              string
 	GroupName            string
+	AccountGroupID       *int64
 	PrimaryModel         string
 	PrimaryStatus        string
 	PrimaryLatencyMs     *int

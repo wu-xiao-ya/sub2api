@@ -476,6 +476,11 @@ export default {
   // Channel Status (user-facing read-only view)
   channelStatus: {
     title: '渠道状态',
+    realTraffic24h: '真实请求（24h）',
+    trafficSuccess: '成功 {value}',
+    trafficTtft: '首字 {value}',
+    trafficCache: '缓存 {value}',
+    realTrafficErrors: '真实请求错误（24h）',
     viewAria: '渠道监控视图',
     viewV2: 'V2 请求数据监控',
     viewV1: 'V1 主动账号诊断',
