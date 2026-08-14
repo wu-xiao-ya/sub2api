@@ -44,6 +44,13 @@ jobs:
       - name: Build backend
         working-directory: backend
         run: make build
+      - name: Upload deployable backend artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: sub2api-linux-amd64
+          path: backend/bin/server
+          if-no-files-found: error
+          retention-days: 3
       - name: Verify Channel Monitor V2 contracts
         working-directory: backend
         run: |
