@@ -36,6 +36,8 @@ const (
 	FieldBillingTier = "billing_tier"
 	// FieldBillingMode holds the string denoting the billing_mode field in the database.
 	FieldBillingMode = "billing_mode"
+	// FieldUsageSource holds the string denoting the usage_source field in the database.
+	FieldUsageSource = "usage_source"
 	// FieldGroupID holds the string denoting the group_id field in the database.
 	FieldGroupID = "group_id"
 	// FieldSubscriptionID holds the string denoting the subscription_id field in the database.
@@ -66,6 +68,12 @@ const (
 	FieldActualCost = "actual_cost"
 	// FieldRateMultiplier holds the string denoting the rate_multiplier field in the database.
 	FieldRateMultiplier = "rate_multiplier"
+	// FieldPromotionID holds the string denoting the promotion_id field in the database.
+	FieldPromotionID = "promotion_id"
+	// FieldPromotionName holds the string denoting the promotion_name field in the database.
+	FieldPromotionName = "promotion_name"
+	// FieldBaseRateMultiplier holds the string denoting the base_rate_multiplier field in the database.
+	FieldBaseRateMultiplier = "base_rate_multiplier"
 	// FieldLongContextBillingApplied holds the string denoting the long_context_billing_applied field in the database.
 	FieldLongContextBillingApplied = "long_context_billing_applied"
 	// FieldAccountRateMultiplier holds the string denoting the account_rate_multiplier field in the database.
@@ -167,6 +175,7 @@ var Columns = []string{
 	FieldModelMappingChain,
 	FieldBillingTier,
 	FieldBillingMode,
+	FieldUsageSource,
 	FieldGroupID,
 	FieldSubscriptionID,
 	FieldInputTokens,
@@ -182,6 +191,9 @@ var Columns = []string{
 	FieldTotalCost,
 	FieldActualCost,
 	FieldRateMultiplier,
+	FieldPromotionID,
+	FieldPromotionName,
+	FieldBaseRateMultiplier,
 	FieldLongContextBillingApplied,
 	FieldAccountRateMultiplier,
 	FieldBillingType,
@@ -228,6 +240,8 @@ var (
 	BillingTierValidator func(string) error
 	// BillingModeValidator is a validator for the "billing_mode" field. It is called by the builders before save.
 	BillingModeValidator func(string) error
+	// UsageSourceValidator is a validator for the "usage_source" field. It is called by the builders before save.
+	UsageSourceValidator func(string) error
 	// DefaultInputTokens holds the default value on creation for the "input_tokens" field.
 	DefaultInputTokens int
 	// DefaultOutputTokens holds the default value on creation for the "output_tokens" field.
@@ -254,6 +268,8 @@ var (
 	DefaultActualCost float64
 	// DefaultRateMultiplier holds the default value on creation for the "rate_multiplier" field.
 	DefaultRateMultiplier float64
+	// PromotionNameValidator is a validator for the "promotion_name" field. It is called by the builders before save.
+	PromotionNameValidator func(string) error
 	// DefaultLongContextBillingApplied holds the default value on creation for the "long_context_billing_applied" field.
 	DefaultLongContextBillingApplied bool
 	// DefaultBillingType holds the default value on creation for the "billing_type" field.
@@ -347,6 +363,11 @@ func ByBillingMode(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldBillingMode, opts...).ToFunc()
 }
 
+// ByUsageSource orders the results by the usage_source field.
+func ByUsageSource(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldUsageSource, opts...).ToFunc()
+}
+
 // ByGroupID orders the results by the group_id field.
 func ByGroupID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldGroupID, opts...).ToFunc()
@@ -420,6 +441,21 @@ func ByActualCost(opts ...sql.OrderTermOption) OrderOption {
 // ByRateMultiplier orders the results by the rate_multiplier field.
 func ByRateMultiplier(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldRateMultiplier, opts...).ToFunc()
+}
+
+// ByPromotionID orders the results by the promotion_id field.
+func ByPromotionID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPromotionID, opts...).ToFunc()
+}
+
+// ByPromotionName orders the results by the promotion_name field.
+func ByPromotionName(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPromotionName, opts...).ToFunc()
+}
+
+// ByBaseRateMultiplier orders the results by the base_rate_multiplier field.
+func ByBaseRateMultiplier(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldBaseRateMultiplier, opts...).ToFunc()
 }
 
 // ByLongContextBillingApplied orders the results by the long_context_billing_applied field.

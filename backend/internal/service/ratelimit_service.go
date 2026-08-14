@@ -78,6 +78,7 @@ const (
 	openAI403CooldownMinutesDefault = 10
 	openAI403DisableThreshold       = 3
 	openAI403CounterWindowMinutes   = 180
+	openAI403ModelCooldownReason    = "openai_403_waf_blocked"
 )
 
 // NewRateLimitService 创建RateLimitService实例
@@ -136,6 +137,97 @@ func (s *RateLimitService) notifyAccountSchedulingBlockCleared(accountID int64) 
 		return
 	}
 	s.runtimeBlocker.ClearAccountSchedulingBlock(accountID)
+}
+
+// ApplyAccountSchedulingThreshold evaluates admin-configured per-platform
+// utilization thresholds and, when breached, parks the account as temp-
+// unschedulable until the winning window resets. Returns true when the account
+// is blocked (either newly or already paused for the same threshold reason).
+func (s *RateLimitService) ApplyAccountSchedulingThreshold(ctx context.Context, account *Account) bool {
+	if s == nil || s.settingService == nil || s.accountRepo == nil || account == nil || account.ID <= 0 {
+		return false
+	}
+	if !account.IsActive() || !account.Schedulable {
+		return false
+	}
+
+	now := time.Now().UTC()
+	thresholds := s.settingService.GetAccountSchedulingThresholds(ctx)
+	decision := EvaluateAccountSchedulingThreshold(account, thresholds, now)
+	if !decision.ShouldPause || decision.Until == nil || !decision.Until.After(now) {
+		return false
+	}
+
+	reason := BuildDetailedAccountSchedulingThresholdReason(AccountSchedulingThresholdReasonInput{
+		Platform:         decision.Platform,
+		Window:           decision.Window,
+		Scope:            decision.Scope,
+		ThresholdPercent: decision.ThresholdPercent,
+		UsedPercent:      decision.UsedPercent,
+		Until:            *decision.Until,
+		Now:              now,
+	})
+
+	if accountHasSameSchedulingThresholdPause(account, *decision.Until, reason) {
+		return true
+	}
+	if !account.IsSchedulable() {
+		return false
+	}
+
+	account.TempUnschedulableUntil = cloneTimePtr(decision.Until)
+	account.TempUnschedulableReason = reason
+	s.notifyAccountSchedulingBlocked(account, *decision.Until, "account_scheduling_threshold")
+
+	if err := s.accountRepo.SetTempUnschedulable(ctx, account.ID, *decision.Until, reason); err != nil {
+		slog.Warn("account_scheduling_threshold_set_temp_unsched_failed",
+			"account_id", account.ID,
+			"platform", decision.Platform,
+			"window", decision.Window,
+			"scope", decision.Scope,
+			"threshold_percent", decision.ThresholdPercent,
+			"used_percent", decision.UsedPercent,
+			"until", decision.Until.UTC(),
+			"error", err)
+	} else if s.tempUnschedCache != nil {
+		if state := tempUnschedStateFromStoredReason(reason, decision.Until.Unix()); state != nil {
+			if err := s.tempUnschedCache.SetTempUnsched(ctx, account.ID, state); err != nil {
+				slog.Warn("account_scheduling_threshold_cache_set_failed", "account_id", account.ID, "error", err)
+			}
+		}
+	}
+
+	slog.Info("account_scheduling_threshold_temp_unschedulable",
+		"account_id", account.ID,
+		"platform", decision.Platform,
+		"window", decision.Window,
+		"scope", decision.Scope,
+		"threshold_percent", decision.ThresholdPercent,
+		"used_percent", decision.UsedPercent,
+		"until", decision.Until.UTC())
+	return true
+}
+
+func accountHasSameSchedulingThresholdPause(account *Account, until time.Time, reason string) bool {
+	if account == nil || account.TempUnschedulableUntil == nil {
+		return false
+	}
+	if account.TempUnschedulableUntil.UTC().Unix() != until.UTC().Unix() {
+		return false
+	}
+
+	existing, ok := parseTempUnschedReasonPayload(account.TempUnschedulableReason)
+	if !ok || existing.Source != AccountSchedulingThresholdReasonSource {
+		return false
+	}
+	next, ok := parseTempUnschedReasonPayload(reason)
+	if !ok || next.Source != AccountSchedulingThresholdReasonSource {
+		return false
+	}
+
+	existing.TriggeredAtUnix = 0
+	next.TriggeredAtUnix = 0
+	return existing == next
 }
 
 // ErrorPolicyResult 表示错误策略检查的结果
@@ -371,7 +463,7 @@ func (s *RateLimitService) HandleUpstreamError(ctx context.Context, account *Acc
 			upstreamMsg,
 			truncateForLog(responseBody, 1024),
 		)
-		shouldDisable = s.handle403(ctx, account, upstreamMsg, responseBody)
+		shouldDisable = s.handle403(ctx, account, upstreamMsg, responseBody, headers)
 	case 429:
 		s.handle429(ctx, account, headers, responseBody)
 		shouldDisable = false
@@ -804,12 +896,12 @@ func buildForbiddenErrorMessage(prefix string, upstreamMsg string, responseBody 
 // handle403 处理 403 Forbidden 错误
 // Antigravity 平台区分 validation/violation/generic 三种类型，均 SetError 永久禁用；
 // 其他平台保持原有 SetError 行为。
-func (s *RateLimitService) handle403(ctx context.Context, account *Account, upstreamMsg string, responseBody []byte) (shouldDisable bool) {
+func (s *RateLimitService) handle403(ctx context.Context, account *Account, upstreamMsg string, responseBody []byte, headers http.Header) (shouldDisable bool) {
 	if account.Platform == PlatformAntigravity {
 		return s.handleAntigravity403(ctx, account, upstreamMsg, responseBody)
 	}
 	if account.Platform == PlatformOpenAI {
-		return s.handleOpenAI403(ctx, account, upstreamMsg, responseBody)
+		return s.handleOpenAI403(ctx, account, upstreamMsg, responseBody, headers)
 	}
 	// 非 Antigravity 平台：保持原有行为
 	msg := buildForbiddenErrorMessage(
@@ -822,13 +914,49 @@ func (s *RateLimitService) handle403(ctx context.Context, account *Account, upst
 	return true
 }
 
-func (s *RateLimitService) handleOpenAI403(ctx context.Context, account *Account, upstreamMsg string, responseBody []byte) (shouldDisable bool) {
+func (s *RateLimitService) handleOpenAI403(ctx context.Context, account *Account, upstreamMsg string, responseBody []byte, headers http.Header) (shouldDisable bool) {
 	msg := buildForbiddenErrorMessage(
 		"Access forbidden (403):",
 		upstreamMsg,
 		responseBody,
 		"account may be suspended or lack permissions",
 	)
+
+	model := tempUnschedulableModel(ctx, nil)
+	if isOpenAIGenericBlocked403(upstreamMsg, responseBody) &&
+		!isExplicitOpenAI403AuthFailure(upstreamMsg, responseBody) &&
+		model != "" &&
+		s.openAI403CounterCache != nil {
+		distinctModels, added, err := s.openAI403CounterCache.RecordOpenAI403Model(
+			ctx,
+			account.ID,
+			model,
+			openAI403CounterWindowMinutes,
+		)
+		if err != nil {
+			slog.Warn("openai_403_model_record_failed", "account_id", account.ID, "model", model, "error", err)
+		} else if distinctModels < 2 {
+			until := time.Now().Add(time.Duration(openAI403CooldownMinutesDefault) * time.Minute)
+			reason := fmt.Sprintf("OpenAI generic blocked 403 model cooldown: %s", msg)
+			if err := s.accountRepo.SetModelRateLimit(ctx, account.ID, model, until, reason); err != nil {
+				slog.Warn("openai_403_set_model_rate_limit_failed", "account_id", account.ID, "model", model, "error", err)
+			} else {
+				markOpenAI403ModelScoped(ctx)
+				eventName := "account_model_cooldown_entered"
+				if !added {
+					eventName = "account_model_cooldown_extended"
+				}
+				writeOpenAIAccountRuntimeEvent(ctx, eventName, account, model, map[string]any{
+					"reason":               openAI403ModelCooldownReason,
+					"upstream_status_code": http.StatusForbidden,
+					"upstream_request_id":  strings.TrimSpace(headers.Get("x-request-id")),
+					"cooldown_until":       until.UTC().Format(time.RFC3339Nano),
+					"distinct_403_models":  distinctModels,
+				})
+				return true
+			}
+		}
+	}
 
 	if s.openAI403CounterCache == nil {
 		s.handleAuthError(ctx, account, msg)
@@ -865,6 +993,36 @@ func (s *RateLimitService) handleOpenAI403(ctx context.Context, account *Account
 		"threshold", openAI403DisableThreshold,
 	)
 	return true
+}
+
+func isOpenAIGenericBlocked403(upstreamMsg string, responseBody []byte) bool {
+	combined := strings.ToLower(strings.TrimSpace(upstreamMsg) + "\n" + strings.TrimSpace(string(responseBody)))
+	return strings.Contains(combined, "your request was blocked")
+}
+
+func isExplicitOpenAI403AuthFailure(upstreamMsg string, responseBody []byte) bool {
+	combined := strings.ToLower(strings.TrimSpace(upstreamMsg) + "\n" + strings.TrimSpace(string(responseBody)))
+	for _, marker := range []string{
+		"invalid_api_key",
+		"invalid api key",
+		"authentication failed",
+		"authentication error",
+		"unauthorized",
+		"invalid token",
+		"token expired",
+		"token revoked",
+		"token was revoked",
+		"token has been revoked",
+		"credential revoked",
+		"credentials are invalid",
+		"account deactivated",
+		"workspace deactivated",
+	} {
+		if strings.Contains(combined, marker) {
+			return true
+		}
+	}
+	return false
 }
 
 // handleAntigravity403 处理 Antigravity 平台的 403 错误

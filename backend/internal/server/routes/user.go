@@ -127,6 +127,25 @@ func RegisterUserRoutes(
 		{
 			monitors.GET("", h.ChannelMonitor.List)
 			monitors.GET("/:id/status", h.ChannelMonitor.GetStatus)
+			monitors.GET("/:id/image", h.ChannelMonitor.Image)
+		}
+
+		// 共享号池：用户提交、查看贡献账号和收益
+		contributions := authenticated.Group("/account-contributions")
+		{
+			contributions.POST("/openai/auth-url", h.AccountContribution.GenerateOpenAIAuthURL)
+			contributions.POST("/openai/exchange-code", h.AccountContribution.SubmitOpenAI)
+			contributions.POST("/openai/import-json/preview", h.AccountContribution.PreviewOpenAIJSON)
+			contributions.POST("/openai/import-json", h.AccountContribution.SubmitOpenAIJSON)
+			contributions.GET("", h.AccountContribution.ListMine)
+			contributions.GET("/rewards/summary", h.AccountContribution.GetRewardSummary)
+			contributions.GET("/rewards", h.AccountContribution.ListRewards)
+			contributions.POST("/today-stats/batch", h.AccountContribution.GetBatchTodayStats)
+			contributions.POST("/:id/republish", h.AccountContribution.Republish)
+			contributions.PUT("/:id/config", h.AccountContribution.UpdateConfig)
+			contributions.GET("/:id/usage", h.AccountContribution.GetUsage)
+			contributions.GET("/:id/today-stats", h.AccountContribution.GetTodayStats)
+			contributions.DELETE("/:id", h.AccountContribution.Revoke)
 		}
 	}
 }

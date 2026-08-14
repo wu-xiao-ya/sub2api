@@ -26,6 +26,16 @@ type cleanupDeleteCall struct {
 	limit   int
 }
 
+type cleanupArchiveFindCall struct {
+	cutoff time.Time
+	window time.Duration
+}
+
+type cleanupArchiveCall struct {
+	start time.Time
+	end   time.Time
+}
+
 type cleanupMarkCall struct {
 	taskID      int64
 	deletedRows int64
@@ -33,26 +43,32 @@ type cleanupMarkCall struct {
 }
 
 type cleanupRepoStub struct {
-	mu            sync.Mutex
-	created       []*UsageCleanupTask
-	createErr     error
-	listTasks     []UsageCleanupTask
-	listResult    *pagination.PaginationResult
-	listErr       error
-	claimQueue    []*UsageCleanupTask
-	claimErr      error
-	deleteQueue   []cleanupDeleteResponse
-	deleteCalls   []cleanupDeleteCall
-	markSucceeded []cleanupMarkCall
-	markFailed    []cleanupMarkCall
-	statusByID    map[int64]string
-	statusErr     error
-	progressCalls []cleanupMarkCall
-	updateErr     error
-	cancelCalls   []int64
-	cancelErr     error
-	cancelResult  *bool
-	markFailedErr error
+	mu                 sync.Mutex
+	created            []*UsageCleanupTask
+	createErr          error
+	listTasks          []UsageCleanupTask
+	listResult         *pagination.PaginationResult
+	listErr            error
+	claimQueue         []*UsageCleanupTask
+	claimErr           error
+	deleteQueue        []cleanupDeleteResponse
+	deleteCalls        []cleanupDeleteCall
+	archiveWindowQueue []*UsageLogArchiveWindow
+	archiveFindCalls   []cleanupArchiveFindCall
+	archiveFindErr     error
+	archiveQueue       []UsageLogArchiveResult
+	archiveCalls       []cleanupArchiveCall
+	archiveErr         error
+	markSucceeded      []cleanupMarkCall
+	markFailed         []cleanupMarkCall
+	statusByID         map[int64]string
+	statusErr          error
+	progressCalls      []cleanupMarkCall
+	updateErr          error
+	cancelCalls        []int64
+	cancelErr          error
+	cancelResult       *bool
+	markFailedErr      error
 }
 
 type dashboardRepoStub struct {
@@ -229,6 +245,36 @@ func (s *cleanupRepoStub) DeleteUsageLogsBatch(ctx context.Context, filters Usag
 	resp := s.deleteQueue[0]
 	s.deleteQueue = s.deleteQueue[1:]
 	return resp.deleted, resp.err
+}
+
+func (s *cleanupRepoStub) FindNextUsageLogArchiveWindow(ctx context.Context, cutoff time.Time, window time.Duration) (*UsageLogArchiveWindow, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.archiveFindCalls = append(s.archiveFindCalls, cleanupArchiveFindCall{cutoff: cutoff, window: window})
+	if s.archiveFindErr != nil {
+		return nil, s.archiveFindErr
+	}
+	if len(s.archiveWindowQueue) == 0 {
+		return nil, nil
+	}
+	next := s.archiveWindowQueue[0]
+	s.archiveWindowQueue = s.archiveWindowQueue[1:]
+	return next, nil
+}
+
+func (s *cleanupRepoStub) ArchiveUsageLogsWindow(ctx context.Context, start, end time.Time) (*UsageLogArchiveResult, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.archiveCalls = append(s.archiveCalls, cleanupArchiveCall{start: start, end: end})
+	if s.archiveErr != nil {
+		return nil, s.archiveErr
+	}
+	if len(s.archiveQueue) == 0 {
+		return &UsageLogArchiveResult{}, nil
+	}
+	result := s.archiveQueue[0]
+	s.archiveQueue = s.archiveQueue[1:]
+	return &result, nil
 }
 
 func TestUsageCleanupServiceCreateTaskSanitizeFilters(t *testing.T) {
@@ -798,6 +844,11 @@ func TestUsageCleanupServiceDefaultsAndLifecycle(t *testing.T) {
 	require.Equal(t, 5000, nilSvc.batchSize())
 	require.Equal(t, 10*time.Second, nilSvc.workerInterval())
 	require.Equal(t, 30*time.Minute, nilSvc.taskTimeout())
+	require.False(t, nilSvc.archiveEnabled())
+	require.Equal(t, 15, nilSvc.archiveRetentionDays())
+	require.Equal(t, time.Hour, nilSvc.archiveInterval())
+	require.Equal(t, time.Hour, nilSvc.archiveWindow())
+	require.Equal(t, 1, nilSvc.archiveMaxWindowsPerRun())
 	nilSvc.Start()
 	nilSvc.Stop()
 
@@ -824,6 +875,91 @@ func TestUsageCleanupServiceDefaultsAndLifecycle(t *testing.T) {
 
 	svcMissingDeps := NewUsageCleanupService(nil, nil, nil, cfgFallback)
 	svcMissingDeps.Start()
+}
+
+func TestUsageCleanupServiceRunArchiveOnce(t *testing.T) {
+	start := time.Now().UTC().AddDate(0, 0, -20).Truncate(time.Hour)
+	repo := &cleanupRepoStub{
+		archiveWindowQueue: []*UsageLogArchiveWindow{
+			{StartTime: start, EndTime: start.Add(time.Hour)},
+			{StartTime: start.Add(time.Hour), EndTime: start.Add(2 * time.Hour)},
+		},
+		archiveQueue: []UsageLogArchiveResult{
+			{SummaryRows: 3, DeletedRows: 10},
+			{SummaryRows: 2, DeletedRows: 8},
+		},
+	}
+	cfg := &config.Config{UsageCleanup: config.UsageCleanupConfig{
+		Enabled:                 true,
+		ArchiveEnabled:          true,
+		ArchiveRetentionDays:    15,
+		ArchiveWindowHours:      1,
+		ArchiveMaxWindowsPerRun: 2,
+		TaskTimeoutSeconds:      30,
+	}}
+	svc := NewUsageCleanupService(repo, nil, nil, cfg)
+
+	svc.runArchiveOnce()
+
+	repo.mu.Lock()
+	defer repo.mu.Unlock()
+	require.Len(t, repo.archiveFindCalls, 2)
+	require.Len(t, repo.archiveCalls, 2)
+	require.Equal(t, time.Hour, repo.archiveFindCalls[0].window)
+	require.True(t, repo.archiveCalls[0].start.Equal(start))
+	require.True(t, repo.archiveCalls[1].end.Equal(start.Add(2*time.Hour)))
+}
+
+func TestUsageCleanupServiceRunArchiveOnceDisabled(t *testing.T) {
+	repo := &cleanupRepoStub{}
+	cfg := &config.Config{UsageCleanup: config.UsageCleanupConfig{Enabled: true, ArchiveEnabled: false}}
+	svc := NewUsageCleanupService(repo, nil, nil, cfg)
+
+	svc.runArchiveOnce()
+
+	repo.mu.Lock()
+	defer repo.mu.Unlock()
+	require.Empty(t, repo.archiveFindCalls)
+	require.Empty(t, repo.archiveCalls)
+}
+
+func TestUsageCleanupServiceRunArchiveOnceFindError(t *testing.T) {
+	repo := &cleanupRepoStub{archiveFindErr: errors.New("find failed")}
+	cfg := &config.Config{UsageCleanup: config.UsageCleanupConfig{
+		Enabled:              true,
+		ArchiveEnabled:       true,
+		ArchiveRetentionDays: 15,
+		TaskTimeoutSeconds:   30,
+	}}
+	svc := NewUsageCleanupService(repo, nil, nil, cfg)
+
+	svc.runArchiveOnce()
+
+	repo.mu.Lock()
+	defer repo.mu.Unlock()
+	require.Len(t, repo.archiveFindCalls, 1)
+	require.Empty(t, repo.archiveCalls)
+}
+
+func TestUsageCleanupServiceRunArchiveOnceArchiveError(t *testing.T) {
+	start := time.Now().UTC().AddDate(0, 0, -20).Truncate(time.Hour)
+	repo := &cleanupRepoStub{
+		archiveWindowQueue: []*UsageLogArchiveWindow{{StartTime: start, EndTime: start.Add(time.Hour)}},
+		archiveErr:         errors.New("archive failed"),
+	}
+	cfg := &config.Config{UsageCleanup: config.UsageCleanupConfig{
+		Enabled:              true,
+		ArchiveEnabled:       true,
+		ArchiveRetentionDays: 15,
+		TaskTimeoutSeconds:   30,
+	}}
+	svc := NewUsageCleanupService(repo, nil, nil, cfg)
+
+	svc.runArchiveOnce()
+
+	repo.mu.Lock()
+	defer repo.mu.Unlock()
+	require.Len(t, repo.archiveCalls, 1)
 }
 
 func TestSanitizeUsageCleanupFiltersModelEmpty(t *testing.T) {

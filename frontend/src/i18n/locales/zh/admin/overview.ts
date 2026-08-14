@@ -15,6 +15,7 @@ export default {
       todayRequests: '今日请求',
       totalRequests: '总请求数',
       todayCost: '今日消费',
+      todayMonitorCost: '今日监测费用',
       totalCost: '总消费',
       newUsersToday: '今日新增用户',
       actual: '实际',
@@ -25,6 +26,10 @@ export default {
       input: '输入',
       output: '输出',
       cacheToday: '今日缓存',
+      cacheHitRate: '缓存命中率',
+      todayCacheHitRate: '今日缓存命中率',
+      historicalCacheHitRate: '历史缓存命中率',
+      cacheReadTokens: '缓存读取',
       performance: '性能指标',
       avgResponse: '平均响应',
       averageTime: '平均时间',
@@ -77,7 +82,20 @@ export default {
       groupPricingDesc: '设置批量折扣和冻结比例',
       systemSettings: '系统设置',
       configureSystem: '配置系统设置',
-      failedToLoad: '加载仪表盘数据失败'
+      failedToLoad: '加载仪表盘数据失败',
+      costProfit: {
+        actualRevenue: '实际收入',
+        upstreamCost: '上游成本',
+        upstreamMultiplier: '上游倍率',
+        excludedUsers: '统计黑名单',
+        excludedUsersPlaceholder: '用户 ID 或邮箱，逗号分隔',
+        fromUpstreamRate: '按上游定价与倍率计算',
+        standardCost: '标准计费',
+        profit: '利润',
+        margin: '利润率',
+        periodHint: '按当前时间范围统计',
+        byGroup: '分组成本与利润'
+      }
     },
 
     backup: {
@@ -125,6 +143,8 @@ export default {
         retainDaysHint: '备份文件超过此天数后自动删除，0 = 永不过期',
         retainCount: '最大保留份数',
         retainCountHint: '最多保留的备份数量，0 = 不限制',
+        uploadRateLimit: '上传限速（KB/s）',
+        uploadRateLimitHint: '仅限制服务器上传备份到对象存储；下载使用预签名直链，不经过本站服务器。',
         saved: '定时备份配置已保存'
       },
       operations: {
@@ -789,6 +809,7 @@ export default {
         id: 'ID',
         platform: '平台',
         rateMultiplier: '费率倍数',
+        contributorRewardMultiplier: '贡献奖励',
         rpmOverride: 'RPM 覆盖',
         rpmOverrideHint: '该用户在此分组的 RPM 上限；留空 = 使用分组默认；0 = 不限制',
         rateDefault: '默认',
@@ -827,6 +848,7 @@ export default {
         descriptionPlaceholder: '请输入描述（可选）',
         rateMultiplierLabel: '费率倍数',
         rateMultiplierHint: '1.0 = 标准费率，0.5 = 半价，2.0 = 双倍',
+        contributorRewardMultiplier: '贡献奖励倍率',
         rpmLimit: '每分钟请求数 (RPM)',
         rpmLimitPlaceholder: '0 表示不限制',
         rpmLimitHint: '每用户在本分组每分钟最大请求数，0 = 不限制；一旦设置即接管该用户的限流（覆盖用户级 rpm_limit）',
@@ -855,6 +877,7 @@ export default {
           '公开分组费率 0.8，您可以创建一个费率 0.7 的专属分组，手动分配给 VIP 用户，让他们享受更优惠的价格。'
       },
       rateMultiplierHint: '1.0 = 标准费率，0.5 = 半价，2.0 = 双倍',
+      contributorRewardMultiplierHint: '贡献账号被此分组调度时，按原始成本乘此倍率给贡献者加余额；0 表示不奖励。',
       platforms: {
         all: '全部平台',
         anthropic: 'Anthropic',
@@ -862,6 +885,9 @@ export default {
         gemini: 'Gemini',
         antigravity: 'Antigravity',
         grok: 'Grok',
+        deepseek: 'DeepSeek',
+        kimi: 'Kimi',
+        glm: 'GLM',
       },
       saving: '保存中...',
       noGroups: '暂无分组',
@@ -966,12 +992,28 @@ export default {
         title: '视频生成计费',
         description:
           '配置 Grok 视频生成的每秒单价（USD/秒），留空则使用默认每秒价（grok-imagine-video：480p $0.05/s、720p $0.07/s；video-1.5：480p $0.08/s、720p $0.14/s、1080p $0.25/s）',
+        modelOverridesTitle: '按模型覆盖视频价格',
+        modelOverridesDescription: '已填写的单元格会覆盖该模型族的平面分辨率价格。video-1.5 的 preview 与 legacy 别名共用同一模型族；留空则回退到平面分辨率价格。',
         independentMultiplier: '视频倍率独立',
         videoMultiplier: '视频独立倍率',
         modeHint:
           '视频按秒计费：费用 = 每秒价格 × 时长（1-15 秒，未指定默认 8 秒）。默认叠加当前分组有效倍率；开启独立倍率后改用视频独立倍率。',
         finalPricePreview: '最终每秒价格预览',
         notConfigured: '未配置'
+      },
+      explicitPricing: {
+        title: 'Grok 搜索与 Voice 定价',
+        description: '分组级 web_search（每千次）与 Voice realtime / TTS / STT 单价（USD）。留空表示未配置。',
+        searchPricePer1k: '搜索每千次价格（USD）',
+        pricePlaceholder: '可选'
+      },
+      voicePricing: {
+        title: 'Grok Voice 定价',
+        description: '分组级 Voice realtime / TTS / STT 单价（USD）。留空表示未配置。',
+        audioRealtimePerMin: 'Realtime 每分钟价格（USD）',
+        audioTtsPerMillionChars: 'TTS 每百万字符价格（USD）',
+        audioSttPerHour: 'STT 每小时价格（USD）',
+        pricePlaceholder: '可选'
       },
       webSearchPricing: {
         title: 'Codex 网页搜索计费',

@@ -87,13 +87,14 @@ type APIKey struct {
 }
 
 type Group struct {
-	ID             int64   `json:"id"`
-	Name           string  `json:"name"`
-	Description    string  `json:"description"`
-	Platform       string  `json:"platform"`
-	RateMultiplier float64 `json:"rate_multiplier"`
-	IsExclusive    bool    `json:"is_exclusive"`
-	Status         string  `json:"status"`
+	ID                          int64   `json:"id"`
+	Name                        string  `json:"name"`
+	Description                 string  `json:"description"`
+	Platform                    string  `json:"platform"`
+	RateMultiplier              float64 `json:"rate_multiplier"`
+	ContributorRewardMultiplier float64 `json:"contributor_reward_multiplier"`
+	IsExclusive                 bool    `json:"is_exclusive"`
+	Status                      string  `json:"status"`
 
 	SubscriptionType string   `json:"subscription_type"`
 	DailyLimitUSD    *float64 `json:"daily_limit_usd"`
@@ -120,8 +121,14 @@ type Group struct {
 	VideoPrice480P     *float64 `json:"video_price_480p"`
 	VideoPrice720P     *float64 `json:"video_price_720p"`
 	VideoPrice1080P    *float64 `json:"video_price_1080p"`
+	// VideoModelPrices 可选按模型族×分辨率覆盖视频每秒单价 (USD/s)。
+	VideoModelPrices map[string]map[string]float64 `json:"video_model_prices,omitempty"`
 	// Codex alpha/search 网页搜索单次价格（USD/次）；null 表示使用默认价 0.01
-	WebSearchPricePerCall *float64 `json:"web_search_price_per_call"`
+	WebSearchPricePerCall        *float64 `json:"web_search_price_per_call"`
+	SearchPricePer1k             *float64 `json:"search_price_per_1k"`
+	AudioRealtimePricePerMin     *float64 `json:"audio_realtime_price_per_min"`
+	AudioTtsPricePerMillionChars *float64 `json:"audio_tts_price_per_million_chars"`
+	AudioSttPricePerHour         *float64 `json:"audio_stt_price_per_hour"`
 
 	// Claude Code 客户端限制
 	ClaudeCodeOnly  bool   `json:"claude_code_only"`
@@ -185,6 +192,7 @@ type Account struct {
 	ProxyID                 *int64          `json:"proxy_id"`
 	ProxyFallbackOriginID   *int64          `json:"proxy_fallback_origin_id"`
 	ProxyFallbackOriginName *string         `json:"proxy_fallback_origin_name,omitempty"`
+	PoolGroupID             *int64          `json:"pool_group_id,omitempty"`
 	Concurrency             int             `json:"concurrency"`
 	LoadFactor              *int            `json:"load_factor,omitempty"`
 	Priority                int             `json:"priority"`
@@ -196,6 +204,12 @@ type Account struct {
 	AutoPauseOnExpired      bool            `json:"auto_pause_on_expired"`
 	CreatedAt               time.Time       `json:"created_at"`
 	UpdatedAt               time.Time       `json:"updated_at"`
+
+	OwnerUserID             *int64     `json:"owner_user_id,omitempty"`
+	ContributionStatus      string     `json:"contribution_status,omitempty"`
+	ContributionSubmittedAt *time.Time `json:"contribution_submitted_at,omitempty"`
+	ContributionApprovedAt  *time.Time `json:"contribution_approved_at,omitempty"`
+	ContributionRevokedAt   *time.Time `json:"contribution_revoked_at,omitempty"`
 
 	Schedulable bool `json:"schedulable"`
 
@@ -283,11 +297,23 @@ type Account struct {
 	ParentSubscriptionExpiresAt string `json:"parent_subscription_expires_at,omitempty"`
 	ParentChatGPTAccountID      string `json:"parent_chatgpt_account_id,omitempty"`
 
-	Proxy         *Proxy         `json:"proxy,omitempty"`
-	AccountGroups []AccountGroup `json:"account_groups,omitempty"`
+	Proxy         *Proxy            `json:"proxy,omitempty"`
+	PoolGroup     *AccountPoolGroup `json:"pool_group,omitempty"`
+	AccountGroups []AccountGroup    `json:"account_groups,omitempty"`
 
 	GroupIDs []int64  `json:"group_ids,omitempty"`
 	Groups   []*Group `json:"groups,omitempty"`
+}
+
+type AccountPoolGroup struct {
+	ID          int64     `json:"id"`
+	Name        string    `json:"name"`
+	UpstreamKey string    `json:"upstream_key"`
+	Description string    `json:"description"`
+	SortOrder   int       `json:"sort_order"`
+	Status      string    `json:"status"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
 }
 
 type AccountGroup struct {
@@ -470,6 +496,8 @@ type UsageLog struct {
 	InboundEndpoint *string `json:"inbound_endpoint,omitempty"`
 	// UpstreamEndpoint is the normalized upstream endpoint path, e.g. /v1/responses.
 	UpstreamEndpoint *string `json:"upstream_endpoint,omitempty"`
+	// UsageSource marks internal request origins such as channel_monitor.
+	UsageSource *string `json:"usage_source,omitempty"`
 
 	GroupID        *int64 `json:"group_id"`
 	SubscriptionID *int64 `json:"subscription_id"`
@@ -482,14 +510,17 @@ type UsageLog struct {
 	CacheCreation5mTokens int `json:"cache_creation_5m_tokens"`
 	CacheCreation1hTokens int `json:"cache_creation_1h_tokens"`
 
-	InputCost                 float64 `json:"input_cost"`
-	OutputCost                float64 `json:"output_cost"`
-	CacheCreationCost         float64 `json:"cache_creation_cost"`
-	CacheReadCost             float64 `json:"cache_read_cost"`
-	TotalCost                 float64 `json:"total_cost"`
-	ActualCost                float64 `json:"actual_cost"`
-	RateMultiplier            float64 `json:"rate_multiplier"`
-	LongContextBillingApplied bool    `json:"long_context_billing_applied"`
+	InputCost                 float64  `json:"input_cost"`
+	OutputCost                float64  `json:"output_cost"`
+	CacheCreationCost         float64  `json:"cache_creation_cost"`
+	CacheReadCost             float64  `json:"cache_read_cost"`
+	TotalCost                 float64  `json:"total_cost"`
+	ActualCost                float64  `json:"actual_cost"`
+	RateMultiplier            float64  `json:"rate_multiplier"`
+	PromotionID               *int64   `json:"promotion_id,omitempty"`
+	PromotionName             *string  `json:"promotion_name,omitempty"`
+	BaseRateMultiplier        *float64 `json:"base_rate_multiplier,omitempty"`
+	LongContextBillingApplied bool     `json:"long_context_billing_applied"`
 
 	BillingType  int8   `json:"billing_type"`
 	RequestType  string `json:"request_type"`

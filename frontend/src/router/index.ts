@@ -13,6 +13,7 @@ import { useRoutePrefetch } from '@/composables/useRoutePrefetch'
 import { getSetupStatus } from '@/api/setup'
 import { resolveCompletedSetupRedirectPath } from './setupRedirect'
 import { resolveRouteDocumentTitle } from './title'
+import { getAppBasePath } from '@/utils/appPath'
 
 /**
  * Route definitions with lazy loading
@@ -279,6 +280,27 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/account-contributions',
+    name: 'AccountContributions',
+    component: () => import('@/views/user/AccountContributionsView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: false,
+      titleKey: 'accountContributions.title',
+      descriptionKey: 'accountContributions.description'
+    }
+  },
+  {
+    path: '/account-contributions/callback',
+    name: 'AccountContributionCallback',
+    component: () => import('@/views/user/AccountContributionCallbackView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: false,
+      titleKey: 'accountContributions.callbackTitle'
+    }
+  },
+  {
     path: '/subscriptions',
     name: 'Subscriptions',
     component: () => import('@/views/user/SubscriptionsView.vue'),
@@ -515,6 +537,17 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/admin/account-contributions',
+    name: 'AdminAccountContributions',
+    component: () => import('@/views/admin/AccountContributionsView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      titleKey: 'admin.accountContributions.title',
+      descriptionKey: 'admin.accountContributions.description'
+    }
+  },
+  {
     path: '/admin/announcements',
     name: 'AdminAnnouncements',
     component: () => import('@/views/admin/AnnouncementsView.vue'),
@@ -524,6 +557,18 @@ const routes: RouteRecordRaw[] = [
       title: 'Announcements',
       titleKey: 'admin.announcements.title',
       descriptionKey: 'admin.announcements.description'
+    }
+  },
+  {
+    path: '/admin/group-promotions',
+    name: 'AdminGroupPromotions',
+    component: () => import('@/views/admin/GroupPromotionsView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'Group Promotions',
+      titleKey: 'admin.groupPromotions.title',
+      descriptionKey: 'admin.groupPromotions.description'
     }
   },
   {
@@ -691,6 +736,18 @@ const routes: RouteRecordRaw[] = [
       requiresPayment: true
     }
   },
+  {
+    path: '/admin/finance/ledger',
+    name: 'AdminFinanceLedger',
+    component: () => import('@/views/admin/finance/AdminFinanceLedgerView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'Balance Ledger',
+      titleKey: 'nav.financeLedger',
+      requiresPayment: true
+    }
+  },
 
   // ==================== 404 Not Found ====================
   {
@@ -707,7 +764,7 @@ const routes: RouteRecordRaw[] = [
  * Create router instance
  */
 const router = createRouter({
-  history: createWebHistory(import.meta.env.BASE_URL),
+  history: createWebHistory(getAppBasePath()),
   routes,
   scrollBehavior(_to, _from, savedPosition) {
     // Scroll to saved position when using browser back/forward

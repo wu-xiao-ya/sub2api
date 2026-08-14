@@ -53,6 +53,12 @@ const (
 	FieldHoldAmount = "hold_amount"
 	// FieldActualCost holds the string denoting the actual_cost field in the database.
 	FieldActualCost = "actual_cost"
+	// FieldPromotionID holds the string denoting the promotion_id field in the database.
+	FieldPromotionID = "promotion_id"
+	// FieldPromotionName holds the string denoting the promotion_name field in the database.
+	FieldPromotionName = "promotion_name"
+	// FieldPromotionBaseRateMultiplier holds the string denoting the promotion_base_rate_multiplier field in the database.
+	FieldPromotionBaseRateMultiplier = "promotion_base_rate_multiplier"
 	// FieldCurrency holds the string denoting the currency field in the database.
 	FieldCurrency = "currency"
 	// FieldHoldID holds the string denoting the hold_id field in the database.
@@ -120,6 +126,9 @@ var Columns = []string{
 	FieldEstimatedCost,
 	FieldHoldAmount,
 	FieldActualCost,
+	FieldPromotionID,
+	FieldPromotionName,
+	FieldPromotionBaseRateMultiplier,
 	FieldCurrency,
 	FieldHoldID,
 	FieldIdempotencyKey,
@@ -185,6 +194,8 @@ var (
 	DefaultCancelledCount int
 	// DefaultEstimatedCost holds the default value on creation for the "estimated_cost" field.
 	DefaultEstimatedCost float64
+	// PromotionNameValidator is a validator for the "promotion_name" field. It is called by the builders before save.
+	PromotionNameValidator func(string) error
 	// DefaultCurrency holds the default value on creation for the "currency" field.
 	DefaultCurrency string
 	// CurrencyValidator is a validator for the "currency" field. It is called by the builders before save.
@@ -317,6 +328,21 @@ func ByHoldAmount(opts ...sql.OrderTermOption) OrderOption {
 // ByActualCost orders the results by the actual_cost field.
 func ByActualCost(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldActualCost, opts...).ToFunc()
+}
+
+// ByPromotionID orders the results by the promotion_id field.
+func ByPromotionID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPromotionID, opts...).ToFunc()
+}
+
+// ByPromotionName orders the results by the promotion_name field.
+func ByPromotionName(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPromotionName, opts...).ToFunc()
+}
+
+// ByPromotionBaseRateMultiplier orders the results by the promotion_base_rate_multiplier field.
+func ByPromotionBaseRateMultiplier(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPromotionBaseRateMultiplier, opts...).ToFunc()
 }
 
 // ByCurrency orders the results by the currency field.

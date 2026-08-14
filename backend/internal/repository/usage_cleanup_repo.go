@@ -320,6 +320,262 @@ func (r *usageCleanupRepository) DeleteUsageLogsBatch(ctx context.Context, filte
 	return deleted, nil
 }
 
+func (r *usageCleanupRepository) FindNextUsageLogArchiveWindow(ctx context.Context, cutoff time.Time, window time.Duration) (*service.UsageLogArchiveWindow, error) {
+	if r == nil || r.sql == nil {
+		return nil, fmt.Errorf("usage cleanup repository not ready")
+	}
+	if window <= 0 {
+		window = time.Hour
+	}
+	cutoff = cutoff.UTC()
+	var bucketStart sql.NullTime
+	if err := scanSingleRow(ctx, r.sql, `
+		SELECT date_trunc('hour', MIN(created_at))
+		FROM usage_logs
+		WHERE created_at < $1
+	`, []any{cutoff}, &bucketStart); err != nil {
+		return nil, err
+	}
+	if !bucketStart.Valid {
+		return nil, nil
+	}
+	start := bucketStart.Time.UTC().Truncate(time.Hour)
+	end := start.Add(window)
+	return &service.UsageLogArchiveWindow{StartTime: start, EndTime: end}, nil
+}
+
+func (r *usageCleanupRepository) ArchiveUsageLogsWindow(ctx context.Context, start, end time.Time) (*service.UsageLogArchiveResult, error) {
+	if r == nil || r.sql == nil {
+		return nil, fmt.Errorf("usage cleanup repository not ready")
+	}
+	start = start.UTC()
+	end = end.UTC()
+	if !end.After(start) {
+		return nil, fmt.Errorf("archive window end must be after start")
+	}
+	if db, ok := r.sql.(*sql.DB); ok {
+		tx, err := db.BeginTx(ctx, nil)
+		if err != nil {
+			return nil, err
+		}
+		result, err := archiveUsageLogsWindowWithExecutor(ctx, tx, start, end)
+		if err != nil {
+			_ = tx.Rollback()
+			return nil, err
+		}
+		if err := tx.Commit(); err != nil {
+			return nil, err
+		}
+		return result, nil
+	}
+	return archiveUsageLogsWindowWithExecutor(ctx, r.sql, start, end)
+}
+
+func archiveUsageLogsWindowWithExecutor(ctx context.Context, exec sqlExecutor, start, end time.Time) (*service.UsageLogArchiveResult, error) {
+	query := `
+		WITH aggregated AS (
+			SELECT
+				date_trunc('hour', created_at) AS bucket_start,
+				user_id,
+				api_key_id,
+				account_id,
+				COALESCE(group_id, 0)::bigint AS group_id,
+				COALESCE(channel_id, 0)::bigint AS channel_id,
+				COALESCE(NULLIF(TRIM(model), ''), '') AS model,
+				COALESCE(NULLIF(TRIM(requested_model), ''), '') AS requested_model,
+				COALESCE(NULLIF(TRIM(upstream_model), ''), '') AS upstream_model,
+				COALESCE(NULLIF(TRIM(billing_tier), ''), '') AS billing_tier,
+				COALESCE(NULLIF(TRIM(billing_mode), ''), '') AS billing_mode,
+				COALESCE(request_type, 0)::smallint AS request_type,
+				COALESCE(stream, false) AS stream,
+				COALESCE(billing_type, 0)::smallint AS billing_type,
+				COUNT(*)::bigint AS request_count,
+				COUNT(*) FILTER (WHERE COALESCE(actual_cost, 0) > 0)::bigint AS success_count,
+				COUNT(*) FILTER (WHERE COALESCE(actual_cost, 0) <= 0)::bigint AS zero_cost_count,
+				COALESCE(SUM(input_tokens), 0)::bigint AS input_tokens,
+				COALESCE(SUM(output_tokens), 0)::bigint AS output_tokens,
+				COALESCE(SUM(cache_creation_tokens), 0)::bigint AS cache_creation_tokens,
+				COALESCE(SUM(cache_read_tokens), 0)::bigint AS cache_read_tokens,
+				COALESCE(SUM(cache_creation_5m_tokens), 0)::bigint AS cache_creation_5m_tokens,
+				COALESCE(SUM(cache_creation_1h_tokens), 0)::bigint AS cache_creation_1h_tokens,
+				COALESCE(SUM(image_count), 0)::bigint AS image_count,
+				COALESCE(SUM(image_input_tokens), 0)::bigint AS image_input_tokens,
+				COALESCE(SUM(image_output_tokens), 0)::bigint AS image_output_tokens,
+				COALESCE(SUM(video_count), 0)::bigint AS video_count,
+				COALESCE(SUM(video_duration_seconds), 0)::bigint AS video_duration_seconds,
+				COALESCE(SUM(input_cost), 0) AS input_cost,
+				COALESCE(SUM(output_cost), 0) AS output_cost,
+				COALESCE(SUM(cache_creation_cost), 0) AS cache_creation_cost,
+				COALESCE(SUM(cache_read_cost), 0) AS cache_read_cost,
+				COALESCE(SUM(image_input_cost), 0) AS image_input_cost,
+				COALESCE(SUM(image_output_cost), 0) AS image_output_cost,
+				COALESCE(SUM(total_cost), 0) AS total_cost,
+				COALESCE(SUM(actual_cost), 0) AS actual_cost,
+				COALESCE(SUM(COALESCE(account_stats_cost, total_cost) * COALESCE(account_rate_multiplier, 1)), 0) AS account_cost,
+				COALESCE(SUM(duration_ms), 0)::bigint AS total_duration_ms,
+				COALESCE(SUM(first_token_ms), 0)::bigint AS total_first_token_ms
+			FROM usage_logs
+			WHERE created_at >= $1 AND created_at < $2
+			GROUP BY
+				bucket_start,
+				user_id,
+				api_key_id,
+				account_id,
+				COALESCE(group_id, 0),
+				COALESCE(channel_id, 0),
+				COALESCE(NULLIF(TRIM(model), ''), ''),
+				COALESCE(NULLIF(TRIM(requested_model), ''), ''),
+				COALESCE(NULLIF(TRIM(upstream_model), ''), ''),
+				COALESCE(NULLIF(TRIM(billing_tier), ''), ''),
+				COALESCE(NULLIF(TRIM(billing_mode), ''), ''),
+				COALESCE(request_type, 0),
+				COALESCE(stream, false),
+				COALESCE(billing_type, 0)
+		),
+		upserted AS (
+			INSERT INTO usage_log_hourly_archives (
+				bucket_start,
+				user_id,
+				api_key_id,
+				account_id,
+				group_id,
+				channel_id,
+				model,
+				requested_model,
+				upstream_model,
+				billing_tier,
+				billing_mode,
+				request_type,
+				stream,
+				billing_type,
+				request_count,
+				success_count,
+				zero_cost_count,
+				input_tokens,
+				output_tokens,
+				cache_creation_tokens,
+				cache_read_tokens,
+				cache_creation_5m_tokens,
+				cache_creation_1h_tokens,
+				image_count,
+				image_input_tokens,
+				image_output_tokens,
+				video_count,
+				video_duration_seconds,
+				input_cost,
+				output_cost,
+				cache_creation_cost,
+				cache_read_cost,
+				image_input_cost,
+				image_output_cost,
+				total_cost,
+				actual_cost,
+				account_cost,
+				total_duration_ms,
+				total_first_token_ms
+			)
+			SELECT
+				bucket_start,
+				user_id,
+				api_key_id,
+				account_id,
+				group_id,
+				channel_id,
+				model,
+				requested_model,
+				upstream_model,
+				billing_tier,
+				billing_mode,
+				request_type,
+				stream,
+				billing_type,
+				request_count,
+				success_count,
+				zero_cost_count,
+				input_tokens,
+				output_tokens,
+				cache_creation_tokens,
+				cache_read_tokens,
+				cache_creation_5m_tokens,
+				cache_creation_1h_tokens,
+				image_count,
+				image_input_tokens,
+				image_output_tokens,
+				video_count,
+				video_duration_seconds,
+				input_cost,
+				output_cost,
+				cache_creation_cost,
+				cache_read_cost,
+				image_input_cost,
+				image_output_cost,
+				total_cost,
+				actual_cost,
+				account_cost,
+				total_duration_ms,
+				total_first_token_ms
+			FROM aggregated
+			ON CONFLICT (
+				bucket_start,
+				user_id,
+				api_key_id,
+				account_id,
+				group_id,
+				channel_id,
+				model,
+				requested_model,
+				upstream_model,
+				billing_tier,
+				billing_mode,
+				request_type,
+				stream,
+				billing_type
+			)
+			DO UPDATE SET
+				request_count = EXCLUDED.request_count,
+				success_count = EXCLUDED.success_count,
+				zero_cost_count = EXCLUDED.zero_cost_count,
+				input_tokens = EXCLUDED.input_tokens,
+				output_tokens = EXCLUDED.output_tokens,
+				cache_creation_tokens = EXCLUDED.cache_creation_tokens,
+				cache_read_tokens = EXCLUDED.cache_read_tokens,
+				cache_creation_5m_tokens = EXCLUDED.cache_creation_5m_tokens,
+				cache_creation_1h_tokens = EXCLUDED.cache_creation_1h_tokens,
+				image_count = EXCLUDED.image_count,
+				image_input_tokens = EXCLUDED.image_input_tokens,
+				image_output_tokens = EXCLUDED.image_output_tokens,
+				video_count = EXCLUDED.video_count,
+				video_duration_seconds = EXCLUDED.video_duration_seconds,
+				input_cost = EXCLUDED.input_cost,
+				output_cost = EXCLUDED.output_cost,
+				cache_creation_cost = EXCLUDED.cache_creation_cost,
+				cache_read_cost = EXCLUDED.cache_read_cost,
+				image_input_cost = EXCLUDED.image_input_cost,
+				image_output_cost = EXCLUDED.image_output_cost,
+				total_cost = EXCLUDED.total_cost,
+				actual_cost = EXCLUDED.actual_cost,
+				account_cost = EXCLUDED.account_cost,
+				total_duration_ms = EXCLUDED.total_duration_ms,
+				total_first_token_ms = EXCLUDED.total_first_token_ms,
+				updated_at = NOW()
+			RETURNING 1
+		),
+		deleted AS (
+			DELETE FROM usage_logs
+			WHERE created_at >= $1 AND created_at < $2
+			RETURNING 1
+		)
+		SELECT
+			(SELECT COUNT(*) FROM upserted)::bigint AS summary_rows,
+			(SELECT COUNT(*) FROM deleted)::bigint AS deleted_rows
+	`
+	result := &service.UsageLogArchiveResult{}
+	if err := scanSingleRow(ctx, exec, query, []any{start, end}, &result.SummaryRows, &result.DeletedRows); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
 func buildUsageCleanupWhere(filters service.UsageCleanupFilters) (string, []any) {
 	conditions := make([]string, 0, 8)
 	args := make([]any, 0, 8)

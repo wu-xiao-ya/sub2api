@@ -59,9 +59,13 @@ type tokenCacheInvalidatorRecorder struct {
 }
 
 type openAI403CounterCacheStub struct {
-	counts     []int64
-	resetCalls []int64
-	err        error
+	counts         []int64
+	modelDistinct  []int64
+	modelAdded     []bool
+	modelRecords   []string
+	modelRecordErr error
+	resetCalls     []int64
+	err            error
 }
 
 func (s *openAI403CounterCacheStub) IncrementOpenAI403Count(_ context.Context, _ int64, _ int) (int64, error) {
@@ -74,6 +78,24 @@ func (s *openAI403CounterCacheStub) IncrementOpenAI403Count(_ context.Context, _
 	count := s.counts[0]
 	s.counts = s.counts[1:]
 	return count, nil
+}
+
+func (s *openAI403CounterCacheStub) RecordOpenAI403Model(_ context.Context, _ int64, model string, _ int) (int64, bool, error) {
+	s.modelRecords = append(s.modelRecords, model)
+	if s.modelRecordErr != nil {
+		return 0, false, s.modelRecordErr
+	}
+	distinct := int64(1)
+	if len(s.modelDistinct) > 0 {
+		distinct = s.modelDistinct[0]
+		s.modelDistinct = s.modelDistinct[1:]
+	}
+	added := true
+	if len(s.modelAdded) > 0 {
+		added = s.modelAdded[0]
+		s.modelAdded = s.modelAdded[1:]
+	}
+	return distinct, added, nil
 }
 
 func (s *openAI403CounterCacheStub) ResetOpenAI403Count(_ context.Context, accountID int64) error {

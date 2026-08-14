@@ -51,7 +51,7 @@ var (
 		"UPSTREAM_BILLING_PROBE_UNAVAILABLE", "upstream billing probe is unavailable",
 	)
 	ErrUpstreamBillingProbeAccountInvalid = infraerrors.BadRequest(
-		"UPSTREAM_BILLING_PROBE_ACCOUNT_INVALID", "account is not an OpenAI API key account",
+		"UPSTREAM_BILLING_PROBE_ACCOUNT_INVALID", "account is not a supported upstream billing probe account",
 	)
 	ErrUpstreamBillingProbeIdentityChanged = infraerrors.Conflict(
 		"UPSTREAM_BILLING_PROBE_IDENTITY_CHANGED", "account identity changed during upstream billing probe; retry the probe",
@@ -328,7 +328,7 @@ func (s *UpstreamBillingProbeService) RunDue(ctx context.Context) error {
 	due := make([]Account, 0, len(accounts))
 	for i := range accounts {
 		account := accounts[i]
-		if !isUpstreamBillingProbeAccount(&account) || !account.IsActive() || !upstreamBillingProbeEnabled(&account) {
+		if !isAutomaticUpstreamBillingProbeAccount(&account) || !account.IsActive() || !upstreamBillingProbeEnabled(&account) {
 			continue
 		}
 		snapshot := decodeUpstreamBillingProbeSnapshot(account.Extra)
@@ -430,11 +430,12 @@ func (s *UpstreamBillingProbeService) probeAccountWithMode(ctx context.Context, 
 		if loadErr != nil {
 			return nil, loadErr
 		}
-		if !isUpstreamBillingProbeAccount(account) {
+		if !isManualUpstreamBillingProbeAccount(account) {
 			return nil, ErrUpstreamBillingProbeAccountInvalid
 		}
 		if requireEnabled {
-			if !account.IsActive() || !upstreamBillingProbeEnabled(account) {
+			if !isAutomaticUpstreamBillingProbeAccount(account) ||
+				!account.IsActive() || !upstreamBillingProbeEnabled(account) {
 				return nil, nil
 			}
 			if snapshot := decodeUpstreamBillingProbeSnapshot(account.Extra); snapshot != nil &&
@@ -538,7 +539,7 @@ func (s *UpstreamBillingProbeService) SetAccountEnabled(ctx context.Context, acc
 	if err != nil {
 		return err
 	}
-	if !isUpstreamBillingProbeAccount(account) {
+	if !isAutomaticUpstreamBillingProbeAccount(account) {
 		return ErrUpstreamBillingProbeAccountInvalid
 	}
 	return s.accountRepo.UpdateExtra(ctx, accountID, map[string]any{
@@ -551,17 +552,9 @@ func (s *UpstreamBillingProbeService) probeLoadedAccount(ctx context.Context, ac
 	if s.accountTestService == nil || s.accountTestService.httpUpstream == nil {
 		return s.persistProbeFailure(ctx, account, intervalMinutes, now, 0, "transport_unavailable", 0)
 	}
-	apiKey := account.GetOpenAIApiKey()
+	apiKey := strings.TrimSpace(account.GetCredential("api_key"))
 	if apiKey == "" {
 		return s.persistProbeFailure(ctx, account, intervalMinutes, now, 0, "missing_api_key", 0)
-	}
-	baseURL := account.GetOpenAIBaseURL()
-	if baseURL == "" {
-		baseURL = "https://api.openai.com"
-	}
-	normalizedBaseURL, err := s.accountTestService.validateUpstreamBaseURL(baseURL)
-	if err != nil {
-		return s.persistProbeFailure(ctx, account, intervalMinutes, now, 0, "invalid_base_url", 0)
 	}
 	proxyURL := ""
 	if account.ProxyID != nil {
@@ -573,22 +566,18 @@ func (s *UpstreamBillingProbeService) probeLoadedAccount(ctx context.Context, ac
 		}
 		proxyURL = account.Proxy.URL()
 	}
-	probeURL := buildOpenAIEndpointURL(normalizedBaseURL, "/v1/sub2api/billing")
+	req, tlsProfile, err := s.buildUpstreamBillingProbeRequest(ctx, account, apiKey)
+	if err != nil {
+		return s.persistProbeFailure(ctx, account, intervalMinutes, now, 0, err.Error(), 0)
+	}
 	probeCtx, cancel := context.WithTimeout(ctx, upstreamBillingProbeRequestTimeout)
 	defer cancel()
-	req, err := http.NewRequestWithContext(probeCtx, http.MethodGet, probeURL, bytes.NewReader(nil))
-	if err != nil {
-		return s.persistProbeFailure(ctx, account, intervalMinutes, now, 0, "request_build_failed", 0)
+	req = req.WithContext(probeCtx)
+	reqCtx := req.Context()
+	if account.Platform == PlatformOpenAI {
+		reqCtx = WithHTTPUpstreamProfile(reqCtx, HTTPUpstreamProfileOpenAI)
 	}
-	reqCtx := WithHTTPUpstreamProfile(req.Context(), HTTPUpstreamProfileOpenAI)
 	req = req.WithContext(WithHTTPUpstreamRedirectsDisabled(reqCtx))
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("Authorization", "Bearer "+apiKey)
-	account.ApplyHeaderOverrides(req.Header)
-	var tlsProfile *tlsfingerprint.Profile
-	if s.accountTestService.tlsFPProfileService != nil {
-		tlsProfile = s.accountTestService.tlsFPProfileService.ResolveTLSProfile(account)
-	}
 	resp, err := s.accountTestService.httpUpstream.DoWithTLS(req, proxyURL, account.ID, account.Concurrency, tlsProfile)
 	if err != nil {
 		return s.persistProbeFailure(ctx, account, intervalMinutes, now, 0, "request_failed", 0)
@@ -627,6 +616,51 @@ func (s *UpstreamBillingProbeService) probeLoadedAccount(ctx context.Context, ac
 		return nil, err
 	}
 	return snapshot, nil
+}
+
+func (s *UpstreamBillingProbeService) buildUpstreamBillingProbeRequest(ctx context.Context, account *Account, apiKey string) (*http.Request, *tlsfingerprint.Profile, error) {
+	if account == nil {
+		return nil, nil, fmt.Errorf("invalid_account")
+	}
+	baseURL := ""
+	switch account.Platform {
+	case PlatformOpenAI:
+		baseURL = account.GetOpenAIBaseURL()
+		if baseURL == "" {
+			baseURL = "https://api.openai.com"
+		}
+	case PlatformAnthropic:
+		baseURL = account.GetBaseURL()
+		if baseURL == "" {
+			baseURL = "https://api.anthropic.com"
+		}
+	default:
+		return nil, nil, fmt.Errorf("unsupported_platform")
+	}
+	normalizedBaseURL, err := s.accountTestService.validateUpstreamBaseURL(baseURL)
+	if err != nil {
+		return nil, nil, fmt.Errorf("invalid_base_url")
+	}
+	probeURL := buildOpenAIEndpointURL(normalizedBaseURL, "/v1/sub2api/billing")
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, probeURL, bytes.NewReader(nil))
+	if err != nil {
+		return nil, nil, fmt.Errorf("request_build_failed")
+	}
+	req.Header.Set("Accept", "application/json")
+	switch account.Platform {
+	case PlatformOpenAI:
+		req.Header.Set("Authorization", "Bearer "+apiKey)
+	case PlatformAnthropic:
+		setAnthropicAPIKeyAuthHeader(req.Header, account, apiKey)
+	default:
+		return nil, nil, fmt.Errorf("unsupported_platform")
+	}
+	account.ApplyHeaderOverrides(req.Header)
+	var tlsProfile *tlsfingerprint.Profile
+	if s.accountTestService.tlsFPProfileService != nil {
+		tlsProfile = s.accountTestService.tlsFPProfileService.ResolveTLSProfile(account)
+	}
+	return req, tlsProfile, nil
 }
 
 func (s *UpstreamBillingProbeService) persistProbeFailure(
@@ -840,8 +874,13 @@ func decodeUpstreamBillingProbeSnapshot(extra map[string]any) *UpstreamBillingPr
 	return &snapshot
 }
 
-func isUpstreamBillingProbeAccount(account *Account) bool {
+func isAutomaticUpstreamBillingProbeAccount(account *Account) bool {
 	return account != nil && account.Platform == PlatformOpenAI && account.Type == AccountTypeAPIKey
+}
+
+func isManualUpstreamBillingProbeAccount(account *Account) bool {
+	return account != nil && account.Type == AccountTypeAPIKey &&
+		(account.Platform == PlatformOpenAI || account.Platform == PlatformAnthropic)
 }
 
 func upstreamBillingProbeEnabled(account *Account) bool {

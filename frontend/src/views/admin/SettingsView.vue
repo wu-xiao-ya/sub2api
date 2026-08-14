@@ -4216,6 +4216,78 @@
                 <Toggle v-model="form.allow_ungrouped_key_scheduling" />
               </div>
 
+              <div class="border-t border-gray-100 pt-4 dark:border-dark-700">
+                <div class="mb-3">
+                  <label class="font-medium text-gray-900 dark:text-white">
+                    {{
+                      t(
+                        "admin.settings.scheduling.accountSchedulingThresholdsTitle",
+                      )
+                    }}
+                  </label>
+                  <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                    {{
+                      t(
+                        "admin.settings.scheduling.accountSchedulingThresholdsDescription",
+                      )
+                    }}
+                  </p>
+                  <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                    {{
+                      t(
+                        "admin.settings.scheduling.accountSchedulingThresholdsGlobalHint",
+                      )
+                    }}
+                  </p>
+                  <p class="mt-0.5 text-xs text-amber-600 dark:text-amber-400">
+                    {{
+                      t(
+                        "admin.settings.scheduling.accountSchedulingThresholdsDisabledHint",
+                      )
+                    }}
+                  </p>
+                </div>
+                <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                  <div
+                    v-for="platform in schedulingThresholdPlatforms"
+                    :key="platform"
+                    class="rounded-lg border border-gray-200 p-4 dark:border-dark-700"
+                  >
+                    <div class="flex items-start justify-between gap-3">
+                      <div>
+                        <label
+                          class="font-mono text-sm font-medium text-gray-900 dark:text-white"
+                        >
+                          {{ platform }}
+                        </label>
+                        <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                          {{
+                            t(
+                              "admin.settings.scheduling.accountSchedulingThresholdsRangeHint",
+                            )
+                          }}
+                        </p>
+                      </div>
+                      <span
+                        class="rounded bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-600 dark:bg-dark-700 dark:text-gray-300"
+                      >
+                        %
+                      </span>
+                    </div>
+                    <input
+                      v-model.number="form.account_scheduling_thresholds[platform]"
+                      type="number"
+                      min="1"
+                      max="100"
+                      step="1"
+                      class="input mt-3"
+                      :data-testid="`account-scheduling-threshold-${platform}`"
+                      placeholder="100"
+                    />
+                  </div>
+                </div>
+              </div>
+
               <div
                 v-if="!form.openai_advanced_scheduler_enabled"
                 class="flex items-center justify-between border-t border-gray-100 pt-5 dark:border-dark-700"
@@ -4411,6 +4483,71 @@
               </p>
             </div>
             <div class="space-y-5 p-6">
+              <div class="grid gap-5 border-b border-gray-100 pb-5 dark:border-dark-700 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
+                <div>
+                  <label
+                    for="grok-default-text-model"
+                    class="text-sm font-medium text-gray-700 dark:text-gray-300"
+                  >
+                    {{ t("admin.settings.gatewayForwarding.grokDefaultTextModel") }}
+                  </label>
+                  <input
+                    id="grok-default-text-model"
+                    v-model.trim="form.grok_default_text_model"
+                    type="text"
+                    class="input mt-2 w-full"
+                    list="grok-default-text-model-options"
+                    data-testid="grok-default-text-model"
+                    placeholder="grok-4.5"
+                  />
+                  <datalist id="grok-default-text-model-options">
+                    <option value="grok-4.5" />
+                    <option value="grok-4.1-fast" />
+                    <option value="grok-4" />
+                  </datalist>
+                  <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                    {{ t("admin.settings.gatewayForwarding.grokDefaultTextModelHint") }}
+                  </p>
+                </div>
+                <div class="flex items-center justify-between gap-5 md:min-w-72">
+                  <div>
+                    <label class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                      {{ t("admin.settings.gatewayForwarding.grokCrossClientMap") }}
+                    </label>
+                    <p class="mt-0.5 max-w-sm text-xs text-gray-500 dark:text-gray-400">
+                      {{ t("admin.settings.gatewayForwarding.grokCrossClientMapHint") }}
+                    </p>
+                  </div>
+                  <Toggle
+                    v-model="form.grok_cross_client_model_map_enabled"
+                    data-testid="grok-cross-client-model-map-toggle"
+                  />
+                </div>
+                </div>
+                <div class="md:col-span-2">
+                  <label
+                    for="grok-default-base-url-mode"
+                    class="text-sm font-medium text-gray-700 dark:text-gray-300"
+                  >
+                    {{ t("admin.settings.gatewayForwarding.grokDefaultBaseURLMode") }}
+                  </label>
+                  <select
+                    id="grok-default-base-url-mode"
+                    v-model="form.grok_default_base_url_mode"
+                    class="input mt-2 w-full"
+                    data-testid="grok-default-base-url-mode"
+                  >
+                    <option value="cli">{{ t("admin.settings.gatewayForwarding.grokBaseURLModeCLI") }}</option>
+                    <option value="api">{{ t("admin.settings.gatewayForwarding.grokBaseURLModeAPI") }}</option>
+                    <option value="us-east-1">{{ t("admin.settings.gatewayForwarding.grokBaseURLModeUSEast1") }}</option>
+                    <option value="us-west-2">{{ t("admin.settings.gatewayForwarding.grokBaseURLModeUSWest2") }}</option>
+                    <option value="eu-west-1">{{ t("admin.settings.gatewayForwarding.grokBaseURLModeEUWest1") }}</option>
+                  </select>
+                  <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                    {{ t("admin.settings.gatewayForwarding.grokDefaultBaseURLModeHint") }}
+                  </p>
+                </div>
+
               <!-- Fingerprint Unification -->
               <div class="flex items-center justify-between">
                 <div>
@@ -5389,6 +5526,26 @@
                 </p>
               </div>
 
+              <!-- API Endpoint Latency Probe Interval -->
+              <div>
+                <label
+                  class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
+                >
+                  {{ t("admin.settings.site.apiEndpointProbeInterval") }}
+                </label>
+                <input
+                  v-model.number="form.api_endpoint_probe_interval_seconds"
+                  type="number"
+                  min="0"
+                  max="300"
+                  step="1"
+                  class="input w-40"
+                />
+                <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                  {{ t("admin.settings.site.apiEndpointProbeIntervalHint") }}
+                </p>
+              </div>
+
               <!-- Global Table Preferences -->
               <div class="border-t border-gray-100 pt-4 dark:border-dark-700">
                 <h3 class="text-sm font-medium text-gray-900 dark:text-white">
@@ -6104,6 +6261,220 @@
               <p class="mt-1 text-xs text-gray-400">
                 {{ t('admin.settings.features.channelMonitor.defaultIntervalHint') }}
               </p>
+            </div>
+
+            <div
+              v-if="form.channel_monitor_enabled"
+              data-testid="channel-monitor-account-probe-settings"
+              class="border-t border-gray-100 pt-5 dark:border-dark-700"
+            >
+              <div class="flex items-start justify-between gap-4">
+                <div class="min-w-0">
+                  <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    {{ t('admin.settings.features.channelMonitor.accountProbe.title') }}
+                  </h3>
+                  <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                    {{ t('admin.settings.features.channelMonitor.accountProbe.description') }}
+                  </p>
+                </div>
+                <Toggle
+                  v-model="form.channel_monitor_account_probe_settings.enabled"
+                  data-testid="channel-monitor-account-probe-enabled"
+                />
+              </div>
+
+              <div
+                v-if="form.channel_monitor_account_probe_settings.enabled"
+                class="mt-5 space-y-5"
+              >
+                <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <div>
+                    <label
+                      for="channel-monitor-account-probe-confirm-attempts"
+                      class="input-label"
+                    >
+                      {{ t('admin.settings.features.channelMonitor.accountProbe.confirmAttempts') }}
+                    </label>
+                    <input
+                      id="channel-monitor-account-probe-confirm-attempts"
+                      v-model.number="form.channel_monitor_account_probe_settings.confirm_attempts"
+                      data-testid="channel-monitor-account-probe-confirm-attempts"
+                      type="number"
+                      min="0"
+                      max="2"
+                      step="1"
+                      class="input"
+                    />
+                    <p class="mt-1 text-xs text-gray-400">
+                      {{ t('admin.settings.features.channelMonitor.accountProbe.confirmAttemptsHint') }}
+                    </p>
+                  </div>
+
+                  <div>
+                    <label
+                      for="channel-monitor-account-probe-degraded-threshold"
+                      class="input-label"
+                    >
+                      {{ t('admin.settings.features.channelMonitor.accountProbe.degradedThreshold') }}
+                    </label>
+                    <input
+                      id="channel-monitor-account-probe-degraded-threshold"
+                      v-model.number="form.channel_monitor_account_probe_settings.degraded_threshold_ms"
+                      data-testid="channel-monitor-account-probe-degraded-threshold"
+                      type="number"
+                      min="100"
+                      max="120000"
+                      step="100"
+                      class="input"
+                    />
+                    <p class="mt-1 text-xs text-gray-400">
+                      {{ t('admin.settings.features.channelMonitor.accountProbe.degradedThresholdHint') }}
+                    </p>
+                  </div>
+
+                  <div>
+                    <label
+                      for="channel-monitor-account-probe-max-candidates"
+                      class="input-label"
+                    >
+                      {{ t('admin.settings.features.channelMonitor.accountProbe.maxCandidates') }}
+                    </label>
+                    <input
+                      id="channel-monitor-account-probe-max-candidates"
+                      v-model.number="form.channel_monitor_account_probe_settings.max_candidates"
+                      data-testid="channel-monitor-account-probe-max-candidates"
+                      type="number"
+                      min="1"
+                      max="20"
+                      step="1"
+                      class="input"
+                    />
+                    <p class="mt-1 text-xs text-gray-400">
+                      {{ t('admin.settings.features.channelMonitor.accountProbe.maxCandidatesHint') }}
+                    </p>
+                  </div>
+
+                  <div>
+                    <label
+                      for="channel-monitor-account-probe-parallelism"
+                      class="input-label"
+                    >
+                      {{ t('admin.settings.features.channelMonitor.accountProbe.parallelism') }}
+                    </label>
+                    <input
+                      id="channel-monitor-account-probe-parallelism"
+                      v-model.number="form.channel_monitor_account_probe_settings.parallelism"
+                      data-testid="channel-monitor-account-probe-parallelism"
+                      type="number"
+                      min="1"
+                      max="20"
+                      step="1"
+                      class="input"
+                    />
+                    <p class="mt-1 text-xs text-gray-400">
+                      {{ t('admin.settings.features.channelMonitor.accountProbe.parallelismHint') }}
+                    </p>
+                  </div>
+                </div>
+
+                <div class="flex items-start justify-between gap-4 border-t border-gray-100 pt-4 dark:border-dark-700">
+                  <div class="min-w-0">
+                    <label class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                      {{ t('admin.settings.features.channelMonitor.accountProbe.allowImageFanout') }}
+                    </label>
+                    <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                      {{ t('admin.settings.features.channelMonitor.accountProbe.allowImageFanoutHint') }}
+                    </p>
+                  </div>
+                  <Toggle
+                    v-model="form.channel_monitor_account_probe_settings.allow_image_fanout"
+                    data-testid="channel-monitor-account-probe-allow-image-fanout"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div
+              v-if="form.channel_monitor_enabled"
+              data-testid="channel-monitor-traffic-observation-settings"
+              class="border-t border-gray-100 pt-5 dark:border-dark-700"
+            >
+              <div class="flex items-start justify-between gap-4">
+                <div class="min-w-0">
+                  <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    {{ t('admin.settings.features.channelMonitor.trafficObservation.title') }}
+                  </h3>
+                  <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                    {{ t('admin.settings.features.channelMonitor.trafficObservation.description') }}
+                  </p>
+                </div>
+                <Toggle
+                  v-model="form.channel_monitor_traffic_observation_settings.enabled"
+                  data-testid="channel-monitor-traffic-observation-enabled"
+                />
+              </div>
+
+              <div
+                v-if="form.channel_monitor_traffic_observation_settings.enabled"
+                class="mt-5 grid grid-cols-1 gap-4 md:grid-cols-3"
+              >
+                <div>
+                  <label for="channel-monitor-traffic-idle" class="input-label">
+                    {{ t('admin.settings.features.channelMonitor.trafficObservation.fallbackIdle') }}
+                  </label>
+                  <input
+                    id="channel-monitor-traffic-idle"
+                    v-model.number="form.channel_monitor_traffic_observation_settings.fallback_idle_seconds"
+                    data-testid="channel-monitor-traffic-idle"
+                    type="number"
+                    min="60"
+                    max="86400"
+                    step="60"
+                    class="input"
+                  />
+                  <p class="mt-1 text-xs text-gray-400">
+                    {{ t('admin.settings.features.channelMonitor.trafficObservation.fallbackIdleHint') }}
+                  </p>
+                </div>
+
+                <div>
+                  <label for="channel-monitor-traffic-window" class="input-label">
+                    {{ t('admin.settings.features.channelMonitor.trafficObservation.aggregationWindow') }}
+                  </label>
+                  <input
+                    id="channel-monitor-traffic-window"
+                    v-model.number="form.channel_monitor_traffic_observation_settings.aggregation_window_seconds"
+                    data-testid="channel-monitor-traffic-window"
+                    type="number"
+                    min="30"
+                    max="3600"
+                    step="30"
+                    class="input"
+                  />
+                  <p class="mt-1 text-xs text-gray-400">
+                    {{ t('admin.settings.features.channelMonitor.trafficObservation.aggregationWindowHint') }}
+                  </p>
+                </div>
+
+                <div>
+                  <label for="channel-monitor-traffic-samples" class="input-label">
+                    {{ t('admin.settings.features.channelMonitor.trafficObservation.minimumSamples') }}
+                  </label>
+                  <input
+                    id="channel-monitor-traffic-samples"
+                    v-model.number="form.channel_monitor_traffic_observation_settings.minimum_samples"
+                    data-testid="channel-monitor-traffic-samples"
+                    type="number"
+                    min="1"
+                    max="20"
+                    step="1"
+                    class="input"
+                  />
+                  <p class="mt-1 text-xs text-gray-400">
+                    {{ t('admin.settings.features.channelMonitor.trafficObservation.minimumSamplesHint') }}
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -7640,8 +8011,11 @@ import { adminAPI } from "@/api";
 import {
   appendAuthSourceDefaultsToUpdateRequest,
   buildAuthSourceDefaultsState,
+  normalizeAccountSchedulingThresholdsMap,
   normalizePlatformQuotasMap,
+  sanitizeAccountSchedulingThresholdsMap,
   sanitizePlatformQuotasMap,
+  SCHEDULING_THRESHOLD_PLATFORMS,
   defaultWeChatConnectScopesForMode,
   deriveWeChatConnectStoredMode,
   normalizeDefaultSubscriptionSettings,
@@ -8362,7 +8736,10 @@ type SettingsForm = Omit<
   openai_advanced_scheduler_weight_session_sticky: string;
   // 系统全局平台限额 map；form 内始终归一化为全 4 平台对象（模板非空绑定依赖此不变量）
   default_platform_quotas: DefaultPlatformQuotasMap;
+  account_scheduling_thresholds: ReturnType<typeof normalizeAccountSchedulingThresholdsMap>;
 };
+
+const schedulingThresholdPlatforms = SCHEDULING_THRESHOLD_PLATFORMS;
 
 const form = reactive<SettingsForm>({
   registration_enabled: true,
@@ -8382,6 +8759,7 @@ const form = reactive<SettingsForm>({
   login_agreement_documents: defaultLoginAgreementDocuments(),
   default_balance: 0,
   default_platform_quotas: normalizePlatformQuotasMap() as DefaultPlatformQuotasMap,
+  account_scheduling_thresholds: normalizeAccountSchedulingThresholdsMap(),
   affiliate_rebate_rate: 20,
   affiliate_rebate_freeze_hours: 0,
   affiliate_rebate_duration_days: 0,
@@ -8395,6 +8773,7 @@ const form = reactive<SettingsForm>({
   site_logo: "",
   site_subtitle: "Subscription to API Conversion Platform",
   api_base_url: "",
+  api_endpoint_probe_interval_seconds: 5,
   contact_info: "",
   doc_url: "",
   home_content: "",
@@ -8543,6 +8922,9 @@ const form = reactive<SettingsForm>({
   fallback_model_openai: "gpt-4o",
   fallback_model_gemini: "gemini-2.5-pro",
   fallback_model_antigravity: "gemini-2.5-pro",
+  grok_default_text_model: "grok-4.5",
+  grok_cross_client_model_map_enabled: false,
+  grok_default_base_url_mode: "cli",
   // Identity patch (Claude -> Gemini)
   enable_identity_patch: true,
   identity_patch_prompt: "",
@@ -8601,6 +8983,20 @@ const form = reactive<SettingsForm>({
   // Channel Monitor feature switch
   channel_monitor_enabled: true,
   channel_monitor_default_interval_seconds: 60,
+  channel_monitor_account_probe_settings: {
+    enabled: true,
+    confirm_attempts: 1,
+    degraded_threshold_ms: 6000,
+    max_candidates: 5,
+    parallelism: 5,
+    allow_image_fanout: false,
+  },
+  channel_monitor_traffic_observation_settings: {
+    enabled: false,
+    fallback_idle_seconds: 1800,
+    aggregation_window_seconds: 300,
+    minimum_samples: 1,
+  },
   // Available Channels feature switch
   available_channels_enabled: false,
   // Affiliate (邀请返利) feature switch
@@ -9545,6 +9941,9 @@ async function loadSettings() {
         : defaultLoginAgreementDocuments();
     Object.assign(authSourceDefaults, buildAuthSourceDefaultsState(settings));
     form.default_platform_quotas = normalizePlatformQuotasMap(settings.default_platform_quotas);
+    form.account_scheduling_thresholds = normalizeAccountSchedulingThresholdsMap(
+      settings.account_scheduling_thresholds,
+    );
     form.backend_mode_enabled = settings.backend_mode_enabled;
     form.default_subscriptions = normalizeDefaultSubscriptionSettings(
       settings.default_subscriptions,
@@ -9913,6 +10312,8 @@ async function saveSettings() {
       site_logo: form.site_logo,
       site_subtitle: form.site_subtitle,
       api_base_url: form.api_base_url,
+      api_endpoint_probe_interval_seconds:
+        Number(form.api_endpoint_probe_interval_seconds) || 0,
       contact_info: form.contact_info,
       doc_url: form.doc_url,
       home_content: form.home_content,
@@ -10027,6 +10428,11 @@ async function saveSettings() {
       fallback_model_openai: form.fallback_model_openai,
       fallback_model_gemini: form.fallback_model_gemini,
       fallback_model_antigravity: form.fallback_model_antigravity,
+      grok_default_text_model:
+        form.grok_default_text_model.trim() || "grok-4.5",
+      grok_cross_client_model_map_enabled:
+        form.grok_cross_client_model_map_enabled,
+      grok_default_base_url_mode: form.grok_default_base_url_mode,
       enable_identity_patch: form.enable_identity_patch,
       identity_patch_prompt: form.identity_patch_prompt,
       min_claude_code_version: form.min_claude_code_version,
@@ -10143,6 +10549,91 @@ async function saveSettings() {
       channel_monitor_enabled: form.channel_monitor_enabled,
       channel_monitor_default_interval_seconds:
         Number(form.channel_monitor_default_interval_seconds) || 60,
+      channel_monitor_account_probe_settings: {
+        enabled: Boolean(form.channel_monitor_account_probe_settings.enabled),
+        confirm_attempts: Math.min(
+          2,
+          Math.max(
+            0,
+            Math.floor(
+              Number(
+                form.channel_monitor_account_probe_settings.confirm_attempts,
+              ) || 0,
+            ),
+          ),
+        ),
+        degraded_threshold_ms: Math.min(
+          120000,
+          Math.max(
+            100,
+            Math.floor(
+              Number(
+                form.channel_monitor_account_probe_settings.degraded_threshold_ms,
+              ) || 6000,
+            ),
+          ),
+        ),
+        max_candidates: Math.min(
+          20,
+          Math.max(
+            1,
+            Math.floor(
+              Number(
+                form.channel_monitor_account_probe_settings.max_candidates,
+              ) || 5,
+            ),
+          ),
+        ),
+        parallelism: Math.min(
+          20,
+          Math.max(
+            1,
+            Math.floor(
+              Number(form.channel_monitor_account_probe_settings.parallelism) ||
+                5,
+            ),
+          ),
+        ),
+        allow_image_fanout: Boolean(
+          form.channel_monitor_account_probe_settings.allow_image_fanout,
+        ),
+      },
+      channel_monitor_traffic_observation_settings: {
+        enabled: Boolean(form.channel_monitor_traffic_observation_settings.enabled),
+        fallback_idle_seconds: Math.min(
+          86400,
+          Math.max(
+            60,
+            Math.floor(
+              Number(
+                form.channel_monitor_traffic_observation_settings.fallback_idle_seconds,
+              ) || 1800,
+            ),
+          ),
+        ),
+        aggregation_window_seconds: Math.min(
+          3600,
+          Math.max(
+            30,
+            Math.floor(
+              Number(
+                form.channel_monitor_traffic_observation_settings.aggregation_window_seconds,
+              ) || 300,
+            ),
+          ),
+        ),
+        minimum_samples: Math.min(
+          20,
+          Math.max(
+            1,
+            Math.floor(
+              Number(
+                form.channel_monitor_traffic_observation_settings.minimum_samples,
+              ) || 1,
+            ),
+          ),
+        ),
+      },
       // Available Channels feature switch
       available_channels_enabled: form.available_channels_enabled,
       // Affiliate (邀请返利) feature switch
@@ -10183,6 +10674,9 @@ async function saveSettings() {
     }
 
     payload.default_platform_quotas = sanitizePlatformQuotasMap(form.default_platform_quotas);
+    payload.account_scheduling_thresholds = sanitizeAccountSchedulingThresholdsMap(
+      form.account_scheduling_thresholds,
+    );
     appendAuthSourceDefaultsToUpdateRequest(payload, authSourceDefaults);
 
     const updated = await settingsStepUp.run(() =>
@@ -10196,6 +10690,9 @@ async function saveSettings() {
     }
     Object.assign(authSourceDefaults, buildAuthSourceDefaultsState(updated));
     form.default_platform_quotas = normalizePlatformQuotasMap(updated.default_platform_quotas);
+    form.account_scheduling_thresholds = normalizeAccountSchedulingThresholdsMap(
+      updated.account_scheduling_thresholds,
+    );
     registrationEmailSuffixWhitelistTags.value =
       normalizeRegistrationEmailSuffixDomains(
         updated.registration_email_suffix_whitelist,

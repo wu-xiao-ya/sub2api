@@ -30,7 +30,7 @@
         </div>
       </div>
 
-      <div v-if="form.provider === PROVIDER_OPENAI" class="rounded-lg border border-blue-100 bg-blue-50/50 p-3 dark:border-blue-500/20 dark:bg-blue-500/10">
+      <div v-if="supportsSelectableAPIMode(form.provider)" class="rounded-lg border border-blue-100 bg-blue-50/50 p-3 dark:border-blue-500/20 dark:bg-blue-500/10">
         <label class="input-label">{{ t('admin.channelMonitor.form.apiMode') }}</label>
         <div class="grid gap-3 sm:grid-cols-2">
           <button
@@ -106,9 +106,26 @@
       </div>
 
       <div>
+        <label class="input-label">{{ t('admin.channelMonitor.form.accountGroup') }}</label>
+        <Select
+          v-model="accountGroupSelectValue"
+          :options="accountGroupOptions"
+          :placeholder="t('admin.channelMonitor.form.accountGroupPlaceholder')"
+          :disabled="accountGroupsLoading"
+        />
+        <p class="mt-1 text-xs text-gray-400">{{ t('admin.channelMonitor.form.accountGroupHint') }}</p>
+      </div>
+
+      <div>
         <label class="input-label">{{ t('admin.channelMonitor.form.intervalSeconds') }} <span class="text-red-500">*</span></label>
         <input v-model.number="form.interval_seconds" type="number" min="15" max="3600" required class="input" />
         <p class="mt-1 text-xs text-gray-400">{{ t('admin.channelMonitor.form.intervalSecondsHint') }}</p>
+      </div>
+
+      <div v-if="form.api_mode === API_MODE_IMAGES">
+        <label class="input-label">{{ t('admin.channelMonitor.form.imageRequestTimeoutSeconds') }} <span class="text-red-500">*</span></label>
+        <input v-model.number="form.request_timeout_seconds" type="number" min="15" max="900" required class="input" />
+        <p class="mt-1 text-xs text-gray-400">{{ t('admin.channelMonitor.form.imageRequestTimeoutSecondsHint') }}</p>
       </div>
 
       <div>
@@ -201,7 +218,7 @@ import type {
   UpdateParams,
 } from '@/api/admin/channelMonitor'
 import type { ChannelMonitorTemplate } from '@/api/admin/channelMonitorTemplate'
-import type { ApiKey } from '@/types'
+import type { AdminGroup, ApiKey } from '@/types'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import Toggle from '@/components/common/Toggle.vue'
 import Select from '@/components/common/Select.vue'
@@ -216,11 +233,18 @@ import {
   PROVIDER_ANTHROPIC,
   PROVIDER_GEMINI,
   PROVIDER_GROK,
+  PROVIDER_ANTIGRAVITY,
+  PROVIDER_DEEPSEEK,
+  PROVIDER_KIMI,
+  PROVIDER_GLM,
   API_MODE_CHAT_COMPLETIONS,
   API_MODE_RESPONSES,
+  API_MODE_MODELS,
+  API_MODE_IMAGES,
   DEFAULT_GROK_ENDPOINT,
   DEFAULT_GROK_MODEL,
   DEFAULT_INTERVAL_SECONDS,
+  supportsSelectableAPIMode,
 } from '@/constants/channelMonitor'
 
 const props = defineProps<{
@@ -236,6 +260,9 @@ const emit = defineEmits<{
 const { t } = useI18n()
 const appStore = useAppStore()
 const { providerPickerClass } = useChannelMonitorFormat()
+const DEFAULT_IMAGE_MONITOR_INTERVAL_SECONDS = 30 * 60
+const DEFAULT_TEXT_REQUEST_TIMEOUT_SECONDS = 45
+const DEFAULT_IMAGE_REQUEST_TIMEOUT_SECONDS = 5 * 60
 
 // System-configured default interval for new monitors. Falls back to the static
 // constant when public settings haven't loaded yet or store the legacy 0 value.
@@ -264,8 +291,10 @@ interface MonitorForm {
   primary_model: string
   extra_models: string[]
   group_name: string
+  account_group_id: number | null
   interval_seconds: number
   jitter_seconds: number
+  request_timeout_seconds: number
   enabled: boolean
   // 高级设置快照
   template_id: number | null
@@ -283,8 +312,10 @@ const form = reactive<MonitorForm>({
   primary_model: '',
   extra_models: [],
   group_name: '',
+  account_group_id: null,
   interval_seconds: systemDefaultInterval.value,
   jitter_seconds: 0,
+  request_timeout_seconds: DEFAULT_TEXT_REQUEST_TIMEOUT_SECONDS,
   enabled: true,
   template_id: null,
   extra_headers: {},
@@ -300,11 +331,14 @@ let suppressFormWatchers = false
 // 可用模板列表（进入 dialog 时一次性拉取 cache；按 provider / api mode 过滤）。
 const templatesCache = ref<ChannelMonitorTemplate[]>([])
 const templatesLoading = ref(false)
+const accountGroupsCache = new Map<Provider, AdminGroup[]>()
+const accountGroups = ref<AdminGroup[]>([])
+const accountGroupsLoading = ref(false)
 
 const templateOptions = computed(() => {
   const items = templatesCache.value.filter((t) => {
     if (t.provider !== form.provider) return false
-    if (form.provider !== PROVIDER_OPENAI) return true
+    if (!supportsSelectableAPIMode(form.provider)) return true
     return normalizeAPIMode(t.api_mode) === form.api_mode
   })
   return [
@@ -363,10 +397,23 @@ const apiModeOptions = computed<{ value: APIMode; label: string; hint: string }[
     label: t('admin.channelMonitor.form.apiModeResponses'),
     hint: t('admin.channelMonitor.form.apiModeResponsesHint'),
   },
+  {
+    value: API_MODE_MODELS,
+    label: t('admin.channelMonitor.form.apiModeModels'),
+    hint: t('admin.channelMonitor.form.apiModeModelsHint'),
+  },
+  {
+    value: API_MODE_IMAGES,
+    label: t('admin.channelMonitor.form.apiModeImages'),
+    hint: t('admin.channelMonitor.form.apiModeImagesHint'),
+  },
 ])
 
 function normalizeAPIMode(mode: APIMode | undefined | null): APIMode {
-  return mode === API_MODE_RESPONSES ? API_MODE_RESPONSES : API_MODE_CHAT_COMPLETIONS
+  if (mode === API_MODE_RESPONSES) return API_MODE_RESPONSES
+  if (mode === API_MODE_MODELS) return API_MODE_MODELS
+  if (mode === API_MODE_IMAGES) return API_MODE_IMAGES
+  return API_MODE_CHAT_COMPLETIONS
 }
 
 function apiModeButtonClass(mode: APIMode): string {
@@ -378,10 +425,14 @@ function apiModeButtonClass(mode: APIMode): string {
 }
 
 function templateOptionLabel(tpl: ChannelMonitorTemplate): string {
-  if (tpl.provider !== PROVIDER_OPENAI) return tpl.name
+  if (!supportsSelectableAPIMode(tpl.provider)) return tpl.name
   const labelKey = normalizeAPIMode(tpl.api_mode) === API_MODE_RESPONSES
     ? 'admin.channelMonitor.form.apiModeResponses'
-    : 'admin.channelMonitor.form.apiModeChatCompletions'
+    : normalizeAPIMode(tpl.api_mode) === API_MODE_MODELS
+      ? 'admin.channelMonitor.form.apiModeModels'
+      : normalizeAPIMode(tpl.api_mode) === API_MODE_IMAGES
+        ? 'admin.channelMonitor.form.apiModeImages'
+        : 'admin.channelMonitor.form.apiModeChatCompletions'
   return `${tpl.name} · ${t(labelKey)}`
 }
 
@@ -402,7 +453,55 @@ const providerOptions = computed<ProviderOption[]>(() => [
   { value: PROVIDER_OPENAI, label: t('monitorCommon.providers.openai') },
   { value: PROVIDER_GEMINI, label: t('monitorCommon.providers.gemini') },
   { value: PROVIDER_GROK, label: t('monitorCommon.providers.grok') },
+  { value: PROVIDER_ANTIGRAVITY, label: t('monitorCommon.providers.antigravity') },
+  { value: PROVIDER_DEEPSEEK, label: t('monitorCommon.providers.deepseek') },
+  { value: PROVIDER_KIMI, label: t('monitorCommon.providers.kimi') },
+  { value: PROVIDER_GLM, label: t('monitorCommon.providers.glm') },
 ])
+
+const accountGroupOptions = computed(() => [
+  { value: '', label: t('admin.channelMonitor.form.accountGroupNone') },
+  ...accountGroups.value.map((group) => ({
+    value: String(group.id),
+    label: `${group.name} (#${group.id})`,
+  })),
+])
+
+const accountGroupSelectValue = computed<string>({
+  get: () => (form.account_group_id == null ? '' : String(form.account_group_id)),
+  set: (raw: string) => {
+    if (!raw) {
+      form.account_group_id = null
+      return
+    }
+    const id = Number(raw)
+    form.account_group_id = Number.isSafeInteger(id) && id > 0 ? id : null
+  },
+})
+
+async function loadAccountGroups() {
+  const provider = form.provider
+  const cached = accountGroupsCache.get(provider)
+  if (cached) {
+    accountGroups.value = cached
+    return
+  }
+  accountGroupsLoading.value = true
+  try {
+    const groups = await adminAPI.groups.getByPlatform(provider)
+    accountGroupsCache.set(provider, groups)
+    if (form.provider === provider) {
+      accountGroups.value = groups
+    }
+  } catch (err: unknown) {
+    console.warn('load monitor account groups failed', err)
+    if (form.provider === provider) {
+      accountGroups.value = []
+    }
+  } finally {
+    accountGroupsLoading.value = false
+  }
+}
 
 function selectProvider(provider: Provider) {
   if (form.provider === provider) return
@@ -429,16 +528,40 @@ function selectProvider(provider: Provider) {
 watch(() => form.provider, () => {
   if (suppressFormWatchers) return
   form.api_key = ''
-  if (form.provider !== PROVIDER_OPENAI) {
+  form.account_group_id = null
+  if (!supportsSelectableAPIMode(form.provider)) {
     form.api_mode = API_MODE_CHAT_COMPLETIONS
   }
   clearRequestSnapshot()
+  void loadAccountGroups()
 }, { flush: 'sync' })
 
 watch(() => form.api_mode, () => {
   if (suppressFormWatchers) return
-  if (form.provider === PROVIDER_OPENAI) {
+  if (supportsSelectableAPIMode(form.provider)) {
     clearRequestSnapshot()
+  }
+}, { flush: 'sync' })
+
+function defaultIntervalForMode(mode: APIMode): number {
+  return mode === API_MODE_IMAGES
+    ? DEFAULT_IMAGE_MONITOR_INTERVAL_SECONDS
+    : systemDefaultInterval.value
+}
+
+function defaultRequestTimeoutForMode(mode: APIMode): number {
+  return mode === API_MODE_IMAGES
+    ? DEFAULT_IMAGE_REQUEST_TIMEOUT_SECONDS
+    : DEFAULT_TEXT_REQUEST_TIMEOUT_SECONDS
+}
+
+watch(() => form.api_mode, (mode, previousMode) => {
+  if (suppressFormWatchers) return
+  if (form.interval_seconds === defaultIntervalForMode(previousMode)) {
+    form.interval_seconds = defaultIntervalForMode(mode)
+  }
+  if (form.request_timeout_seconds === defaultRequestTimeoutForMode(previousMode)) {
+    form.request_timeout_seconds = defaultRequestTimeoutForMode(mode)
   }
 }, { flush: 'sync' })
 
@@ -452,8 +575,10 @@ function resetForm() {
   form.primary_model = ''
   form.extra_models = []
   form.group_name = ''
-  form.interval_seconds = systemDefaultInterval.value
+  form.account_group_id = null
+  form.interval_seconds = defaultIntervalForMode(form.api_mode)
   form.jitter_seconds = 0
+  form.request_timeout_seconds = defaultRequestTimeoutForMode(form.api_mode)
   form.enabled = true
   form.template_id = null
   form.extra_headers = {}
@@ -472,8 +597,10 @@ function loadFromMonitor(m: ChannelMonitor) {
   form.primary_model = m.primary_model
   form.extra_models = [...(m.extra_models || [])]
   form.group_name = m.group_name || ''
-  form.interval_seconds = m.interval_seconds || systemDefaultInterval.value
+  form.account_group_id = m.account_group_id ?? null
+  form.interval_seconds = m.interval_seconds || defaultIntervalForMode(form.api_mode)
   form.jitter_seconds = m.jitter_seconds || 0
+  form.request_timeout_seconds = m.request_timeout_seconds || defaultRequestTimeoutForMode(form.api_mode)
   form.enabled = m.enabled
   form.template_id = m.template_id ?? null
   form.extra_headers = { ...(m.extra_headers || {}) }
@@ -491,6 +618,7 @@ watch(
     void loadTemplates()
     if (m) loadFromMonitor(m)
     else resetForm()
+    void loadAccountGroups()
   },
   { immediate: true },
 )
@@ -532,15 +660,17 @@ function buildPayload(): CreateParams {
   return {
     name: form.name.trim(),
     provider: form.provider,
-    api_mode: form.provider === PROVIDER_OPENAI ? form.api_mode : API_MODE_CHAT_COMPLETIONS,
+    api_mode: supportsSelectableAPIMode(form.provider) ? form.api_mode : API_MODE_CHAT_COMPLETIONS,
     endpoint: form.endpoint.trim(),
     api_key: form.api_key.trim(),
     primary_model: form.primary_model.trim(),
     extra_models: form.extra_models,
     group_name: form.group_name.trim(),
+    account_group_id: form.account_group_id,
     enabled: form.enabled,
     interval_seconds: form.interval_seconds,
     jitter_seconds: form.jitter_seconds || 0,
+    request_timeout_seconds: form.request_timeout_seconds,
     template_id: form.template_id,
     extra_headers: form.extra_headers,
     body_override_mode: form.body_override_mode,
@@ -571,6 +701,10 @@ async function handleSubmit() {
       if (form.template_id == null) {
         req.clear_template = true
         delete req.template_id
+      }
+      if (form.account_group_id == null) {
+        req.clear_account_group = true
+        delete req.account_group_id
       }
       await adminAPI.channelMonitor.update(target.id, req)
       appStore.showSuccess(t('admin.channelMonitor.updateSuccess'))

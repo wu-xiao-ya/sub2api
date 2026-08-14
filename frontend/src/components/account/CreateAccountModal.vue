@@ -160,7 +160,33 @@
             <PlatformIcon platform="grok" size="sm" />
             Grok
           </button>
+          <button
+            v-for="provider in [
+              { value: 'deepseek', label: 'DeepSeek' },
+              { value: 'kimi', label: 'Kimi' },
+              { value: 'glm', label: 'GLM' }
+            ]"
+            :key="provider.value"
+            type="button"
+            @click="form.platform = provider.value as AccountPlatform"
+            :class="[
+              'flex flex-1 items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-medium transition-all',
+              form.platform === provider.value
+                ? 'bg-white text-primary-600 shadow-sm dark:bg-dark-600 dark:text-primary-400'
+                : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200'
+            ]"
+          >
+            <PlatformIcon :platform="provider.value as AccountPlatform" size="sm" />
+            {{ provider.label }}
+          </button>
         </div>
+      </div>
+
+      <div
+        v-if="isAPIKeyOnlyPlatform"
+        class="rounded-lg border border-purple-200 bg-purple-50 px-3 py-2 text-xs text-purple-800 dark:border-purple-800/40 dark:bg-purple-900/20 dark:text-purple-200"
+      >
+        API Key
       </div>
 
       <!-- Account Type Selection (Anthropic) -->
@@ -3142,6 +3168,15 @@
           :mixed-scheduling="mixedScheduling"
           data-tour="account-form-groups"
         />
+        <div>
+          <label class="input-label">{{ t('admin.accounts.accountPoolGroup.label') }}</label>
+          <Select
+            v-model="form.pool_group_id"
+            :options="poolGroupOptions"
+            searchable="auto"
+          />
+          <p class="input-hint">{{ t('admin.accounts.accountPoolGroup.hint') }}</p>
+        </div>
       </div>
 
     </form>
@@ -3167,6 +3202,7 @@
         :show-agent-identity-option="form.platform === 'openai'"
         :show-codex-pat-option="form.platform === 'openai'"
         :show-sso-option="form.platform === 'grok'"
+        :show-email-password-option="false"
         :show-manual-option="true"
         :initial-input-method="'manual'"
         :platform="form.platform"
@@ -3179,6 +3215,7 @@
         @import-codex-session="handleOpenAIImportCodexSession"
         @import-codex-pat="handleOpenAIImportCodexPAT"
         @import-sso="handleGrokImportSSO"
+        @authorize-password="handleGrokAuthorizePassword"
       />
 
     </div>
@@ -3269,8 +3306,8 @@
   <BaseDialog
     :show="showGeminiHelpDialog"
     :title="t('admin.accounts.gemini.helpDialog.title')"
+    width="wide"
     @close="showGeminiHelpDialog = false"
-    max-width="max-w-3xl"
   >
     <div class="space-y-6">
       <!-- Setup Guide Section -->
@@ -3523,6 +3560,7 @@ import { useGrokOAuth } from '@/composables/useGrokOAuth'
 import type {
   Proxy,
   AdminGroup,
+  AccountPoolGroup,
   AccountPlatform,
   AccountType,
   CheckMixedChannelResponse,
@@ -3613,6 +3651,7 @@ interface Props {
   show: boolean
   proxies: Proxy[]
   groups: AdminGroup[]
+  poolGroups: AccountPoolGroup[]
 }
 
 const props = defineProps<Props>()
@@ -3683,6 +3722,7 @@ interface TempUnschedRuleForm {
 const step = ref(1)
 const submitting = ref(false)
 const accountCategory = ref<'oauth-based' | 'apikey' | 'bedrock' | 'service_account'>('oauth-based') // UI selection for account category
+const isAPIKeyOnlyPlatform = computed(() => ['deepseek', 'kimi', 'glm'].includes(form.platform))
 const addMethod = ref<AddMethod>('oauth') // For oauth-based: 'oauth' or 'setup-token'
 const apiKeyBaseUrl = ref('https://api.anthropic.com')
 const apiKeyValue = ref('')
@@ -4068,8 +4108,17 @@ const form = reactive({
   priority: 1,
   rate_multiplier: 1,
   group_ids: [] as number[],
+  pool_group_id: null as number | null,
   expires_at: null as number | null
 })
+
+const poolGroupOptions = computed(() => [
+  { value: null, label: t('admin.accounts.accountPoolGroup.none') },
+  ...props.poolGroups.map(group => ({
+    value: group.id,
+    label: group.upstream_key ? `${group.name} · ${group.upstream_key}` : group.name
+  }))
+])
 
 // Helper to check if current type needs OAuth flow
 const isOAuthFlow = computed(() => {
@@ -4176,6 +4225,12 @@ watch(
     apiKeyBaseUrl.value =
       (newPlatform === 'openai')
         ? 'https://api.openai.com'
+        : newPlatform === 'deepseek'
+          ? 'https://api.deepseek.com'
+          : newPlatform === 'kimi'
+            ? 'https://api.moonshot.cn/v1'
+            : newPlatform === 'glm'
+              ? 'https://open.bigmodel.cn/api/paas/v4'
         : newPlatform === 'gemini'
           ? 'https://generativelanguage.googleapis.com'
           : newPlatform === 'grok'
@@ -4205,6 +4260,13 @@ watch(
       addMethod.value = 'oauth'
       modelRestrictionMode.value = 'mapping'
       form.concurrency = 1
+      form.load_factor = null
+    }
+    if (newPlatform === 'deepseek' || newPlatform === 'kimi' || newPlatform === 'glm') {
+      accountCategory.value = 'apikey'
+      addMethod.value = 'oauth'
+      form.type = 'apikey'
+      form.concurrency = 10
       form.load_factor = null
     }
     if (newPlatform !== 'gemini' && newPlatform !== 'anthropic' && accountCategory.value === 'service_account') {
@@ -4618,6 +4680,7 @@ const resetForm = () => {
   form.priority = 1
   form.rate_multiplier = 1
   form.group_ids = []
+  form.pool_group_id = null
   form.expires_at = null
   accountCategory.value = 'oauth-based'
   addMethod.value = 'oauth'
@@ -5043,6 +5106,11 @@ const handleSubmit = async () => {
     return
   }
 
+  if (form.platform === 'deepseek' || form.platform === 'kimi' || form.platform === 'glm') {
+    accountCategory.value = 'apikey'
+    form.type = 'apikey'
+  }
+
   // For apikey type, create directly
   if (!apiKeyValue.value.trim()) {
     appStore.showError(t('admin.accounts.pleaseEnterApiKey'))
@@ -5053,11 +5121,17 @@ const handleSubmit = async () => {
   const defaultBaseUrl =
     form.platform === 'openai'
       ? 'https://api.openai.com'
-      : form.platform === 'gemini'
-        ? 'https://generativelanguage.googleapis.com'
-        : form.platform === 'grok'
-          ? 'https://api.x.ai/v1'
-          : 'https://api.anthropic.com'
+      : form.platform === 'deepseek'
+        ? 'https://api.deepseek.com'
+        : form.platform === 'kimi'
+          ? 'https://api.moonshot.cn/v1'
+          : form.platform === 'glm'
+            ? 'https://open.bigmodel.cn/api/paas/v4'
+            : form.platform === 'gemini'
+              ? 'https://generativelanguage.googleapis.com'
+              : form.platform === 'grok'
+                ? 'https://api.x.ai/v1'
+                : 'https://api.anthropic.com'
 
   // Build credentials with optional model mapping
   const credentials: Record<string, unknown> = {
@@ -5122,6 +5196,7 @@ const handleSubmit = async () => {
   await doCreateAccount({
     ...form,
     group_ids: form.group_ids,
+    pool_group_id: form.pool_group_id,
     extra,
     upstream_billing_probe_enabled:
       form.platform === 'openai' ? upstreamBillingAutoProbeEnabled.value : undefined,
@@ -5252,6 +5327,7 @@ const createAccountAndFinish = async (
     priority: form.priority,
     rate_multiplier: form.rate_multiplier,
     group_ids: form.group_ids,
+    pool_group_id: form.pool_group_id,
     expires_at: form.expires_at,
     auto_pause_on_expired: autoPauseOnExpired.value
   })
@@ -5316,6 +5392,7 @@ const handleGrokValidateRT = async (refreshTokenInput: string) => {
           priority: form.priority,
           rate_multiplier: form.rate_multiplier,
           group_ids: form.group_ids,
+          pool_group_id: form.pool_group_id,
           expires_at: form.expires_at,
           auto_pause_on_expired: autoPauseOnExpired.value
         })
@@ -5378,6 +5455,7 @@ const handleGrokImportSSO = async (ssoInput: string) => {
       notes: form.notes || undefined,
       proxy_id: form.proxy_id,
       group_ids: form.group_ids,
+      pool_group_id: form.pool_group_id,
       credentials,
       concurrency: form.concurrency,
       load_factor: form.load_factor ?? undefined,
@@ -5415,6 +5493,116 @@ const handleGrokImportSSO = async (ssoInput: string) => {
   } catch (error: any) {
     grokOAuth.error.value = error.response?.data?.detail || error.message || t('admin.accounts.oauth.grok.failedToConvertSSO')
     appStore.showError(grokOAuth.error.value)
+  } finally {
+    grokOAuth.loading.value = false
+  }
+}
+
+/**
+ * Grok password login: each line is email----password.
+ * Password is only used for the authorize API call; buildCredentials never stores it.
+ */
+const handleGrokAuthorizePassword = async (emailPasswordInput: string) => {
+  if (!emailPasswordInput.trim()) return
+  if (!validateGrokOAuthUpstreamConfig()) return
+
+  const lines = emailPasswordInput
+    .split('\n')
+    // Keep the password portion byte-for-byte; trim is only for determining
+    // whether this textarea line is blank.
+    .filter((line) => line.trim() && line.includes('----'))
+
+  if (lines.length === 0) {
+    grokOAuth.error.value = t(
+      'admin.accounts.oauth.grok.pleaseEnterPassword',
+      'Please enter email----password (one per line)'
+    )
+    return
+  }
+
+  grokOAuth.loading.value = true
+  grokOAuth.error.value = ''
+
+  let successCount = 0
+  let failedCount = 0
+  const errors: string[] = []
+
+  try {
+    for (let i = 0; i < lines.length; i++) {
+      try {
+        const tokenInfo = await grokOAuth.authorizePassword(lines[i], form.proxy_id)
+        if (!tokenInfo) {
+          failedCount++
+          errors.push(`#${i + 1}: ${grokOAuth.error.value || 'Authorization failed'}`)
+          grokOAuth.error.value = ''
+          continue
+        }
+
+        const credentials = grokOAuth.buildCredentials(tokenInfo)
+        applyGrokOAuthUpstreamConfig(credentials)
+        const extra = grokOAuth.buildExtraInfo(tokenInfo)
+        const accountName =
+          lines.length > 1
+            ? `${form.name || tokenInfo.email || 'Grok OAuth Account'} #${i + 1}`
+            : form.name || tokenInfo.email || 'Grok OAuth Account'
+
+        const modelMapping = buildModelMappingObject(
+          modelRestrictionMode.value,
+          allowedModels.value,
+          modelMappings.value
+        )
+        if (modelMapping) {
+          credentials.model_mapping = modelMapping
+        }
+        if (!applyTempUnschedConfig(credentials)) {
+          return
+        }
+
+        await adminAPI.accounts.create({
+          name: accountName,
+          notes: form.notes,
+          platform: 'grok',
+          type: 'oauth',
+          credentials,
+          extra,
+          proxy_id: form.proxy_id,
+          concurrency: form.concurrency,
+          load_factor: form.load_factor ?? undefined,
+          priority: form.priority,
+          rate_multiplier: form.rate_multiplier,
+          group_ids: form.group_ids,
+          expires_at: form.expires_at,
+          auto_pause_on_expired: autoPauseOnExpired.value
+        })
+        successCount++
+      } catch (error: any) {
+        failedCount++
+        const errMsg = error.response?.data?.detail || error.message || 'Unknown error'
+        errors.push(`#${i + 1}: ${errMsg}`)
+      }
+    }
+
+    if (successCount > 0 && failedCount === 0) {
+      appStore.showSuccess(
+        lines.length > 1
+          ? t('admin.accounts.oauth.batchSuccess', { count: successCount })
+          : t('admin.accounts.accountCreated')
+      )
+      emit('created')
+      handleClose()
+    } else if (successCount > 0) {
+      appStore.showWarning(
+        t('admin.accounts.oauth.batchPartialSuccess', {
+          success: successCount,
+          failed: failedCount
+        })
+      )
+      grokOAuth.error.value = errors.join('\n')
+      emit('created')
+    } else {
+      grokOAuth.error.value = errors.join('\n')
+      appStore.showError(t('admin.accounts.oauth.batchFailed'))
+    }
   } finally {
     grokOAuth.loading.value = false
   }
@@ -5482,6 +5670,7 @@ const handleOpenAIExchange = async (authCode: string) => {
         priority: form.priority,
         rate_multiplier: form.rate_multiplier,
         group_ids: form.group_ids,
+        pool_group_id: form.pool_group_id,
         expires_at: form.expires_at,
         auto_pause_on_expired: autoPauseOnExpired.value
       })
@@ -5587,6 +5776,7 @@ const handleOpenAIImportCodexSession = async (content: string) => {
       priority: form.priority,
       rate_multiplier: form.rate_multiplier,
       group_ids: form.group_ids,
+      pool_group_id: form.pool_group_id,
       expires_at: form.expires_at,
       auto_pause_on_expired: autoPauseOnExpired.value,
       credential_extras: Object.keys(credentialExtras).length > 0 ? credentialExtras : undefined,
@@ -5665,6 +5855,7 @@ const handleOpenAIImportCodexPAT = async (accessToken: string) => {
       priority: form.priority,
       rate_multiplier: form.rate_multiplier,
       group_ids: form.group_ids,
+      pool_group_id: form.pool_group_id,
       expires_at: form.expires_at,
       auto_pause_on_expired: autoPauseOnExpired.value,
       credential_extras: Object.keys(credentialExtras).length > 0 ? credentialExtras : undefined,
@@ -5763,6 +5954,7 @@ const handleOpenAIBatchRT = async (refreshTokenInput: string, clientId?: string)
             priority: form.priority,
             rate_multiplier: form.rate_multiplier,
             group_ids: form.group_ids,
+            pool_group_id: form.pool_group_id,
             expires_at: form.expires_at,
             auto_pause_on_expired: autoPauseOnExpired.value
           })
@@ -5862,6 +6054,7 @@ const handleAntigravityValidateRT = async (refreshTokenInput: string) => {
           priority: form.priority,
           rate_multiplier: form.rate_multiplier,
           group_ids: form.group_ids,
+          pool_group_id: form.pool_group_id,
           expires_at: form.expires_at,
           auto_pause_on_expired: autoPauseOnExpired.value
         })
@@ -6243,6 +6436,7 @@ const handleCookieAuth = async (sessionKey: string) => {
           priority: form.priority,
           rate_multiplier: form.rate_multiplier,
           group_ids: form.group_ids,
+          pool_group_id: form.pool_group_id,
           expires_at: form.expires_at,
           auto_pause_on_expired: autoPauseOnExpired.value
         })

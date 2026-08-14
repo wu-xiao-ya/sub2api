@@ -459,7 +459,16 @@ func TestSyncPricingModels_ValidPlatform_EmptyService(t *testing.T) {
 	svc := service.NewPricingService(nil, nil)
 	router := setupSyncPricingModelsRouter(svc)
 
-	for _, platform := range []string{"anthropic", "openai", "gemini", "antigravity"} {
+	for _, platform := range []string{
+		"anthropic",
+		"openai",
+		"gemini",
+		"antigravity",
+		"grok",
+		"deepseek",
+		"kimi",
+		"glm",
+	} {
 		req := httptest.NewRequest(http.MethodGet, "/channels/pricing/sync-models?platform="+platform, nil)
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
@@ -474,4 +483,44 @@ func TestSyncPricingModels_ValidPlatform_EmptyService(t *testing.T) {
 		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
 		require.NotNil(t, body.Data.Models, "models must not be null for platform=%s", platform)
 	}
+}
+
+func TestSyncPricingModels_OpenAICompatiblePlatformsIncludeMaintainedDefaults(t *testing.T) {
+	svc := service.NewPricingService(nil, nil)
+	router := setupSyncPricingModelsRouter(svc)
+
+	tests := []struct {
+		platform string
+		model    string
+	}{
+		{platform: service.PlatformDeepSeek, model: "deepseek-chat"},
+		{platform: service.PlatformKimi, model: "kimi-k2.6"},
+		{platform: service.PlatformGLM, model: "glm-4.7"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.platform, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/channels/pricing/sync-models?platform="+tt.platform, nil)
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, req)
+
+			require.Equal(t, http.StatusOK, w.Code)
+			var body struct {
+				Data struct {
+					Models []string `json:"models"`
+				} `json:"data"`
+			}
+			require.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
+			require.Contains(t, body.Data.Models, tt.model)
+		})
+	}
+}
+
+func TestMergeChannelPricingModelNamesKeepsPrimaryOrderAndDeduplicates(t *testing.T) {
+	require.Equal(t,
+		[]string{"kimi-k2.6", "moonshot-v1-8k", "moonshot-v1-32k"},
+		mergeChannelPricingModelNames(
+			[]string{"kimi-k2.6", "moonshot-v1-8k"},
+			[]string{"KIMI-K2.6", "moonshot-v1-32k"},
+		),
+	)
 }

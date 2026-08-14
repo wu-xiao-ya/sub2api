@@ -35,7 +35,7 @@ func (ChannelMonitor) Fields() []ent.Field {
 			NotEmpty().
 			MaxLen(100),
 		field.Enum("provider").
-			Values("openai", "anthropic", "gemini", "grok"),
+			Values("openai", "anthropic", "gemini", "grok", "antigravity", "deepseek", "kimi", "glm"),
 		field.String("api_mode").
 			Default("chat_completions").
 			MaxLen(32).
@@ -58,6 +58,11 @@ func (ChannelMonitor) Fields() []ent.Field {
 			Optional().
 			Default("").
 			MaxLen(100),
+		// Explicitly binds a monitor to one account-management group. Legacy
+		// monitors keep this null and continue using their static API key.
+		field.Int64("account_group_id").
+			Optional().
+			Nillable(),
 		field.Bool("enabled").
 			Default(true),
 		field.Int("interval_seconds").
@@ -66,6 +71,10 @@ func (ChannelMonitor) Fields() []ent.Field {
 			Default(0).
 			Range(0, 3600).
 			Comment("每次调度在 interval 基础上 ± [0, jitter] 的均匀随机偏移（秒）；0 表示固定间隔。service 层另保证 interval - jitter >= 15"),
+		field.Int("request_timeout_seconds").
+			Default(45).
+			Range(15, 900).
+			Comment("单次上游检测等待上限（秒）；生图监控可单独配置更长等待时间"),
 		field.Time("last_checked_at").
 			Optional().
 			Nillable(),

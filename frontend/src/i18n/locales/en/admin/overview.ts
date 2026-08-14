@@ -14,6 +14,7 @@ export default {
       todayRequests: 'Today Requests',
       totalRequests: 'Total Requests',
       todayCost: 'Today Cost',
+      todayMonitorCost: 'Today Monitor Cost',
       totalCost: 'Total Cost',
       newUsersToday: 'New Users Today',
       todayTokens: 'Today Tokens',
@@ -21,6 +22,10 @@ export default {
       input: 'Input',
       output: 'Output',
       cacheToday: 'Cache (Today)',
+      cacheHitRate: 'Cache Hit Rate',
+      todayCacheHitRate: 'Today Cache Hit Rate',
+      historicalCacheHitRate: 'Historical Cache Hit Rate',
+      cacheReadTokens: 'Cache Read',
       performance: 'Performance',
       avgResponse: 'Avg Response',
       averageTime: 'Average Time',
@@ -77,7 +82,20 @@ export default {
       groupPricingDesc: 'Configure batch discount and hold ratio',
       systemSettings: 'System Settings',
       configureSystem: 'Configure system settings',
-      failedToLoad: 'Failed to load dashboard statistics'
+      failedToLoad: 'Failed to load dashboard statistics',
+      costProfit: {
+        actualRevenue: 'Actual revenue',
+        upstreamCost: 'Upstream cost',
+        upstreamMultiplier: 'Upstream multiplier',
+        excludedUsers: 'Report blacklist',
+        excludedUsersPlaceholder: 'User IDs or emails, comma-separated',
+        fromUpstreamRate: 'Calculated from upstream pricing and multiplier',
+        standardCost: 'Standard cost',
+        profit: 'Profit',
+        margin: 'Profit margin',
+        periodHint: 'For the selected time range',
+        byGroup: 'Cost and profit by group'
+      }
     },
 
     backup: {
@@ -125,6 +143,8 @@ export default {
         retainDaysHint: 'Backup files auto-delete after this many days, 0 = never expire',
         retainCount: 'Max Retain Count',
         retainCountHint: 'Maximum number of backups to keep, 0 = unlimited',
+        uploadRateLimit: 'Upload Limit (KB/s)',
+        uploadRateLimitHint: 'Only limits server uploads to object storage. Downloads use a presigned direct link and do not pass through this server.',
         saved: 'Schedule configuration saved'
       },
       operations: {
@@ -796,6 +816,7 @@ export default {
         id: 'ID',
         platform: 'Platform',
         rateMultiplier: 'Rate Multiplier',
+        contributorRewardMultiplier: 'Contribution Reward',
         rpmOverride: 'RPM Override',
         rpmOverrideHint: 'Per-user RPM cap in this group; empty = group default; 0 = unlimited',
         rateDefault: 'default',
@@ -845,6 +866,7 @@ export default {
         descriptionPlaceholder: 'Enter description (optional)',
         rateMultiplierLabel: 'Rate Multiplier',
         rateMultiplierHint: '1.0 = standard rate, 0.5 = half price, 2.0 = double',
+        contributorRewardMultiplier: 'Contribution Reward Multiplier',
         rpmLimit: 'Requests Per Minute (RPM)',
         rpmLimitPlaceholder: '0 = unlimited',
         rpmLimitHint: 'Max requests per minute for each user in this group; 0 = unlimited. Once set, it takes over per-user rate limiting in this group (overrides the user-level rpm_limit fallback).',
@@ -873,6 +895,7 @@ export default {
       groupUpdatedSuccess: 'Group updated successfully',
       groupDeletedSuccess: 'Group deleted successfully',
       rateMultiplierHint: 'Cost multiplier for this group (e.g., 1.5 = 150% of base cost)',
+      contributorRewardMultiplierHint: 'When a contributed account is scheduled in this group, its owner earns raw cost times this multiplier. 0 disables rewards.',
       exclusiveHint: 'Exclusive group, manually assign to specific users',
       exclusiveTooltip: {
         title: 'What is an exclusive group?',
@@ -929,6 +952,9 @@ export default {
         gemini: 'Gemini',
         antigravity: 'Antigravity',
         grok: 'Grok',
+        deepseek: 'DeepSeek',
+        kimi: 'Kimi',
+        glm: 'GLM',
       },
       deleteConfirm:
         "Are you sure you want to delete '{name}'? All associated API keys will no longer belong to any group.",
@@ -969,12 +995,28 @@ export default {
         title: 'Video Generation Pricing',
         description:
           'Configure Grok video generation prices in USD per second of output video. Leave empty to use the default per-second rates (grok-imagine-video: $0.05/s 480p, $0.07/s 720p; video-1.5: $0.08/s 480p, $0.14/s 720p, $0.25/s 1080p).',
+        modelOverridesTitle: 'Per-model video price overrides',
+        modelOverridesDescription: 'Each populated cell overrides the flat resolution price for that model family. Preview and legacy aliases for video-1.5 use the same family; empty cells fall back to the flat resolution price.',
         independentMultiplier: 'Use independent video multiplier',
         videoMultiplier: 'Video multiplier',
         modeHint:
           'Videos are billed per second: per-second price × duration (1-15s, default 8s). By default the current effective group multiplier applies; independent mode uses the video multiplier instead.',
         finalPricePreview: 'Final per-second price preview',
         notConfigured: 'Not configured'
+      },
+      explicitPricing: {
+        title: 'Grok Search & Voice Pricing',
+        description: 'Optional per-group prices for web_search (per 1k calls) and Voice realtime / TTS / STT (USD). Leave empty if unused.',
+        searchPricePer1k: 'Search price per 1k calls (USD)',
+        pricePlaceholder: 'optional'
+      },
+      voicePricing: {
+        title: 'Grok Voice Pricing',
+        description: 'Optional per-group prices for Voice realtime / TTS / STT (USD). Leave empty to leave unpriced.',
+        audioRealtimePerMin: 'Realtime price per minute (USD)',
+        audioTtsPerMillionChars: 'TTS price per million chars (USD)',
+        audioSttPerHour: 'STT price per hour (USD)',
+        pricePlaceholder: 'optional'
       },
       webSearchPricing: {
         title: 'Codex Web Search Pricing',

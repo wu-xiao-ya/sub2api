@@ -12,6 +12,7 @@ export default {
     switchToDark: '切换到深色模式',
     dashboard: '控制台',
     login: '登录',
+    keyUsage: 'Key 用量查询',
     getStarted: '立即开始',
     goToDashboard: '进入控制台',
     // 新增：面向用户的价值主张
@@ -134,6 +135,8 @@ export default {
     tokenStats: 'Token 统计',
     dailyDetail: '按日明细',
     modelStats: '模型用量统计',
+    usedModels: '本 Key 使用过的模型',
+    modelCount: '共 {count} 个模型',
     // Table headers
     date: '日期',
     model: '模型',

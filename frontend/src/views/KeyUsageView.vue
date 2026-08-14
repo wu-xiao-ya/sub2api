@@ -1,26 +1,16 @@
 <template>
   <div class="relative flex min-h-screen flex-col bg-gray-50 dark:bg-dark-950">
-    <!-- Header (same pattern as HomeView) -->
+    <!-- Standalone header: deliberately contains no route back to the main site. -->
     <header class="relative z-20 px-6 py-4">
       <nav class="mx-auto flex max-w-6xl items-center justify-between">
-        <router-link to="/home" class="flex items-center gap-3">
+        <div class="flex items-center gap-3">
           <div class="h-10 w-10 overflow-hidden rounded-xl shadow-md">
             <img :src="siteLogo || '/logo.svg'" alt="Logo" class="h-full w-full object-contain" />
           </div>
           <span class="text-lg font-semibold tracking-tight text-gray-900 dark:text-white">{{ siteName }}</span>
-        </router-link>
+        </div>
         <div class="flex items-center gap-3">
           <LocaleSwitcher />
-          <a
-            v-if="docUrl"
-            :href="docUrl"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="rounded-lg p-2 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:text-dark-400 dark:hover:bg-dark-800 dark:hover:text-white"
-            :title="t('home.viewDocs')"
-          >
-            <Icon name="book" size="md" />
-          </a>
           <button
             @click="toggleTheme"
             class="rounded-lg p-2 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:text-dark-400 dark:hover:bg-dark-800 dark:hover:text-white"
@@ -166,6 +156,34 @@
               <span class="text-xs text-gray-500 dark:text-dark-400">{{ statusInfo.statusText }}</span>
             </div>
           </div>
+
+          <!-- Prominent model summary -->
+          <section
+            v-if="modelStats.length > 0"
+            data-testid="model-summary"
+            class="fade-up rounded-lg border border-gray-200 bg-white/90 px-6 py-5 backdrop-blur-sm dark:border-dark-700 dark:bg-dark-900/90"
+          >
+            <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
+              <h2 class="text-sm font-semibold text-gray-900 dark:text-white">{{ t('keyUsage.usedModels') }}</h2>
+              <span class="text-xs text-gray-500 dark:text-dark-400">
+                {{ t('keyUsage.modelCount', { count: modelStats.length }) }}
+              </span>
+            </div>
+            <div class="flex flex-wrap gap-2">
+              <div
+                v-for="model in modelStats"
+                :key="model.model"
+                class="inline-flex min-w-0 items-center gap-2 rounded-md border border-gray-200 bg-gray-50 px-3 py-2 dark:border-dark-700 dark:bg-dark-950"
+              >
+                <span class="max-w-full break-all font-mono text-sm font-medium text-gray-900 dark:text-white">
+                  {{ model.model || '-' }}
+                </span>
+                <span class="shrink-0 text-xs tabular-nums text-gray-500 dark:text-dark-400">
+                  {{ fmtNum(model.requests) }} {{ t('keyUsage.requests') }}
+                </span>
+              </div>
+            </div>
+          </section>
 
           <!-- Ring Cards Grid -->
           <div v-if="ringItems.length > 0" :class="ringGridClass">
@@ -390,27 +408,12 @@
       </div>
     </main>
 
-    <!-- Footer (same pattern as HomeView) -->
+    <!-- Standalone footer with no navigation links. -->
     <footer class="relative z-10 border-t border-gray-200/50 px-6 py-8 dark:border-dark-800/50">
-      <div class="mx-auto flex max-w-6xl flex-col items-center justify-center gap-4 text-center sm:flex-row sm:text-left">
+      <div class="mx-auto max-w-6xl text-center">
         <p class="text-sm text-gray-500 dark:text-dark-400">
           &copy; {{ currentYear }} {{ siteName }}. {{ t('home.footer.allRightsReserved') }}
         </p>
-        <div class="flex items-center gap-4">
-          <a
-            v-if="docUrl"
-            :href="docUrl"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="text-sm text-gray-500 transition-colors hover:text-gray-700 dark:text-dark-400 dark:hover:text-white"
-          >{{ t('home.docs') }}</a>
-          <a
-            :href="githubUrl"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="text-sm text-gray-500 transition-colors hover:text-gray-700 dark:text-dark-400 dark:hover:text-white"
-          >GitHub</a>
-        </div>
       </div>
     </footer>
   </div>
@@ -433,8 +436,6 @@ const appStore = useAppStore()
 
 const siteName = computed(() => appStore.cachedPublicSettings?.site_name || appStore.siteName || 'Sub2API')
 const siteLogo = computed(() => sanitizeUrl(appStore.cachedPublicSettings?.site_logo || appStore.siteLogo || '', { allowRelative: true, allowDataUrl: true }))
-const docUrl = computed(() => sanitizeUrl(appStore.cachedPublicSettings?.doc_url || appStore.docUrl || ''))
-const githubUrl = 'https://github.com/Wei-Shaw/sub2api'
 
 // ==================== Theme (same as HomeView) ====================
 
@@ -807,7 +808,11 @@ const usageStatCells = computed<StatCell[]>(() => {
 })
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const modelStats = computed<any[]>(() => resultData.value?.model_stats || [])
+const modelStats = computed<any[]>(() => {
+  const stats = resultData.value?.model_stats
+  if (!Array.isArray(stats)) return []
+  return [...stats].sort((a, b) => Number(b.requests || 0) - Number(a.requests || 0))
+})
 
 interface DailyUsageRow {
   date: string

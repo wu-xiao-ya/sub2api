@@ -11,6 +11,14 @@ import (
 const (
 	// monitorRequestTimeout 单次模型请求总超时（含 Body 读取）。
 	monitorRequestTimeout = 45 * time.Second
+	// monitorDefaultImageRequestTimeout gives image generation enough time to
+	// queue and render when an older row or an API client does not provide an
+	// explicit per-monitor timeout.
+	monitorDefaultImageRequestTimeout = 5 * time.Minute
+	// monitorMaxRequestTimeoutSeconds bounds one monitor worker. Image monitors
+	// can choose any value in this range through the admin form.
+	monitorMinRequestTimeoutSeconds = 15
+	monitorMaxRequestTimeoutSeconds = 900
 	// monitorPingTimeout HEAD 请求 endpoint origin 的超时。
 	monitorPingTimeout = 8 * time.Second
 	// monitorDegradedThreshold 主请求成功但耗时超过该阈值视为 degraded。
@@ -37,6 +45,11 @@ const (
 	monitorMessageMaxBytes = 500
 	// monitorResponseMaxBytes 单次模型响应最大读取字节，防止 OOM。
 	monitorResponseMaxBytes = 64 * 1024
+	// monitorImageResponseMaxBytes 生图响应通常包含较大的 base64 图片，
+	// 与文本检测分开限额，避免把图片响应截断，同时限制异常上游的内存占用。
+	monitorImageResponseMaxBytes = 32 * 1024 * 1024
+	// monitorLatestImageMaxBytes 单张缓存图片的最大字节数。
+	monitorLatestImageMaxBytes = 20 * 1024 * 1024
 	// monitorErrorBodySnippetMaxBytes 非 2xx 响应时保留上游 body 片段的最大字节数。
 	// 留 300 字节足够覆盖典型结构化错误（如 `{"error":{"message":"..."}}`），
 	// 又给 "upstream HTTP <status>: " 前缀留出余量，避免最终被 monitorMessageMaxBytes (500) 截得太狠。
@@ -51,19 +64,33 @@ const (
 	providerGrokPath = "/v1/chat/completions"
 	// providerOpenAIResponsesPath OpenAI Responses API 路径。
 	providerOpenAIResponsesPath = "/v1/responses"
+	// providerOpenAIModelsPath OpenAI Models API 路径。
+	providerOpenAIModelsPath = "/v1/models"
+	// providerOpenAIImagesPath OpenAI Images API 路径。
+	providerOpenAIImagesPath = "/v1/images/generations"
 	// providerAnthropicPath Anthropic Messages 路径。
 	providerAnthropicPath = "/v1/messages"
 	// providerGeminiPathTemplate Gemini generateContent 路径模板（含 model 占位）。
 	providerGeminiPathTemplate = "/v1beta/models/%s:generateContent"
 
-	// MonitorProviderOpenAI / Anthropic / Gemini / Grok provider 字符串常量（也是 ent enum 的实际值）。
-	MonitorProviderOpenAI    = "openai"
-	MonitorProviderAnthropic = "anthropic"
-	MonitorProviderGemini    = "gemini"
-	MonitorProviderGrok      = "grok"
+	// MonitorProvider* provider strings. Antigravity is only meaningful with
+	// an explicit account-management group; legacy static monitors continue to
+	// use the existing endpoint/API-key adapters.
+	MonitorProviderOpenAI      = "openai"
+	MonitorProviderAnthropic   = "anthropic"
+	MonitorProviderGemini      = "gemini"
+	MonitorProviderGrok        = "grok"
+	MonitorProviderAntigravity = "antigravity"
+	MonitorProviderDeepSeek    = "deepseek"
+	MonitorProviderKimi        = "kimi"
+	MonitorProviderGLM         = "glm"
 
 	// MonitorDefaultGrokModel 是新增 Grok 监控未显式指定模型时使用的轻量测活模型。
 	MonitorDefaultGrokModel = "grok-4.5"
+
+	// MonitorImageCheckPrompt is a fixed landscape prompt so the cached preview
+	// is useful for visually confirming that real image generation works.
+	MonitorImageCheckPrompt = "A detailed cinematic landscape painting of a quiet alpine valley at sunrise, layered snow-capped mountains in the distance, a winding river reflecting warm golden light, pine forest and wildflowers in the foreground, atmospheric depth, natural colors, visible brushwork, no people, no text."
 
 	// MonitorStatusOperational 等监控状态字符串常量（与 ent enum 一致）。
 	MonitorStatusOperational = "operational"
@@ -93,6 +120,21 @@ const (
 	monitorAnthropicAPIVersion = "2023-06-01"
 	// monitorChallengeMaxTokens 单次 challenge 请求的 max_tokens（足够回答个位数算术）。
 	monitorChallengeMaxTokens = 50
+	// monitorLowCostMaxTokens 同组并发探测的最大输出 token。
+	monitorLowCostMaxTokens = 1
+	// monitorCompatibleLowCostMaxTokens gives independently managed
+	// OpenAI-compatible reasoning providers enough room to emit the final
+	// confirmation token. A one-token limit can be consumed before content is
+	// emitted, producing a valid 2xx response with an empty message.
+	monitorCompatibleLowCostMaxTokens = 16
+	// monitorPersistenceTimeout is deliberately independent from the outbound
+	// probe deadline so a slow monitor run can still save its final result,
+	// adaptive state, and cost observation.
+	monitorPersistenceTimeout = 10 * time.Second
+	// monitorGroupProbeMaxCandidates 同组单次最多探测的线路数。
+	monitorGroupProbeMaxCandidates = 5
+	// monitorGroupProbeParallelism 同组候选线路的并发上限。
+	monitorGroupProbeParallelism = 5
 
 	// monitorRunOneBuffer runOne 的总超时缓冲（除请求超时与 ping 超时外的额外裕量）。
 	monitorRunOneBuffer = 10 * time.Second
@@ -118,10 +160,10 @@ var (
 		"CHANNEL_MONITOR_NOT_FOUND", "channel monitor not found",
 	)
 	ErrChannelMonitorInvalidProvider = infraerrors.BadRequest(
-		"CHANNEL_MONITOR_INVALID_PROVIDER", "provider must be one of openai/anthropic/gemini/grok",
+		"CHANNEL_MONITOR_INVALID_PROVIDER", "provider must be one of openai/anthropic/gemini/grok/deepseek/kimi/glm",
 	)
 	ErrChannelMonitorInvalidAPIMode = infraerrors.BadRequest(
-		"CHANNEL_MONITOR_INVALID_API_MODE", "api_mode must be chat_completions or responses; responses is only supported for openai",
+		"CHANNEL_MONITOR_INVALID_API_MODE", "api_mode must be chat_completions, responses, models, or images; responses, models, and images are only supported for openai",
 	)
 	ErrChannelMonitorInvalidRequestBody = infraerrors.BadRequest(
 		"CHANNEL_MONITOR_INVALID_REQUEST_BODY", "openai-compatible replace-mode body_override must include non-empty messages for chat_completions or non-empty instructions and input for responses",
@@ -131,6 +173,9 @@ var (
 	)
 	ErrChannelMonitorInvalidJitter = infraerrors.BadRequest(
 		"CHANNEL_MONITOR_INVALID_JITTER", "jitter_seconds must be >= 0 and interval_seconds - jitter_seconds must be >= 15",
+	)
+	ErrChannelMonitorInvalidRequestTimeout = infraerrors.BadRequest(
+		"CHANNEL_MONITOR_INVALID_REQUEST_TIMEOUT", "request_timeout_seconds must be in [15, 900]",
 	)
 	ErrChannelMonitorInvalidEndpoint = infraerrors.BadRequest(
 		"CHANNEL_MONITOR_INVALID_ENDPOINT", "endpoint must be a valid https URL",
@@ -155,5 +200,8 @@ var (
 	)
 	ErrChannelMonitorAPIKeyDecryptFailed = infraerrors.InternalServer(
 		"CHANNEL_MONITOR_KEY_DECRYPT_FAILED", "api key decryption failed; please re-edit the monitor with a fresh key",
+	)
+	ErrChannelMonitorLatestImageNotFound = infraerrors.NotFound(
+		"CHANNEL_MONITOR_LATEST_IMAGE_NOT_FOUND", "this monitor has no successful generated image yet",
 	)
 )

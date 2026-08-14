@@ -4,14 +4,17 @@
  */
 
 import { apiClient } from './client'
-import type { Provider, MonitorStatus } from './admin/channelMonitor'
+import type { APIMode, Provider, MonitorStatus } from './admin/channelMonitor'
 
-export type { Provider, MonitorStatus } from './admin/channelMonitor'
+export type { APIMode, Provider, MonitorStatus } from './admin/channelMonitor'
+export type ChannelMonitorSource = 'traffic' | 'probe'
 
 export interface UserMonitorExtraModel {
   model: string
-  status: MonitorStatus
+  status: MonitorStatus | ''
   latency_ms: number | null
+  source?: ChannelMonitorSource
+  availability_7d: number
 }
 
 export interface MonitorTimelinePoint {
@@ -25,11 +28,13 @@ export interface UserMonitorView {
   id: number
   name: string
   provider: Provider
+  api_mode: APIMode
   group_name: string
   primary_model: string
   primary_status: MonitorStatus
   primary_latency_ms: number | null
   primary_ping_latency_ms: number | null
+  primary_source?: ChannelMonitorSource
   availability_7d: number
   extra_models: UserMonitorExtraModel[]
   timeline: MonitorTimelinePoint[]
@@ -43,6 +48,7 @@ export interface UserMonitorModelDetail {
   model: string
   latest_status: MonitorStatus
   latest_latency_ms: number | null
+  source?: ChannelMonitorSource
   availability_7d: number
   availability_15d: number
   availability_30d: number
@@ -75,9 +81,20 @@ export async function status(id: number): Promise<UserMonitorDetail> {
   return data
 }
 
+/**
+ * Fetch the latest successful generated image for an enabled monitor.
+ */
+export async function latestImage(id: number): Promise<Blob> {
+  const { data } = await apiClient.get<Blob>(`/channel-monitors/${id}/image`, {
+    responseType: 'blob',
+  })
+  return data
+}
+
 export const channelMonitorUserAPI = {
   list,
   status,
+  latestImage,
 }
 
 export default channelMonitorUserAPI

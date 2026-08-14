@@ -43,7 +43,26 @@ const (
 	PlatformGemini      = domain.PlatformGemini
 	PlatformAntigravity = domain.PlatformAntigravity
 	PlatformGrok        = domain.PlatformGrok
+	PlatformDeepSeek    = domain.PlatformDeepSeek
+	PlatformKimi        = domain.PlatformKimi
+	PlatformGLM         = domain.PlatformGLM
+	// PlatformKiro is retained for unsupported-platform threshold tests and legacy
+	// account rows. Scheduling-threshold evaluation never pauses kiro accounts.
+	PlatformKiro = "kiro"
 )
+
+// IsOpenAICompatiblePlatform reports whether a platform uses the OpenAI
+// compatible API-key execution path while retaining its own admin/group
+// identity. This keeps provider pools isolated instead of collapsing them into
+// the generic OpenAI platform.
+func IsOpenAICompatiblePlatform(platform string) bool {
+	switch platform {
+	case PlatformOpenAI, PlatformGrok, PlatformDeepSeek, PlatformKimi, PlatformGLM:
+		return true
+	default:
+		return false
+	}
+}
 
 // AllowedQuotaPlatforms 是允许设置 user × platform quota 的平台列表（单一权威来源）。
 // ent/schema/user_platform_quota.go 的 Validate 函数独立维护（构建期约束），
@@ -53,6 +72,17 @@ var AllowedQuotaPlatforms = []string{
 	PlatformOpenAI,
 	PlatformGemini,
 	PlatformAntigravity,
+	PlatformGrok,
+	PlatformDeepSeek,
+	PlatformKimi,
+	PlatformGLM,
+}
+
+// AllowedSchedulingThresholdPlatforms 是允许设置账号自动停调阈值的平台列表。
+// 仅 openai / anthropic / grok 有原生用量窗口可供评估；其他平台写入阈值无效果。
+var AllowedSchedulingThresholdPlatforms = []string{
+	PlatformOpenAI,
+	PlatformAnthropic,
 	PlatformGrok,
 }
 
@@ -89,6 +119,14 @@ const (
 const (
 	PromoCodeStatusActive   = domain.PromoCodeStatusActive
 	PromoCodeStatusDisabled = domain.PromoCodeStatusDisabled
+)
+
+// Account contribution status constants.
+const (
+	ContributionStatusPending  = "pending"
+	ContributionStatusApproved = "approved"
+	ContributionStatusRejected = "rejected"
+	ContributionStatusRevoked  = "revoked"
 )
 
 // Admin adjustment type constants
@@ -259,14 +297,15 @@ const (
 	SettingKeyGoogleOAuthFrontendRedirectURL = "google_oauth_frontend_redirect_url"
 
 	// OEM设置
-	SettingKeySiteName                    = "site_name"                     // 网站名称
-	SettingKeySiteLogo                    = "site_logo"                     // 网站Logo (base64)
-	SettingKeySiteSubtitle                = "site_subtitle"                 // 网站副标题
-	SettingKeyAPIBaseURL                  = "api_base_url"                  // API端点地址（用于客户端配置和导入）
-	SettingKeyContactInfo                 = "contact_info"                  // 客服联系方式
-	SettingKeyDocURL                      = "doc_url"                       // 文档链接
-	SettingKeyHomeContent                 = "home_content"                  // 首页内容（支持 Markdown/HTML，或 URL 作为 iframe src）
-	SettingKeyHideCcsImportButton         = "hide_ccs_import_button"        // 是否隐藏 API Keys 页面的导入 CCS 按钮
+	SettingKeySiteName                    = "site_name"              // 网站名称
+	SettingKeySiteLogo                    = "site_logo"              // 网站Logo (base64)
+	SettingKeySiteSubtitle                = "site_subtitle"          // 网站副标题
+	SettingKeyAPIBaseURL                  = "api_base_url"           // API端点地址（用于客户端配置和导入）
+	SettingKeyContactInfo                 = "contact_info"           // 客服联系方式
+	SettingKeyDocURL                      = "doc_url"                // 文档链接
+	SettingKeyHomeContent                 = "home_content"           // 首页内容（支持 Markdown/HTML，或 URL 作为 iframe src）
+	SettingKeyHideCcsImportButton         = "hide_ccs_import_button" // 是否隐藏 API Keys 页面的导入 CCS 按钮
+	SettingKeyAPIEndpointProbeInterval    = "api_endpoint_probe_interval_seconds"
 	SettingKeyPurchaseSubscriptionEnabled = "purchase_subscription_enabled" // 是否展示"购买订阅"页面入口
 	SettingKeyPurchaseSubscriptionURL     = "purchase_subscription_url"     // "购买订阅"页面 URL（作为 iframe src）
 	SettingKeyTableDefaultPageSize        = "table_default_page_size"       // 表格默认每页条数
@@ -375,6 +414,27 @@ const (
 	// pre-filled when creating a new channel monitor from the admin UI. Range: [15, 3600].
 	SettingKeyChannelMonitorDefaultIntervalSeconds = "channel_monitor_default_interval_seconds"
 
+	// SettingKeyGrokDefaultTextModel is the fallback Grok text model for empty
+	// request models and built-in Grok aliases (e.g. "grok" → this id). Default grok-4.5.
+	SettingKeyGrokDefaultTextModel = "grok_default_text_model"
+
+	// SettingKeyGrokCrossClientModelMapEnabled, when true, includes gpt-*/codex-*/o*/claude-*
+	// wildcards in the default Grok account model_mapping so foreign client model names
+	// can reach Grok groups. Default false (no silent cross-vendor rewrite).
+	SettingKeyGrokCrossClientModelMapEnabled = "grok_cross_client_model_map_enabled"
+
+	// SettingKeyGrokDefaultBaseURLMode controls the default text upstream for
+	// Grok accounts without an explicit credentials.base_url.
+	SettingKeyGrokDefaultBaseURLMode = "grok_default_base_url_mode"
+
+	// SettingKeyChannelMonitorAccountProbeSettings stores adaptive account probe
+	// limits and retry behavior as a single JSON value.
+	SettingKeyChannelMonitorAccountProbeSettings = "channel_monitor_account_probe_settings"
+
+	// SettingKeyChannelMonitorTrafficObservationSettings stores the optional
+	// real-request observation mode for account-group channel monitors.
+	SettingKeyChannelMonitorTrafficObservationSettings = "channel_monitor_traffic_observation_settings"
+
 	// SettingKeyAvailableChannelsEnabled is a DB-backed soft switch for the "Available Channels"
 	// user-facing aggregate view. When false: user endpoint returns an empty list and the
 	// sidebar entry is hidden. Defaults to false (opt-in feature).
@@ -383,6 +443,14 @@ const (
 	// SettingKeyUpstreamBillingProbeSettings stores the global enable switch and interval
 	// for probing remote Sub2API API-key billing metadata.
 	SettingKeyUpstreamBillingProbeSettings = "upstream_billing_probe_settings"
+
+	// SettingKeyImageUpstreamCostPerImage stores the configurable upstream cost
+	// used by cost/profit reporting for one generated image.
+	SettingKeyImageUpstreamCostPerImage = "image_upstream_cost_per_image"
+
+	// SettingKeyImageUpstreamCostByAccount stores account-specific image
+	// upstream-cost overrides as a JSON object keyed by account ID.
+	SettingKeyImageUpstreamCostByAccount = "image_upstream_cost_by_account"
 
 	// =========================
 	// Overload Cooldown (529)
@@ -526,6 +594,10 @@ const (
 // SettingKeyDefaultPlatformQuotas —— 系统全局：每用户 × 平台日/周/月 USD 上限（JSON）。
 // 值为 map[platform]{daily,weekly,monthly}，null/缺省 = 不限制；0 = 禁用；>0 = USD 上限。
 const SettingKeyDefaultPlatformQuotas = "default_platform_quotas"
+
+// SettingKeyAccountSchedulingThresholds —— 系统全局：按平台自动停调阈值（JSON map）。
+// 值为 map[platform]percent，1..100；100 = 禁用该平台自动停调。
+const SettingKeyAccountSchedulingThresholds = "account_scheduling_thresholds"
 
 // SettingKeyAuthSourcePlatformQuotas 返回某 auth source 的 platform quota JSON key。
 // 形如 auth_source_default_{source}_platform_quotas

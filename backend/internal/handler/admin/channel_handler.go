@@ -515,6 +515,9 @@ var platformToLiteLLMProvider = map[string]string{
 	service.PlatformGemini:      "google",
 	service.PlatformAntigravity: "anthropic",
 	service.PlatformGrok:        "xai",
+	service.PlatformDeepSeek:    "deepseek",
+	service.PlatformKimi:        "moonshot",
+	service.PlatformGLM:         "zhipu",
 }
 
 // SyncPricingModels 返回 LiteLLM 定价目录中指定平台的最新模型列表
@@ -535,6 +538,29 @@ func (h *ChannelHandler) SyncPricingModels(c *gin.Context) {
 		return
 	}
 
-	models := h.pricingService.ListModelNamesByProvider(provider)
+	models := mergeChannelPricingModelNames(
+		service.DefaultOpenAICompatibleModelIDs(platform),
+		h.pricingService.ListModelNamesByProvider(provider),
+	)
 	response.Success(c, gin.H{"models": models})
+}
+
+func mergeChannelPricingModelNames(primary, secondary []string) []string {
+	seen := make(map[string]struct{}, len(primary)+len(secondary))
+	result := make([]string, 0, len(primary)+len(secondary))
+	for _, list := range [][]string{primary, secondary} {
+		for _, model := range list {
+			model = strings.TrimSpace(model)
+			if model == "" {
+				continue
+			}
+			key := strings.ToLower(model)
+			if _, ok := seen[key]; ok {
+				continue
+			}
+			seen[key] = struct{}{}
+			result = append(result, model)
+		}
+	}
+	return result
 }

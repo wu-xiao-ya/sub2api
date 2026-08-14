@@ -1,7 +1,6 @@
 package repository
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -37,26 +36,20 @@ func NewS3BackupStoreFactory() service.BackupObjectStoreFactory {
 	}
 }
 
-func (s *S3BackupStore) Upload(ctx context.Context, key string, body io.Reader, contentType string) (int64, error) {
-	// 读取全部内容以获取大小（S3 PutObject 需要知道内容长度）
-	// 注意：阿里云 OSS 不兼容 s3manager 分片上传的签名方式，因此使用 PutObject
-	data, err := io.ReadAll(body)
-	if err != nil {
-		return 0, fmt.Errorf("read body: %w", err)
-	}
-
+func (s *S3BackupStore) Upload(ctx context.Context, key string, input service.BackupUploadInput) (int64, error) {
 	finish := servertiming.ObserveDependency(ctx, "s3")
-	_, err = s.client.PutObject(ctx, &s3.PutObjectInput{
-		Bucket:      &s.bucket,
-		Key:         &key,
-		Body:        bytes.NewReader(data),
-		ContentType: &contentType,
+	_, err := s.client.PutObject(ctx, &s3.PutObjectInput{
+		Bucket:        &s.bucket,
+		Key:           &key,
+		Body:          input.Body,
+		ContentType:   &input.ContentType,
+		ContentLength: &input.ContentLength,
 	})
 	finish()
 	if err != nil {
 		return 0, fmt.Errorf("S3 PutObject: %w", err)
 	}
-	return int64(len(data)), nil
+	return input.ContentLength, nil
 }
 
 func (s *S3BackupStore) Download(ctx context.Context, key string) (io.ReadCloser, error) {

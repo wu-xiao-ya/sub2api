@@ -1,35 +1,41 @@
 <template>
-  <div class="mt-4 pt-3 border-t border-gray-100 dark:border-dark-700/60">
-    <div
-      class="flex justify-between text-[10px] font-semibold uppercase tracking-widest text-gray-400 mb-2"
-    >
-      <span>{{ t('monitorCommon.history60pts', { n: length }) }}</span>
-      <span class="tabular-nums">{{ t('monitorCommon.nextUpdateIn', { n: countdownSeconds }) }}</span>
-    </div>
-
+  <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
+    <span class="whitespace-nowrap text-[11px] font-medium text-gray-500 dark:text-gray-400">
+      {{ t('monitorCommon.history60pts', { n: length }) }}
+    </span>
     <div
       v-if="maintenance"
-      class="flex h-5 w-full items-center justify-center rounded border border-dashed border-gray-300 dark:border-dark-600 text-[10px] uppercase tracking-widest text-gray-400"
+      class="flex h-2 min-w-[9rem] flex-1 rounded-full border border-dashed border-gray-300 dark:border-dark-600"
+      :title="t('monitorCommon.maintenancePaused')"
     >
-      {{ t('monitorCommon.maintenancePaused') }}
+      <span class="sr-only">{{ t('monitorCommon.maintenancePaused') }}</span>
     </div>
-    <div v-else class="flex items-end gap-[2px] h-5 w-full">
+    <div v-else class="flex h-2 min-w-[9rem] flex-1 items-stretch gap-[3px]">
       <div
         v-for="(bar, idx) in displayBars"
         :key="idx"
-        class="flex-1 min-w-[3px] rounded-sm"
+        class="min-w-[2px] flex-1 rounded-sm transition-opacity hover:opacity-80"
         :class="bar.colorClass"
-        :style="{ height: bar.heightPct + '%' }"
         :title="bar.title"
-      ></div>
+      >
+        <span class="sr-only">{{ bar.title }}</span>
+      </div>
     </div>
 
-    <div
-      class="mt-1 flex justify-between text-[9px] uppercase tracking-widest text-gray-400"
-    >
-      <span>{{ t('monitorCommon.past') }}</span>
-      <span>{{ t('monitorCommon.now') }}</span>
+    <div class="flex items-center gap-x-3 text-[11px] text-gray-500 dark:text-gray-400">
+      <span
+        v-for="summary in summaries"
+        :key="summary.status"
+        class="inline-flex items-center gap-1.5"
+      >
+        <span class="h-1.5 w-1.5 rounded-full" :class="summary.dotClass"></span>
+        <span>{{ summary.label }}</span>
+        <strong class="font-mono font-semibold tabular-nums text-gray-700 dark:text-gray-200">{{ summary.count }}</strong>
+      </span>
     </div>
+    <span class="whitespace-nowrap font-mono text-[10px] tabular-nums text-gray-400">
+      {{ t('monitorCommon.nextUpdateIn', { n: countdownSeconds }) }}
+    </span>
   </div>
 </template>
 
@@ -55,18 +61,7 @@ const { statusLabel, formatLatency, formatRelativeTime } = useChannelMonitorForm
 
 interface Bar {
   colorClass: string
-  heightPct: number
   title: string
-}
-
-// 4 级高度 + 颜色双重编码：高=好+绿，短=坏+红，灰=未测试。
-// 长绿(正常) > 中黄(降级) > 短红(失败/系统错误) > 很短灰(未测试)。
-const STATUS_HEIGHT: Record<string, number> = {
-  operational: 100,
-  degraded: 65,
-  failed: 35,
-  error: 35,
-  empty: 15,
 }
 
 const STATUS_COLOR: Record<string, string> = {
@@ -74,13 +69,10 @@ const STATUS_COLOR: Record<string, string> = {
   degraded: 'bg-amber-500',
   failed: 'bg-red-500',
   error: 'bg-red-500',
-  empty: 'bg-gray-300 dark:bg-dark-600',
+  empty: 'bg-gray-200 dark:bg-dark-700',
 }
 
 const displayBars = computed<Bar[]>(() => {
-  // Real points come newest-first; convert to oldest-first so the rightmost
-  // bar represents "now". Pad the left with empty placeholders to keep the
-  // bar count stable at `length`.
   const real = [...(props.buckets ?? [])]
     .slice(0, props.length)
     .reverse()
@@ -91,25 +83,54 @@ const displayBars = computed<Bar[]>(() => {
   for (let i = 0; i < padCount; i += 1) {
     bars.push({
       colorClass: STATUS_COLOR.empty,
-      heightPct: STATUS_HEIGHT.empty,
       title: '',
     })
   }
 
   for (const point of real) {
-    const status = point.status as keyof typeof STATUS_HEIGHT
+    const status = point.status as keyof typeof STATUS_COLOR
     const colorClass = STATUS_COLOR[status] ?? STATUS_COLOR.empty
-    const heightPct = STATUS_HEIGHT[status] ?? STATUS_HEIGHT.empty
     const latency = formatLatency(point.latency_ms)
     const relative = formatRelativeTime(point.checked_at)
     const label = statusLabel(point.status)
     bars.push({
       colorClass,
-      heightPct,
       title: `${relative} · ${label} · ${latency}ms`,
     })
   }
 
   return bars
+})
+
+type SummaryStatus = 'operational' | 'degraded' | 'failed' | 'error'
+
+const SUMMARY_STYLES: Record<SummaryStatus, { dotClass: string }> = {
+  operational: { dotClass: 'bg-emerald-500' },
+  degraded: { dotClass: 'bg-amber-500' },
+  failed: { dotClass: 'bg-red-500' },
+  error: { dotClass: 'bg-red-500' },
+}
+
+const summaries = computed(() => {
+  const counts: Record<SummaryStatus, number> = {
+    operational: 0,
+    degraded: 0,
+    failed: 0,
+    error: 0,
+  }
+
+  for (const point of (props.buckets ?? []).slice(0, props.length)) {
+    const status = point.status as SummaryStatus
+    if (status in counts) counts[status] += 1
+  }
+
+  return (Object.keys(counts) as SummaryStatus[])
+    .filter(status => counts[status] > 0)
+    .map(status => ({
+      status,
+      label: statusLabel(status),
+      count: counts[status],
+      dotClass: SUMMARY_STYLES[status].dotClass,
+    }))
 })
 </script>

@@ -159,6 +159,11 @@
             <input v-model.number="scheduleForm.retain_count" type="number" min="0" class="input w-full" />
             <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t('admin.backup.schedule.retainCountHint') }}</p>
           </div>
+          <div>
+            <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">{{ t('admin.backup.schedule.uploadRateLimit') }}</label>
+            <input v-model.number="scheduleForm.upload_rate_limit_kbps" type="number" min="256" max="20480" step="1" class="input w-full" />
+            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t('admin.backup.schedule.uploadRateLimitHint') }}</p>
+          </div>
         </div>
         <div class="mt-4">
           <button type="button" class="btn btn-primary btn-sm" :disabled="savingSchedule" @click="saveSchedule">
@@ -423,6 +428,7 @@ const scheduleForm = ref<BackupScheduleConfig>({
   cron_expr: '0 2 * * *',
   retain_days: 14,
   retain_count: 10,
+  upload_rate_limit_kbps: 2048,
 })
 const savingSchedule = ref(false)
 
@@ -657,6 +663,7 @@ async function loadSchedule() {
       cron_expr: cfg.cron_expr || '0 2 * * *',
       retain_days: cfg.retain_days || 14,
       retain_count: cfg.retain_count || 10,
+      upload_rate_limit_kbps: normalizeUploadRateLimit(cfg.upload_rate_limit_kbps),
     }
   } catch (error) {
     appStore.showError((error as { message?: string })?.message || t('errors.networkError'))
@@ -666,6 +673,7 @@ async function loadSchedule() {
 async function saveSchedule() {
   savingSchedule.value = true
   try {
+    scheduleForm.value.upload_rate_limit_kbps = normalizeUploadRateLimit(scheduleForm.value.upload_rate_limit_kbps)
     await adminAPI.backup.updateSchedule(scheduleForm.value)
     appStore.showSuccess(t('admin.backup.schedule.saved'))
   } catch (error) {
@@ -673,6 +681,11 @@ async function saveSchedule() {
   } finally {
     savingSchedule.value = false
   }
+}
+
+function normalizeUploadRateLimit(value: number | undefined): number {
+  if (!Number.isFinite(value) || !value) return 2048
+  return Math.min(20480, Math.max(256, Math.round(value)))
 }
 
 async function loadBackups() {

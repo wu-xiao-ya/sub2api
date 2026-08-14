@@ -9,6 +9,10 @@ export default {
     todayTokens: 'Today Tokens',
     totalTokens: 'Total Tokens',
     cacheToday: 'Cache (Today)',
+    cacheHitRate: 'Cache Hit Rate',
+    todayCacheHitRate: 'Today Cache Hit Rate',
+    historicalCacheHitRate: 'Historical Cache Hit Rate',
+    cacheReadTokens: 'Cache Read',
     performance: 'Performance',
     avgResponse: 'Avg Response',
     averageTime: 'Average time',
@@ -76,6 +80,15 @@ export default {
       copiedHint: 'Copied to clipboard',
       clickToCopy: 'Click to copy this endpoint',
       speedTest: 'Speed Test',
+      checking: 'Checking',
+      unknown: 'Pending',
+      offline: 'Error',
+      timeout: 'Probe timed out',
+      requestFailed: 'Probe failed',
+      httpError: 'Health check returned {status}',
+      lastCheckedAt: 'Last checked: {time}',
+      notChecked: 'Not checked yet',
+      refresh: 'Check again',
     },
     allGroups: 'All Groups',
     allStatus: 'All Status',
@@ -169,16 +182,24 @@ export default {
         note: 'These environment variables will be active in the current terminal session. For permanent configuration, add them to ~/.bashrc, ~/.zshrc, or the appropriate configuration file.',
       },
       grok: {
-        description: 'Configure Grok Build, Claude Code, Codex, or OpenCode to send requests through your Sub2API Grok group.',
+        description:
+          'Configure Grok CLI, Claude Code, Codex, or OpenCode to send requests through your Sub2API Grok group. Text models use Responses; image/video use Imagine model IDs on media endpoints.',
         claudeDescription: 'Configure Claude Code to send Messages API traffic through your Sub2API Grok group.',
         codexDescription: 'Configure Codex to send Responses API traffic through your Sub2API Grok group.',
-        configTomlHint: 'Back up an existing config.toml before merging this model entry. Run grok inspect after saving to verify the effective configuration.',
-        codexConfigTomlHint: 'Back up an existing config.toml before merging this provider configuration.',
-        note: 'Save the file as ~/.grok/config.toml, then run grok inspect and select grok from /model.',
-        noteWindows: 'Save the file as %USERPROFILE%\\.grok\\config.toml, then run grok inspect and select grok from /model.',
-        claudeNote: 'Choose one method: run the terminal commands for the current session, or save settings.json for user-level persistent configuration.',
-        codexNote: 'Save config.toml under ~/.codex and set SUB2API_API_KEY before starting Codex.',
-        codexNoteWindows: 'Save config.toml under %USERPROFILE%\\.codex and set SUB2API_API_KEY in PowerShell before starting Codex.',
+        configTomlHint:
+          'Official path: ~/.grok/config.toml (or $GROK_HOME). Fill [endpoints] (models_base_url / models_list_url / xai_api_base_url / cli_chat_proxy_base_url), [auth] preferred_method=api_key, [models], [session], and [features] image/video overrides. Prefer env_key over api_key; every text model needs api_backend=responses. Back up before merge, then run grok inspect.',
+        codexConfigTomlHint:
+          'Official Codex: wire_api = "responses" only; prefer env_key over experimental_bearer_token; supports_websockets = false for non-OpenAI gateways (Sub2API can still accept client WS and bridge to HTTP/SSE). Back up ~/.codex/config.toml before merge.',
+        note:
+          'Export GROK_MODELS_BASE_URL and XAI_API_KEY, save the full config.toml (endpoints/auth/models/session/features) as ~/.grok/config.toml, run grok inspect, then /model grok-4.5 (or grok-build-0.1 for coding).',
+        noteWindows:
+          'Set GROK_MODELS_BASE_URL and XAI_API_KEY, save the full config.toml as %USERPROFILE%\\.grok\\config.toml, run grok inspect, then /model grok-4.5 (or grok-build-0.1 for coding).',
+        claudeNote:
+          'Choose one method: terminal env for this session, or ~/.claude/settings.json for persistence. Do not commit files that contain your API key.',
+        codexNote:
+          'Export SUB2API_API_KEY, save config.toml under ~/.codex (mkdir -p ~/.codex). Prefer env_key auth; do not commit secrets.',
+        codexNoteWindows:
+          'Set $env:SUB2API_API_KEY, save config.toml under %USERPROFILE%\\.codex. Prefer env_key auth; do not commit secrets.',
       },
       opencode: {
         title: 'OpenCode Example',
@@ -356,6 +377,11 @@ export default {
     serviceTierFlex: 'Flex',
     serviceTierStandard: 'Standard',
     rate: 'Rate',
+    promotion: 'Promotion',
+    promotionRate: 'Promotion Rate',
+    promotionBaseRate: 'Pre-promotion Rate',
+    promotionFinalRate: 'Final Rate',
+    promotionPricePercent: 'Promotion Billing (%)',
     original: 'Original',
     billed: 'Billed',
     noRecords: 'No usage records found. Try adjusting your filters.',
@@ -407,7 +433,7 @@ export default {
   monitorCommon: {
     status: {
       operational: 'Operational',
-      degraded: 'Degraded',
+      degraded: 'Slow response',
       failed: 'Failed',
       error: 'Error',
       unknown: '-'
@@ -416,7 +442,11 @@ export default {
       openai: 'OpenAI',
       anthropic: 'Anthropic',
       gemini: 'Gemini',
-      grok: 'Grok'
+      grok: 'Grok',
+      antigravity: 'Antigravity',
+      deepseek: 'DeepSeek',
+      kimi: 'Kimi',
+      glm: 'GLM'
     },
     extraModelsHeader: 'Extra Models',
     extraModelsEmpty: 'No extra models',
@@ -445,6 +475,32 @@ export default {
     searchPlaceholder: 'Search channels...',
     allProviders: 'All Providers',
     loadError: 'Failed to load channel status',
+    imageLoadError: 'Failed to load the latest generated image',
+    latestImage: 'Latest generated image',
+    latestImageEmpty: 'No successful test image yet',
+    modelMonitoring: 'Model monitoring',
+    modelsCount: '{n} models',
+    availableModels: 'Available models',
+    leadLatency: 'Current latency',
+    sourceLabel: 'Source',
+    source: {
+      traffic: 'User request',
+      probe: 'System probe',
+      mixed: 'Mixed source',
+    },
+    latencyMetric: {
+      traffic: 'User request: median time to first token of recent successful requests; falls back to total duration when first token is missing',
+      probe: 'System probe: full response duration of the latest probe',
+      unknown: 'Current latency',
+    },
+    latencyKind: {
+      firstToken: 'TTFT',
+      probe: 'Probe',
+    },
+    primaryModel: 'Direct probe',
+    responseLatency: 'Response latency',
+    windowAvailability: '{window} availability',
+    viewDetail: 'View channel detail',
     detailLoadError: 'Failed to load channel detail',
     detailTitle: 'Channel Detail',
     closeDetail: 'Close',
@@ -454,9 +510,16 @@ export default {
       '30d': '30 days'
     },
     overall: {
-      operational: 'OPERATIONAL',
-      degraded: 'DEGRADED',
-      unavailable: 'UNAVAILABLE'
+      operational: 'Operational',
+      slow_response: 'Slow response',
+      partial: 'Partial channel issue',
+      unavailable: 'Channel unavailable'
+    },
+    health: {
+      operational: 'Operational',
+      slow_response: 'Slow response',
+      partial: 'Some models unavailable',
+      unavailable: 'Unavailable'
     },
     columns: {
       name: 'Name',
@@ -468,6 +531,7 @@ export default {
     },
     detailColumns: {
       model: 'Model',
+      source: 'Data Source',
       latestStatus: 'Latest Status',
       latestLatency: 'Latest Latency (ms)',
       availability7d: '7d Availability',
@@ -483,16 +547,41 @@ export default {
 
   // Available Channels (user-facing)
   availableChannels: {
-    title: 'Available Channels',
-    description: 'Channels you can access, along with their supported models and pricing',
-    searchPlaceholder: 'Search channels or models...',
+    title: 'Model Plaza',
+    description: 'Browse available models, current prices, and accessible groups',
+    searchPlaceholder: 'Search models, groups, or platforms...',
+    allPlatforms: 'All platforms',
+    platformFilter: 'Filter platform',
+    channelCount: '{count} channels',
+    groupCount: '{count} groups',
+    modelCount: '{count} models',
+    groupUnit: 'groups',
+    modelUnit: 'models',
+    groupsLabel: 'Accessible Groups',
+    modelsLabel: 'Available Models',
     empty: 'No available channels',
+    emptyDescription: 'There are no channels available to this account yet.',
+    noMatching: 'No matching channels',
     noModels: 'No models configured',
+    noGroups: 'No groups available',
     noPricing: 'Pricing not configured',
     exclusive: 'Exclusive',
     public: 'Public',
     exclusiveTooltip: 'Exclusive groups granted to you by an admin',
     publicTooltip: 'Groups open to all users',
+    filtersTitle: 'Filters',
+    clearFilters: 'Clear',
+    providersTitle: 'Providers',
+    groupsFilterTitle: 'Groups',
+    billingFilterTitle: 'Billing Mode',
+    tokenUnit: 'Token price unit',
+    sortLabel: 'Sort order',
+    sortDefault: 'Sort · Default',
+    sortName: 'Sort · Model name',
+    sortRate: 'Sort · Lowest rate',
+    lowestRate: 'From',
+    sourceLabel: 'Channel: {name}',
+    filterByGroup: 'Filter by group "{name}"',
     columns: {
       name: 'Channel',
       description: 'Description',
@@ -563,6 +652,179 @@ export default {
       line2: 'When invitees recharge, you receive {rate} of the recharge as rebate quota.',
       line3: 'Transfer rebate quota to balance at any time.',
       line4: 'Newly earned rebates may have a waiting period before they can be transferred.'
+    }
+  },
+
+  accountContributions: {
+    title: 'Account Contributions',
+    callbackTitle: 'Contribution Authorization Callback',
+    description: 'Contribute your OpenAI OAuth account to the shared pool and earn balance rewards after approval',
+    startOAuth: 'Authorize OpenAI Account',
+    startingOAuth: 'Redirecting...',
+    revoke: 'Revoke',
+    republish: 'Republish',
+    revoked: 'Contribution revoked',
+    republished: 'Contribution submitted for review',
+    backToList: 'Back to Contributions',
+    contributeOpenAI: {
+      title: 'Contribute OpenAI OAuth Account',
+      description: 'After authorization, the account remains pending until an administrator approves it for scheduling.'
+    },
+    proxy: {
+      url: 'Dedicated proxy URL (optional)',
+      placeholder: 'Example: http://user:pass@1.2.3.4:8080 or socks5://1.2.3.4:1080',
+      hint: 'A dedicated proxy is created for this contribution and deleted when it is revoked.',
+      importHint: 'Each imported contribution receives its own dedicated proxy, which is deleted on revoke.'
+    },
+    oauthDialog: {
+      title: 'Authorize OpenAI Account',
+      warning: 'Use a registered OAuth callback URL. If localhost cannot open after authorization, copy the complete callback URL back here.',
+      redirectURI: 'OAuth redirect URI',
+      redirectURIHint: 'Keep the default unless you know it is registered.',
+      generate: 'Generate authorization link',
+      generating: 'Generating...',
+      generated: 'Authorization link generated. Open it to sign in.',
+      openAuthURL: 'Open authorization page',
+      authURL: 'Authorization link',
+      callbackURL: 'Callback URL / code',
+      callbackPlaceholder: 'Paste the complete callback URL from the browser address bar',
+      submitCallback: 'Submit authorization result',
+      submitting: 'Submitting...',
+      copyFailed: 'Failed to copy authorization link',
+      steps: {
+        line1: '1. Generate and open the authorization link.',
+        line2: '2. Sign in to OpenAI and copy the full callback URL.',
+        line3: '3. Submit the callback URL to send the account for review.'
+      }
+    },
+    importJson: {
+      title: 'Import OpenAI Account JSON',
+      button: 'Import JSON',
+      hint: 'Supports account-management exports. Only OpenAI OAuth accounts are accepted and all enter review.',
+      warning: 'User imports never enter the scheduler directly.',
+      file: 'JSON file',
+      selectFile: 'Select a JSON file',
+      selectedFiles: '{count} files selected',
+      fileHint: 'Supports one or more sub2api-data / sub2api-bundle JSON files',
+      submit: 'Import as contributions',
+      importing: 'Importing...',
+      result: 'Import Result',
+      resultSummary: 'Total {total}, created {created}, failed {failed}',
+      errors: 'Error Details',
+      invalidFile: '{file} is not a valid account import JSON',
+      proxyNotSupported: '{file} contains proxy data and its account proxy_key will be imported as a dedicated proxy',
+      parseFailed: 'Failed to parse JSON',
+      failed: 'Failed to import contributions',
+      success: '{created} contribution account(s) submitted for review',
+      completedWithErrors: 'Import finished: created {created}, failed {failed}',
+      preview: 'Import Preview',
+      previewTotal: 'Total Accounts',
+      previewValid: 'Valid',
+      previewDuplicate: 'Duplicates',
+      previewUnsupported: 'Unsupported / Invalid',
+      previewFailed: 'Failed to preview import JSON',
+      previewDuplicateMessage: 'Already contributed or duplicated in this import',
+      previewUnsupportedMessage: 'Only OpenAI OAuth accounts are supported',
+      previewInvalidMessage: 'Incomplete account data'
+    },
+    rules: {
+      title: 'Shared Pool Rules',
+      line1: '1. Pending, rejected, and revoked accounts are never scheduled.',
+      line2: '2. Revoked accounts can be republished for review.',
+      line3: '3. Approved accounts earn balance rewards using the group reward multiplier.'
+    },
+    stats: {
+      totalAccounts: 'Contributed Accounts',
+      pageRewards: 'Page Rewards',
+      totalRewards: 'Total Rewards',
+      todayRewards: 'Today Rewards',
+      last7dRewards: 'Last 7 Days'
+    },
+    status: {
+      pending: 'Pending Review',
+      approved: 'Approved',
+      rejected: 'Rejected',
+      revoked: 'Revoked'
+    },
+    accounts: {
+      title: 'My Contributed Accounts',
+      description: 'Review approval status and revoke pending or approved accounts at any time.',
+      submitted: 'Submitted',
+      approved: 'Approved',
+      revoked: 'Revoked',
+      columns: {
+        id: 'ID',
+        account: 'Account',
+        status: 'Status',
+        groups: 'Groups',
+        todayStats: 'Today',
+        usage: 'Usage',
+        timeline: 'Timeline'
+      }
+    },
+    settings: {
+      title: 'Shared Account Settings',
+      button: 'Settings',
+      saved: 'Account settings saved',
+      accountLevel: 'Account Level',
+      groups: 'Groups',
+      name: 'Name',
+      notes: 'Notes',
+      concurrency: 'Concurrency',
+      loadFactor: 'Load Factor',
+      expiresAt: 'Expires At',
+      autoPauseOnExpired: 'Auto-pause on expiry',
+      tempUnschedulable: 'Temporary Unschedulable Rules',
+      addRule: 'Add Rule',
+      errorCode: 'Status Code',
+      keywords: 'Keywords',
+      durationMinutes: 'Minutes',
+      ruleDescription: 'Description',
+      codexProtection: 'Codex Limit Protection',
+      threshold5h: '5h Threshold (%)',
+      threshold7d: '7d Threshold (%)',
+      disable5h: 'Disable 5h Protection',
+      disable7d: 'Disable 7d Protection'
+    },
+    rewards: {
+      title: 'Contribution Reward Details',
+      description: 'Idempotent reward entries produced after successful usage billing.',
+      columns: {
+        createdAt: 'Time',
+        account: 'Account',
+        group: 'Group',
+        totalCost: 'Raw Cost',
+        actualCost: 'Actual Charge',
+        multiplier: 'Reward Multiplier',
+        reward: 'Reward',
+        request: 'Request ID'
+      }
+    },
+    callback: {
+      processingTitle: 'Submitting Contribution',
+      processingMessage: 'Processing the OAuth callback. Please wait.',
+      successTitle: 'Submitted',
+      successMessage: 'The account is pending review and will not be scheduled until approved.',
+      failedTitle: 'Submission Failed',
+      failedMessage: 'The authorization callback could not be completed.',
+      retry: 'Retry Submission',
+      submitted: 'Contribution submitted',
+      submitFailed: 'Failed to submit contribution',
+      missingCode: 'OAuth callback is missing code',
+      missingState: 'OAuth callback is missing state',
+      missingSession: 'Authorization session was not found. Start again.',
+      stateMismatch: 'OAuth state mismatch. Start again.'
+    },
+    errors: {
+      startOAuthFailed: 'Failed to generate OpenAI authorization link',
+      loadAccountsFailed: 'Failed to load contributed accounts',
+      loadRewardsFailed: 'Failed to load reward details',
+      loadRewardSummaryFailed: 'Failed to load reward summary',
+      loadTodayStatsFailed: 'Failed to load today statistics',
+      loadUsageFailed: 'Failed to load usage',
+      saveSettingsFailed: 'Failed to save account settings',
+      revokeFailed: 'Failed to revoke contribution',
+      republishFailed: 'Failed to republish contribution'
     }
   },
 

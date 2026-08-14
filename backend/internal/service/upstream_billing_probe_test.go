@@ -114,7 +114,11 @@ func (r *upstreamBillingProbeAccountRepo) UpdateUpstreamBillingProbeSnapshot(_ c
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	account := r.accounts[expected.ID]
-	if account == nil || account.Platform != expected.Platform || account.Type != expected.Type || !reflect.DeepEqual(account.Credentials, expected.Credentials) {
+	if account == nil ||
+		account.Platform != expected.Platform ||
+		account.Type != expected.Type ||
+		!reflect.DeepEqual(account.Credentials, expected.Credentials) ||
+		account.GetAnthropicAPIKeyAuthScheme() != expected.GetAnthropicAPIKeyAuthScheme() {
 		return ErrUpstreamBillingProbeIdentityChanged
 	}
 	if account.Extra == nil {
@@ -315,6 +319,75 @@ func TestUpstreamBillingProbeSuccessPersistsSanitizedSnapshot(t *testing.T) {
 	persisted := decodeUpstreamBillingProbeSnapshot(account.Extra)
 	require.NotNil(t, persisted)
 	require.Equal(t, snapshot.Status, persisted.Status)
+}
+
+func TestUpstreamBillingProbeSupportsAnthropicAPIKeyManualRequests(t *testing.T) {
+	tests := []struct {
+		name              string
+		extra             map[string]any
+		wantAuthorization string
+		wantXAPIKey       string
+	}{
+		{
+			name:        "defaults to x-api-key",
+			wantXAPIKey: "sk-ant-sensitive",
+		},
+		{
+			name: "supports authorization bearer",
+			extra: map[string]any{
+				anthropicAPIKeyAuthSchemeExtraKey: AnthropicAPIKeyAuthSchemeAuthorizationBearer,
+			},
+			wantAuthorization: "Bearer sk-ant-sensitive",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			account := &Account{
+				ID:          18,
+				Platform:    PlatformAnthropic,
+				Type:        AccountTypeAPIKey,
+				Status:      StatusActive,
+				Concurrency: 2,
+				Credentials: map[string]any{
+					"api_key":                 "sk-ant-sensitive",
+					"base_url":                "https://cc.example/v1",
+					"header_override_enabled": true,
+					"header_overrides": map[string]any{
+						"x-cc-route": "stable",
+					},
+				},
+				Extra: tt.extra,
+			}
+			repo := &upstreamBillingProbeAccountRepo{accounts: map[int64]*Account{account.ID: account}}
+			upstream := &httpUpstreamRecorder{resp: &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     http.Header{"Content-Type": []string{"application/json"}},
+				Body: io.NopCloser(strings.NewReader(`{
+					"object":"sub2api.key_billing",
+					"schema_version":1,
+					"billing_scope":"token",
+					"group_rate_multiplier":0.07,
+					"resolved_rate_multiplier":0.07,
+					"peak_rate_enabled":false,
+					"effective_rate_multiplier":0.07,
+					"observed_at":"2026-08-12T01:00:00Z"
+				}`)),
+			}}
+			svc := newUpstreamBillingProbeTestService(repo, upstream, &upstreamBillingProbeSettingRepo{})
+
+			snapshot, err := svc.ProbeAccount(context.Background(), account.ID)
+
+			require.NoError(t, err)
+			require.Equal(t, UpstreamBillingProbeStatusOK, snapshot.Status)
+			require.Equal(t, 0.07, snapshot.Data["effective_rate_multiplier"])
+			require.Equal(t, "https://cc.example/v1/sub2api/billing", upstream.lastReq.URL.String())
+			require.Equal(t, tt.wantAuthorization, upstream.lastReq.Header.Get("Authorization"))
+			require.Equal(t, tt.wantXAPIKey, upstream.lastReq.Header.Get("x-api-key"))
+			require.Equal(t, []string{"stable"}, upstream.lastReq.Header["x-cc-route"])
+			require.True(t, HTTPUpstreamRedirectsDisabled(upstream.lastReq.Context()))
+		})
+	}
 }
 
 func TestUpstreamBillingProbeRejectsMissingRequiredMultiplier(t *testing.T) {
@@ -565,6 +638,38 @@ func TestUpstreamBillingProbeUnsupportedAndAccountToggle(t *testing.T) {
 	repo.accounts[invalid.ID] = invalid
 	err = svc.SetAccountEnabled(context.Background(), invalid.ID, true)
 	require.True(t, errors.Is(err, ErrUpstreamBillingProbeAccountInvalid))
+
+	anthropic := &Account{
+		ID:          21,
+		Platform:    PlatformAnthropic,
+		Type:        AccountTypeAPIKey,
+		Credentials: map[string]any{"api_key": "sk-ant-test", "base_url": "https://cc.example"},
+	}
+	repo.accounts[anthropic.ID] = anthropic
+	err = svc.SetAccountEnabled(context.Background(), anthropic.ID, true)
+	require.ErrorIs(t, err, ErrUpstreamBillingProbeAccountInvalid)
+}
+
+func TestUpstreamBillingProbeRunnerSkipsAnthropicAPIKeyEvenWhenEnabledFlagExists(t *testing.T) {
+	account := &Account{
+		ID:          22,
+		Platform:    PlatformAnthropic,
+		Type:        AccountTypeAPIKey,
+		Status:      StatusActive,
+		Concurrency: 1,
+		Credentials: map[string]any{"api_key": "sk-ant-test", "base_url": "https://cc.example"},
+		Extra:       map[string]any{UpstreamBillingProbeEnabledExtraKey: true},
+	}
+	repo := &upstreamBillingProbeAccountRepo{accounts: map[int64]*Account{account.ID: account}}
+	settingsRepo := &upstreamBillingProbeSettingRepo{values: map[string]string{
+		SettingKeyUpstreamBillingProbeSettings: `{"enabled":true,"interval_minutes":30}`,
+	}}
+	upstream := &upstreamBillingProbeHTTPStub{}
+	svc := newUpstreamBillingProbeTestService(repo, upstream, settingsRepo)
+
+	require.NoError(t, svc.RunDue(context.Background()))
+	require.Zero(t, upstream.calls.Load())
+	require.NotContains(t, account.Extra, UpstreamBillingProbeExtraKey)
 }
 
 func TestUpstreamBillingProbeRunnerIsBoundedAndManualProbeIgnoresSwitches(t *testing.T) {

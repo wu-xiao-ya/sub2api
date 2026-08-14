@@ -20,7 +20,64 @@ const (
 	captureBatchImageHoldSQL    = `(?s)UPDATE users\s+SET balance = balance\s+\+ CASE WHEN \$1 > \$2 THEN \$1 - \$2 ELSE 0 END\s+- CASE WHEN \$2 > \$1 THEN \$2 - \$1 ELSE 0 END,\s+frozen_balance = COALESCE\(frozen_balance, 0\) - \$1,\s+updated_at = NOW\(\)\s+WHERE id = \$3 AND deleted_at IS NULL AND COALESCE\(frozen_balance, 0\) >= \$1\s+RETURNING balance, frozen_balance`
 	releaseBatchImageHoldSQL    = `(?s)UPDATE users\s+SET balance = balance \+ \$1,\s+frozen_balance = COALESCE\(frozen_balance, 0\) - \$1,\s+updated_at = NOW\(\)\s+WHERE id = \$2 AND deleted_at IS NULL AND COALESCE\(frozen_balance, 0\) >= \$1\s+RETURNING balance, frozen_balance`
 	userExistsForBillingSQL     = `(?s)SELECT 1\s+FROM users\s+WHERE id = \$1 AND deleted_at IS NULL`
+	lockConsumptionRewardSQL    = `(?s)SELECT lifetime_consumption_usd, consumption_concurrency_tier\s+FROM users\s+WHERE id = \$1 AND deleted_at IS NULL\s+FOR UPDATE`
+	updateConsumptionRewardSQL  = `(?s)UPDATE users\s+SET lifetime_consumption_usd = \$1,\s+consumption_concurrency_tier = \$2,\s+consumption_concurrency_bonus = consumption_concurrency_bonus \+ \$3,\s+concurrency = concurrency \+ \$3,\s+updated_at = NOW\(\)\s+WHERE id = \$4 AND deleted_at IS NULL`
 )
+
+func TestApplyConsumptionConcurrencyReward_CrossesFirstTier(t *testing.T) {
+	ctx := context.Background()
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	mock.ExpectBegin()
+	tx, err := db.BeginTx(ctx, nil)
+	require.NoError(t, err)
+	mock.ExpectQuery(lockConsumptionRewardSQL).
+		WithArgs(int64(42)).
+		WillReturnRows(sqlmock.NewRows([]string{"lifetime_consumption_usd", "consumption_concurrency_tier"}).AddRow(49.5, 0))
+	mock.ExpectExec(updateConsumptionRewardSQL).
+		WithArgs(50.25, 1, 5, int64(42)).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+
+	result := &service.UsageBillingApplyResult{}
+	err = (&usageBillingRepository{}).applyConsumptionConcurrencyReward(ctx, tx, 42, 0.75, result)
+	require.NoError(t, err)
+	require.True(t, result.ConsumptionConcurrencyChanged)
+	require.Equal(t, 5, result.ConsumptionConcurrencyDelta)
+	require.Equal(t, 1, result.ConsumptionConcurrencyTier)
+	require.InDelta(t, 50.25, result.ConsumptionLifetimeUSD, 0.000001)
+	require.NoError(t, tx.Commit())
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestApplyConsumptionConcurrencyReward_CrossesMultipleTiersOnce(t *testing.T) {
+	ctx := context.Background()
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	mock.ExpectBegin()
+	tx, err := db.BeginTx(ctx, nil)
+	require.NoError(t, err)
+	mock.ExpectQuery(lockConsumptionRewardSQL).
+		WithArgs(int64(42)).
+		WillReturnRows(sqlmock.NewRows([]string{"lifetime_consumption_usd", "consumption_concurrency_tier"}).AddRow(40.0, 0))
+	mock.ExpectExec(updateConsumptionRewardSQL).
+		WithArgs(540.0, 4, 20, int64(42)).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+
+	result := &service.UsageBillingApplyResult{}
+	err = (&usageBillingRepository{}).applyConsumptionConcurrencyReward(ctx, tx, 42, 500, result)
+	require.NoError(t, err)
+	require.True(t, result.ConsumptionConcurrencyChanged)
+	require.Equal(t, 20, result.ConsumptionConcurrencyDelta)
+	require.Equal(t, 4, result.ConsumptionConcurrencyTier)
+	require.NoError(t, tx.Commit())
+	require.NoError(t, mock.ExpectationsWereMet())
+}
 
 func TestDeductUsageBillingBalance_UsesSufficientBalanceGuard(t *testing.T) {
 	ctx := context.Background()

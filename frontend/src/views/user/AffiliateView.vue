@@ -151,6 +151,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useClipboard } from '@/composables/useClipboard'
 import { formatCurrency, formatDateTime } from '@/utils/format'
 import { extractApiErrorMessage } from '@/utils/apiError'
+import { buildAppOriginUrl } from '@/utils/appPath'
 
 const { t } = useI18n()
 const appStore = useAppStore()
@@ -164,7 +165,7 @@ const detail = ref<UserAffiliateDetail | null>(null)
 const inviteLink = computed(() => {
   if (!detail.value) return ''
   if (typeof window === 'undefined') return `/register?aff=${encodeURIComponent(detail.value.aff_code)}`
-  return `${window.location.origin}/register?aff=${encodeURIComponent(detail.value.aff_code)}`
+  return `${buildAppOriginUrl('/register')}?aff=${encodeURIComponent(detail.value.aff_code)}`
 })
 
 // Rebate rate is a percentage in the range [0, 100]; backend already clamps it.

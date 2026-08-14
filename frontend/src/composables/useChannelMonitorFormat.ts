@@ -17,6 +17,10 @@ import {
   PROVIDER_ANTHROPIC,
   PROVIDER_GEMINI,
   PROVIDER_GROK,
+  PROVIDER_ANTIGRAVITY,
+  PROVIDER_DEEPSEEK,
+  PROVIDER_KIMI,
+  PROVIDER_GLM,
   STATUS_OPERATIONAL,
   STATUS_DEGRADED,
   STATUS_FAILED,
@@ -62,7 +66,11 @@ export function useChannelMonitorFormat() {
       p === PROVIDER_OPENAI ||
       p === PROVIDER_ANTHROPIC ||
       p === PROVIDER_GEMINI ||
-      p === PROVIDER_GROK
+      p === PROVIDER_GROK ||
+      p === PROVIDER_ANTIGRAVITY ||
+      p === PROVIDER_DEEPSEEK ||
+      p === PROVIDER_KIMI ||
+      p === PROVIDER_GLM
     ) {
       return t(`monitorCommon.providers.${p}`)
     }
@@ -79,6 +87,14 @@ export function useChannelMonitorFormat() {
         return 'bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300'
       case PROVIDER_GROK:
         return 'bg-zinc-100 text-zinc-700 dark:bg-zinc-500/15 dark:text-zinc-300'
+      case PROVIDER_ANTIGRAVITY:
+        return 'bg-cyan-100 text-cyan-700 dark:bg-cyan-500/15 dark:text-cyan-300'
+      case PROVIDER_DEEPSEEK:
+        return 'bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300'
+      case PROVIDER_KIMI:
+        return 'bg-cyan-100 text-cyan-700 dark:bg-cyan-500/15 dark:text-cyan-300'
+      case PROVIDER_GLM:
+        return 'bg-indigo-100 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300'
       default:
         return NEUTRAL_BADGE
     }
@@ -107,6 +123,22 @@ export function useChannelMonitorFormat() {
         return active
           ? 'border-zinc-500 bg-zinc-50 text-zinc-800 dark:bg-zinc-500/15 dark:text-zinc-200 dark:border-zinc-400'
           : 'border-gray-200 bg-white text-gray-600 hover:border-zinc-400 hover:text-zinc-800 dark:border-dark-700 dark:bg-dark-800 dark:text-gray-400 dark:hover:border-zinc-500/50'
+      case PROVIDER_ANTIGRAVITY:
+        return active
+          ? 'border-cyan-500 bg-cyan-50 text-cyan-800 dark:bg-cyan-500/15 dark:text-cyan-200 dark:border-cyan-400'
+          : 'border-gray-200 bg-white text-gray-600 hover:border-cyan-300 hover:text-cyan-800 dark:border-dark-700 dark:bg-dark-800 dark:text-gray-400 dark:hover:border-cyan-500/50'
+      case PROVIDER_DEEPSEEK:
+        return active
+          ? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300 dark:border-blue-400'
+          : 'border-gray-200 bg-white text-gray-600 hover:border-blue-300 hover:text-blue-700 dark:border-dark-700 dark:bg-dark-800 dark:text-gray-400 dark:hover:border-blue-500/50'
+      case PROVIDER_KIMI:
+        return active
+          ? 'border-cyan-500 bg-cyan-50 text-cyan-700 dark:bg-cyan-500/15 dark:text-cyan-300 dark:border-cyan-400'
+          : 'border-gray-200 bg-white text-gray-600 hover:border-cyan-300 hover:text-cyan-700 dark:border-dark-700 dark:bg-dark-800 dark:text-gray-400 dark:hover:border-cyan-500/50'
+      case PROVIDER_GLM:
+        return active
+          ? 'border-indigo-500 bg-indigo-50 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300 dark:border-indigo-400'
+          : 'border-gray-200 bg-white text-gray-600 hover:border-indigo-300 hover:text-indigo-700 dark:border-dark-700 dark:bg-dark-800 dark:text-gray-400 dark:hover:border-indigo-500/50'
       default:
         return active
           ? 'border-gray-400 bg-gray-50 text-gray-700 dark:border-dark-500 dark:bg-dark-700 dark:text-gray-200'
@@ -180,6 +212,14 @@ export function providerGradient(provider: string): string {
       return 'bg-gradient-to-br from-sky-50 to-indigo-100 dark:from-sky-500/10 dark:to-indigo-500/20'
     case PROVIDER_GROK:
       return 'bg-gradient-to-br from-zinc-50 to-neutral-200 dark:from-zinc-500/10 dark:to-neutral-500/20'
+    case PROVIDER_ANTIGRAVITY:
+      return 'bg-gradient-to-br from-cyan-50 to-sky-100 dark:from-cyan-500/10 dark:to-sky-500/20'
+    case PROVIDER_DEEPSEEK:
+      return 'bg-gradient-to-br from-blue-50 to-cyan-100 dark:from-blue-500/10 dark:to-cyan-500/20'
+    case PROVIDER_KIMI:
+      return 'bg-gradient-to-br from-cyan-50 to-sky-100 dark:from-cyan-500/10 dark:to-sky-500/20'
+    case PROVIDER_GLM:
+      return 'bg-gradient-to-br from-indigo-50 to-blue-100 dark:from-indigo-500/10 dark:to-blue-500/20'
     default:
       return 'bg-gradient-to-br from-gray-100 to-gray-200 dark:from-dark-700 dark:to-dark-600'
   }

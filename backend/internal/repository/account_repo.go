@@ -15,6 +15,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -69,10 +70,15 @@ var schedulerNeutralExtraKeys = map[string]struct{}{
 const postgresParameterBatchSize = 50000
 
 // NewAccountRepository 创建账户仓储实例。
-// 这是对外暴露的构造函数，返回接口类型以便于依赖注入。
-func NewAccountRepository(client *dbent.Client, sqlDB *sql.DB, schedulerCache service.SchedulerCache) service.AccountRepository {
+// 返回具体类型，使 Wire 可以同时绑定普通账号和贡献账号仓储接口。
+func NewAccountRepository(client *dbent.Client, sqlDB *sql.DB, schedulerCache service.SchedulerCache) *accountRepository {
 	return newAccountRepositoryWithSQL(client, sqlDB, schedulerCache)
 }
+
+var (
+	_ service.AccountRepository             = (*accountRepository)(nil)
+	_ service.AccountContributionRepository = (*accountRepository)(nil)
+)
 
 // NewAdminAccountRepository exposes the account repository's atomic duplication capability
 // as an explicit dependency of the admin service.
@@ -114,6 +120,22 @@ func createAccountRecord(ctx context.Context, client *dbent.Client, account *ser
 		SetErrorMessage(account.ErrorMessage).
 		SetSchedulable(account.Schedulable).
 		SetAutoPauseOnExpired(account.AutoPauseOnExpired)
+
+	if account.OwnerUserID != nil {
+		builder.SetOwnerUserID(*account.OwnerUserID)
+	}
+	if account.ContributionStatus != "" {
+		builder.SetContributionStatus(account.ContributionStatus)
+	}
+	if account.ContributionSubmittedAt != nil {
+		builder.SetContributionSubmittedAt(*account.ContributionSubmittedAt)
+	}
+	if account.ContributionApprovedAt != nil {
+		builder.SetContributionApprovedAt(*account.ContributionApprovedAt)
+	}
+	if account.ContributionRevokedAt != nil {
+		builder.SetContributionRevokedAt(*account.ContributionRevokedAt)
+	}
 
 	if account.RateMultiplier != nil {
 		builder.SetRateMultiplier(*account.RateMultiplier)
@@ -158,6 +180,9 @@ func createAccountRecord(ctx context.Context, client *dbent.Client, account *ser
 	created, err := builder.Save(ctx)
 	if err != nil {
 		return translatePersistenceError(err, service.ErrAccountNotFound, nil)
+	}
+	if err := setAccountPoolGroupID(ctx, client, created.ID, account.PoolGroupID); err != nil {
+		return err
 	}
 
 	account.ID = created.ID
@@ -477,6 +502,24 @@ func (r *accountRepository) updateLockedAccount(ctx context.Context, client *dbe
 		SetSchedulable(schedulable).
 		SetAutoPauseOnExpired(account.AutoPauseOnExpired)
 
+	builder.SetNillableOwnerUserID(account.OwnerUserID)
+	builder.SetContributionStatus(account.ContributionStatus)
+	if account.ContributionSubmittedAt != nil {
+		builder.SetContributionSubmittedAt(*account.ContributionSubmittedAt)
+	} else {
+		builder.ClearContributionSubmittedAt()
+	}
+	if account.ContributionApprovedAt != nil {
+		builder.SetContributionApprovedAt(*account.ContributionApprovedAt)
+	} else {
+		builder.ClearContributionApprovedAt()
+	}
+	if account.ContributionRevokedAt != nil {
+		builder.SetContributionRevokedAt(*account.ContributionRevokedAt)
+	} else {
+		builder.ClearContributionRevokedAt()
+	}
+
 	if account.RateMultiplier != nil {
 		builder.SetRateMultiplier(*account.RateMultiplier)
 	}
@@ -538,7 +581,34 @@ func (r *accountRepository) updateLockedAccount(ctx context.Context, client *dbe
 	builder.SetQuotaDimension(dbaccount.QuotaDimension(account.QuotaDimensionOrDefault()))
 	builder.SetNillableParentAccountID(account.ParentAccountID)
 
-	return builder.Save(ctx)
+	updated, err := builder.Save(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if err := setAccountPoolGroupID(ctx, client, account.ID, account.PoolGroupID); err != nil {
+		return nil, err
+	}
+	return updated, nil
+}
+
+func setAccountPoolGroupID(ctx context.Context, exec sqlExecutor, accountID int64, poolGroupID *int64) error {
+	if accountID <= 0 || exec == nil {
+		return nil
+	}
+	if poolGroupID == nil || *poolGroupID <= 0 {
+		_, err := exec.ExecContext(ctx, `
+			UPDATE accounts
+			SET pool_group_id = NULL
+			WHERE id = $1 AND deleted_at IS NULL
+		`, accountID)
+		return err
+	}
+	_, err := exec.ExecContext(ctx, `
+		UPDATE accounts
+		SET pool_group_id = $2
+		WHERE id = $1 AND deleted_at IS NULL
+	`, accountID, *poolGroupID)
+	return err
 }
 
 func lockAndMergeAccountProbeExtra(ctx context.Context, client *dbent.Client, account *service.Account, explicitProbeEnabled *bool) (map[string]any, error) {
@@ -555,13 +625,22 @@ func lockAndMergeAccountProbeExtra(ctx context.Context, client *dbent.Client, ac
 			platform = $2
 			AND type = $3
 			AND credentials = $4::jsonb
-			AND proxy_id IS NOT DISTINCT FROM $5,
+			AND proxy_id IS NOT DISTINCT FROM $5
+			AND (
+				platform <> 'anthropic'
+				OR type <> 'apikey'
+				OR CASE
+					WHEN extra ->> 'anthropic_apikey_auth_scheme' = 'authorization_bearer'
+					THEN 'authorization_bearer'
+					ELSE 'x_api_key'
+				END = $6
+			),
 			extra -> 'upstream_billing_probe_enabled',
 			extra -> 'upstream_billing_probe'
 		FROM accounts
 		WHERE id = $1 AND deleted_at IS NULL
 		FOR NO KEY UPDATE
-	`, account.ID, account.Platform, account.Type, string(credentials), proxyID)
+	`, account.ID, account.Platform, account.Type, string(credentials), proxyID, account.GetAnthropicAPIKeyAuthScheme())
 	if err != nil {
 		return nil, err
 	}
@@ -589,11 +668,13 @@ func lockAndMergeAccountProbeExtra(ctx context.Context, client *dbent.Client, ac
 	delete(extra, service.UpstreamBillingProbeEnabledExtraKey)
 	delete(extra, service.UpstreamBillingProbeExtraKey)
 	probeExplicitlyDisabled := false
-	probeAccount := account.Platform == service.PlatformOpenAI && account.Type == service.AccountTypeAPIKey
-	if probeAccount && explicitProbeEnabled != nil {
+	automaticProbeAccount := account.Platform == service.PlatformOpenAI && account.Type == service.AccountTypeAPIKey
+	manualProbeAccount := account.Type == service.AccountTypeAPIKey &&
+		(account.Platform == service.PlatformOpenAI || account.Platform == service.PlatformAnthropic)
+	if automaticProbeAccount && explicitProbeEnabled != nil {
 		extra[service.UpstreamBillingProbeEnabledExtraKey] = *explicitProbeEnabled
 		probeExplicitlyDisabled = !*explicitProbeEnabled
-	} else if probeAccount && len(currentEnabled) > 0 && string(currentEnabled) != "null" {
+	} else if automaticProbeAccount && len(currentEnabled) > 0 && string(currentEnabled) != "null" {
 		var enabled any
 		if err := json.Unmarshal(currentEnabled, &enabled); err != nil {
 			return nil, err
@@ -603,7 +684,8 @@ func lockAndMergeAccountProbeExtra(ctx context.Context, client *dbent.Client, ac
 			probeExplicitlyDisabled = true
 		}
 	}
-	if !identityUnchanged || probeExplicitlyDisabled || len(currentSnapshot) == 0 || string(currentSnapshot) == "null" {
+	if !manualProbeAccount || !identityUnchanged || probeExplicitlyDisabled ||
+		len(currentSnapshot) == 0 || string(currentSnapshot) == "null" {
 		return extra, nil
 	}
 	var snapshot any
@@ -642,7 +724,7 @@ func (r *accountRepository) UpdateCredentials(ctx context.Context, id int64, cre
 		SET
 			credentials = $1::jsonb,
 			extra = CASE
-				WHEN platform = 'openai'
+				WHEN platform IN ('openai', 'anthropic')
 					AND type = 'apikey'
 					AND credentials IS DISTINCT FROM $1::jsonb
 				THEN COALESCE(extra, '{}'::jsonb) - 'upstream_billing_probe'
@@ -721,7 +803,7 @@ func (r *accountRepository) List(ctx context.Context, params pagination.Paginati
 	return r.ListWithFilters(ctx, params, "", "", "", "", 0, "")
 }
 
-func (r *accountRepository) accountListFilteredQuery(platform, accountType, status, search string, groupID int64, privacyMode string) *dbent.AccountQuery {
+func (r *accountRepository) accountListFilteredQuery(platform, accountType, status, search string, groupID int64, privacyMode string, poolGroupID int64) *dbent.AccountQuery {
 	q := r.client.Account.Query()
 
 	if platform != "" {
@@ -799,6 +881,15 @@ func (r *accountRepository) accountListFilteredQuery(platform, accountType, stat
 	} else if groupID > 0 {
 		q = q.Where(dbaccount.HasAccountGroupsWith(dbaccountgroup.GroupIDEQ(groupID)))
 	}
+	if poolGroupID == service.AccountListPoolGroupUngrouped {
+		q = q.Where(dbpredicate.Account(func(s *entsql.Selector) {
+			s.Where(entsql.IsNull(s.C("pool_group_id")))
+		}))
+	} else if poolGroupID > 0 {
+		q = q.Where(dbpredicate.Account(func(s *entsql.Selector) {
+			s.Where(entsql.EQ(s.C("pool_group_id"), poolGroupID))
+		}))
+	}
 	if privacyMode != "" {
 		q = q.Where(dbpredicate.Account(func(s *entsql.Selector) {
 			path := sqljson.Path("privacy_mode")
@@ -818,7 +909,11 @@ func (r *accountRepository) accountListFilteredQuery(platform, accountType, stat
 }
 
 func (r *accountRepository) ListWithFilters(ctx context.Context, params pagination.PaginationParams, platform, accountType, status, search string, groupID int64, privacyMode string) ([]service.Account, *pagination.PaginationResult, error) {
-	q := r.accountListFilteredQuery(platform, accountType, status, search, groupID, privacyMode)
+	return r.ListWithPoolGroupFilters(ctx, params, platform, accountType, status, search, groupID, privacyMode, 0)
+}
+
+func (r *accountRepository) ListWithPoolGroupFilters(ctx context.Context, params pagination.PaginationParams, platform, accountType, status, search string, groupID int64, privacyMode string, poolGroupID int64) ([]service.Account, *pagination.PaginationResult, error) {
+	q := r.accountListFilteredQuery(platform, accountType, status, search, groupID, privacyMode, poolGroupID)
 	// Clone before Count so interceptor-appended predicates (SoftDeleteMixin's
 	// deleted_at IS NULL) don't accumulate on the shared builder and pollute the
 	// subsequent list query. Same pattern used in group_repo/promo_code_repo/user_repo
@@ -848,7 +943,11 @@ func (r *accountRepository) ListWithFilters(ctx context.Context, params paginati
 }
 
 func (r *accountRepository) ListAllWithFilters(ctx context.Context, platform, accountType, status, search string, groupID int64, privacyMode string) ([]service.Account, error) {
-	accounts, err := r.accountListFilteredQuery(platform, accountType, status, search, groupID, privacyMode).All(ctx)
+	return r.ListAllWithPoolGroupFilters(ctx, platform, accountType, status, search, groupID, privacyMode, 0)
+}
+
+func (r *accountRepository) ListAllWithPoolGroupFilters(ctx context.Context, platform, accountType, status, search string, groupID int64, privacyMode string, poolGroupID int64) ([]service.Account, error) {
+	accounts, err := r.accountListFilteredQuery(platform, accountType, status, search, groupID, privacyMode, poolGroupID).All(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -949,6 +1048,9 @@ func accountListOrder(params pagination.PaginationParams) []func(*entsql.Selecto
 }
 
 func upstreamBillingRateSortExpression(extra string) string {
+	manualJSON := extra + " -> '" + service.UpstreamBillingManualRateExtraKey + "'"
+	manual := extra + " ->> '" + service.UpstreamBillingManualRateExtraKey + "'"
+	manualRate := "(CASE WHEN jsonb_typeof(" + manualJSON + ") = 'number' THEN CASE WHEN (" + manual + ")::numeric >= 0 THEN (" + manual + ")::numeric END END)"
 	status := extra + " #>> '{upstream_billing_probe,status}'"
 	effectiveJSON := extra + " #> '{upstream_billing_probe,data,effective_rate_multiplier}'"
 	effective := extra + " #>> '{upstream_billing_probe,data,effective_rate_multiplier}'"
@@ -977,9 +1079,10 @@ func upstreamBillingRateSortExpression(extra string) string {
 		" THEN " + peakMultiplierValue + " ELSE 1 END ELSE NULL END"
 	legacySnapshot := "jsonb_typeof(" + resolvedJSON + ") IS NULL AND jsonb_typeof(" + peakEnabledJSON + ") IS NULL"
 
-	return "CASE WHEN " + status + " IN ('ok', 'failed') AND (jsonb_typeof(" + resolvedJSON + ") = 'number' OR jsonb_typeof(" + effectiveJSON + ") = 'number') THEN CASE WHEN jsonb_typeof(" +
+	probedRate := "CASE WHEN " + status + " IN ('ok', 'failed') AND (jsonb_typeof(" + resolvedJSON + ") = 'number' OR jsonb_typeof(" + effectiveJSON + ") = 'number') THEN CASE WHEN jsonb_typeof(" +
 		resolvedJSON + ") = 'number' AND jsonb_typeof(" + peakEnabledJSON + ") = 'boolean' THEN CASE WHEN " + billingScope + " = 'token' THEN " + dynamicRate + " ELSE NULL END WHEN " + legacySnapshot +
 		" AND jsonb_typeof(" + effectiveJSON + ") = 'number' THEN (" + effective + ")::numeric END END"
+	return "COALESCE(" + manualRate + ", " + probedRate + ")"
 }
 
 func (r *accountRepository) ListByGroup(ctx context.Context, groupID int64) ([]service.Account, error) {
@@ -1715,6 +1818,7 @@ func (r *accountRepository) schedulableAccountsQuery(now time.Time) *dbent.Accou
 		Where(
 			dbaccount.StatusEQ(service.StatusActive),
 			dbaccount.SchedulableEQ(true),
+			contributionSchedulablePredicate(),
 			tempUnschedulablePredicate(),
 			notExpiredPredicate(now),
 			dbaccount.Or(dbaccount.OverloadUntilIsNil(), dbaccount.OverloadUntilLTE(now)),
@@ -1773,12 +1877,16 @@ func (r *accountRepository) ListSchedulableCapacityByGroupIDs(ctx context.Contex
 			AND a.deleted_at IS NULL
 			AND a.status = $2
 			AND a.schedulable = TRUE
+			AND (
+				(a.owner_user_id IS NULL AND a.contribution_status = '')
+				OR (a.owner_user_id IS NOT NULL AND a.contribution_status = $4)
+			)
 			AND (a.temp_unschedulable_until IS NULL OR a.temp_unschedulable_until <= $3)
 			AND (a.expires_at IS NULL OR a.expires_at > $3 OR a.auto_pause_on_expired = FALSE)
 			AND (a.overload_until IS NULL OR a.overload_until <= $3)
 			AND (a.rate_limit_reset_at IS NULL OR a.rate_limit_reset_at <= $3)
 		ORDER BY ag.group_id ASC, ag.priority ASC, a.priority ASC, a.id ASC
-	`, pq.Array(groupIDs), service.StatusActive, time.Now())
+	`, pq.Array(groupIDs), service.StatusActive, time.Now(), service.ContributionStatusApproved)
 	if err != nil {
 		return nil, err
 	}
@@ -1821,6 +1929,7 @@ func (r *accountRepository) ListSchedulableByPlatform(ctx context.Context, platf
 			dbaccount.PlatformEQ(platform),
 			dbaccount.StatusEQ(service.StatusActive),
 			dbaccount.SchedulableEQ(true),
+			contributionSchedulablePredicate(),
 			tempUnschedulablePredicate(),
 			notExpiredPredicate(now),
 			dbaccount.Or(dbaccount.OverloadUntilIsNil(), dbaccount.OverloadUntilLTE(now)),
@@ -1843,6 +1952,46 @@ func (r *accountRepository) ListSchedulableByGroupIDAndPlatform(ctx context.Cont
 	})
 }
 
+func (r *accountRepository) GetGroupPlatform(ctx context.Context, groupID int64) (string, error) {
+	platform, err := r.client.Group.Query().
+		Where(
+			dbgroup.IDEQ(groupID),
+			dbgroup.DeletedAtIsNil(),
+		).
+		Select(dbgroup.FieldPlatform).
+		String(ctx)
+	if err != nil {
+		return "", translatePersistenceError(err, service.ErrGroupNotFound, nil)
+	}
+	return strings.TrimSpace(platform), nil
+}
+
+func (r *accountRepository) ListSchedulableByGroupNameAndPlatform(ctx context.Context, groupName, platform string) ([]service.Account, error) {
+	groupName = strings.TrimSpace(groupName)
+	platform = strings.TrimSpace(platform)
+	if groupName == "" || platform == "" {
+		return []service.Account{}, nil
+	}
+	group, err := r.client.Group.Query().
+		Where(
+			dbgroup.NameEQ(groupName),
+			dbgroup.PlatformEQ(platform),
+			dbgroup.DeletedAtIsNil(),
+		).
+		Only(ctx)
+	if err != nil {
+		if dbent.IsNotFound(err) {
+			return []service.Account{}, nil
+		}
+		return nil, err
+	}
+	return r.queryAccountsByGroup(ctx, group.ID, accountGroupQueryOptions{
+		status:      service.StatusActive,
+		schedulable: true,
+		platforms:   []string{platform},
+	})
+}
+
 func (r *accountRepository) ListSchedulableByPlatforms(ctx context.Context, platforms []string) ([]service.Account, error) {
 	if len(platforms) == 0 {
 		return nil, nil
@@ -1855,6 +2004,7 @@ func (r *accountRepository) ListSchedulableByPlatforms(ctx context.Context, plat
 			dbaccount.PlatformIn(platforms...),
 			dbaccount.StatusEQ(service.StatusActive),
 			dbaccount.SchedulableEQ(true),
+			contributionSchedulablePredicate(),
 			tempUnschedulablePredicate(),
 			notExpiredPredicate(now),
 			dbaccount.Or(dbaccount.OverloadUntilIsNil(), dbaccount.OverloadUntilLTE(now)),
@@ -1876,6 +2026,7 @@ func (r *accountRepository) ListSchedulableUngroupedByPlatform(ctx context.Conte
 			dbaccount.StatusEQ(service.StatusActive),
 			dbaccount.SchedulableEQ(true),
 			dbaccount.Not(dbaccount.HasAccountGroups()),
+			contributionSchedulablePredicate(),
 			tempUnschedulablePredicate(),
 			notExpiredPredicate(now),
 			dbaccount.Or(dbaccount.OverloadUntilIsNil(), dbaccount.OverloadUntilLTE(now)),
@@ -1900,6 +2051,7 @@ func (r *accountRepository) ListSchedulableUngroupedByPlatforms(ctx context.Cont
 			dbaccount.StatusEQ(service.StatusActive),
 			dbaccount.SchedulableEQ(true),
 			dbaccount.Not(dbaccount.HasAccountGroups()),
+			contributionSchedulablePredicate(),
 			tempUnschedulablePredicate(),
 			notExpiredPredicate(now),
 			dbaccount.Or(dbaccount.OverloadUntilIsNil(), dbaccount.OverloadUntilLTE(now)),
@@ -1951,6 +2103,7 @@ func (r *accountRepository) ListModelAvailabilityCandidates(
 		dbaccount.StatusEQ(service.StatusActive),
 		dbaccount.SchedulableEQ(true),
 		dbaccount.PlatformIn(platforms...),
+		contributionSchedulablePredicate(),
 	}
 	if !includeGrouped {
 		preds = append(preds, dbaccount.Not(dbaccount.HasAccountGroups()))
@@ -2521,8 +2674,18 @@ func (r *accountRepository) updateUpstreamBillingProbeSnapshotInTx(
 			AND proxy_id IS NOT DISTINCT FROM $6
 			AND COALESCE(extra -> 'upstream_billing_probe', 'null'::jsonb) = $7::jsonb
 			AND COALESCE(extra -> 'upstream_billing_probe_enabled', 'null'::jsonb) = $8::jsonb
+			AND (
+				platform <> 'anthropic'
+				OR type <> 'apikey'
+				OR CASE
+					WHEN extra ->> 'anthropic_apikey_auth_scheme' = 'authorization_bearer'
+					THEN 'authorization_bearer'
+					ELSE 'x_api_key'
+				END = $9
+			)
 			AND deleted_at IS NULL
-	`, string(payload), account.ID, account.Platform, account.Type, string(credentials), proxyID, string(expectedSnapshotJSON), string(expectedEnabledJSON))
+	`, string(payload), account.ID, account.Platform, account.Type, string(credentials), proxyID,
+		string(expectedSnapshotJSON), string(expectedEnabledJSON), account.GetAnthropicAPIKeyAuthScheme())
 	if err != nil {
 		return err
 	}
@@ -2533,7 +2696,139 @@ func (r *accountRepository) updateUpstreamBillingProbeSnapshotInTx(
 	if affected == 0 {
 		return service.ErrUpstreamBillingProbeIdentityChanged
 	}
+	if err := r.insertUpstreamBillingRateSnapshots(ctx, client, account, snapshot); err != nil {
+		return err
+	}
 	return enqueueSchedulerOutbox(ctx, client, service.SchedulerOutboxEventAccountChanged, &account.ID, nil, nil)
+}
+
+func (r *accountRepository) insertUpstreamBillingRateSnapshots(
+	ctx context.Context,
+	client *dbent.Client,
+	account *service.Account,
+	snapshot *service.UpstreamBillingProbeSnapshot,
+) error {
+	if account == nil || snapshot == nil || snapshot.Status != service.UpstreamBillingProbeStatusOK {
+		return nil
+	}
+
+	rate, observedAt, capturedAt, ok := upstreamBillingRateSnapshotValues(snapshot)
+	if !ok {
+		return nil
+	}
+
+	groupIDs := append([]int64(nil), account.GroupIDs...)
+	if len(groupIDs) == 0 {
+		groupIDs = []int64{0}
+	}
+
+	_, err := client.ExecContext(ctx, `
+		INSERT INTO account_upstream_rate_snapshots (
+			account_id,
+			group_id,
+			effective_rate_multiplier,
+			observed_at,
+			captured_at,
+			source
+		)
+		SELECT $1, group_id, $2, $3, $4, 'probe'
+		FROM unnest($5::bigint[]) AS group_id
+		WHERE NOT EXISTS (
+			SELECT 1
+			FROM accounts current_account
+			WHERE current_account.id = $1
+				AND current_account.deleted_at IS NULL
+				AND CASE
+					WHEN jsonb_typeof(current_account.extra -> $6) = 'number'
+					THEN (current_account.extra ->> $6)::numeric >= 0
+					ELSE FALSE
+				END
+		)
+		ON CONFLICT (account_id, group_id, observed_at)
+		DO UPDATE SET
+			effective_rate_multiplier = EXCLUDED.effective_rate_multiplier,
+			captured_at = EXCLUDED.captured_at,
+			source = EXCLUDED.source
+	`, account.ID, rate, observedAt, capturedAt, pq.Array(groupIDs), service.UpstreamBillingManualRateExtraKey)
+	return err
+}
+
+// RecordUpstreamBillingManualRateSnapshot writes an operator edit into the
+// existing time-aware cost timeline. Clearing an override writes an explicit
+// marker so a prior manual rate cannot leak into later reporting buckets.
+func (r *accountRepository) RecordUpstreamBillingManualRateSnapshot(
+	ctx context.Context,
+	account *service.Account,
+	manualRate *float64,
+) error {
+	if account == nil || account.ID <= 0 {
+		return service.ErrAccountNilInput
+	}
+	if r.sql == nil {
+		return errors.New("account repository SQL executor not configured")
+	}
+
+	now := time.Now().UTC()
+	rate := 0.0
+	source := service.UpstreamBillingRateSnapshotSourceManual
+	if manualRate != nil {
+		rate = *manualRate
+	} else if fallbackRate, ok := service.CurrentUpstreamBillingRate(account, now); ok {
+		rate = fallbackRate
+		source = service.UpstreamBillingRateSnapshotSourceManualClearFallback
+	} else {
+		source = service.UpstreamBillingRateSnapshotSourceManualCleared
+	}
+
+	groupIDs := append([]int64(nil), account.GroupIDs...)
+	if len(groupIDs) == 0 {
+		groupIDs = []int64{0}
+	}
+	_, err := r.sql.ExecContext(ctx, `
+		INSERT INTO account_upstream_rate_snapshots (
+			account_id,
+			group_id,
+			effective_rate_multiplier,
+			observed_at,
+			captured_at,
+			source
+		)
+		SELECT $1, group_id, $2, $3, $3, $4
+		FROM unnest($5::bigint[]) AS group_id
+		ON CONFLICT (account_id, group_id, observed_at)
+		DO UPDATE SET
+			effective_rate_multiplier = EXCLUDED.effective_rate_multiplier,
+			captured_at = EXCLUDED.captured_at,
+			source = EXCLUDED.source
+	`, account.ID, rate, now, source, pq.Array(groupIDs))
+	return err
+}
+
+func upstreamBillingRateSnapshotValues(snapshot *service.UpstreamBillingProbeSnapshot) (float64, time.Time, time.Time, bool) {
+	if snapshot == nil || snapshot.Data == nil {
+		return 0, time.Time{}, time.Time{}, false
+	}
+	rate, ok := snapshot.Data["effective_rate_multiplier"].(float64)
+	if !ok || rate < 0 || math.IsNaN(rate) || math.IsInf(rate, 0) {
+		return 0, time.Time{}, time.Time{}, false
+	}
+
+	observedAt := time.Time{}
+	if raw, ok := snapshot.Data["observed_at"].(string); ok {
+		observedAt, _ = time.Parse(time.RFC3339Nano, raw)
+	}
+	if observedAt.IsZero() && snapshot.ReceivedAt != nil {
+		observedAt = *snapshot.ReceivedAt
+	}
+	if observedAt.IsZero() {
+		return 0, time.Time{}, time.Time{}, false
+	}
+
+	capturedAt := observedAt
+	if snapshot.ReceivedAt != nil && !snapshot.ReceivedAt.IsZero() {
+		capturedAt = *snapshot.ReceivedAt
+	}
+	return rate, observedAt.UTC(), capturedAt.UTC(), true
 }
 
 func lockAndMatchProbeProxyIdentity(ctx context.Context, client *dbent.Client, account *service.Account) (bool, error) {
@@ -2626,6 +2921,16 @@ func (r *accountRepository) BulkUpdate(ctx context.Context, ids []int64, updates
 		} else {
 			setClauses = append(setClauses, "proxy_id = $"+itoa(idx))
 			args = append(args, *updates.ProxyID)
+			idx++
+		}
+	}
+	if updates.PoolGroupID != nil {
+		// 0 表示清除账号池组。
+		if *updates.PoolGroupID <= 0 {
+			setClauses = append(setClauses, "pool_group_id = NULL")
+		} else {
+			setClauses = append(setClauses, "pool_group_id = $"+itoa(idx))
+			args = append(args, *updates.PoolGroupID)
 			idx++
 		}
 	}
@@ -2796,7 +3101,10 @@ func (r *accountRepository) queryAccountsByGroup(ctx context.Context, groupID in
 		preds = append(preds, dbaccount.PlatformIn(opts.platforms...))
 	}
 	if opts.schedulable {
-		preds = append(preds, dbaccount.SchedulableEQ(true))
+		preds = append(preds,
+			dbaccount.SchedulableEQ(true),
+			contributionSchedulablePredicate(),
+		)
 		if !opts.ignoreTransientState {
 			now := time.Now()
 			preds = append(preds,
@@ -2871,6 +3179,10 @@ func (r *accountRepository) accountsToService(ctx context.Context, accounts []*d
 	if err != nil {
 		return nil, err
 	}
+	poolGroupIDsByAccount, poolGroupsByAccount, err := r.loadAccountPoolGroups(ctx, accountIDs)
+	if err != nil {
+		return nil, err
+	}
 
 	outAccounts := make([]service.Account, 0, len(accounts))
 	for _, acc := range accounts {
@@ -2898,6 +3210,12 @@ func (r *accountRepository) accountsToService(ctx context.Context, accounts []*d
 		}
 		if ags, ok := accountGroupsByAccount[acc.ID]; ok {
 			out.AccountGroups = ags
+		}
+		if poolGroupID, ok := poolGroupIDsByAccount[acc.ID]; ok {
+			out.PoolGroupID = &poolGroupID
+		}
+		if poolGroup, ok := poolGroupsByAccount[acc.ID]; ok {
+			out.PoolGroup = poolGroup
 		}
 		outAccounts = append(outAccounts, *out)
 	}
@@ -3020,6 +3338,82 @@ func (r *accountRepository) loadGroups(ctx context.Context, groupIDs []int64) (m
 	return groupMap, nil
 }
 
+func (r *accountRepository) loadAccountPoolGroups(ctx context.Context, accountIDs []int64) (map[int64]int64, map[int64]*service.AccountPoolGroup, error) {
+	poolGroupIDsByAccount := make(map[int64]int64)
+	poolGroupsByAccount := make(map[int64]*service.AccountPoolGroup)
+
+	accountIDs = uniquePositiveInt64s(accountIDs)
+	if len(accountIDs) == 0 || r.sql == nil {
+		return poolGroupIDsByAccount, poolGroupsByAccount, nil
+	}
+
+	for start := 0; start < len(accountIDs); start += postgresParameterBatchSize {
+		end := start + postgresParameterBatchSize
+		if end > len(accountIDs) {
+			end = len(accountIDs)
+		}
+		rows, err := r.sql.QueryContext(ctx, `
+			SELECT
+				a.id,
+				a.pool_group_id,
+				pg.id,
+				pg.name,
+				pg.upstream_key,
+				pg.description,
+				pg.sort_order,
+				pg.status,
+				pg.created_at,
+				pg.updated_at
+			FROM accounts a
+			LEFT JOIN account_pool_groups pg
+			  ON pg.id = a.pool_group_id
+			 AND pg.deleted_at IS NULL
+			WHERE a.id = ANY($1)
+			  AND a.deleted_at IS NULL
+		`, pq.Array(accountIDs[start:end]))
+		if err != nil {
+			return nil, nil, err
+		}
+		for rows.Next() {
+			var accountID int64
+			var poolGroupID sql.NullInt64
+			var groupID sql.NullInt64
+			var name, upstreamKey, description, status sql.NullString
+			var sortOrder sql.NullInt64
+			var createdAt, updatedAt sql.NullTime
+			if err := rows.Scan(&accountID, &poolGroupID, &groupID, &name, &upstreamKey, &description, &sortOrder, &status, &createdAt, &updatedAt); err != nil {
+				_ = rows.Close()
+				return nil, nil, err
+			}
+			if poolGroupID.Valid {
+				poolGroupIDsByAccount[accountID] = poolGroupID.Int64
+			}
+			if groupID.Valid {
+				group := &service.AccountPoolGroup{
+					ID:          groupID.Int64,
+					Name:        name.String,
+					UpstreamKey: upstreamKey.String,
+					Description: description.String,
+					SortOrder:   int(sortOrder.Int64),
+					Status:      status.String,
+					CreatedAt:   createdAt.Time,
+					UpdatedAt:   updatedAt.Time,
+				}
+				poolGroupsByAccount[accountID] = group
+			}
+		}
+		if err := rows.Err(); err != nil {
+			_ = rows.Close()
+			return nil, nil, err
+		}
+		if err := rows.Close(); err != nil {
+			return nil, nil, err
+		}
+	}
+
+	return poolGroupIDsByAccount, poolGroupsByAccount, nil
+}
+
 func uniquePositiveInt64s(ids []int64) []int64 {
 	if len(ids) == 0 {
 		return nil
@@ -3119,6 +3513,11 @@ func accountEntityToService(m *dbent.Account) *service.Account {
 		AutoPauseOnExpired:      m.AutoPauseOnExpired,
 		CreatedAt:               m.CreatedAt,
 		UpdatedAt:               m.UpdatedAt,
+		OwnerUserID:             m.OwnerUserID,
+		ContributionStatus:      m.ContributionStatus,
+		ContributionSubmittedAt: m.ContributionSubmittedAt,
+		ContributionApprovedAt:  m.ContributionApprovedAt,
+		ContributionRevokedAt:   m.ContributionRevokedAt,
 		Schedulable:             m.Schedulable,
 		RateLimitedAt:           m.RateLimitedAt,
 		RateLimitResetAt:        m.RateLimitResetAt,
@@ -3131,6 +3530,13 @@ func accountEntityToService(m *dbent.Account) *service.Account {
 		ParentAccountID:         m.ParentAccountID,
 		QuotaDimension:          string(m.QuotaDimension),
 	}
+}
+
+func contributionSchedulablePredicate() dbpredicate.Account {
+	return dbaccount.Or(
+		dbaccount.And(dbaccount.OwnerUserIDIsNil(), dbaccount.ContributionStatusEQ("")),
+		dbaccount.And(dbaccount.OwnerUserIDNotNil(), dbaccount.ContributionStatusEQ(service.ContributionStatusApproved)),
+	)
 }
 
 func normalizeJSONMap(in map[string]any) map[string]any {
@@ -3218,6 +3624,64 @@ func (r *accountRepository) FindByExtraField(ctx context.Context, key string, va
 	}
 
 	return r.accountsToService(ctx, accounts)
+}
+
+func (r *accountRepository) ListContributionsByOwner(
+	ctx context.Context,
+	ownerUserID int64,
+	params pagination.PaginationParams,
+) ([]service.Account, *pagination.PaginationResult, error) {
+	q := r.client.Account.Query().Where(
+		dbaccount.OwnerUserIDEQ(ownerUserID),
+		dbaccount.ContributionStatusNEQ(""),
+	)
+	total, err := q.Clone().Count(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	accounts, err := q.Order(
+		dbent.Desc(dbaccount.FieldCreatedAt),
+		dbent.Desc(dbaccount.FieldID),
+	).Offset(params.Offset()).Limit(params.Limit()).All(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	out, err := r.accountsToService(ctx, accounts)
+	if err != nil {
+		return nil, nil, err
+	}
+	return out, paginationResultFromTotal(int64(total), params), nil
+}
+
+func (r *accountRepository) ListContributionsByStatus(
+	ctx context.Context,
+	status string,
+	params pagination.PaginationParams,
+) ([]service.Account, *pagination.PaginationResult, error) {
+	predicates := []dbpredicate.Account{
+		dbaccount.OwnerUserIDNotNil(),
+		dbaccount.ContributionStatusNEQ(""),
+	}
+	if strings.ToLower(strings.TrimSpace(status)) != "all" {
+		predicates = append(predicates, dbaccount.ContributionStatusEQ(status))
+	}
+	q := r.client.Account.Query().Where(predicates...)
+	total, err := q.Clone().Count(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	accounts, err := q.Order(
+		dbent.Asc(dbaccount.FieldCreatedAt),
+		dbent.Asc(dbaccount.FieldID),
+	).Offset(params.Offset()).Limit(params.Limit()).All(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	out, err := r.accountsToService(ctx, accounts)
+	if err != nil {
+		return nil, nil, err
+	}
+	return out, paginationResultFromTotal(int64(total), params), nil
 }
 
 // ListDueUpstreamBillingProbeAccounts bounds result hydration and network work

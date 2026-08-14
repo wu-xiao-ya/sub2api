@@ -114,6 +114,8 @@ func defaultModelsListCandidateIDs(platform string) []string {
 		return ids
 	case PlatformGrok:
 		return xai.DefaultModelIDs()
+	case PlatformDeepSeek, PlatformKimi, PlatformGLM:
+		return defaultOpenAICompatibleModelIDs(platform)
 	default:
 		ids := make([]string, 0, len(claude.DefaultModels))
 		for _, model := range claude.DefaultModels {
@@ -121,6 +123,52 @@ func defaultModelsListCandidateIDs(platform string) []string {
 		}
 		return ids
 	}
+}
+
+func defaultOpenAICompatibleModelIDs(platform string) []string {
+	switch platform {
+	case PlatformDeepSeek:
+		return []string{
+			"deepseek-v4-pro",
+			"deepseek-v4-flash",
+			"deepseek-chat",
+			"deepseek-reasoner",
+		}
+	case PlatformKimi:
+		return []string{
+			"kimi-k3",
+			"kimi-k2.6",
+			"kimi-for-coding",
+			"kimi-k2.5",
+			"kimi-k2-thinking",
+			"kimi-k2",
+			"moonshot-v1-8k",
+			"moonshot-v1-32k",
+			"moonshot-v1-128k",
+		}
+	case PlatformGLM:
+		return []string{
+			"glm-5.2",
+			"glm-5.1",
+			"glm-5",
+			"glm-5-turbo",
+			"glm-4.7",
+			"glm-4.7-flash",
+			"glm-4.7-flashx",
+			"glm-4.6",
+			"glm-4.5",
+		}
+	default:
+		return nil
+	}
+}
+
+// DefaultOpenAICompatibleModelIDs returns a defensive copy of the maintained
+// model list for third-party OpenAI-compatible platforms. Admin surfaces such
+// as groups and channel pricing share this source so their model catalogs do
+// not drift apart.
+func DefaultOpenAICompatibleModelIDs(platform string) []string {
+	return append([]string(nil), defaultOpenAICompatibleModelIDs(platform)...)
 }
 
 func defaultAllowImageGenerationForPlatform(platform string) bool {
@@ -132,6 +180,9 @@ func defaultAllowImageGenerationForPlatform(platform string) bool {
 func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupInput) (*Group, error) {
 	if input.RateMultiplier <= 0 {
 		return nil, errors.New("rate_multiplier must be > 0")
+	}
+	if input.ContributorRewardMultiplier < 0 {
+		return nil, errors.New("contributor_reward_multiplier must be >= 0")
 	}
 
 	platform := input.Platform
@@ -157,6 +208,10 @@ func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupIn
 	videoPrice720P := normalizePrice(input.VideoPrice720P)
 	videoPrice1080P := normalizePrice(input.VideoPrice1080P)
 	webSearchPricePerCall := normalizePrice(input.WebSearchPricePerCall)
+	searchPricePer1k := normalizePrice(input.SearchPricePer1k)
+	audioRealtimePricePerMin := normalizePrice(input.AudioRealtimePricePerMin)
+	audioTTSPricePerMillionChars := normalizePrice(input.AudioTTSPricePerMillionChars)
+	audioSTTPricePerHour := normalizePrice(input.AudioSTTPricePerHour)
 	imageRateMultiplier := 1.0
 	if input.ImageRateMultiplier != nil {
 		if *input.ImageRateMultiplier < 0 {
@@ -264,6 +319,7 @@ func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupIn
 		Description:                     input.Description,
 		Platform:                        platform,
 		RateMultiplier:                  input.RateMultiplier,
+		ContributorRewardMultiplier:     input.ContributorRewardMultiplier,
 		IsExclusive:                     input.IsExclusive,
 		Status:                          StatusActive,
 		SubscriptionType:                subscriptionType,
@@ -288,7 +344,12 @@ func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupIn
 		VideoPrice480P:                  videoPrice480P,
 		VideoPrice720P:                  videoPrice720P,
 		VideoPrice1080P:                 videoPrice1080P,
+		VideoModelPrices:                NormalizeVideoModelPrices(input.VideoModelPrices),
 		WebSearchPricePerCall:           webSearchPricePerCall,
+		SearchPricePer1k:                searchPricePer1k,
+		AudioRealtimePricePerMin:        audioRealtimePricePerMin,
+		AudioTTSPricePerMillionChars:    audioTTSPricePerMillionChars,
+		AudioSTTPricePerHour:            audioSTTPricePerHour,
 		ClaudeCodeOnly:                  input.ClaudeCodeOnly,
 		FallbackGroupID:                 input.FallbackGroupID,
 		FallbackGroupIDOnInvalidRequest: fallbackOnInvalidRequest,
@@ -446,6 +507,12 @@ func (s *adminServiceImpl) UpdateGroup(ctx context.Context, id int64, input *Upd
 		}
 		group.RateMultiplier = *input.RateMultiplier
 	}
+	if input.ContributorRewardMultiplier != nil {
+		if *input.ContributorRewardMultiplier < 0 {
+			return nil, errors.New("contributor_reward_multiplier must be >= 0")
+		}
+		group.ContributorRewardMultiplier = *input.ContributorRewardMultiplier
+	}
 	if input.IsExclusive != nil {
 		group.IsExclusive = *input.IsExclusive
 	}
@@ -545,8 +612,24 @@ func (s *adminServiceImpl) UpdateGroup(ctx context.Context, id int64, input *Upd
 	if input.VideoPrice1080P != nil {
 		group.VideoPrice1080P = normalizePrice(input.VideoPrice1080P)
 	}
+	// nil = leave unchanged; empty map = clear per-model prices.
+	if input.VideoModelPrices != nil {
+		group.VideoModelPrices = NormalizeVideoModelPrices(input.VideoModelPrices)
+	}
 	if input.WebSearchPricePerCall != nil {
 		group.WebSearchPricePerCall = normalizePrice(input.WebSearchPricePerCall)
+	}
+	if input.SearchPricePer1k != nil {
+		group.SearchPricePer1k = normalizePrice(input.SearchPricePer1k)
+	}
+	if input.AudioRealtimePricePerMin != nil {
+		group.AudioRealtimePricePerMin = normalizePrice(input.AudioRealtimePricePerMin)
+	}
+	if input.AudioTTSPricePerMillionChars != nil {
+		group.AudioTTSPricePerMillionChars = normalizePrice(input.AudioTTSPricePerMillionChars)
+	}
+	if input.AudioSTTPricePerHour != nil {
+		group.AudioSTTPricePerHour = normalizePrice(input.AudioSTTPricePerHour)
 	}
 
 	// Claude Code 客户端限制

@@ -127,6 +127,8 @@ type UsageLog struct {
 	InboundEndpoint *string
 	// UpstreamEndpoint is the normalized upstream endpoint path, e.g. /v1/responses.
 	UpstreamEndpoint *string
+	// UsageSource marks internal request origins, e.g. channel_monitor.
+	UsageSource *string
 
 	GroupID        *int64
 	SubscriptionID *int64
@@ -144,13 +146,18 @@ type UsageLog struct {
 	ImageOutputTokens int
 	ImageOutputCost   float64
 
-	InputCost                 float64
-	OutputCost                float64
-	CacheCreationCost         float64
-	CacheReadCost             float64
-	TotalCost                 float64
-	ActualCost                float64
-	RateMultiplier            float64
+	InputCost         float64
+	OutputCost        float64
+	CacheCreationCost float64
+	CacheReadCost     float64
+	TotalCost         float64
+	ActualCost        float64
+	RateMultiplier    float64
+	// PromotionID, PromotionName, and BaseRateMultiplier are immutable
+	// snapshots for requests that received an activity discount.
+	PromotionID               *int64
+	PromotionName             *string
+	BaseRateMultiplier        *float64
 	LongContextBillingApplied bool
 	// AccountRateMultiplier 账号计费倍率快照（nil 表示历史数据，按 1.0 处理）
 	AccountRateMultiplier *float64

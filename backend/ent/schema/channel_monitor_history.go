@@ -39,6 +39,24 @@ func (ChannelMonitorHistory) Fields() []ent.Field {
 		field.Int("ping_latency_ms").
 			Optional().
 			Nillable(),
+		// Admin-only account source metadata for adaptive account probes.
+		field.Int64("account_id").
+			Optional().
+			Nillable(),
+		field.String("account_name").
+			Optional().
+			Default("").
+			MaxLen(160),
+		field.String("probe_mode").
+			Optional().
+			Default("static").
+			MaxLen(24),
+		field.Int("candidate_count").
+			Optional().
+			Default(0),
+		field.Int("healthy_count").
+			Optional().
+			Default(0),
 		field.String("message").
 			Optional().
 			Default("").

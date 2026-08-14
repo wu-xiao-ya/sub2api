@@ -11,8 +11,13 @@ export function formatCacheTokens(tokens: number): string {
  * 自适应精度格式化倍率（确保小数值如 0.001 不被截断）
  */
 export function formatMultiplier(val: number): string {
-  if (val >= 0.01) return val.toFixed(2)
-  if (val >= 0.001) return val.toFixed(3)
-  if (val >= 0.0001) return val.toFixed(4)
-  return val.toPrecision(2)
+  if (!Number.isFinite(val)) return '0.00'
+
+  const fixed = val.toFixed(8)
+  const trimmed = fixed.replace(/(\.\d*?[1-9])0+$|\.0+$/, '$1')
+  const [integerPart, fractionPart = ''] = trimmed.split('.')
+
+  if (fractionPart.length === 0) return `${integerPart}.00`
+  if (fractionPart.length === 1) return `${integerPart}.${fractionPart}0`
+  return trimmed
 }

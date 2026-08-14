@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/url"
 	"strings"
+	"time"
 )
 
 // 渠道监控参数校验与归一化辅助函数。
@@ -30,6 +31,16 @@ func validateAPIMode(provider, apiMode string) error {
 			return nil
 		}
 		return ErrChannelMonitorInvalidAPIMode
+	case MonitorAPIModeModels:
+		if provider == MonitorProviderOpenAI {
+			return nil
+		}
+		return ErrChannelMonitorInvalidAPIMode
+	case MonitorAPIModeImages:
+		if provider == MonitorProviderOpenAI {
+			return nil
+		}
+		return ErrChannelMonitorInvalidAPIMode
 	default:
 		return ErrChannelMonitorInvalidAPIMode
 	}
@@ -50,6 +61,23 @@ func validateJitter(jitterSec, intervalSec int) error {
 		return ErrChannelMonitorInvalidJitter
 	}
 	return nil
+}
+
+func validateRequestTimeout(sec int) error {
+	if sec < monitorMinRequestTimeoutSeconds || sec > monitorMaxRequestTimeoutSeconds {
+		return ErrChannelMonitorInvalidRequestTimeout
+	}
+	return nil
+}
+
+func defaultRequestTimeoutSeconds(apiMode string, configured int) int {
+	if configured > 0 {
+		return configured
+	}
+	if defaultAPIMode(apiMode) == MonitorAPIModeImages {
+		return int(monitorDefaultImageRequestTimeout / time.Second)
+	}
+	return int(monitorRequestTimeout / time.Second)
 }
 
 // validateEndpoint 校验 endpoint：

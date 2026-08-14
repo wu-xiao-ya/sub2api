@@ -12,6 +12,7 @@ export default {
     switchToDark: 'Switch to Dark Mode',
     dashboard: 'Dashboard',
     login: 'Login',
+    keyUsage: 'Key Usage',
     getStarted: 'Get Started',
     goToDashboard: 'Go to Dashboard',
     // User-focused value proposition
@@ -134,6 +135,8 @@ export default {
     tokenStats: 'Token Statistics',
     dailyDetail: 'Daily Detail',
     modelStats: 'Model Usage Statistics',
+    usedModels: 'Models Used by This Key',
+    modelCount: '{count} models',
     // Table headers
     date: 'Date',
     model: 'Model',

@@ -6,6 +6,8 @@ import "context"
 type OpenAI403CounterCache interface {
 	// IncrementOpenAI403Count 原子递增 403 计数并返回当前值。
 	IncrementOpenAI403Count(ctx context.Context, accountID int64, windowMinutes int) (int64, error)
+	// RecordOpenAI403Model records one affected model in the current 403 window.
+	RecordOpenAI403Model(ctx context.Context, accountID int64, model string, windowMinutes int) (distinctModels int64, added bool, err error)
 	// ResetOpenAI403Count 成功后清零计数器。
 	ResetOpenAI403Count(ctx context.Context, accountID int64) error
 }

@@ -141,6 +141,20 @@ func (_c *UsageLogCreate) SetNillableBillingMode(v *string) *UsageLogCreate {
 	return _c
 }
 
+// SetUsageSource sets the "usage_source" field.
+func (_c *UsageLogCreate) SetUsageSource(v string) *UsageLogCreate {
+	_c.mutation.SetUsageSource(v)
+	return _c
+}
+
+// SetNillableUsageSource sets the "usage_source" field if the given value is not nil.
+func (_c *UsageLogCreate) SetNillableUsageSource(v *string) *UsageLogCreate {
+	if v != nil {
+		_c.SetUsageSource(*v)
+	}
+	return _c
+}
+
 // SetGroupID sets the "group_id" field.
 func (_c *UsageLogCreate) SetGroupID(v int64) *UsageLogCreate {
 	_c.mutation.SetGroupID(v)
@@ -347,6 +361,48 @@ func (_c *UsageLogCreate) SetRateMultiplier(v float64) *UsageLogCreate {
 func (_c *UsageLogCreate) SetNillableRateMultiplier(v *float64) *UsageLogCreate {
 	if v != nil {
 		_c.SetRateMultiplier(*v)
+	}
+	return _c
+}
+
+// SetPromotionID sets the "promotion_id" field.
+func (_c *UsageLogCreate) SetPromotionID(v int64) *UsageLogCreate {
+	_c.mutation.SetPromotionID(v)
+	return _c
+}
+
+// SetNillablePromotionID sets the "promotion_id" field if the given value is not nil.
+func (_c *UsageLogCreate) SetNillablePromotionID(v *int64) *UsageLogCreate {
+	if v != nil {
+		_c.SetPromotionID(*v)
+	}
+	return _c
+}
+
+// SetPromotionName sets the "promotion_name" field.
+func (_c *UsageLogCreate) SetPromotionName(v string) *UsageLogCreate {
+	_c.mutation.SetPromotionName(v)
+	return _c
+}
+
+// SetNillablePromotionName sets the "promotion_name" field if the given value is not nil.
+func (_c *UsageLogCreate) SetNillablePromotionName(v *string) *UsageLogCreate {
+	if v != nil {
+		_c.SetPromotionName(*v)
+	}
+	return _c
+}
+
+// SetBaseRateMultiplier sets the "base_rate_multiplier" field.
+func (_c *UsageLogCreate) SetBaseRateMultiplier(v float64) *UsageLogCreate {
+	_c.mutation.SetBaseRateMultiplier(v)
+	return _c
+}
+
+// SetNillableBaseRateMultiplier sets the "base_rate_multiplier" field if the given value is not nil.
+func (_c *UsageLogCreate) SetNillableBaseRateMultiplier(v *float64) *UsageLogCreate {
+	if v != nil {
+		_c.SetBaseRateMultiplier(*v)
 	}
 	return _c
 }
@@ -803,6 +859,11 @@ func (_c *UsageLogCreate) check() error {
 			return &ValidationError{Name: "billing_mode", err: fmt.Errorf(`ent: validator failed for field "UsageLog.billing_mode": %w`, err)}
 		}
 	}
+	if v, ok := _c.mutation.UsageSource(); ok {
+		if err := usagelog.UsageSourceValidator(v); err != nil {
+			return &ValidationError{Name: "usage_source", err: fmt.Errorf(`ent: validator failed for field "UsageLog.usage_source": %w`, err)}
+		}
+	}
 	if _, ok := _c.mutation.InputTokens(); !ok {
 		return &ValidationError{Name: "input_tokens", err: errors.New(`ent: missing required field "UsageLog.input_tokens"`)}
 	}
@@ -841,6 +902,11 @@ func (_c *UsageLogCreate) check() error {
 	}
 	if _, ok := _c.mutation.RateMultiplier(); !ok {
 		return &ValidationError{Name: "rate_multiplier", err: errors.New(`ent: missing required field "UsageLog.rate_multiplier"`)}
+	}
+	if v, ok := _c.mutation.PromotionName(); ok {
+		if err := usagelog.PromotionNameValidator(v); err != nil {
+			return &ValidationError{Name: "promotion_name", err: fmt.Errorf(`ent: validator failed for field "UsageLog.promotion_name": %w`, err)}
+		}
 	}
 	if _, ok := _c.mutation.LongContextBillingApplied(); !ok {
 		return &ValidationError{Name: "long_context_billing_applied", err: errors.New(`ent: missing required field "UsageLog.long_context_billing_applied"`)}
@@ -966,6 +1032,10 @@ func (_c *UsageLogCreate) createSpec() (*UsageLog, *sqlgraph.CreateSpec) {
 		_spec.SetField(usagelog.FieldBillingMode, field.TypeString, value)
 		_node.BillingMode = &value
 	}
+	if value, ok := _c.mutation.UsageSource(); ok {
+		_spec.SetField(usagelog.FieldUsageSource, field.TypeString, value)
+		_node.UsageSource = &value
+	}
 	if value, ok := _c.mutation.InputTokens(); ok {
 		_spec.SetField(usagelog.FieldInputTokens, field.TypeInt, value)
 		_node.InputTokens = value
@@ -1017,6 +1087,18 @@ func (_c *UsageLogCreate) createSpec() (*UsageLog, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.RateMultiplier(); ok {
 		_spec.SetField(usagelog.FieldRateMultiplier, field.TypeFloat64, value)
 		_node.RateMultiplier = value
+	}
+	if value, ok := _c.mutation.PromotionID(); ok {
+		_spec.SetField(usagelog.FieldPromotionID, field.TypeInt64, value)
+		_node.PromotionID = &value
+	}
+	if value, ok := _c.mutation.PromotionName(); ok {
+		_spec.SetField(usagelog.FieldPromotionName, field.TypeString, value)
+		_node.PromotionName = &value
+	}
+	if value, ok := _c.mutation.BaseRateMultiplier(); ok {
+		_spec.SetField(usagelog.FieldBaseRateMultiplier, field.TypeFloat64, value)
+		_node.BaseRateMultiplier = &value
 	}
 	if value, ok := _c.mutation.LongContextBillingApplied(); ok {
 		_spec.SetField(usagelog.FieldLongContextBillingApplied, field.TypeBool, value)
@@ -1405,6 +1487,24 @@ func (u *UsageLogUpsert) ClearBillingMode() *UsageLogUpsert {
 	return u
 }
 
+// SetUsageSource sets the "usage_source" field.
+func (u *UsageLogUpsert) SetUsageSource(v string) *UsageLogUpsert {
+	u.Set(usagelog.FieldUsageSource, v)
+	return u
+}
+
+// UpdateUsageSource sets the "usage_source" field to the value that was provided on create.
+func (u *UsageLogUpsert) UpdateUsageSource() *UsageLogUpsert {
+	u.SetExcluded(usagelog.FieldUsageSource)
+	return u
+}
+
+// ClearUsageSource clears the value of the "usage_source" field.
+func (u *UsageLogUpsert) ClearUsageSource() *UsageLogUpsert {
+	u.SetNull(usagelog.FieldUsageSource)
+	return u
+}
+
 // SetGroupID sets the "group_id" field.
 func (u *UsageLogUpsert) SetGroupID(v int64) *UsageLogUpsert {
 	u.Set(usagelog.FieldGroupID, v)
@@ -1672,6 +1772,72 @@ func (u *UsageLogUpsert) UpdateRateMultiplier() *UsageLogUpsert {
 // AddRateMultiplier adds v to the "rate_multiplier" field.
 func (u *UsageLogUpsert) AddRateMultiplier(v float64) *UsageLogUpsert {
 	u.Add(usagelog.FieldRateMultiplier, v)
+	return u
+}
+
+// SetPromotionID sets the "promotion_id" field.
+func (u *UsageLogUpsert) SetPromotionID(v int64) *UsageLogUpsert {
+	u.Set(usagelog.FieldPromotionID, v)
+	return u
+}
+
+// UpdatePromotionID sets the "promotion_id" field to the value that was provided on create.
+func (u *UsageLogUpsert) UpdatePromotionID() *UsageLogUpsert {
+	u.SetExcluded(usagelog.FieldPromotionID)
+	return u
+}
+
+// AddPromotionID adds v to the "promotion_id" field.
+func (u *UsageLogUpsert) AddPromotionID(v int64) *UsageLogUpsert {
+	u.Add(usagelog.FieldPromotionID, v)
+	return u
+}
+
+// ClearPromotionID clears the value of the "promotion_id" field.
+func (u *UsageLogUpsert) ClearPromotionID() *UsageLogUpsert {
+	u.SetNull(usagelog.FieldPromotionID)
+	return u
+}
+
+// SetPromotionName sets the "promotion_name" field.
+func (u *UsageLogUpsert) SetPromotionName(v string) *UsageLogUpsert {
+	u.Set(usagelog.FieldPromotionName, v)
+	return u
+}
+
+// UpdatePromotionName sets the "promotion_name" field to the value that was provided on create.
+func (u *UsageLogUpsert) UpdatePromotionName() *UsageLogUpsert {
+	u.SetExcluded(usagelog.FieldPromotionName)
+	return u
+}
+
+// ClearPromotionName clears the value of the "promotion_name" field.
+func (u *UsageLogUpsert) ClearPromotionName() *UsageLogUpsert {
+	u.SetNull(usagelog.FieldPromotionName)
+	return u
+}
+
+// SetBaseRateMultiplier sets the "base_rate_multiplier" field.
+func (u *UsageLogUpsert) SetBaseRateMultiplier(v float64) *UsageLogUpsert {
+	u.Set(usagelog.FieldBaseRateMultiplier, v)
+	return u
+}
+
+// UpdateBaseRateMultiplier sets the "base_rate_multiplier" field to the value that was provided on create.
+func (u *UsageLogUpsert) UpdateBaseRateMultiplier() *UsageLogUpsert {
+	u.SetExcluded(usagelog.FieldBaseRateMultiplier)
+	return u
+}
+
+// AddBaseRateMultiplier adds v to the "base_rate_multiplier" field.
+func (u *UsageLogUpsert) AddBaseRateMultiplier(v float64) *UsageLogUpsert {
+	u.Add(usagelog.FieldBaseRateMultiplier, v)
+	return u
+}
+
+// ClearBaseRateMultiplier clears the value of the "base_rate_multiplier" field.
+func (u *UsageLogUpsert) ClearBaseRateMultiplier() *UsageLogUpsert {
+	u.SetNull(usagelog.FieldBaseRateMultiplier)
 	return u
 }
 
@@ -2253,6 +2419,27 @@ func (u *UsageLogUpsertOne) ClearBillingMode() *UsageLogUpsertOne {
 	})
 }
 
+// SetUsageSource sets the "usage_source" field.
+func (u *UsageLogUpsertOne) SetUsageSource(v string) *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.SetUsageSource(v)
+	})
+}
+
+// UpdateUsageSource sets the "usage_source" field to the value that was provided on create.
+func (u *UsageLogUpsertOne) UpdateUsageSource() *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.UpdateUsageSource()
+	})
+}
+
+// ClearUsageSource clears the value of the "usage_source" field.
+func (u *UsageLogUpsertOne) ClearUsageSource() *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.ClearUsageSource()
+	})
+}
+
 // SetGroupID sets the "group_id" field.
 func (u *UsageLogUpsertOne) SetGroupID(v int64) *UsageLogUpsertOne {
 	return u.Update(func(s *UsageLogUpsert) {
@@ -2565,6 +2752,83 @@ func (u *UsageLogUpsertOne) AddRateMultiplier(v float64) *UsageLogUpsertOne {
 func (u *UsageLogUpsertOne) UpdateRateMultiplier() *UsageLogUpsertOne {
 	return u.Update(func(s *UsageLogUpsert) {
 		s.UpdateRateMultiplier()
+	})
+}
+
+// SetPromotionID sets the "promotion_id" field.
+func (u *UsageLogUpsertOne) SetPromotionID(v int64) *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.SetPromotionID(v)
+	})
+}
+
+// AddPromotionID adds v to the "promotion_id" field.
+func (u *UsageLogUpsertOne) AddPromotionID(v int64) *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.AddPromotionID(v)
+	})
+}
+
+// UpdatePromotionID sets the "promotion_id" field to the value that was provided on create.
+func (u *UsageLogUpsertOne) UpdatePromotionID() *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.UpdatePromotionID()
+	})
+}
+
+// ClearPromotionID clears the value of the "promotion_id" field.
+func (u *UsageLogUpsertOne) ClearPromotionID() *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.ClearPromotionID()
+	})
+}
+
+// SetPromotionName sets the "promotion_name" field.
+func (u *UsageLogUpsertOne) SetPromotionName(v string) *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.SetPromotionName(v)
+	})
+}
+
+// UpdatePromotionName sets the "promotion_name" field to the value that was provided on create.
+func (u *UsageLogUpsertOne) UpdatePromotionName() *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.UpdatePromotionName()
+	})
+}
+
+// ClearPromotionName clears the value of the "promotion_name" field.
+func (u *UsageLogUpsertOne) ClearPromotionName() *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.ClearPromotionName()
+	})
+}
+
+// SetBaseRateMultiplier sets the "base_rate_multiplier" field.
+func (u *UsageLogUpsertOne) SetBaseRateMultiplier(v float64) *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.SetBaseRateMultiplier(v)
+	})
+}
+
+// AddBaseRateMultiplier adds v to the "base_rate_multiplier" field.
+func (u *UsageLogUpsertOne) AddBaseRateMultiplier(v float64) *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.AddBaseRateMultiplier(v)
+	})
+}
+
+// UpdateBaseRateMultiplier sets the "base_rate_multiplier" field to the value that was provided on create.
+func (u *UsageLogUpsertOne) UpdateBaseRateMultiplier() *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.UpdateBaseRateMultiplier()
+	})
+}
+
+// ClearBaseRateMultiplier clears the value of the "base_rate_multiplier" field.
+func (u *UsageLogUpsertOne) ClearBaseRateMultiplier() *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.ClearBaseRateMultiplier()
 	})
 }
 
@@ -3367,6 +3631,27 @@ func (u *UsageLogUpsertBulk) ClearBillingMode() *UsageLogUpsertBulk {
 	})
 }
 
+// SetUsageSource sets the "usage_source" field.
+func (u *UsageLogUpsertBulk) SetUsageSource(v string) *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.SetUsageSource(v)
+	})
+}
+
+// UpdateUsageSource sets the "usage_source" field to the value that was provided on create.
+func (u *UsageLogUpsertBulk) UpdateUsageSource() *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.UpdateUsageSource()
+	})
+}
+
+// ClearUsageSource clears the value of the "usage_source" field.
+func (u *UsageLogUpsertBulk) ClearUsageSource() *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.ClearUsageSource()
+	})
+}
+
 // SetGroupID sets the "group_id" field.
 func (u *UsageLogUpsertBulk) SetGroupID(v int64) *UsageLogUpsertBulk {
 	return u.Update(func(s *UsageLogUpsert) {
@@ -3679,6 +3964,83 @@ func (u *UsageLogUpsertBulk) AddRateMultiplier(v float64) *UsageLogUpsertBulk {
 func (u *UsageLogUpsertBulk) UpdateRateMultiplier() *UsageLogUpsertBulk {
 	return u.Update(func(s *UsageLogUpsert) {
 		s.UpdateRateMultiplier()
+	})
+}
+
+// SetPromotionID sets the "promotion_id" field.
+func (u *UsageLogUpsertBulk) SetPromotionID(v int64) *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.SetPromotionID(v)
+	})
+}
+
+// AddPromotionID adds v to the "promotion_id" field.
+func (u *UsageLogUpsertBulk) AddPromotionID(v int64) *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.AddPromotionID(v)
+	})
+}
+
+// UpdatePromotionID sets the "promotion_id" field to the value that was provided on create.
+func (u *UsageLogUpsertBulk) UpdatePromotionID() *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.UpdatePromotionID()
+	})
+}
+
+// ClearPromotionID clears the value of the "promotion_id" field.
+func (u *UsageLogUpsertBulk) ClearPromotionID() *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.ClearPromotionID()
+	})
+}
+
+// SetPromotionName sets the "promotion_name" field.
+func (u *UsageLogUpsertBulk) SetPromotionName(v string) *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.SetPromotionName(v)
+	})
+}
+
+// UpdatePromotionName sets the "promotion_name" field to the value that was provided on create.
+func (u *UsageLogUpsertBulk) UpdatePromotionName() *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.UpdatePromotionName()
+	})
+}
+
+// ClearPromotionName clears the value of the "promotion_name" field.
+func (u *UsageLogUpsertBulk) ClearPromotionName() *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.ClearPromotionName()
+	})
+}
+
+// SetBaseRateMultiplier sets the "base_rate_multiplier" field.
+func (u *UsageLogUpsertBulk) SetBaseRateMultiplier(v float64) *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.SetBaseRateMultiplier(v)
+	})
+}
+
+// AddBaseRateMultiplier adds v to the "base_rate_multiplier" field.
+func (u *UsageLogUpsertBulk) AddBaseRateMultiplier(v float64) *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.AddBaseRateMultiplier(v)
+	})
+}
+
+// UpdateBaseRateMultiplier sets the "base_rate_multiplier" field to the value that was provided on create.
+func (u *UsageLogUpsertBulk) UpdateBaseRateMultiplier() *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.UpdateBaseRateMultiplier()
+	})
+}
+
+// ClearBaseRateMultiplier clears the value of the "base_rate_multiplier" field.
+func (u *UsageLogUpsertBulk) ClearBaseRateMultiplier() *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.ClearBaseRateMultiplier()
 	})
 }
 

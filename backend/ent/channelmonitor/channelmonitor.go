@@ -35,12 +35,16 @@ const (
 	FieldExtraModels = "extra_models"
 	// FieldGroupName holds the string denoting the group_name field in the database.
 	FieldGroupName = "group_name"
+	// FieldAccountGroupID holds the string denoting the account_group_id field in the database.
+	FieldAccountGroupID = "account_group_id"
 	// FieldEnabled holds the string denoting the enabled field in the database.
 	FieldEnabled = "enabled"
 	// FieldIntervalSeconds holds the string denoting the interval_seconds field in the database.
 	FieldIntervalSeconds = "interval_seconds"
 	// FieldJitterSeconds holds the string denoting the jitter_seconds field in the database.
 	FieldJitterSeconds = "jitter_seconds"
+	// FieldRequestTimeoutSeconds holds the string denoting the request_timeout_seconds field in the database.
+	FieldRequestTimeoutSeconds = "request_timeout_seconds"
 	// FieldLastCheckedAt holds the string denoting the last_checked_at field in the database.
 	FieldLastCheckedAt = "last_checked_at"
 	// FieldCreatedBy holds the string denoting the created_by field in the database.
@@ -97,9 +101,11 @@ var Columns = []string{
 	FieldPrimaryModel,
 	FieldExtraModels,
 	FieldGroupName,
+	FieldAccountGroupID,
 	FieldEnabled,
 	FieldIntervalSeconds,
 	FieldJitterSeconds,
+	FieldRequestTimeoutSeconds,
 	FieldLastCheckedAt,
 	FieldCreatedBy,
 	FieldTemplateID,
@@ -151,6 +157,10 @@ var (
 	DefaultJitterSeconds int
 	// JitterSecondsValidator is a validator for the "jitter_seconds" field. It is called by the builders before save.
 	JitterSecondsValidator func(int) error
+	// DefaultRequestTimeoutSeconds holds the default value on creation for the "request_timeout_seconds" field.
+	DefaultRequestTimeoutSeconds int
+	// RequestTimeoutSecondsValidator is a validator for the "request_timeout_seconds" field. It is called by the builders before save.
+	RequestTimeoutSecondsValidator func(int) error
 	// DefaultExtraHeaders holds the default value on creation for the "extra_headers" field.
 	DefaultExtraHeaders map[string]string
 	// DefaultBodyOverrideMode holds the default value on creation for the "body_override_mode" field.
@@ -164,10 +174,14 @@ type Provider string
 
 // Provider values.
 const (
-	ProviderOpenai    Provider = "openai"
-	ProviderAnthropic Provider = "anthropic"
-	ProviderGemini    Provider = "gemini"
-	ProviderGrok      Provider = "grok"
+	ProviderOpenai      Provider = "openai"
+	ProviderAnthropic   Provider = "anthropic"
+	ProviderGemini      Provider = "gemini"
+	ProviderGrok        Provider = "grok"
+	ProviderAntigravity Provider = "antigravity"
+	ProviderDeepseek    Provider = "deepseek"
+	ProviderKimi        Provider = "kimi"
+	ProviderGlm         Provider = "glm"
 )
 
 func (pr Provider) String() string {
@@ -177,7 +191,7 @@ func (pr Provider) String() string {
 // ProviderValidator is a validator for the "provider" field enum values. It is called by the builders before save.
 func ProviderValidator(pr Provider) error {
 	switch pr {
-	case ProviderOpenai, ProviderAnthropic, ProviderGemini, ProviderGrok:
+	case ProviderOpenai, ProviderAnthropic, ProviderGemini, ProviderGrok, ProviderAntigravity, ProviderDeepseek, ProviderKimi, ProviderGlm:
 		return nil
 	default:
 		return fmt.Errorf("channelmonitor: invalid enum value for provider field: %q", pr)
@@ -237,6 +251,11 @@ func ByGroupName(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldGroupName, opts...).ToFunc()
 }
 
+// ByAccountGroupID orders the results by the account_group_id field.
+func ByAccountGroupID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAccountGroupID, opts...).ToFunc()
+}
+
 // ByEnabled orders the results by the enabled field.
 func ByEnabled(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldEnabled, opts...).ToFunc()
@@ -250,6 +269,11 @@ func ByIntervalSeconds(opts ...sql.OrderTermOption) OrderOption {
 // ByJitterSeconds orders the results by the jitter_seconds field.
 func ByJitterSeconds(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldJitterSeconds, opts...).ToFunc()
+}
+
+// ByRequestTimeoutSeconds orders the results by the request_timeout_seconds field.
+func ByRequestTimeoutSeconds(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldRequestTimeoutSeconds, opts...).ToFunc()
 }
 
 // ByLastCheckedAt orders the results by the last_checked_at field.

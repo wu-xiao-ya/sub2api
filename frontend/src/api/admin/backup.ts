@@ -15,6 +15,7 @@ export interface BackupScheduleConfig {
   cron_expr: string
   retain_days: number
   retain_count: number
+  upload_rate_limit_kbps: number
 }
 
 export interface BackupRecord {

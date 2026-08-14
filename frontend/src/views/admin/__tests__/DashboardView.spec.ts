@@ -50,7 +50,7 @@ const formatLocalDate = (date: Date): string => {
   return `${year}-${month}-${day}`
 }
 
-const createDashboardStats = (): DashboardStats => ({
+const createDashboardStats = (overrides: Partial<DashboardStats> = {}): DashboardStats => ({
   total_users: 0,
   today_new_users: 0,
   active_users: 0,
@@ -83,12 +83,14 @@ const createDashboardStats = (): DashboardStats => ({
   average_duration_ms: 0,
   uptime: 0,
   rpm: 0,
-  tpm: 0
+  tpm: 0,
+  ...overrides
 })
 
 describe('admin DashboardView', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
+    window.localStorage.clear()
 
     getSnapshotV2.mockReset()
     getUserUsageTrend.mockReset()
@@ -140,7 +142,128 @@ describe('admin DashboardView', () => {
     expect(getSnapshotV2).toHaveBeenCalledWith(expect.objectContaining({
       start_date: formatLocalDate(yesterday),
       end_date: formatLocalDate(now),
-      granularity: 'hour'
+      granularity: 'hour',
+      include_group_stats: true
+    }))
+  })
+
+  it('shows separate today and historical cache hit rates using all prompt tokens', async () => {
+    getSnapshotV2.mockResolvedValue({
+      stats: createDashboardStats({
+        today_input_tokens: 500,
+        today_cache_creation_tokens: 0,
+        today_cache_read_tokens: 1500,
+        total_input_tokens: 200,
+        total_cache_creation_tokens: 300,
+        total_cache_read_tokens: 500,
+      }),
+      trend: [],
+      models: []
+    })
+
+    const wrapper = mount(DashboardView, {
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          LoadingSpinner: true,
+          Icon: true,
+          DateRangePicker: true,
+          Select: true,
+          ModelDistributionChart: true,
+          TokenUsageTrend: true,
+          Line: true
+        }
+      }
+    })
+
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="admin-cache-hit-rate"]').text()).toBe('75.0%')
+    expect(wrapper.get('[data-testid="admin-historical-cache-hit-rate"]').text()).toBe('50.0%')
+  })
+
+  it('renders time-range cost and profit metrics by group', async () => {
+    getSnapshotV2.mockResolvedValue({
+      stats: createDashboardStats(),
+      trend: [],
+      models: [],
+      groups: [
+        {
+          group_id: 1,
+          group_name: 'gpt-pro',
+          requests: 10,
+          total_tokens: 1000,
+          cost: 20,
+          actual_cost: 4,
+          account_cost: 2.4,
+          upstream_cost: 2.4,
+          upstream_multiplier: 0.12,
+          profit: 1.6,
+          profit_margin: 0.4
+        }
+      ],
+      cost_profit: {
+        requests: 10,
+        total_tokens: 1000,
+        standard_cost: 20,
+        actual_cost: 4,
+        upstream_cost: 2.4,
+        upstream_multiplier: 0.12,
+        profit: 1.6,
+        profit_margin: 0.4
+      }
+    })
+
+    const wrapper = mount(DashboardView, {
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          LoadingSpinner: true,
+          Icon: true,
+          DateRangePicker: true,
+          Select: true,
+          ModelDistributionChart: true,
+          TokenUsageTrend: true,
+          Line: true
+        }
+      }
+    })
+
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('gpt-pro')
+    expect(wrapper.text()).toContain('$4.00')
+    expect(wrapper.text()).toContain('$2.40')
+    expect(wrapper.text()).toContain('$1.60')
+    expect(wrapper.text()).toContain('40.0%')
+    expect(wrapper.text()).toContain('0.1200x')
+  })
+
+  it('sends the saved report blacklist with the dashboard request', async () => {
+    window.localStorage.setItem(
+      'sub2api.admin.dashboard.costProfitExcludedUsers',
+      '42, blocked@example.com'
+    )
+
+    mount(DashboardView, {
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          LoadingSpinner: true,
+          Icon: true,
+          DateRangePicker: true,
+          Select: true,
+          ModelDistributionChart: true,
+          TokenUsageTrend: true,
+          Line: true
+        }
+      }
+    })
+
+    await flushPromises()
+
+    expect(getSnapshotV2).toHaveBeenCalledWith(expect.objectContaining({
+      exclude_users: '42, blocked@example.com'
     }))
   })
 })

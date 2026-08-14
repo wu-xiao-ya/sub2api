@@ -2,26 +2,25 @@
   <div>
     <div
       v-if="loading && items.length === 0"
-      class="grid gap-5 grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4"
+      class="grid grid-cols-1 items-start gap-3 lg:grid-cols-2"
     >
       <div
-        v-for="i in 6"
+        v-for="i in 4"
         :key="i"
-        class="p-5 rounded-2xl min-h-[280px] bg-white/70 dark:bg-dark-800/60 border border-gray-200/80 dark:border-dark-700/70 animate-pulse"
+        class="min-h-[230px] animate-pulse rounded-md border border-gray-200/80 bg-white/70 p-4 dark:border-dark-700/70 dark:bg-dark-800/60"
       >
-        <div class="flex items-start gap-3">
-          <div class="w-9 h-9 rounded-xl bg-gray-200 dark:bg-dark-700"></div>
-          <div class="flex-1 space-y-2">
+        <div class="flex items-center gap-3">
+          <div class="h-10 w-1.5 rounded-full bg-gray-200 dark:bg-dark-700"></div>
+          <div class="min-w-0 flex-1 space-y-2">
             <div class="h-4 w-2/3 rounded bg-gray-200 dark:bg-dark-700"></div>
-            <div class="h-3 w-1/2 rounded bg-gray-200 dark:bg-dark-700"></div>
+            <div class="h-3 w-1/3 rounded bg-gray-100 dark:bg-dark-900/40"></div>
           </div>
-          <div class="h-6 w-16 rounded-full bg-gray-200 dark:bg-dark-700"></div>
+          <div class="h-8 w-16 rounded bg-gray-100 dark:bg-dark-900/40"></div>
         </div>
-        <div class="mt-5 grid grid-cols-2 gap-2">
-          <div class="h-16 rounded-xl bg-gray-100 dark:bg-dark-900/40"></div>
-          <div class="h-16 rounded-xl bg-gray-100 dark:bg-dark-900/40"></div>
+        <div class="mt-4 h-2 rounded bg-gray-100 dark:bg-dark-900/40"></div>
+        <div class="mt-4 grid grid-cols-2 gap-x-4 gap-y-2">
+          <div v-for="j in 4" :key="j" class="h-7 rounded border-b border-gray-100 bg-gray-50 dark:border-dark-700 dark:bg-dark-900/40"></div>
         </div>
-        <div class="mt-6 h-5 w-full rounded bg-gray-100 dark:bg-dark-900/40"></div>
       </div>
     </div>
 
@@ -31,17 +30,15 @@
       :description="t('channelStatus.empty.description')"
     />
 
-    <div
-      v-else
-      class="grid gap-5 grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4"
-    >
+    <div v-else class="grid grid-cols-1 items-start gap-3 lg:grid-cols-2">
       <MonitorCard
         v-for="item in items"
-        :key="item.id"
+        :key="item.key"
         :item="item"
         :window="window"
-        :availability-value="resolveAvailability(item)"
         :countdown-seconds="countdownSeconds"
+        :detail-cache="detailCache"
+        :image-url="item.imageMonitorId == null ? undefined : imageUrls[item.imageMonitorId]"
         @click="emit('cardClick', item)"
       />
     </div>
@@ -50,32 +47,23 @@
 
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
-import type { UserMonitorView, UserMonitorDetail } from '@/api/channelMonitor'
+import type { UserMonitorDetail } from '@/api/channelMonitor'
+import type { GroupedChannelStatus } from '@/utils/channelMonitorGrouping'
 import EmptyState from '@/components/common/EmptyState.vue'
 import MonitorCard from './MonitorCard.vue'
 
-const props = defineProps<{
-  items: UserMonitorView[]
+defineProps<{
+  items: GroupedChannelStatus[]
   window: '7d' | '15d' | '30d'
   countdownSeconds: number
   loading: boolean
   detailCache: Record<number, UserMonitorDetail>
+  imageUrls: Record<number, string>
 }>()
 
 const emit = defineEmits<{
-  (e: 'cardClick', item: UserMonitorView): void
+  (e: 'cardClick', item: GroupedChannelStatus): void
 }>()
 
 const { t } = useI18n()
-
-function resolveAvailability(item: UserMonitorView): number | null {
-  if (props.window === '7d') {
-    return item.availability_7d ?? null
-  }
-  const detail = props.detailCache[item.id]
-  if (!detail) return null
-  const primary = detail.models.find(m => m.model === item.primary_model)
-  if (!primary) return null
-  return props.window === '15d' ? primary.availability_15d ?? null : primary.availability_30d ?? null
-}
 </script>

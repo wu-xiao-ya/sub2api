@@ -20,6 +20,23 @@
             {{ statusLabel(row.primary_status) }}
           </span>
         </div>
+        <div v-if="row.primary_account_name || row.primary_probe_mode" class="space-y-0.5 border-y border-white/10 py-1.5 text-[11px] text-gray-300">
+          <div v-if="row.primary_account_name">
+            {{ t('admin.channelMonitor.probeAccount', { name: row.primary_account_name }) }}
+          </div>
+          <div v-if="row.primary_probe_mode">
+            {{ t('admin.channelMonitor.probeMode', { mode: probeModeLabel(row.primary_probe_mode) }) }}
+          </div>
+          <div v-if="row.primary_candidate_count">
+            {{ t('admin.channelMonitor.probeCandidates', {
+              healthy: row.primary_healthy_count || 0,
+              candidates: row.primary_candidate_count,
+            }) }}
+          </div>
+          <div v-if="row.primary_checked_at">
+            {{ t('admin.channelMonitor.probeCheckedAt', { time: formatRelativeTime(row.primary_checked_at) }) }}
+          </div>
+        </div>
         <div v-if="(row.extra_models?.length ?? 0) === 0" class="text-[11px] text-gray-300">
           {{ t('monitorCommon.extraModelsEmpty') }}
         </div>
@@ -67,5 +84,9 @@ defineProps<{
 }>()
 
 const { t } = useI18n()
-const { statusLabel, statusBadgeClass, formatLatency } = useChannelMonitorFormat()
+const { statusLabel, statusBadgeClass, formatLatency, formatRelativeTime } = useChannelMonitorFormat()
+
+function probeModeLabel(mode: string): string {
+  return t(`admin.channelMonitor.probeModes.${mode}`)
+}
 </script>

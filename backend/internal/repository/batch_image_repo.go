@@ -746,7 +746,7 @@ INSERT INTO batch_image_jobs (
     provider_job_name, provider_input_ref, provider_output_ref, gcs_input_uri, gcs_output_uri,
     item_count, success_count, fail_count, cancelled_count,
     estimated_cost, hold_amount, actual_cost,
-    base_unit_price, group_rate_multiplier, account_rate_multiplier,
+    base_unit_price, group_rate_multiplier, promotion_id, promotion_name, promotion_base_rate_multiplier, account_rate_multiplier,
     batch_discount_multiplier, hold_multiplier, billable_unit_price, hold_unit_price,
     pricing_snapshot_version,
     currency, hold_id,
@@ -757,17 +757,17 @@ INSERT INTO batch_image_jobs (
     $15, $16, $17, $18,
     $19, $20, $21,
     $22, $23, $24,
-    $25, $26, $27, $28,
-    $29,
-    $30, $31,
-    $32, $33, $34, $35, $36
+    $25, $26, $27, $28, $29, $30, $31,
+    $32,
+    $33, $34,
+    $35, $36, $37, $38, $39
 )
 RETURNING `+batchImageJobColumns,
 		params.BatchID, params.UserID, params.APIKeyID, params.AccountID, params.Provider, params.Model, params.TaskName, params.ParentBatchID, params.Status,
 		params.ProviderJobName, params.ProviderInputRef, params.ProviderOutputRef, params.GCSInputURI, params.GCSOutputURI,
 		params.ItemCount, params.SuccessCount, params.FailCount, params.CancelledCount,
 		params.EstimatedCost, params.HoldAmount, params.ActualCost,
-		params.BaseUnitPrice, params.GroupRateMultiplier, params.AccountRateMultiplier,
+		params.BaseUnitPrice, params.GroupRateMultiplier, params.PromotionID, params.PromotionName, params.PromotionBaseRateMultiplier, params.AccountRateMultiplier,
 		params.BatchDiscountMultiplier, params.HoldMultiplier, params.BillableUnitPrice, params.HoldUnitPrice,
 		params.PricingSnapshotVersion,
 		params.Currency, params.HoldID,
@@ -820,7 +820,7 @@ id, batch_id, user_id, api_key_id, account_id, provider, model, task_name, paren
 provider_job_name, provider_input_ref, provider_output_ref, gcs_input_uri, gcs_output_uri,
 item_count, success_count, fail_count, cancelled_count,
 estimated_cost, hold_amount, actual_cost,
-base_unit_price, group_rate_multiplier, account_rate_multiplier,
+base_unit_price, group_rate_multiplier, promotion_id, promotion_name, promotion_base_rate_multiplier, account_rate_multiplier,
 batch_discount_multiplier, hold_multiplier, billable_unit_price, hold_unit_price,
 pricing_snapshot_version,
 currency, hold_id,
@@ -837,6 +837,9 @@ func scanBatchImageJob(row rowScanner) (*service.BatchImageJob, error) {
 	var providerJobName, providerInputRef, providerOutputRef, gcsInputURI, gcsOutputURI sql.NullString
 	var parentBatchID sql.NullString
 	var holdAmount, actualCost sql.NullFloat64
+	var promotionID sql.NullInt64
+	var promotionName sql.NullString
+	var promotionBaseRateMultiplier sql.NullFloat64
 	var holdID, idempotencyKey, requestHash, manifestHash sql.NullString
 	var outputExpiresAt, inputDeletedAt, outputDeletedAt, downloadedAt, userDeletedAt sql.NullTime
 	var lastErrorCode, lastErrorMessage sql.NullString
@@ -847,7 +850,7 @@ func scanBatchImageJob(row rowScanner) (*service.BatchImageJob, error) {
 		&providerJobName, &providerInputRef, &providerOutputRef, &gcsInputURI, &gcsOutputURI,
 		&job.ItemCount, &job.SuccessCount, &job.FailCount, &job.CancelledCount,
 		&job.EstimatedCost, &holdAmount, &actualCost,
-		&job.BaseUnitPrice, &job.GroupRateMultiplier, &job.AccountRateMultiplier,
+		&job.BaseUnitPrice, &job.GroupRateMultiplier, &promotionID, &promotionName, &promotionBaseRateMultiplier, &job.AccountRateMultiplier,
 		&job.BatchDiscountMultiplier, &job.HoldMultiplier, &job.BillableUnitPrice, &job.HoldUnitPrice,
 		&job.PricingSnapshotVersion,
 		&job.Currency, &holdID,
@@ -870,6 +873,9 @@ func scanBatchImageJob(row rowScanner) (*service.BatchImageJob, error) {
 	job.GCSOutputURI = batchImageNullStringPtr(gcsOutputURI)
 	job.HoldAmount = batchImageNullFloat64Ptr(holdAmount)
 	job.ActualCost = batchImageNullFloat64Ptr(actualCost)
+	job.PromotionID = batchImageNullInt64Ptr(promotionID)
+	job.PromotionName = batchImageNullStringPtr(promotionName)
+	job.PromotionBaseRateMultiplier = batchImageNullFloat64Ptr(promotionBaseRateMultiplier)
 	job.HoldID = batchImageNullStringPtr(holdID)
 	job.IdempotencyKey = batchImageNullStringPtr(idempotencyKey)
 	job.RequestHash = batchImageNullStringPtr(requestHash)

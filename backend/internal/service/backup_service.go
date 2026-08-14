@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"sort"
 	"strings"
 	"sync"
@@ -26,7 +27,13 @@ const (
 	settingKeyBackupSchedule = "backup_schedule"
 	settingKeyBackupRecords  = "backup_records"
 
-	maxBackupRecords = 100
+	maxBackupRecords                 = 100
+	defaultBackupUploadRateLimitKBps = 2048
+	minBackupUploadRateLimitKBps     = 256
+	maxBackupUploadRateLimitKBps     = 20480
+	backupUploadReadChunkSize        = 64 * 1024
+	maxBackupTempFileSizeBytes       = 2 * 1024 * 1024 * 1024
+	backupOperationTimeout           = 3 * time.Hour
 )
 
 var (
@@ -58,9 +65,17 @@ type DBDumper interface {
 	Restore(ctx context.Context, data io.Reader) error
 }
 
+// BackupUploadInput describes a backup object upload without requiring the
+// object store implementation to buffer the complete backup in memory.
+type BackupUploadInput struct {
+	Body          io.Reader
+	ContentType   string
+	ContentLength int64
+}
+
 // BackupObjectStore abstracts object storage for backup files
 type BackupObjectStore interface {
-	Upload(ctx context.Context, key string, body io.Reader, contentType string) (sizeBytes int64, err error)
+	Upload(ctx context.Context, key string, input BackupUploadInput) (sizeBytes int64, err error)
 	Download(ctx context.Context, key string) (io.ReadCloser, error)
 	Delete(ctx context.Context, key string) error
 	PresignURL(ctx context.Context, key string, expiry time.Duration) (string, error)
@@ -90,10 +105,30 @@ func (c *BackupS3Config) IsConfigured() bool {
 
 // BackupScheduleConfig 定时备份配置
 type BackupScheduleConfig struct {
-	Enabled     bool   `json:"enabled"`
-	CronExpr    string `json:"cron_expr"`    // cron 表达式，如 "0 2 * * *" 每天凌晨2点
-	RetainDays  int    `json:"retain_days"`  // 备份文件过期天数，默认14，0=不自动清理
-	RetainCount int    `json:"retain_count"` // 最多保留份数，0=不限制
+	Enabled             bool   `json:"enabled"`
+	CronExpr            string `json:"cron_expr"`              // cron 表达式，如 "0 2 * * *" 每天凌晨2点
+	RetainDays          int    `json:"retain_days"`            // 备份文件过期天数，默认14，0=不自动清理
+	RetainCount         int    `json:"retain_count"`           // 最多保留份数，0=不限制
+	UploadRateLimitKBps int    `json:"upload_rate_limit_kbps"` // 服务器上传至对象存储的速度上限，默认 2048 KB/s
+}
+
+func defaultBackupScheduleConfig() *BackupScheduleConfig {
+	return &BackupScheduleConfig{
+		UploadRateLimitKBps: defaultBackupUploadRateLimitKBps,
+	}
+}
+
+func normalizeBackupUploadRateLimitKBps(rateLimitKBps int) int {
+	switch {
+	case rateLimitKBps == 0:
+		return defaultBackupUploadRateLimitKBps
+	case rateLimitKBps < minBackupUploadRateLimitKBps:
+		return minBackupUploadRateLimitKBps
+	case rateLimitKBps > maxBackupUploadRateLimitKBps:
+		return maxBackupUploadRateLimitKBps
+	default:
+		return rateLimitKBps
+	}
 }
 
 // BackupRecord 备份记录
@@ -339,16 +374,18 @@ func (s *BackupService) TestS3Connection(ctx context.Context, cfg BackupS3Config
 func (s *BackupService) GetSchedule(ctx context.Context) (*BackupScheduleConfig, error) {
 	raw, err := s.settingRepo.GetValue(ctx, settingKeyBackupSchedule)
 	if err != nil || raw == "" {
-		return &BackupScheduleConfig{}, nil
+		return defaultBackupScheduleConfig(), nil
 	}
 	var cfg BackupScheduleConfig
 	if err := json.Unmarshal([]byte(raw), &cfg); err != nil {
-		return &BackupScheduleConfig{}, nil
+		return defaultBackupScheduleConfig(), nil
 	}
+	cfg.UploadRateLimitKBps = normalizeBackupUploadRateLimitKBps(cfg.UploadRateLimitKBps)
 	return &cfg, nil
 }
 
 func (s *BackupService) UpdateSchedule(ctx context.Context, cfg BackupScheduleConfig) (*BackupScheduleConfig, error) {
+	cfg.UploadRateLimitKBps = normalizeBackupUploadRateLimitKBps(cfg.UploadRateLimitKBps)
 	if cfg.Enabled && cfg.CronExpr == "" {
 		return nil, infraerrors.BadRequest("INVALID_CRON", "cron expression is required when schedule is enabled")
 	}
@@ -419,7 +456,7 @@ func (s *BackupService) runScheduledBackup() {
 	s.wg.Add(1)
 	defer s.wg.Done()
 
-	ctx, cancel := context.WithTimeout(s.bgCtx, 30*time.Minute)
+	ctx, cancel := context.WithTimeout(s.bgCtx, backupOperationTimeout)
 	defer cancel()
 
 	// 读取定时备份配置中的过期天数
@@ -452,7 +489,8 @@ func (s *BackupService) runScheduledBackup() {
 
 // ─── 备份/恢复核心 ───
 
-// CreateBackup 创建全量数据库备份并上传到 S3（流式处理）
+// CreateBackup 创建全量数据库备份并上传到 S3。
+// 导出先写入本地临时压缩文件，再限速上传，避免将完整备份缓冲到内存。
 // expireDays: 备份过期天数，0=永不过期，默认14天
 func (s *BackupService) CreateBackup(ctx context.Context, triggeredBy string, expireDays int) (*BackupRecord, error) {
 	if s.shuttingDown.Load() {
@@ -484,6 +522,7 @@ func (s *BackupService) CreateBackup(ctx context.Context, triggeredBy string, ex
 	if err != nil {
 		return nil, fmt.Errorf("init object store: %w", err)
 	}
+	uploadRateLimitKBps := s.getBackupUploadRateLimitKBps(ctx)
 
 	now := time.Now()
 	backupID := uuid.New().String()[:8]
@@ -506,59 +545,24 @@ func (s *BackupService) CreateBackup(ctx context.Context, triggeredBy string, ex
 		ExpiresAt:   expiresAt,
 	}
 
-	// 流式执行: pg_dump -> gzip -> S3 upload
-	dumpReader, err := s.dumper.Dump(ctx)
+	tempPath, err := s.dumpCompressedBackupToTempFile(ctx)
 	if err != nil {
 		record.Status = "failed"
-		record.ErrorMsg = fmt.Sprintf("pg_dump failed: %v", err)
+		record.ErrorMsg = fmt.Sprintf("pg_dump/gzip failed: %v", err)
 		record.FinishedAt = time.Now().Format(time.RFC3339)
 		_ = s.saveRecord(ctx, record)
-		return record, fmt.Errorf("pg_dump: %w", err)
+		return record, fmt.Errorf("pg_dump/gzip: %w", err)
 	}
+	defer func() { _ = os.Remove(tempPath) }()
 
-	// 使用 io.Pipe 将 gzip 压缩数据流式传递给 S3 上传
-	pr, pw := io.Pipe()
-	gzipDone := make(chan error, 1)
-	go func() {
-		defer func() {
-			if r := recover(); r != nil {
-				pw.CloseWithError(fmt.Errorf("gzip goroutine panic: %v", r)) //nolint:errcheck
-				gzipDone <- fmt.Errorf("gzip goroutine panic: %v", r)
-			}
-		}()
-		gzWriter := gzip.NewWriter(pw)
-		var gzErr error
-		_, gzErr = io.Copy(gzWriter, dumpReader)
-		if closeErr := gzWriter.Close(); closeErr != nil && gzErr == nil {
-			gzErr = closeErr
-		}
-		if closeErr := dumpReader.Close(); closeErr != nil && gzErr == nil {
-			gzErr = closeErr
-		}
-		if gzErr != nil {
-			_ = pw.CloseWithError(gzErr)
-		} else {
-			_ = pw.Close()
-		}
-		gzipDone <- gzErr
-	}()
-
-	contentType := "application/gzip"
-	sizeBytes, err := objectStore.Upload(ctx, s3Key, pr, contentType)
+	sizeBytes, err := s.uploadBackupTempFile(ctx, objectStore, s3Key, tempPath, uploadRateLimitKBps)
 	if err != nil {
-		_ = pr.CloseWithError(err) // 确保 gzip goroutine 不会悬挂
-		gzErr := <-gzipDone        // 安全等待 gzip goroutine 完成
 		record.Status = "failed"
-		errMsg := fmt.Sprintf("S3 upload failed: %v", err)
-		if gzErr != nil {
-			errMsg = fmt.Sprintf("gzip/dump failed: %v", gzErr)
-		}
-		record.ErrorMsg = errMsg
+		record.ErrorMsg = fmt.Sprintf("S3 upload failed: %v", err)
 		record.FinishedAt = time.Now().Format(time.RFC3339)
 		_ = s.saveRecord(ctx, record)
 		return record, fmt.Errorf("backup upload: %w", err)
 	}
-	<-gzipDone // 确保 gzip goroutine 已退出
 
 	record.SizeBytes = sizeBytes
 	record.Status = "completed"
@@ -607,6 +611,7 @@ func (s *BackupService) StartBackup(ctx context.Context, triggeredBy string, exp
 	if err != nil {
 		return nil, fmt.Errorf("init object store: %w", err)
 	}
+	uploadRateLimitKBps := s.getBackupUploadRateLimitKBps(ctx)
 
 	now := time.Now()
 	backupID := uuid.New().String()[:8]
@@ -656,78 +661,45 @@ func (s *BackupService) StartBackup(ctx context.Context, triggeredBy string, exp
 				_ = s.saveRecord(context.Background(), record)
 			}
 		}()
-		s.executeBackup(record, objectStore)
+		s.executeBackup(record, objectStore, uploadRateLimitKBps)
 	}()
 
 	return &result, nil
 }
 
 // executeBackup 后台执行备份（独立于 HTTP context）
-func (s *BackupService) executeBackup(record *BackupRecord, objectStore BackupObjectStore) {
-	ctx, cancel := context.WithTimeout(s.bgCtx, 30*time.Minute)
+func (s *BackupService) executeBackup(record *BackupRecord, objectStore BackupObjectStore, uploadRateLimitKBps int) {
+	ctx, cancel := context.WithTimeout(s.bgCtx, backupOperationTimeout)
 	defer cancel()
 
 	// 阶段1: pg_dump
 	record.Progress = "dumping"
 	_ = s.saveRecord(ctx, record)
 
-	dumpReader, err := s.dumper.Dump(ctx)
+	tempPath, err := s.dumpCompressedBackupToTempFile(ctx)
 	if err != nil {
 		record.Status = "failed"
-		record.ErrorMsg = fmt.Sprintf("pg_dump failed: %v", err)
+		record.ErrorMsg = fmt.Sprintf("pg_dump/gzip failed: %v", err)
 		record.Progress = ""
 		record.FinishedAt = time.Now().Format(time.RFC3339)
 		_ = s.saveRecord(context.Background(), record)
 		return
 	}
+	defer func() { _ = os.Remove(tempPath) }()
 
-	// 阶段2: gzip + upload
+	// 阶段2: 限速上传临时压缩文件
 	record.Progress = "uploading"
 	_ = s.saveRecord(ctx, record)
 
-	pr, pw := io.Pipe()
-	gzipDone := make(chan error, 1)
-	go func() {
-		defer func() {
-			if r := recover(); r != nil {
-				pw.CloseWithError(fmt.Errorf("gzip goroutine panic: %v", r)) //nolint:errcheck
-				gzipDone <- fmt.Errorf("gzip goroutine panic: %v", r)
-			}
-		}()
-		gzWriter := gzip.NewWriter(pw)
-		var gzErr error
-		_, gzErr = io.Copy(gzWriter, dumpReader)
-		if closeErr := gzWriter.Close(); closeErr != nil && gzErr == nil {
-			gzErr = closeErr
-		}
-		if closeErr := dumpReader.Close(); closeErr != nil && gzErr == nil {
-			gzErr = closeErr
-		}
-		if gzErr != nil {
-			_ = pw.CloseWithError(gzErr)
-		} else {
-			_ = pw.Close()
-		}
-		gzipDone <- gzErr
-	}()
-
-	contentType := "application/gzip"
-	sizeBytes, err := objectStore.Upload(ctx, record.S3Key, pr, contentType)
+	sizeBytes, err := s.uploadBackupTempFile(ctx, objectStore, record.S3Key, tempPath, uploadRateLimitKBps)
 	if err != nil {
-		_ = pr.CloseWithError(err) // 确保 gzip goroutine 不会悬挂
-		gzErr := <-gzipDone        // 安全等待 gzip goroutine 完成
 		record.Status = "failed"
-		errMsg := fmt.Sprintf("S3 upload failed: %v", err)
-		if gzErr != nil {
-			errMsg = fmt.Sprintf("gzip/dump failed: %v", gzErr)
-		}
-		record.ErrorMsg = errMsg
+		record.ErrorMsg = fmt.Sprintf("S3 upload failed: %v", err)
 		record.Progress = ""
 		record.FinishedAt = time.Now().Format(time.RFC3339)
 		_ = s.saveRecord(context.Background(), record)
 		return
 	}
-	<-gzipDone // 确保 gzip goroutine 已退出
 
 	record.SizeBytes = sizeBytes
 	record.Status = "completed"
@@ -735,6 +707,168 @@ func (s *BackupService) executeBackup(record *BackupRecord, objectStore BackupOb
 	record.FinishedAt = time.Now().Format(time.RFC3339)
 	if err := s.saveRecord(context.Background(), record); err != nil {
 		logger.LegacyPrintf("service.backup", "[Backup] 保存备份记录失败: %v", err)
+	}
+}
+
+func (s *BackupService) getBackupUploadRateLimitKBps(ctx context.Context) int {
+	schedule, err := s.GetSchedule(ctx)
+	if err != nil || schedule == nil {
+		return defaultBackupUploadRateLimitKBps
+	}
+	return normalizeBackupUploadRateLimitKBps(schedule.UploadRateLimitKBps)
+}
+
+func (s *BackupService) dumpCompressedBackupToTempFile(ctx context.Context) (string, error) {
+	dumpReader, err := s.dumper.Dump(ctx)
+	if err != nil {
+		return "", err
+	}
+	dumpClosed := false
+	defer func() {
+		if !dumpClosed {
+			_ = dumpReader.Close()
+		}
+	}()
+
+	tempFile, err := os.CreateTemp("", "sub2api-backup-*.sql.gz")
+	if err != nil {
+		return "", fmt.Errorf("create backup temp file: %w", err)
+	}
+	tempFilePath := tempFile.Name()
+	tempFileClosed := false
+	completed := false
+	defer func() {
+		if !tempFileClosed {
+			_ = tempFile.Close()
+		}
+		if !completed {
+			_ = os.Remove(tempFilePath)
+		}
+	}()
+
+	limitedWriter := &maxBytesWriter{
+		writer: tempFile,
+		limit:  maxBackupTempFileSizeBytes,
+	}
+	gzipWriter := gzip.NewWriter(limitedWriter)
+	if _, err = io.Copy(gzipWriter, dumpReader); err != nil {
+		_ = gzipWriter.Close()
+		return "", fmt.Errorf("write compressed backup: %w", err)
+	}
+	if err = gzipWriter.Close(); err != nil {
+		return "", fmt.Errorf("finalize compressed backup: %w", err)
+	}
+	if limitedWriter.written == 0 {
+		return "", errors.New("compressed backup is empty")
+	}
+	if err := dumpReader.Close(); err != nil {
+		return "", fmt.Errorf("finish pg_dump: %w", err)
+	}
+	dumpClosed = true
+	if err := tempFile.Close(); err != nil {
+		return "", fmt.Errorf("close backup temp file: %w", err)
+	}
+	tempFileClosed = true
+	completed = true
+	return tempFilePath, nil
+}
+
+func (s *BackupService) uploadBackupTempFile(
+	ctx context.Context,
+	objectStore BackupObjectStore,
+	key, tempPath string,
+	uploadRateLimitKBps int,
+) (int64, error) {
+	tempInfo, err := os.Stat(tempPath)
+	if err != nil {
+		return 0, fmt.Errorf("stat backup temp file: %w", err)
+	}
+	if tempInfo.Size() <= 0 {
+		return 0, errors.New("backup temp file is empty")
+	}
+
+	tempFile, err := os.Open(tempPath)
+	if err != nil {
+		return 0, fmt.Errorf("open backup temp file: %w", err)
+	}
+	defer func() { _ = tempFile.Close() }()
+
+	body := io.Reader(tempFile)
+	if uploadRateLimitKBps > 0 {
+		body = &rateLimitedReader{
+			ctx:            ctx,
+			reader:         tempFile,
+			bytesPerSecond: int64(normalizeBackupUploadRateLimitKBps(uploadRateLimitKBps)) * 1024,
+		}
+	}
+	sizeBytes, err := objectStore.Upload(ctx, key, BackupUploadInput{
+		Body:          body,
+		ContentType:   "application/gzip",
+		ContentLength: tempInfo.Size(),
+	})
+	if err != nil {
+		return 0, err
+	}
+	if sizeBytes != tempInfo.Size() {
+		return 0, fmt.Errorf("object store uploaded unexpected size: got %d, expected %d", sizeBytes, tempInfo.Size())
+	}
+	return sizeBytes, nil
+}
+
+type maxBytesWriter struct {
+	writer  io.Writer
+	limit   int64
+	written int64
+}
+
+func (w *maxBytesWriter) Write(p []byte) (int, error) {
+	remaining := w.limit - w.written
+	if remaining <= 0 {
+		return 0, fmt.Errorf("compressed backup exceeds %d bytes", w.limit)
+	}
+	if int64(len(p)) > remaining {
+		n, err := w.writer.Write(p[:int(remaining)])
+		w.written += int64(n)
+		if err != nil {
+			return n, err
+		}
+		return n, fmt.Errorf("compressed backup exceeds %d bytes", w.limit)
+	}
+	n, err := w.writer.Write(p)
+	w.written += int64(n)
+	return n, err
+}
+
+type rateLimitedReader struct {
+	ctx            context.Context
+	reader         io.Reader
+	bytesPerSecond int64
+}
+
+func (r *rateLimitedReader) Read(p []byte) (int, error) {
+	if err := r.ctx.Err(); err != nil {
+		return 0, err
+	}
+	if len(p) > backupUploadReadChunkSize {
+		p = p[:backupUploadReadChunkSize]
+	}
+
+	n, err := r.reader.Read(p)
+	if n <= 0 || r.bytesPerSecond <= 0 {
+		return n, err
+	}
+
+	wait := time.Duration(int64(time.Second) * int64(n) / r.bytesPerSecond)
+	if wait <= 0 {
+		return n, err
+	}
+	timer := time.NewTimer(wait)
+	defer timer.Stop()
+	select {
+	case <-r.ctx.Done():
+		return 0, r.ctx.Err()
+	case <-timer.C:
+		return n, err
 	}
 }
 

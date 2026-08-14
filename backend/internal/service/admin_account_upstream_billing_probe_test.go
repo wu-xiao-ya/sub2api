@@ -90,6 +90,68 @@ func TestUpdateAccountPreservesManagedUpstreamBillingProbeStateForUnrelatedEdit(
 	require.Equal(t, "value", updated.Extra["custom"])
 }
 
+func TestUpdateAccountPreservesAnthropicManualProbeSnapshotForUnrelatedEdit(t *testing.T) {
+	accountID := int64(111)
+	repo := &upstreamBillingProbeAccountRepo{accounts: map[int64]*Account{
+		accountID: {
+			ID:       accountID,
+			Platform: PlatformAnthropic,
+			Type:     AccountTypeAPIKey,
+			Status:   StatusActive,
+			Credentials: map[string]any{
+				"api_key":  "sk-ant-test",
+				"base_url": "https://cc.example",
+			},
+			Extra: map[string]any{
+				UpstreamBillingProbeExtraKey: map[string]any{"status": "ok"},
+			},
+		},
+	}}
+
+	updated, err := (&adminServiceImpl{accountRepo: repo}).UpdateAccount(
+		context.Background(),
+		accountID,
+		&UpdateAccountInput{Extra: map[string]any{"custom": "value"}},
+	)
+
+	require.NoError(t, err)
+	require.Contains(t, updated.Extra, UpstreamBillingProbeExtraKey)
+	require.NotContains(t, updated.Extra, UpstreamBillingProbeEnabledExtraKey)
+	require.Equal(t, "value", updated.Extra["custom"])
+}
+
+func TestUpdateAccountInvalidatesAnthropicManualProbeSnapshotWhenAuthSchemeChanges(t *testing.T) {
+	accountID := int64(118)
+	repo := &upstreamBillingProbeAccountRepo{accounts: map[int64]*Account{
+		accountID: {
+			ID:       accountID,
+			Platform: PlatformAnthropic,
+			Type:     AccountTypeAPIKey,
+			Status:   StatusActive,
+			Credentials: map[string]any{
+				"api_key":  "sk-ant-test",
+				"base_url": "https://cc.example",
+			},
+			Extra: map[string]any{
+				UpstreamBillingProbeExtraKey: map[string]any{"status": "ok"},
+			},
+		},
+	}}
+
+	updated, err := (&adminServiceImpl{accountRepo: repo}).UpdateAccount(
+		context.Background(),
+		accountID,
+		&UpdateAccountInput{Extra: map[string]any{
+			anthropicAPIKeyAuthSchemeExtraKey: AnthropicAPIKeyAuthSchemeAuthorizationBearer,
+		}},
+	)
+
+	require.NoError(t, err)
+	require.Equal(t, AnthropicAPIKeyAuthSchemeAuthorizationBearer, updated.Extra[anthropicAPIKeyAuthSchemeExtraKey])
+	require.NotContains(t, updated.Extra, UpstreamBillingProbeExtraKey)
+	require.NotContains(t, updated.Extra, UpstreamBillingProbeEnabledExtraKey)
+}
+
 func TestUpdateAccountPreservesGrokBillingSnapshotForUnrelatedEdit(t *testing.T) {
 	accountID := int64(112)
 	billing := &xai.BillingSummary{
@@ -474,6 +536,29 @@ func TestBulkUpdateAccountsInvalidatesProbeSnapshotForProxyUpdate(t *testing.T) 
 	require.Len(t, baseRepo.bulkUpdates, 1)
 	require.Contains(t, baseRepo.bulkUpdates[0].Extra, UpstreamBillingProbeExtraKey)
 	require.Nil(t, baseRepo.bulkUpdates[0].Extra[UpstreamBillingProbeExtraKey])
+}
+
+func TestBulkUpdateAccountsInvalidatesProbeSnapshotForAnthropicAuthSchemeUpdate(t *testing.T) {
+	repo := &upstreamBillingProbeAccountRepo{}
+	input := &BulkUpdateAccountsInput{
+		AccountIDs: []int64{1},
+		Extra: map[string]any{
+			anthropicAPIKeyAuthSchemeExtraKey: AnthropicAPIKeyAuthSchemeAuthorizationBearer,
+		},
+	}
+
+	result, err := (&adminServiceImpl{accountRepo: repo}).BulkUpdateAccounts(context.Background(), input)
+
+	require.NoError(t, err)
+	require.Equal(t, 1, result.Success)
+	require.Len(t, repo.bulkUpdates, 1)
+	require.Equal(
+		t,
+		AnthropicAPIKeyAuthSchemeAuthorizationBearer,
+		repo.bulkUpdates[0].Extra[anthropicAPIKeyAuthSchemeExtraKey],
+	)
+	require.Contains(t, repo.bulkUpdates[0].Extra, UpstreamBillingProbeExtraKey)
+	require.Nil(t, repo.bulkUpdates[0].Extra[UpstreamBillingProbeExtraKey])
 }
 
 func TestBulkUpdateAccountsKeepsProbeSnapshotForUnrelatedCredentials(t *testing.T) {

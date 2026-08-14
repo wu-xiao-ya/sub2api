@@ -31,6 +31,8 @@ var grokChatResponsesBridgeTopLevelFields = map[string]struct{}{
 	"top_p":                 {},
 	"stop":                  {},
 	"reasoning_effort":      {},
+	"reasoningEffort":       {},
+	"reasoning":             {},
 	"prompt_cache_key":      {},
 	"tools":                 {},
 	"tool_choice":           {},
@@ -55,10 +57,13 @@ func grokChatResponsesBridgeEligibility(body []byte) (bool, string) {
 	// that common SDK representation keeps the request on the bridge path,
 	// while non-null values remain unsupported because the Responses converter
 	// cannot preserve their Chat Completions semantics.
-	for _, field := range []string{"stop", "reasoning_effort"} {
+	for _, field := range []string{"stop"} {
 		if raw, exists := root[field]; exists && !grokChatJSONNull(raw) {
 			return false, "unsupported_" + field
 		}
+	}
+	if ok, reason := grokChatReasoningEffortBridgeable(root); !ok {
+		return false, reason
 	}
 	if raw, exists := root["instructions"]; exists {
 		var instructions string
@@ -496,7 +501,7 @@ func grokChatResponsesCacheIntentBody(body []byte) ([]byte, error) {
 }
 
 func grokChatResponsesRuntimeEligible(upstreamModel, cacheIdentity string) bool {
-	return strings.TrimSpace(upstreamModel) == "grok-4.5" && strings.TrimSpace(cacheIdentity) != ""
+	return isGrok45CompatibleTextModel(upstreamModel) && strings.TrimSpace(cacheIdentity) != ""
 }
 
 // forwardGrokChatCompletionsViaResponses converts a strictly compatible Chat
@@ -521,13 +526,16 @@ func (s *OpenAIGatewayService) forwardGrokChatCompletionsViaResponses(
 	clientStream := chatReq.Stream
 	billingModel := resolveOpenAIForwardModel(account, originalModel, defaultMappedModel)
 	upstreamModel := normalizeOpenAIModelForUpstream(account, billingModel)
+	if effort := extractGrokReasoningEffortFromBody(body, upstreamModel); effort != nil {
+		chatReq.ReasoningEffort = *effort
+	}
 	cacheIdentity := resolveGrokCacheIdentity(c, body, promptCacheKey, upstreamModel)
 	// Image inputs must go through the Responses bridge: the raw Chat
 	// Completions path cannot forward image_url parts to Grok's native vision
 	// for non-composer models, so they would be silently dropped. Route them to
 	// Responses even when no prompt-cache identity is available.
 	hasImageInput := openAIJSONValueMayContainImageInput(gjson.GetBytes(body, "messages"))
-	if !grokChatResponsesRuntimeEligible(upstreamModel, cacheIdentity) && (!hasImageInput || strings.TrimSpace(upstreamModel) != "grok-4.5") {
+	if !grokChatResponsesRuntimeEligible(upstreamModel, cacheIdentity) && (!hasImageInput || !isGrok45CompatibleTextModel(upstreamModel)) {
 		return s.forwardAsRawChatCompletions(ctx, c, account, body, defaultMappedModel)
 	}
 
@@ -541,6 +549,7 @@ func (s *OpenAIGatewayService) forwardGrokChatCompletionsViaResponses(
 	// service_tier aliases (for example, "fast" -> "priority"). Unknown
 	// values are omitted by the shared normalizer instead of reaching xAI.
 	normalizeResponsesRequestServiceTier(responsesReq)
+	normalizeGrokResponsesRequestReasoning(responsesReq, upstreamModel)
 	// These fields are useful to Codex but are not needed by the Grok CLI
 	// protocol. Keep the bridge request as close as possible to native Grok.
 	responsesReq.Include = nil
@@ -586,7 +595,7 @@ func (s *OpenAIGatewayService) forwardGrokChatCompletionsViaResponses(
 		return nil, fmt.Errorf("get grok access token: %w", err)
 	}
 	upstreamCtx, releaseUpstreamCtx := detachUpstreamContext(ctx)
-	upstreamReq, err := buildGrokResponsesRequest(upstreamCtx, c, account, responsesBody, token, cacheIdentity, s.cfg)
+	upstreamReq, err := buildGrokResponsesRequest(upstreamCtx, c, account, responsesBody, token, cacheIdentity, s.cfg, s.settingService)
 	releaseUpstreamCtx()
 	if err != nil {
 		return nil, fmt.Errorf("build grok responses bridge request: %w", err)
@@ -618,7 +627,7 @@ func (s *OpenAIGatewayService) forwardGrokChatCompletionsViaResponses(
 			Message:            upstreamMsg,
 		})
 		s.handleGrokAccountUpstreamError(ctx, account, resp.StatusCode, resp.Header, respBody)
-		if s.shouldFailoverUpstreamError(resp.StatusCode) {
+		if s.shouldFailoverGrokUpstreamError(resp.StatusCode, respBody) {
 			return nil, &UpstreamFailoverError{
 				StatusCode:             resp.StatusCode,
 				ResponseBody:           respBody,
@@ -643,7 +652,86 @@ func (s *OpenAIGatewayService) forwardGrokChatCompletionsViaResponses(
 		if result.RequestID == "" {
 			result.RequestID = firstNonEmpty(resp.Header.Get("x-request-id"), resp.Header.Get("xai-request-id"))
 		}
-		result.ReasoningEffort = extractOpenAIReasoningEffortFromBody(body, upstreamModel, billingModel, originalModel)
+		result.ReasoningEffort = extractGrokReasoningEffortFromBody(body, upstreamModel)
 	}
 	return result, err
+}
+
+func grokChatReasoningEffortBridgeable(root map[string]json.RawMessage) (bool, string) {
+	if root == nil {
+		return true, ""
+	}
+	if raw, exists := root["reasoning_effort"]; exists && !grokChatJSONNull(raw) {
+		var effort string
+		if json.Unmarshal(raw, &effort) != nil {
+			return false, "invalid_reasoning_effort"
+		}
+		if _, keep := normalizeGrokReasoningEffortValue(effort); !keep {
+			return false, "unsupported_reasoning_effort"
+		}
+	}
+	if raw, exists := root["reasoningEffort"]; exists && !grokChatJSONNull(raw) {
+		var effort string
+		if json.Unmarshal(raw, &effort) != nil {
+			return false, "invalid_reasoning_effort"
+		}
+		if _, keep := normalizeGrokReasoningEffortValue(effort); !keep {
+			return false, "unsupported_reasoning_effort"
+		}
+	}
+	if raw, exists := root["reasoning"]; exists && !grokChatJSONNull(raw) {
+		var reasoning map[string]json.RawMessage
+		if json.Unmarshal(raw, &reasoning) != nil || reasoning == nil {
+			return false, "invalid_reasoning"
+		}
+		for field := range reasoning {
+			if field != "effort" {
+				return false, "unsupported_reasoning_field_" + field
+			}
+		}
+		effortRaw, exists := reasoning["effort"]
+		if !exists || grokChatJSONNull(effortRaw) {
+			return true, ""
+		}
+		var effort string
+		if json.Unmarshal(effortRaw, &effort) != nil {
+			return false, "invalid_reasoning_effort"
+		}
+		if _, keep := normalizeGrokReasoningEffortValue(effort); !keep {
+			return false, "unsupported_reasoning_effort"
+		}
+	}
+	return true, ""
+}
+
+func extractGrokReasoningEffortFromBody(body []byte, upstreamModel string) *string {
+	raw := strings.TrimSpace(gjson.GetBytes(body, "reasoning.effort").String())
+	if raw == "" {
+		raw = strings.TrimSpace(gjson.GetBytes(body, "reasoning_effort").String())
+	}
+	if raw == "" {
+		raw = strings.TrimSpace(gjson.GetBytes(body, "reasoningEffort").String())
+	}
+	normalized, keep := normalizeGrokReasoningEffortValue(raw)
+	if !keep || !grokSupportsReasoningEffort(upstreamModel) {
+		return nil
+	}
+	return &normalized
+}
+
+func normalizeGrokResponsesRequestReasoning(req *apicompat.ResponsesRequest, upstreamModel string) {
+	if req == nil || req.Reasoning == nil {
+		return
+	}
+	if grokModelRejectsReasoningEffort(upstreamModel) {
+		req.Reasoning = nil
+		return
+	}
+	normalized, keep := normalizeGrokReasoningEffortValue(req.Reasoning.Effort)
+	if !keep || !grokSupportsReasoningEffort(upstreamModel) {
+		req.Reasoning = nil
+		return
+	}
+	req.Reasoning.Effort = normalized
+	req.Reasoning.Summary = ""
 }

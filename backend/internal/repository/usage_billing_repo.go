@@ -54,6 +54,9 @@ func (r *usageBillingRepository) Apply(ctx context.Context, cmd *service.UsageBi
 	if err := r.applyUsageBillingEffects(ctx, tx, cmd, result); err != nil {
 		return nil, err
 	}
+	if err := r.applyConsumptionConcurrencyReward(ctx, tx, cmd.UserID, cmd.BalanceCost+cmd.SubscriptionCost, result); err != nil {
+		return nil, err
+	}
 
 	if err := tx.Commit(); err != nil {
 		return nil, err
@@ -162,6 +165,11 @@ func (r *usageBillingRepository) applyBatchImageBalanceHold(
 	if result == nil {
 		result = &service.BatchImageBalanceHoldResult{}
 	}
+	if cmd.ActualAmount > 0 {
+		if err := r.applyConsumptionConcurrencyReward(ctx, tx, cmd.UserID, cmd.ActualAmount, nil); err != nil {
+			return nil, err
+		}
+	}
 	result.Applied = true
 
 	if err := tx.Commit(); err != nil {
@@ -209,6 +217,122 @@ func (r *usageBillingRepository) applyUsageBillingEffects(ctx context.Context, t
 		result.QuotaState = quotaState
 	}
 
+	if cmd.ContributorRewardAmount > 0 && cmd.ContributorOwnerUserID > 0 && cmd.ContributorRewardAccountID > 0 && cmd.ContributorRewardGroupID > 0 {
+		applied, err := applyContributorReward(ctx, tx, cmd)
+		if err != nil {
+			return err
+		}
+		if applied {
+			result.ContributorRewardApplied = true
+			result.ContributorRewardOwnerUserID = cmd.ContributorOwnerUserID
+			result.ContributorRewardAmount = cmd.ContributorRewardAmount
+		}
+	}
+
+	return nil
+}
+
+func applyContributorReward(ctx context.Context, tx *sql.Tx, cmd *service.UsageBillingCommand) (bool, error) {
+	var id int64
+	err := tx.QueryRowContext(ctx, `
+		INSERT INTO contributor_reward_logs (
+			request_id,
+			api_key_id,
+			owner_user_id,
+			consumer_user_id,
+			account_id,
+			group_id,
+			total_cost,
+			actual_cost,
+			reward_multiplier,
+			reward_amount
+		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+		ON CONFLICT (request_id, api_key_id) DO NOTHING
+		RETURNING id
+	`,
+		cmd.RequestID,
+		cmd.APIKeyID,
+		cmd.ContributorOwnerUserID,
+		cmd.UserID,
+		cmd.ContributorRewardAccountID,
+		cmd.ContributorRewardGroupID,
+		cmd.ContributorRewardTotalCost,
+		cmd.ContributorRewardActualCost,
+		cmd.ContributorRewardMultiplier,
+		cmd.ContributorRewardAmount,
+	).Scan(&id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	res, err := tx.ExecContext(ctx, `
+		UPDATE users
+		SET balance = balance + $1,
+			updated_at = NOW()
+		WHERE id = $2 AND deleted_at IS NULL
+	`, cmd.ContributorRewardAmount, cmd.ContributorOwnerUserID)
+	if err != nil {
+		return false, err
+	}
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+	if affected == 0 {
+		return false, service.ErrUserNotFound
+	}
+	return true, nil
+}
+
+func (r *usageBillingRepository) applyConsumptionConcurrencyReward(
+	ctx context.Context,
+	tx *sql.Tx,
+	userID int64,
+	chargeUSD float64,
+	result *service.UsageBillingApplyResult,
+) error {
+	if userID <= 0 || chargeUSD <= 0 {
+		return nil
+	}
+
+	var lifetimeUSD float64
+	var previousTier int
+	if err := tx.QueryRowContext(ctx, `
+		SELECT lifetime_consumption_usd, consumption_concurrency_tier
+		FROM users
+		WHERE id = $1 AND deleted_at IS NULL
+		FOR UPDATE
+	`, userID).Scan(&lifetimeUSD, &previousTier); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return service.ErrUserNotFound
+		}
+		return err
+	}
+
+	newLifetimeUSD := lifetimeUSD + chargeUSD
+	newTier := service.ConsumptionConcurrencyTier(newLifetimeUSD)
+	delta := service.ConsumptionConcurrencyBonus(newTier) - service.ConsumptionConcurrencyBonus(previousTier)
+
+	if _, err := tx.ExecContext(ctx, `
+		UPDATE users
+		SET lifetime_consumption_usd = $1,
+			consumption_concurrency_tier = $2,
+			consumption_concurrency_bonus = consumption_concurrency_bonus + $3,
+			concurrency = concurrency + $3,
+			updated_at = NOW()
+		WHERE id = $4 AND deleted_at IS NULL
+	`, newLifetimeUSD, newTier, delta, userID); err != nil {
+		return err
+	}
+
+	if result != nil {
+		result.ConsumptionConcurrencyChanged = delta != 0
+		result.ConsumptionConcurrencyDelta = delta
+		result.ConsumptionLifetimeUSD = newLifetimeUSD
+		result.ConsumptionConcurrencyTier = newTier
+	}
 	return nil
 }
 

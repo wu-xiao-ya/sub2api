@@ -347,6 +347,7 @@ const baseSettingsResponse = {
   site_logo: "",
   site_subtitle: "",
   api_base_url: "",
+  api_endpoint_probe_interval_seconds: 5,
   contact_info: "",
   doc_url: "",
   home_content: "",
@@ -488,6 +489,22 @@ const baseSettingsResponse = {
   subscription_expiry_notify_enabled: true,
   account_quota_notify_enabled: false,
   account_quota_notify_emails: [],
+  channel_monitor_enabled: true,
+  channel_monitor_default_interval_seconds: 60,
+  channel_monitor_account_probe_settings: {
+    enabled: true,
+    confirm_attempts: 1,
+    degraded_threshold_ms: 6000,
+    max_candidates: 5,
+    parallelism: 5,
+    allow_image_fanout: false,
+  },
+  channel_monitor_traffic_observation_settings: {
+    enabled: false,
+    fallback_idle_seconds: 1800,
+    aggregation_window_seconds: 300,
+    minimum_samples: 1,
+  },
   // 平台限额嵌套字段（新后端契约）
   default_platform_quotas: {
     anthropic:   { daily: null, weekly: null, monthly: null },
@@ -535,6 +552,16 @@ async function openSecurityTab(wrapper: ReturnType<typeof mountView>) {
 
   expect(securityTabButton).toBeDefined();
   await securityTabButton?.trigger("click");
+  await flushPromises();
+}
+
+async function openFeaturesTab(wrapper: ReturnType<typeof mountView>) {
+  const featuresTabButton = wrapper
+    .findAll("button")
+    .find((node) => node.text().includes("admin.settings.tabs.features"));
+
+  expect(featuresTabButton).toBeDefined();
+  await featuresTabButton?.trigger("click");
   await flushPromises();
 }
 
@@ -1116,6 +1143,215 @@ describe("admin SettingsView payment visible method controls", () => {
     // supported_types should be normalized to an empty array, not null
     expect(Array.isArray(receivedProviders[0].supported_types)).toBe(true);
     expect(receivedProviders[0].supported_types).toEqual([]);
+  });
+});
+
+describe("admin SettingsView channel monitor adaptive account probing", () => {
+  beforeEach(() => {
+    getSettings.mockReset();
+    updateSettings.mockReset();
+    getWebSearchEmulationConfig.mockReset();
+    updateWebSearchEmulationConfig.mockReset();
+    getAdminApiKey.mockReset();
+    getOverloadCooldownSettings.mockReset();
+    getRateLimit429CooldownSettings.mockReset();
+    updateRateLimit429CooldownSettings.mockReset();
+    getStreamTimeoutSettings.mockReset();
+    getRectifierSettings.mockReset();
+    getBetaPolicySettings.mockReset();
+    getUpstreamBillingProbeSettings.mockReset();
+    updateUpstreamBillingProbeSettings.mockReset();
+    getGroups.mockReset();
+    listProxies.mockReset();
+    getProviders.mockReset();
+    updateProvider.mockReset();
+    createProvider.mockReset();
+    deleteProvider.mockReset();
+    fetchPublicSettings.mockReset();
+    adminSettingsFetch.mockReset();
+    showError.mockReset();
+    showSuccess.mockReset();
+    localeRef.value = "zh-CN";
+
+    getSettings.mockResolvedValue({
+      ...baseSettingsResponse,
+      channel_monitor_account_probe_settings: {
+        enabled: true,
+        confirm_attempts: 2,
+        degraded_threshold_ms: 7200,
+        max_candidates: 8,
+        parallelism: 4,
+        allow_image_fanout: true,
+      },
+      channel_monitor_traffic_observation_settings: {
+        enabled: true,
+        fallback_idle_seconds: 1200,
+        aggregation_window_seconds: 180,
+        minimum_samples: 2,
+      },
+    });
+    updateSettings.mockImplementation(async (payload) => ({
+      ...baseSettingsResponse,
+      ...payload,
+    }));
+    getWebSearchEmulationConfig.mockResolvedValue({
+      enabled: false,
+      providers: [],
+    });
+    updateWebSearchEmulationConfig.mockResolvedValue({
+      enabled: false,
+      providers: [],
+    });
+    getAdminApiKey.mockResolvedValue({
+      exists: false,
+      masked_key: "",
+    });
+    getOverloadCooldownSettings.mockResolvedValue({
+      enabled: true,
+      cooldown_minutes: 10,
+    });
+    getRateLimit429CooldownSettings.mockResolvedValue({
+      enabled: true,
+      cooldown_seconds: 5,
+    });
+    updateRateLimit429CooldownSettings.mockImplementation(async (payload) => payload);
+    getStreamTimeoutSettings.mockResolvedValue({
+      enabled: true,
+      action: "temp_unsched",
+      temp_unsched_minutes: 5,
+      threshold_count: 3,
+      threshold_window_minutes: 10,
+    });
+    getRectifierSettings.mockResolvedValue({
+      enabled: true,
+      thinking_signature_enabled: true,
+      thinking_budget_enabled: true,
+      apikey_signature_enabled: false,
+      apikey_signature_patterns: [],
+    });
+    getBetaPolicySettings.mockResolvedValue({
+      rules: [],
+    });
+    getUpstreamBillingProbeSettings.mockResolvedValue({
+      enabled: true,
+      interval_minutes: 30,
+    });
+    updateUpstreamBillingProbeSettings.mockImplementation(async (payload) => payload);
+    getGroups.mockResolvedValue([]);
+    listProxies.mockResolvedValue({
+      items: [],
+    });
+    getProviders.mockResolvedValue({
+      data: [],
+    });
+    fetchPublicSettings.mockResolvedValue(undefined);
+    adminSettingsFetch.mockResolvedValue(undefined);
+  });
+
+  it("loads, toggles, and saves adaptive account probe settings", async () => {
+    const wrapper = mountView();
+
+    await flushPromises();
+    await openFeaturesTab(wrapper);
+
+    const card = wrapper.get('[data-testid="channel-monitor-account-probe-settings"]');
+    expect(card.isVisible()).toBe(true);
+    expect(
+      (
+        card.get('[data-testid="channel-monitor-account-probe-enabled"]')
+          .element as HTMLInputElement
+      ).checked,
+    ).toBe(true);
+    expect(
+      (
+        card.get('[data-testid="channel-monitor-account-probe-confirm-attempts"]')
+          .element as HTMLInputElement
+      ).value,
+    ).toBe("2");
+    expect(
+      (
+        card.get('[data-testid="channel-monitor-account-probe-degraded-threshold"]')
+          .element as HTMLInputElement
+      ).value,
+    ).toBe("7200");
+    expect(
+      (
+        card.get('[data-testid="channel-monitor-account-probe-max-candidates"]')
+          .element as HTMLInputElement
+      ).value,
+    ).toBe("8");
+    expect(
+      (
+        card.get('[data-testid="channel-monitor-account-probe-parallelism"]')
+          .element as HTMLInputElement
+      ).value,
+    ).toBe("4");
+    expect(
+      (
+        card.get('[data-testid="channel-monitor-account-probe-allow-image-fanout"]')
+          .element as HTMLInputElement
+      ).checked,
+    ).toBe(true);
+
+    await card
+      .get('[data-testid="channel-monitor-account-probe-enabled"]')
+      .setValue(false);
+    expect(
+      card.find('[data-testid="channel-monitor-account-probe-confirm-attempts"]').exists(),
+    ).toBe(false);
+
+    await card
+      .get('[data-testid="channel-monitor-account-probe-enabled"]')
+      .setValue(true);
+    await card
+      .get('[data-testid="channel-monitor-account-probe-confirm-attempts"]')
+      .setValue(0);
+    await card
+      .get('[data-testid="channel-monitor-account-probe-degraded-threshold"]')
+      .setValue(8800);
+    await card
+      .get('[data-testid="channel-monitor-account-probe-max-candidates"]')
+      .setValue(12);
+    await card
+      .get('[data-testid="channel-monitor-account-probe-parallelism"]')
+      .setValue(3);
+    await card
+      .get('[data-testid="channel-monitor-account-probe-allow-image-fanout"]')
+      .setValue(false);
+    await wrapper
+      .get('[data-testid="channel-monitor-traffic-observation-enabled"]')
+      .setValue(true);
+    await wrapper
+      .get('[data-testid="channel-monitor-traffic-idle"]')
+      .setValue(1200);
+    await wrapper
+      .get('[data-testid="channel-monitor-traffic-window"]')
+      .setValue(180);
+    await wrapper
+      .get('[data-testid="channel-monitor-traffic-samples"]')
+      .setValue(2);
+
+    await wrapper.find("form").trigger("submit.prevent");
+    await flushPromises();
+
+    expect(updateSettings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        channel_monitor_account_probe_settings: {
+          enabled: true,
+          confirm_attempts: 0,
+          degraded_threshold_ms: 8800,
+          max_candidates: 12,
+          parallelism: 3,
+          allow_image_fanout: false,
+        },
+        channel_monitor_traffic_observation_settings: {
+          enabled: true,
+          fallback_idle_seconds: 1200,
+          aggregation_window_seconds: 180,
+          minimum_samples: 2,
+        },
+      }),
+    );
   });
 });
 

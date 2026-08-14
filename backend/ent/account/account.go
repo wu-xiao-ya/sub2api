@@ -56,6 +56,16 @@ const (
 	FieldExpiresAt = "expires_at"
 	// FieldAutoPauseOnExpired holds the string denoting the auto_pause_on_expired field in the database.
 	FieldAutoPauseOnExpired = "auto_pause_on_expired"
+	// FieldOwnerUserID holds the string denoting the owner_user_id field in the database.
+	FieldOwnerUserID = "owner_user_id"
+	// FieldContributionStatus holds the string denoting the contribution_status field in the database.
+	FieldContributionStatus = "contribution_status"
+	// FieldContributionSubmittedAt holds the string denoting the contribution_submitted_at field in the database.
+	FieldContributionSubmittedAt = "contribution_submitted_at"
+	// FieldContributionApprovedAt holds the string denoting the contribution_approved_at field in the database.
+	FieldContributionApprovedAt = "contribution_approved_at"
+	// FieldContributionRevokedAt holds the string denoting the contribution_revoked_at field in the database.
+	FieldContributionRevokedAt = "contribution_revoked_at"
 	// FieldSchedulable holds the string denoting the schedulable field in the database.
 	FieldSchedulable = "schedulable"
 	// FieldRateLimitedAt holds the string denoting the rate_limited_at field in the database.
@@ -151,6 +161,11 @@ var Columns = []string{
 	FieldLastUsedAt,
 	FieldExpiresAt,
 	FieldAutoPauseOnExpired,
+	FieldOwnerUserID,
+	FieldContributionStatus,
+	FieldContributionSubmittedAt,
+	FieldContributionApprovedAt,
+	FieldContributionRevokedAt,
 	FieldSchedulable,
 	FieldRateLimitedAt,
 	FieldRateLimitResetAt,
@@ -216,6 +231,10 @@ var (
 	StatusValidator func(string) error
 	// DefaultAutoPauseOnExpired holds the default value on creation for the "auto_pause_on_expired" field.
 	DefaultAutoPauseOnExpired bool
+	// DefaultContributionStatus holds the default value on creation for the "contribution_status" field.
+	DefaultContributionStatus string
+	// ContributionStatusValidator is a validator for the "contribution_status" field. It is called by the builders before save.
+	ContributionStatusValidator func(string) error
 	// DefaultSchedulable holds the default value on creation for the "schedulable" field.
 	DefaultSchedulable bool
 	// SessionWindowStatusValidator is a validator for the "session_window_status" field. It is called by the builders before save.
@@ -344,6 +363,31 @@ func ByExpiresAt(opts ...sql.OrderTermOption) OrderOption {
 // ByAutoPauseOnExpired orders the results by the auto_pause_on_expired field.
 func ByAutoPauseOnExpired(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldAutoPauseOnExpired, opts...).ToFunc()
+}
+
+// ByOwnerUserID orders the results by the owner_user_id field.
+func ByOwnerUserID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldOwnerUserID, opts...).ToFunc()
+}
+
+// ByContributionStatus orders the results by the contribution_status field.
+func ByContributionStatus(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldContributionStatus, opts...).ToFunc()
+}
+
+// ByContributionSubmittedAt orders the results by the contribution_submitted_at field.
+func ByContributionSubmittedAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldContributionSubmittedAt, opts...).ToFunc()
+}
+
+// ByContributionApprovedAt orders the results by the contribution_approved_at field.
+func ByContributionApprovedAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldContributionApprovedAt, opts...).ToFunc()
+}
+
+// ByContributionRevokedAt orders the results by the contribution_revoked_at field.
+func ByContributionRevokedAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldContributionRevokedAt, opts...).ToFunc()
 }
 
 // BySchedulable orders the results by the schedulable field.

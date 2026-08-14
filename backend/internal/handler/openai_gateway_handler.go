@@ -105,6 +105,9 @@ func usageRecordContext(parent context.Context, base context.Context) context.Co
 	if requestID, _ := parent.Value(ctxkey.RequestID).(string); strings.TrimSpace(requestID) != "" {
 		base = context.WithValue(base, ctxkey.RequestID, strings.TrimSpace(requestID))
 	}
+	if usageSource, _ := parent.Value(ctxkey.UsageSource).(string); strings.TrimSpace(usageSource) != "" {
+		base = context.WithValue(base, ctxkey.UsageSource, strings.TrimSpace(usageSource))
+	}
 	return base
 }
 
@@ -118,8 +121,8 @@ func wrapUsageRecordTaskContext(parent context.Context, task service.UsageRecord
 }
 
 func openAICompatibleRequestPlatform(apiKey *service.APIKey) string {
-	if apiKey != nil && apiKey.Group != nil && apiKey.Group.Platform == service.PlatformGrok {
-		return service.PlatformGrok
+	if apiKey != nil && apiKey.Group != nil && service.IsOpenAICompatiblePlatform(apiKey.Group.Platform) {
+		return apiKey.Group.Platform
 	}
 	return service.PlatformOpenAI
 }
@@ -591,6 +594,7 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 			}
 		}
 		if result != nil {
+			logOpenAIResponsesShortCompletion(reqLog, body, result, account)
 			// 排除 spark 影子:其 codex_* 仅由 QueryUsage(/wham/usage bengalfox)更新(外审第7轮 P1)。
 			if account.Type == service.AccountTypeOAuth && !account.IsShadow() {
 				h.gatewayService.UpdateCodexUsageSnapshotFromHeaders(c.Request.Context(), account.ID, result.ResponseHeaders)
@@ -643,6 +647,46 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 		)
 		return
 	}
+}
+
+const (
+	openAIResponsesShortCompletionMaxOutputTokens = 64
+	openAIResponsesShortCompletionMinInputTokens  = 8192
+)
+
+// logOpenAIResponsesShortCompletion records only routing and completion metadata
+// for suspiciously short Responses outputs. It deliberately excludes user input,
+// tools, credentials, and any other request-content fields.
+func logOpenAIResponsesShortCompletion(reqLog *zap.Logger, body []byte, result *service.OpenAIForwardResult, account *service.Account) {
+	if reqLog == nil || result == nil || !result.Stream {
+		return
+	}
+
+	incomplete := strings.TrimSpace(result.UpstreamIncompleteReason)
+	shortLongContext := result.Usage.InputTokens >= openAIResponsesShortCompletionMinInputTokens &&
+		result.Usage.OutputTokens <= openAIResponsesShortCompletionMaxOutputTokens
+	if incomplete == "" && !shortLongContext {
+		return
+	}
+
+	maxOutputTokens := gjson.GetBytes(body, "max_output_tokens")
+	fields := []zap.Field{
+		zap.Int("input_tokens", result.Usage.InputTokens),
+		zap.Int("output_tokens", result.Usage.OutputTokens),
+		zap.String("terminal_event", strings.TrimSpace(result.UpstreamTerminalEvent)),
+		zap.String("incomplete_reason", incomplete),
+		zap.Bool("has_max_output_tokens", maxOutputTokens.Exists()),
+		zap.Bool("has_compaction_trigger", service.HasCompactionTriggerInInput(body)),
+		zap.Int("request_body_bytes", len(body)),
+		zap.String("upstream_model", strings.TrimSpace(result.UpstreamModel)),
+	}
+	if maxOutputTokens.Exists() && maxOutputTokens.Type == gjson.Number {
+		fields = append(fields, zap.Int64("max_output_tokens", maxOutputTokens.Int()))
+	}
+	if account != nil {
+		fields = append(fields, zap.Int64("account_id", account.ID))
+	}
+	reqLog.Info("openai.responses_short_completion", fields...)
 }
 
 func isOpenAIRemoteCompactPath(c *gin.Context) bool {
@@ -2056,7 +2100,9 @@ func (h *OpenAIGatewayHandler) submitUsageRecordTask(parent context.Context, tas
 }
 
 func (h *OpenAIGatewayHandler) submitOpenAIUsageRecordTask(parent context.Context, result *service.OpenAIForwardResult, task service.UsageRecordTask) {
-	if result != nil && result.ImageCount > 0 {
+	// Money-critical bills never drop on pool overflow: media, search surcharge, voice.
+	if result != nil && (result.ImageCount > 0 || result.VideoCount > 0 ||
+		result.SearchCount > 0 || result.WebSearchCalls > 0 || result.AudioUsage != nil) {
 		h.submitMandatoryUsageRecordTask(parent, task)
 		return
 	}
@@ -2335,7 +2381,10 @@ func (h *OpenAIGatewayHandler) ensureForwardErrorResponse(c *gin.Context, stream
 		imageKeepalivePaddingOnly = adjustedSize < 0
 		imageKeepaliveResponseWritten = adjustedSize >= 0
 	}
-	if service.IsResponseCommitted(c) || (!compactKeepaliveCommitted && imageKeepaliveResponseWritten) {
+	compactKeepaliveHasMeaningfulOutput := compactKeepaliveCommitted && service.OpenAICompactKeepaliveAdjustedWrittenSize(c) > 0
+	// A compact keepalive can commit headers without writing a semantic SSE
+	// event. The response then still needs a protocol-correct terminal error.
+	if (service.IsResponseCommitted(c) && (!compactKeepaliveCommitted || compactKeepaliveHasMeaningfulOutput)) || (!compactKeepaliveCommitted && imageKeepaliveResponseWritten) {
 		return false
 	}
 	if c.Writer.Written() && !imageKeepalivePaddingOnly {

@@ -154,6 +154,21 @@ func ActualCost(v float64) predicate.BatchImageJob {
 	return predicate.BatchImageJob(sql.FieldEQ(FieldActualCost, v))
 }
 
+// PromotionID applies equality check predicate on the "promotion_id" field. It's identical to PromotionIDEQ.
+func PromotionID(v int64) predicate.BatchImageJob {
+	return predicate.BatchImageJob(sql.FieldEQ(FieldPromotionID, v))
+}
+
+// PromotionName applies equality check predicate on the "promotion_name" field. It's identical to PromotionNameEQ.
+func PromotionName(v string) predicate.BatchImageJob {
+	return predicate.BatchImageJob(sql.FieldEQ(FieldPromotionName, v))
+}
+
+// PromotionBaseRateMultiplier applies equality check predicate on the "promotion_base_rate_multiplier" field. It's identical to PromotionBaseRateMultiplierEQ.
+func PromotionBaseRateMultiplier(v float64) predicate.BatchImageJob {
+	return predicate.BatchImageJob(sql.FieldEQ(FieldPromotionBaseRateMultiplier, v))
+}
+
 // Currency applies equality check predicate on the "currency" field. It's identical to CurrencyEQ.
 func Currency(v string) predicate.BatchImageJob {
 	return predicate.BatchImageJob(sql.FieldEQ(FieldCurrency, v))
@@ -1392,6 +1407,181 @@ func ActualCostIsNil() predicate.BatchImageJob {
 // ActualCostNotNil applies the NotNil predicate on the "actual_cost" field.
 func ActualCostNotNil() predicate.BatchImageJob {
 	return predicate.BatchImageJob(sql.FieldNotNull(FieldActualCost))
+}
+
+// PromotionIDEQ applies the EQ predicate on the "promotion_id" field.
+func PromotionIDEQ(v int64) predicate.BatchImageJob {
+	return predicate.BatchImageJob(sql.FieldEQ(FieldPromotionID, v))
+}
+
+// PromotionIDNEQ applies the NEQ predicate on the "promotion_id" field.
+func PromotionIDNEQ(v int64) predicate.BatchImageJob {
+	return predicate.BatchImageJob(sql.FieldNEQ(FieldPromotionID, v))
+}
+
+// PromotionIDIn applies the In predicate on the "promotion_id" field.
+func PromotionIDIn(vs ...int64) predicate.BatchImageJob {
+	return predicate.BatchImageJob(sql.FieldIn(FieldPromotionID, vs...))
+}
+
+// PromotionIDNotIn applies the NotIn predicate on the "promotion_id" field.
+func PromotionIDNotIn(vs ...int64) predicate.BatchImageJob {
+	return predicate.BatchImageJob(sql.FieldNotIn(FieldPromotionID, vs...))
+}
+
+// PromotionIDGT applies the GT predicate on the "promotion_id" field.
+func PromotionIDGT(v int64) predicate.BatchImageJob {
+	return predicate.BatchImageJob(sql.FieldGT(FieldPromotionID, v))
+}
+
+// PromotionIDGTE applies the GTE predicate on the "promotion_id" field.
+func PromotionIDGTE(v int64) predicate.BatchImageJob {
+	return predicate.BatchImageJob(sql.FieldGTE(FieldPromotionID, v))
+}
+
+// PromotionIDLT applies the LT predicate on the "promotion_id" field.
+func PromotionIDLT(v int64) predicate.BatchImageJob {
+	return predicate.BatchImageJob(sql.FieldLT(FieldPromotionID, v))
+}
+
+// PromotionIDLTE applies the LTE predicate on the "promotion_id" field.
+func PromotionIDLTE(v int64) predicate.BatchImageJob {
+	return predicate.BatchImageJob(sql.FieldLTE(FieldPromotionID, v))
+}
+
+// PromotionIDIsNil applies the IsNil predicate on the "promotion_id" field.
+func PromotionIDIsNil() predicate.BatchImageJob {
+	return predicate.BatchImageJob(sql.FieldIsNull(FieldPromotionID))
+}
+
+// PromotionIDNotNil applies the NotNil predicate on the "promotion_id" field.
+func PromotionIDNotNil() predicate.BatchImageJob {
+	return predicate.BatchImageJob(sql.FieldNotNull(FieldPromotionID))
+}
+
+// PromotionNameEQ applies the EQ predicate on the "promotion_name" field.
+func PromotionNameEQ(v string) predicate.BatchImageJob {
+	return predicate.BatchImageJob(sql.FieldEQ(FieldPromotionName, v))
+}
+
+// PromotionNameNEQ applies the NEQ predicate on the "promotion_name" field.
+func PromotionNameNEQ(v string) predicate.BatchImageJob {
+	return predicate.BatchImageJob(sql.FieldNEQ(FieldPromotionName, v))
+}
+
+// PromotionNameIn applies the In predicate on the "promotion_name" field.
+func PromotionNameIn(vs ...string) predicate.BatchImageJob {
+	return predicate.BatchImageJob(sql.FieldIn(FieldPromotionName, vs...))
+}
+
+// PromotionNameNotIn applies the NotIn predicate on the "promotion_name" field.
+func PromotionNameNotIn(vs ...string) predicate.BatchImageJob {
+	return predicate.BatchImageJob(sql.FieldNotIn(FieldPromotionName, vs...))
+}
+
+// PromotionNameGT applies the GT predicate on the "promotion_name" field.
+func PromotionNameGT(v string) predicate.BatchImageJob {
+	return predicate.BatchImageJob(sql.FieldGT(FieldPromotionName, v))
+}
+
+// PromotionNameGTE applies the GTE predicate on the "promotion_name" field.
+func PromotionNameGTE(v string) predicate.BatchImageJob {
+	return predicate.BatchImageJob(sql.FieldGTE(FieldPromotionName, v))
+}
+
+// PromotionNameLT applies the LT predicate on the "promotion_name" field.
+func PromotionNameLT(v string) predicate.BatchImageJob {
+	return predicate.BatchImageJob(sql.FieldLT(FieldPromotionName, v))
+}
+
+// PromotionNameLTE applies the LTE predicate on the "promotion_name" field.
+func PromotionNameLTE(v string) predicate.BatchImageJob {
+	return predicate.BatchImageJob(sql.FieldLTE(FieldPromotionName, v))
+}
+
+// PromotionNameContains applies the Contains predicate on the "promotion_name" field.
+func PromotionNameContains(v string) predicate.BatchImageJob {
+	return predicate.BatchImageJob(sql.FieldContains(FieldPromotionName, v))
+}
+
+// PromotionNameHasPrefix applies the HasPrefix predicate on the "promotion_name" field.
+func PromotionNameHasPrefix(v string) predicate.BatchImageJob {
+	return predicate.BatchImageJob(sql.FieldHasPrefix(FieldPromotionName, v))
+}
+
+// PromotionNameHasSuffix applies the HasSuffix predicate on the "promotion_name" field.
+func PromotionNameHasSuffix(v string) predicate.BatchImageJob {
+	return predicate.BatchImageJob(sql.FieldHasSuffix(FieldPromotionName, v))
+}
+
+// PromotionNameIsNil applies the IsNil predicate on the "promotion_name" field.
+func PromotionNameIsNil() predicate.BatchImageJob {
+	return predicate.BatchImageJob(sql.FieldIsNull(FieldPromotionName))
+}
+
+// PromotionNameNotNil applies the NotNil predicate on the "promotion_name" field.
+func PromotionNameNotNil() predicate.BatchImageJob {
+	return predicate.BatchImageJob(sql.FieldNotNull(FieldPromotionName))
+}
+
+// PromotionNameEqualFold applies the EqualFold predicate on the "promotion_name" field.
+func PromotionNameEqualFold(v string) predicate.BatchImageJob {
+	return predicate.BatchImageJob(sql.FieldEqualFold(FieldPromotionName, v))
+}
+
+// PromotionNameContainsFold applies the ContainsFold predicate on the "promotion_name" field.
+func PromotionNameContainsFold(v string) predicate.BatchImageJob {
+	return predicate.BatchImageJob(sql.FieldContainsFold(FieldPromotionName, v))
+}
+
+// PromotionBaseRateMultiplierEQ applies the EQ predicate on the "promotion_base_rate_multiplier" field.
+func PromotionBaseRateMultiplierEQ(v float64) predicate.BatchImageJob {
+	return predicate.BatchImageJob(sql.FieldEQ(FieldPromotionBaseRateMultiplier, v))
+}
+
+// PromotionBaseRateMultiplierNEQ applies the NEQ predicate on the "promotion_base_rate_multiplier" field.
+func PromotionBaseRateMultiplierNEQ(v float64) predicate.BatchImageJob {
+	return predicate.BatchImageJob(sql.FieldNEQ(FieldPromotionBaseRateMultiplier, v))
+}
+
+// PromotionBaseRateMultiplierIn applies the In predicate on the "promotion_base_rate_multiplier" field.
+func PromotionBaseRateMultiplierIn(vs ...float64) predicate.BatchImageJob {
+	return predicate.BatchImageJob(sql.FieldIn(FieldPromotionBaseRateMultiplier, vs...))
+}
+
+// PromotionBaseRateMultiplierNotIn applies the NotIn predicate on the "promotion_base_rate_multiplier" field.
+func PromotionBaseRateMultiplierNotIn(vs ...float64) predicate.BatchImageJob {
+	return predicate.BatchImageJob(sql.FieldNotIn(FieldPromotionBaseRateMultiplier, vs...))
+}
+
+// PromotionBaseRateMultiplierGT applies the GT predicate on the "promotion_base_rate_multiplier" field.
+func PromotionBaseRateMultiplierGT(v float64) predicate.BatchImageJob {
+	return predicate.BatchImageJob(sql.FieldGT(FieldPromotionBaseRateMultiplier, v))
+}
+
+// PromotionBaseRateMultiplierGTE applies the GTE predicate on the "promotion_base_rate_multiplier" field.
+func PromotionBaseRateMultiplierGTE(v float64) predicate.BatchImageJob {
+	return predicate.BatchImageJob(sql.FieldGTE(FieldPromotionBaseRateMultiplier, v))
+}
+
+// PromotionBaseRateMultiplierLT applies the LT predicate on the "promotion_base_rate_multiplier" field.
+func PromotionBaseRateMultiplierLT(v float64) predicate.BatchImageJob {
+	return predicate.BatchImageJob(sql.FieldLT(FieldPromotionBaseRateMultiplier, v))
+}
+
+// PromotionBaseRateMultiplierLTE applies the LTE predicate on the "promotion_base_rate_multiplier" field.
+func PromotionBaseRateMultiplierLTE(v float64) predicate.BatchImageJob {
+	return predicate.BatchImageJob(sql.FieldLTE(FieldPromotionBaseRateMultiplier, v))
+}
+
+// PromotionBaseRateMultiplierIsNil applies the IsNil predicate on the "promotion_base_rate_multiplier" field.
+func PromotionBaseRateMultiplierIsNil() predicate.BatchImageJob {
+	return predicate.BatchImageJob(sql.FieldIsNull(FieldPromotionBaseRateMultiplier))
+}
+
+// PromotionBaseRateMultiplierNotNil applies the NotNil predicate on the "promotion_base_rate_multiplier" field.
+func PromotionBaseRateMultiplierNotNil() predicate.BatchImageJob {
+	return predicate.BatchImageJob(sql.FieldNotNull(FieldPromotionBaseRateMultiplier))
 }
 
 // CurrencyEQ applies the EQ predicate on the "currency" field.

@@ -75,3 +75,24 @@ describe('MonitorActionsCell duplicate action', () => {
     expect(button.attributes('title')).toBe('admin.channelMonitor.duplicateKeyUnavailable')
   })
 })
+
+describe('MonitorActionsCell image action', () => {
+  it('shows and emits the latest-image action only for images mode', async () => {
+    const row = makeMonitor({ api_mode: 'images' })
+    const wrapper = mount(MonitorActionsCell, {
+      props: { row, running: false, duplicating: false },
+    })
+
+    await wrapper.get('[data-testid="monitor-view-image"]').trigger('click')
+
+    expect(wrapper.emitted('view-image')).toEqual([[row]])
+  })
+
+  it('does not show the image action for text monitors', () => {
+    const wrapper = mount(MonitorActionsCell, {
+      props: { row: makeMonitor(), running: false, duplicating: false },
+    })
+
+    expect(wrapper.find('[data-testid="monitor-view-image"]').exists()).toBe(false)
+  })
+})

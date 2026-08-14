@@ -20,18 +20,35 @@ import (
 )
 
 // Account management implementations
-func (s *adminServiceImpl) ListAccounts(ctx context.Context, page, pageSize int, platform, accountType, status, search string, groupID int64, privacyMode string, sortBy, sortOrder string) ([]Account, int64, error) {
+func (s *adminServiceImpl) ListAccounts(ctx context.Context, page, pageSize int, platform, accountType, status, search string, groupID int64, privacyMode string, poolGroupID int64, sortBy, sortOrder string) ([]Account, int64, error) {
 	params := pagination.PaginationParams{Page: page, PageSize: pageSize, SortBy: sortBy, SortOrder: sortOrder}
-	accounts, result, err := s.accountRepo.ListWithFilters(ctx, params, platform, accountType, status, search, groupID, privacyMode)
+	var (
+		accounts []Account
+		result   *pagination.PaginationResult
+		err      error
+	)
+	if filteredRepo, ok := s.accountRepo.(AccountPoolGroupFilteredLister); ok {
+		accounts, result, err = filteredRepo.ListWithPoolGroupFilters(ctx, params, platform, accountType, status, search, groupID, privacyMode, poolGroupID)
+	} else if poolGroupID != 0 {
+		return nil, 0, errors.New("account repository does not support account pool group filtering")
+	} else {
+		accounts, result, err = s.accountRepo.ListWithFilters(ctx, params, platform, accountType, status, search, groupID, privacyMode)
+	}
 	if err != nil {
 		return nil, 0, err
 	}
 	return accounts, result.Total, nil
 }
 
-func (s *adminServiceImpl) ListAccountsForSchedulerScoreFilter(ctx context.Context, platform, accountType, status, search string, groupID int64, privacyMode string) ([]Account, error) {
+func (s *adminServiceImpl) ListAccountsForSchedulerScoreFilter(ctx context.Context, platform, accountType, status, search string, groupID int64, privacyMode string, poolGroupID int64) ([]Account, error) {
 	if s == nil || s.accountRepo == nil {
 		return nil, nil
+	}
+	if filteredRepo, ok := s.accountRepo.(AccountPoolGroupFilteredLister); ok {
+		return filteredRepo.ListAllWithPoolGroupFilters(ctx, platform, accountType, status, search, groupID, privacyMode, poolGroupID)
+	}
+	if poolGroupID != 0 {
+		return nil, errors.New("account repository does not support account pool group filtering")
 	}
 	return s.accountRepo.ListAllWithFilters(ctx, platform, accountType, status, search, groupID, privacyMode)
 }
@@ -299,6 +316,7 @@ func (s *adminServiceImpl) DuplicateAccount(ctx context.Context, id int64, actor
 		Priority:              source.Priority,
 		RateMultiplier:        cloneAccountValuePointer(source.RateMultiplier),
 		LoadFactor:            cloneAccountValuePointer(source.LoadFactor),
+		PoolGroupID:           cloneAccountValuePointer(source.PoolGroupID),
 		GroupIDs:              groupIDs,
 		ExpiresAt:             expiresAt,
 		AutoPauseOnExpired:    &autoPauseOnExpired,
@@ -323,6 +341,13 @@ func (s *adminServiceImpl) DuplicateAccount(ctx context.Context, id int64, actor
 	}
 	if err := s.accountDuplicateRepo.CreateWithAccountGroups(ctx, duplicate, groups); err != nil {
 		return nil, fmt.Errorf("create duplicate account: %w", err)
+	}
+	if manualRate, ok := UpstreamBillingManualRate(duplicate.Extra); ok {
+		if recorder, supportsSnapshots := s.accountRepo.(upstreamBillingManualRateSnapshotRecorder); supportsSnapshots {
+			if err := recorder.RecordUpstreamBillingManualRateSnapshot(ctx, duplicate, &manualRate); err != nil {
+				return nil, fmt.Errorf("record duplicate account manual upstream billing rate: %w", err)
+			}
+		}
 	}
 	for i := range groups {
 		groups[i].AccountID = duplicate.ID
@@ -394,63 +419,7 @@ func normalizeOpenAILongContextBillingUpdateExtra(account *Account, input *Updat
 	return normalized, nil
 }
 
-// ValidateGrokMediaEligibilityExtra validates the optional media-routing
-// override. null removes the override and returns the account to automatic
-// provider-observation based routing.
-func ValidateGrokMediaEligibilityExtra(platform string, extra map[string]any) error {
-	if platform != PlatformGrok || extra == nil {
-		return nil
-	}
-	raw, exists := extra[GrokMediaEligibleExtraKey]
-	if !exists || raw == nil {
-		return nil
-	}
-	if _, ok := raw.(bool); !ok {
-		return infraerrors.BadRequest(
-			"GROK_MEDIA_ELIGIBILITY_INVALID",
-			"grok_media_eligible must be a boolean or null",
-		)
-	}
-	return nil
-}
-
-func normalizeGrokMediaEligibilityExtra(platform string, extra map[string]any) (map[string]any, error) {
-	if platform != PlatformGrok {
-		return extra, nil
-	}
-	if err := ValidateGrokMediaEligibilityExtra(platform, extra); err != nil {
-		return nil, err
-	}
-	normalized := maps.Clone(extra)
-	if normalized != nil && normalized[GrokMediaEligibleExtraKey] == nil {
-		delete(normalized, GrokMediaEligibleExtraKey)
-	}
-	return normalized, nil
-}
-
-func normalizeGrokMediaEligibilityUpdateExtra(account *Account, input *UpdateAccountInput, normalized map[string]any) (map[string]any, error) {
-	if account == nil || account.Platform != PlatformGrok {
-		return normalized, nil
-	}
-	if err := ValidateGrokMediaEligibilityExtra(account.Platform, input.Extra); err != nil {
-		return nil, err
-	}
-	normalized = maps.Clone(normalized)
-	if normalized == nil {
-		normalized = make(map[string]any)
-	}
-	raw, provided := input.Extra[GrokMediaEligibleExtraKey]
-	if provided {
-		if raw == nil {
-			delete(normalized, GrokMediaEligibleExtraKey)
-		}
-		return normalized, nil
-	}
-	if current, ok := account.Extra[GrokMediaEligibleExtraKey].(bool); ok {
-		normalized[GrokMediaEligibleExtraKey] = current
-	}
-	return normalized, nil
-}
+// Grok media eligibility helpers live in account_grok_media_eligibility.go.
 
 func buildAccountForCreate(input *CreateAccountInput, accountExtra map[string]any) (*Account, error) {
 	// Probe state is system-managed. New accounts always start with auto probe disabled.
@@ -470,7 +439,7 @@ func buildAccountForCreate(input *CreateAccountInput, accountExtra map[string]an
 		Schedulable: true,
 	}
 	if input.ProbeEnabled != nil && *input.ProbeEnabled {
-		if !isUpstreamBillingProbeAccount(account) {
+		if !isAutomaticUpstreamBillingProbeAccount(account) {
 			return nil, ErrUpstreamBillingProbeAccountInvalid
 		}
 		if account.Extra == nil {
@@ -519,6 +488,9 @@ func (s *adminServiceImpl) CreateAccount(ctx context.Context, input *CreateAccou
 	if err != nil {
 		return nil, err
 	}
+	if err := ValidateUpstreamBillingManualRateExtra(accountExtra); err != nil {
+		return nil, err
+	}
 
 	// 绑定分组
 	groupIDs := input.GroupIDs
@@ -542,16 +514,22 @@ func (s *adminServiceImpl) CreateAccount(ctx context.Context, input *CreateAccou
 			return nil, err
 		}
 	}
+	if err := s.validateAccountPoolGroupID(ctx, input.PoolGroupID); err != nil {
+		return nil, err
+	}
 
 	// 校验并规范化请求头覆写配置（header 名小写化、格式检查）
 	if err := NormalizeHeaderOverrideCredentials(input.Credentials); err != nil {
 		return nil, err
 	}
+	// Never persist ephemeral SSO/password secrets after OAuth conversion.
+	input.Credentials = SanitizeStoredCredentials(input.Platform, input.Credentials)
 
 	account, err := buildAccountForCreate(input, accountExtra)
 	if err != nil {
 		return nil, err
 	}
+	account.PoolGroupID = normalizeAccountPoolGroupID(input.PoolGroupID)
 	if err := s.accountRepo.Create(ctx, account); err != nil {
 		return nil, err
 	}
@@ -560,6 +538,14 @@ func (s *adminServiceImpl) CreateAccount(ctx context.Context, input *CreateAccou
 	if len(groupIDs) > 0 {
 		if err := s.accountRepo.BindGroups(ctx, account.ID, groupIDs); err != nil {
 			return nil, err
+		}
+	}
+	account.GroupIDs = append([]int64(nil), groupIDs...)
+	if manualRate, ok := UpstreamBillingManualRate(account.Extra); ok {
+		if recorder, supportsSnapshots := s.accountRepo.(upstreamBillingManualRateSnapshotRecorder); supportsSnapshots {
+			if err := recorder.RecordUpstreamBillingManualRateSnapshot(ctx, account, &manualRate); err != nil {
+				return nil, err
+			}
 		}
 	}
 
@@ -595,11 +581,16 @@ type accountProbeEnabledAtomicUpdater interface {
 	UpdateWithUpstreamBillingProbeEnabled(context.Context, *Account, bool) error
 }
 
+type upstreamBillingManualRateSnapshotRecorder interface {
+	RecordUpstreamBillingManualRateSnapshot(context.Context, *Account, *float64) error
+}
+
 func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *UpdateAccountInput) (*Account, error) {
 	account, err := s.accountRepo.GetByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
+	previousManualRate, previousManualRateSet := UpstreamBillingManualRate(account.Extra)
 	var normalizedExtra map[string]any
 	if input.Extra != nil {
 		normalizedExtra, err = normalizeOpenAILongContextBillingUpdateExtra(account, input)
@@ -608,6 +599,9 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 		}
 		normalizedExtra, err = normalizeGrokMediaEligibilityUpdateExtra(account, input, normalizedExtra)
 		if err != nil {
+			return nil, err
+		}
+		if err := ValidateUpstreamBillingManualRateExtra(normalizedExtra); err != nil {
 			return nil, err
 		}
 	}
@@ -660,6 +654,8 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 		if err := NormalizeHeaderOverrideCredentials(account.Credentials); err != nil {
 			return nil, err
 		}
+		// Strip SSO/password residue that must never sit next to OAuth tokens.
+		account.Credentials = SanitizeStoredCredentials(account.Platform, account.Credentials)
 	}
 	// Extra 使用 map：需要区分“未提供(nil)”与“显式清空({})”。
 	// 关闭配额限制时前端会删除 quota_* 键并提交 extra:{}，此时也必须落库。
@@ -691,7 +687,7 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 			}
 		}
 		if hasRequestedProbeEnabled {
-			if isUpstreamBillingProbeAccount(account) {
+			if isAutomaticUpstreamBillingProbeAccount(account) {
 				normalizedExtra[UpstreamBillingProbeEnabledExtraKey] = requestedProbeEnabled
 			} else {
 				delete(normalizedExtra, UpstreamBillingProbeEnabledExtraKey)
@@ -729,7 +725,7 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 	}
 	if !reflect.DeepEqual(previousProbeIdentity, upstreamBillingProbeIdentity(account)) && account.Extra != nil {
 		delete(account.Extra, UpstreamBillingProbeExtraKey)
-		if !isUpstreamBillingProbeAccount(account) {
+		if !isAutomaticUpstreamBillingProbeAccount(account) {
 			delete(account.Extra, UpstreamBillingProbeEnabledExtraKey)
 		}
 	}
@@ -756,6 +752,13 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 			account.LoadFactor = input.LoadFactor
 		}
 	}
+	if input.PoolGroupID != nil {
+		if err := s.validateAccountPoolGroupID(ctx, input.PoolGroupID); err != nil {
+			return nil, err
+		}
+		account.PoolGroupID = normalizeAccountPoolGroupID(input.PoolGroupID)
+		account.PoolGroup = nil
+	}
 	if input.Status != "" {
 		account.Status = input.Status
 	}
@@ -770,6 +773,10 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 	if input.AutoPauseOnExpired != nil {
 		account.AutoPauseOnExpired = *input.AutoPauseOnExpired
 	}
+	nextManualRate, nextManualRateSet := UpstreamBillingManualRate(account.Extra)
+	manualRateChanged := input.Extra != nil &&
+		(previousManualRateSet != nextManualRateSet || (previousManualRateSet && previousManualRate != nextManualRate))
+	manualRateSnapshotNeeded := manualRateChanged || (input.GroupIDs != nil && nextManualRateSet)
 
 	// 先验证分组是否存在（在任何写操作之前）
 	if input.GroupIDs != nil {
@@ -786,7 +793,7 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 	}
 
 	probeEnabledAppliedAtomically := false
-	if requestedProbeEnabledUpdate != nil && isUpstreamBillingProbeAccount(account) {
+	if requestedProbeEnabledUpdate != nil && isAutomaticUpstreamBillingProbeAccount(account) {
 		if updater, ok := s.accountRepo.(accountProbeEnabledAtomicUpdater); ok {
 			if err := updater.UpdateWithUpstreamBillingProbeEnabled(ctx, account, *requestedProbeEnabledUpdate); err != nil {
 				return nil, err
@@ -798,7 +805,7 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 		if err := s.accountRepo.Update(ctx, account); err != nil {
 			return nil, err
 		}
-		if requestedProbeEnabledUpdate != nil && isUpstreamBillingProbeAccount(account) {
+		if requestedProbeEnabledUpdate != nil && isAutomaticUpstreamBillingProbeAccount(account) {
 			if err := s.accountRepo.UpdateExtra(ctx, account.ID, map[string]any{
 				UpstreamBillingProbeEnabledExtraKey: *requestedProbeEnabledUpdate,
 			}); err != nil {
@@ -826,6 +833,19 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 	updated, err := s.accountRepo.GetByID(ctx, id)
 	if err != nil {
 		return nil, err
+	}
+	if manualRateSnapshotNeeded {
+		recorder, ok := s.accountRepo.(upstreamBillingManualRateSnapshotRecorder)
+		if !ok {
+			return updated, nil
+		}
+		var rate *float64
+		if nextManualRateSet {
+			rate = &nextManualRate
+		}
+		if err := recorder.RecordUpstreamBillingManualRateSnapshot(ctx, updated, rate); err != nil {
+			return nil, err
+		}
 	}
 	return updated, nil
 }
@@ -877,9 +897,13 @@ func (s *adminServiceImpl) BulkUpdateAccounts(ctx context.Context, input *BulkUp
 			return nil, err
 		}
 	}
+	if err := s.validateAccountPoolGroupID(ctx, input.PoolGroupID); err != nil {
+		return nil, err
+	}
 
 	needMixedChannelCheck := input.GroupIDs != nil && !input.SkipMixedChannelCheck
 	_, hasLongContextBillingUpdate := input.Extra[openAILongContextBillingEnabledKey]
+	_, hasAnthropicAPIKeyAuthSchemeUpdate := input.Extra[anthropicAPIKeyAuthSchemeExtraKey]
 
 	// 预取所有目标账号，供凭据守卫/代理守卫/混合渠道检查共用，避免多次 DB 查询。
 	var cachedTargets []*Account
@@ -902,7 +926,7 @@ func (s *adminServiceImpl) BulkUpdateAccounts(ctx context.Context, input *BulkUp
 			if !ok {
 				return nil, ErrAccountNotFound
 			}
-			if !isUpstreamBillingProbeAccount(account) {
+			if !isAutomaticUpstreamBillingProbeAccount(account) {
 				return nil, ErrUpstreamBillingProbeAccountInvalid
 			}
 		}
@@ -975,6 +999,11 @@ func (s *adminServiceImpl) BulkUpdateAccounts(ctx context.Context, input *BulkUp
 	if err := NormalizeHeaderOverrideCredentials(input.Credentials); err != nil {
 		return nil, err
 	}
+	// Bulk may mix platforms; always drop ephemeral SSO/password keys (cookie
+	// only when platform is known Grok — empty platform still strips password/*).
+	if input.Credentials != nil {
+		input.Credentials = SanitizeStoredCredentials("", input.Credentials)
+	}
 
 	// Prepare bulk updates for columns and JSONB fields.
 	repoUpdates := AccountBulkUpdate{
@@ -988,7 +1017,9 @@ func (s *adminServiceImpl) BulkUpdateAccounts(ctx context.Context, input *BulkUp
 		}
 		repoUpdates.Extra[UpstreamBillingProbeEnabledExtraKey] = *input.ProbeEnabled
 	}
-	if updatesUpstreamBillingProbeIdentity(input.Credentials) || input.ProxyID != nil {
+	if updatesUpstreamBillingProbeIdentity(input.Credentials) ||
+		input.ProxyID != nil ||
+		hasAnthropicAPIKeyAuthSchemeUpdate {
 		if repoUpdates.Extra == nil {
 			repoUpdates.Extra = make(map[string]any)
 		}
@@ -1018,6 +1049,13 @@ func (s *adminServiceImpl) BulkUpdateAccounts(ctx context.Context, input *BulkUp
 			return nil, errors.New("load_factor must be <= 10000")
 		} else {
 			repoUpdates.LoadFactor = input.LoadFactor
+		}
+	}
+	if input.PoolGroupID != nil {
+		repoUpdates.PoolGroupID = normalizeAccountPoolGroupID(input.PoolGroupID)
+		if repoUpdates.PoolGroupID == nil {
+			clearPoolGroupID := int64(0)
+			repoUpdates.PoolGroupID = &clearPoolGroupID
 		}
 	}
 	if input.Status != "" {
@@ -1091,6 +1129,9 @@ func upstreamBillingProbeIdentity(account *Account) map[string]any {
 			identity[key] = value
 		}
 	}
+	if account.Platform == PlatformAnthropic && account.Type == AccountTypeAPIKey {
+		identity[anthropicAPIKeyAuthSchemeExtraKey] = account.GetAnthropicAPIKeyAuthScheme()
+	}
 	return identity
 }
 
@@ -1112,6 +1153,19 @@ func (s *adminServiceImpl) resolveBulkUpdateTargetIDs(ctx context.Context, filte
 		groupID = parsedGroupID
 	}
 
+	poolGroupID := int64(0)
+	switch strings.TrimSpace(filters.PoolGroup) {
+	case "":
+	case "ungrouped":
+		poolGroupID = AccountListPoolGroupUngrouped
+	default:
+		parsedPoolGroupID, err := strconv.ParseInt(strings.TrimSpace(filters.PoolGroup), 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("invalid account pool group filter: %w", err)
+		}
+		poolGroupID = parsedPoolGroupID
+	}
+
 	const pageSize = 500
 	page := 1
 	accountIDs := make([]int64, 0, pageSize)
@@ -1127,6 +1181,7 @@ func (s *adminServiceImpl) resolveBulkUpdateTargetIDs(ctx context.Context, filte
 			filters.Search,
 			groupID,
 			filters.PrivacyMode,
+			poolGroupID,
 			"",
 			"",
 		)

@@ -70,6 +70,9 @@ type DashboardStats struct {
 	TodayCost                float64 `json:"today_cost"`         // 今日标准计费
 	TodayActualCost          float64 `json:"today_actual_cost"`  // 今日实际扣除
 	TodayAccountCost         float64 `json:"today_account_cost"` // 今日账号成本
+	TodayMonitorRequests     int64   `json:"today_monitor_requests"`
+	TodayMonitorActualCost   float64 `json:"today_monitor_actual_cost"`  // 今日监测实际成本
+	TodayMonitorAccountCost  float64 `json:"today_monitor_account_cost"` // 今日监测标准估算
 
 	// 系统运行统计
 	AverageDurationMs float64 `json:"average_duration_ms"` // 平均响应时间
@@ -131,6 +134,30 @@ type GroupStat struct {
 	Cost        float64 `json:"cost"`         // 标准计费
 	ActualCost  float64 `json:"actual_cost"`  // 实际扣除
 	AccountCost float64 `json:"account_cost"` // 账号成本
+	// UpstreamCost is the cost calculated from the account's upstream billing
+	// probe snapshots, using 5-minute time buckets when historical data exists.
+	// It mirrors AccountCost and is exposed with an explicit name for profit
+	// reporting.
+	UpstreamCost float64 `json:"upstream_cost"`
+	// UpstreamMultiplier is the period-effective upstream cost / standard cost.
+	UpstreamMultiplier float64 `json:"upstream_multiplier"`
+	Profit             float64 `json:"profit"`
+	ProfitMargin       float64 `json:"profit_margin"` // ratio, not percentage
+}
+
+// CostProfitSummary contains the revenue and cost summary for a time range.
+// ActualCost is the user/API-key charge, while UpstreamCost is calculated from
+// the account's time-aware upstream billing probe multiplier. Historical rows
+// without a probe snapshot use the legacy usage-log account-cost formula.
+type CostProfitSummary struct {
+	Requests           int64   `json:"requests"`
+	TotalTokens        int64   `json:"total_tokens"`
+	StandardCost       float64 `json:"standard_cost"`
+	ActualCost         float64 `json:"actual_cost"`
+	UpstreamCost       float64 `json:"upstream_cost"`
+	UpstreamMultiplier float64 `json:"upstream_multiplier"`
+	Profit             float64 `json:"profit"`
+	ProfitMargin       float64 `json:"profit_margin"` // ratio, not percentage
 }
 
 // UserUsageTrendPoint represents user usage trend data point
@@ -271,6 +298,11 @@ type UsageLogFilters struct {
 	AccountID int64
 	GroupID   int64
 	Model     string
+	// ExcludeUserIDs and ExcludeUserEmails are report-only filters. They are
+	// intentionally separate from UserID so normal usage and billing queries
+	// cannot accidentally inherit the admin dashboard blacklist.
+	ExcludeUserIDs    []int64
+	ExcludeUserEmails []string
 	// ModelFilterSource controls how Model is matched. Empty preserves raw usage_logs.model semantics.
 	ModelFilterSource string
 	RequestType       *int16
@@ -279,6 +311,9 @@ type UsageLogFilters struct {
 	BillingMode       string
 	StartTime         *time.Time
 	EndTime           *time.Time
+	// IncludeMonitorUsage includes rows produced by internal channel-monitor probes.
+	// Default false keeps normal usage views focused on customer traffic.
+	IncludeMonitorUsage bool
 	// ExactTotal requests exact COUNT(*) for pagination. Default false for fast large-table paging.
 	ExactTotal bool
 }

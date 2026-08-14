@@ -19,6 +19,10 @@ A: 5
 Q: %d %s %d = ?
 A:`
 
+// monitorLowCostChallengePrompt is a real inference check with minimal input
+// and a one-token answer, used only when several lines are probed together.
+const monitorLowCostChallengePrompt = "Reply with only the digit 1."
+
 // monitorChallengeNumberRegex 提取响应中的所有整数（含负号）。
 var monitorChallengeNumberRegex = regexp.MustCompile(`-?\d+`)
 
@@ -55,6 +59,16 @@ func generateChallenge() monitorChallenge {
 		Prompt:   fmt.Sprintf(monitorChallengePromptTemplate, hi, "-", lo),
 		Expected: strconv.Itoa(hi - lo),
 	}
+}
+
+func generateChallengeForOptions(opts *CheckOptions) monitorChallenge {
+	if opts != nil && opts.LowCost {
+		return monitorChallenge{
+			Prompt:   monitorLowCostChallengePrompt,
+			Expected: "1",
+		}
+	}
+	return generateChallenge()
 }
 
 // randIntInRange 返回 [min, max] 闭区间的随机整数。

@@ -20,6 +20,7 @@ import (
 
 const (
 	usageCleanupWorkerName = "usage_cleanup_worker"
+	usageArchiveWorkerName = "usage_archive_worker"
 )
 
 // UsageCleanupService 负责创建与执行使用记录清理任务
@@ -30,6 +31,7 @@ type UsageCleanupService struct {
 	cfg         *config.Config
 
 	running   int32
+	archiving int32
 	startOnce sync.Once
 	stopOnce  sync.Once
 
@@ -97,6 +99,18 @@ func (s *UsageCleanupService) Start() {
 	s.startOnce.Do(func() {
 		s.timingWheel.ScheduleRecurring(usageCleanupWorkerName, interval, s.runOnce)
 		logger.LegacyPrintf("service.usage_cleanup", "[UsageCleanup] started (interval=%s max_range_days=%d batch_size=%d task_timeout=%s)", interval, s.maxRangeDays(), s.batchSize(), s.taskTimeout())
+		if s.archiveEnabled() {
+			archiveInterval := s.archiveInterval()
+			s.timingWheel.ScheduleRecurring(usageArchiveWorkerName, archiveInterval, s.runArchiveOnce)
+			logger.LegacyPrintf(
+				"service.usage_cleanup",
+				"[UsageCleanup] archive worker started (interval=%s retention_days=%d window=%s max_windows_per_run=%d)",
+				archiveInterval,
+				s.archiveRetentionDays(),
+				s.archiveWindow(),
+				s.archiveMaxWindowsPerRun(),
+			)
+		}
 	})
 }
 
@@ -110,6 +124,7 @@ func (s *UsageCleanupService) Stop() {
 		}
 		if s.timingWheel != nil {
 			s.timingWheel.Cancel(usageCleanupWorkerName)
+			s.timingWheel.Cancel(usageArchiveWorkerName)
 		}
 		logger.LegacyPrintf("service.usage_cleanup", "[UsageCleanup] stopped")
 	})
@@ -184,6 +199,92 @@ func (s *UsageCleanupService) runOnce() {
 
 	logger.LegacyPrintf("service.usage_cleanup", "[UsageCleanup] task claimed: task=%d status=%s created_by=%d deleted_rows=%d %s", task.ID, task.Status, task.CreatedBy, task.DeletedRows, describeUsageCleanupFilters(task.Filters))
 	svc.executeTask(ctx, task)
+}
+
+func (s *UsageCleanupService) runArchiveOnce() {
+	svc := s
+	if svc == nil || svc.repo == nil || !svc.archiveEnabled() {
+		return
+	}
+	if !atomic.CompareAndSwapInt32(&svc.archiving, 0, 1) {
+		logger.LegacyPrintf("service.usage_cleanup", "[UsageCleanup] archive skipped: already_running=true")
+		return
+	}
+	defer atomic.StoreInt32(&svc.archiving, 0)
+
+	parent := context.Background()
+	if svc.workerCtx != nil {
+		parent = svc.workerCtx
+	}
+	ctx, cancel := context.WithTimeout(parent, svc.taskTimeout())
+	defer cancel()
+
+	cutoff := time.Now().UTC().AddDate(0, 0, -svc.archiveRetentionDays()).Truncate(time.Hour)
+	windowSize := svc.archiveWindow()
+	maxWindows := svc.archiveMaxWindowsPerRun()
+	var totalSummaryRows int64
+	var totalDeletedRows int64
+	var processed int
+
+	for processed < maxWindows {
+		if ctx.Err() != nil {
+			logger.LegacyPrintf("service.usage_cleanup", "[UsageCleanup] archive interrupted: processed=%d summary_rows=%d deleted_rows=%d err=%v", processed, totalSummaryRows, totalDeletedRows, ctx.Err())
+			return
+		}
+		window, err := svc.repo.FindNextUsageLogArchiveWindow(ctx, cutoff, windowSize)
+		if err != nil {
+			logger.LegacyPrintf("service.usage_cleanup", "[UsageCleanup] archive find window failed: %v", err)
+			return
+		}
+		if window == nil {
+			slog.Debug("[UsageCleanup] archive done: no_eligible_window=true")
+			return
+		}
+		if window.EndTime.After(cutoff) {
+			slog.Debug("[UsageCleanup] archive done: next_window_not_older_than_cutoff=true")
+			return
+		}
+
+		result, err := svc.repo.ArchiveUsageLogsWindow(ctx, window.StartTime, window.EndTime)
+		if err != nil {
+			logger.LegacyPrintf(
+				"service.usage_cleanup",
+				"[UsageCleanup] archive window failed: start=%s end=%s err=%v",
+				window.StartTime.UTC().Format(time.RFC3339),
+				window.EndTime.UTC().Format(time.RFC3339),
+				err,
+			)
+			return
+		}
+		processed++
+		if result != nil {
+			totalSummaryRows += result.SummaryRows
+			totalDeletedRows += result.DeletedRows
+		}
+		logger.LegacyPrintf(
+			"service.usage_cleanup",
+			"[UsageCleanup] archive window done: start=%s end=%s summary_rows=%d deleted_rows=%d",
+			window.StartTime.UTC().Format(time.RFC3339),
+			window.EndTime.UTC().Format(time.RFC3339),
+			func() int64 {
+				if result == nil {
+					return 0
+				}
+				return result.SummaryRows
+			}(),
+			func() int64 {
+				if result == nil {
+					return 0
+				}
+				return result.DeletedRows
+			}(),
+		)
+		if result == nil || result.DeletedRows == 0 {
+			break
+		}
+	}
+
+	logger.LegacyPrintf("service.usage_cleanup", "[UsageCleanup] archive run finished: processed=%d summary_rows=%d deleted_rows=%d cutoff=%s", processed, totalSummaryRows, totalDeletedRows, cutoff.Format(time.RFC3339))
 }
 
 func (s *UsageCleanupService) executeTask(ctx context.Context, task *UsageCleanupTask) {
@@ -424,4 +525,51 @@ func (s *UsageCleanupService) taskTimeout() time.Duration {
 		return time.Duration(s.cfg.UsageCleanup.TaskTimeoutSeconds) * time.Second
 	}
 	return 30 * time.Minute
+}
+
+func (s *UsageCleanupService) archiveEnabled() bool {
+	if s == nil || s.cfg == nil {
+		return false
+	}
+	return s.cfg.UsageCleanup.ArchiveEnabled
+}
+
+func (s *UsageCleanupService) archiveRetentionDays() int {
+	if s == nil || s.cfg == nil {
+		return 15
+	}
+	if s.cfg.UsageCleanup.ArchiveRetentionDays > 0 {
+		return s.cfg.UsageCleanup.ArchiveRetentionDays
+	}
+	return 15
+}
+
+func (s *UsageCleanupService) archiveInterval() time.Duration {
+	if s == nil || s.cfg == nil {
+		return time.Hour
+	}
+	if s.cfg.UsageCleanup.ArchiveIntervalSeconds > 0 {
+		return time.Duration(s.cfg.UsageCleanup.ArchiveIntervalSeconds) * time.Second
+	}
+	return time.Hour
+}
+
+func (s *UsageCleanupService) archiveWindow() time.Duration {
+	if s == nil || s.cfg == nil {
+		return time.Hour
+	}
+	if s.cfg.UsageCleanup.ArchiveWindowHours > 0 {
+		return time.Duration(s.cfg.UsageCleanup.ArchiveWindowHours) * time.Hour
+	}
+	return time.Hour
+}
+
+func (s *UsageCleanupService) archiveMaxWindowsPerRun() int {
+	if s == nil || s.cfg == nil {
+		return 1
+	}
+	if s.cfg.UsageCleanup.ArchiveMaxWindowsPerRun > 0 {
+		return s.cfg.UsageCleanup.ArchiveMaxWindowsPerRun
+	}
+	return 1
 }

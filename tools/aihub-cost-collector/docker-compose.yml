@@ -1,0 +1,41 @@
+services:
+  browser:
+    image: selenium/standalone-chrome:4.35.0-20250828
+    container_name: aihub-cost-browser
+    restart: unless-stopped
+    shm_size: 1gb
+    environment:
+      SE_NODE_MAX_SESSIONS: "1"
+      SE_NODE_OVERRIDE_MAX_SESSIONS: "true"
+      SE_NODE_SESSION_TIMEOUT: "86400"
+      SE_ENABLE_TRACING: "false"
+      SE_VNC_NO_PASSWORD: "true"
+      TZ: ${TZ:-Asia/Shanghai}
+    ports:
+      # Do not expose the Selenium or noVNC desktop to the public Internet.
+      - "127.0.0.1:${SELENIUM_PORT:-14444}:4444"
+      - "127.0.0.1:${NOVNC_PORT:-17900}:7900"
+    volumes:
+      - browser_profile_v2:/home/seluser/aihub-profile
+
+  collector:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: aihub-cost-collector
+    restart: unless-stopped
+    depends_on:
+      - browser
+    environment:
+      SELENIUM_URL: http://browser:4444/wd/hub
+      AIHUB_USAGE_URL: https://aihub.top/usage
+      COLLECT_INTERVAL_SECONDS: ${COLLECT_INTERVAL_SECONDS:-900}
+      PAGE_TIMEOUT_SECONDS: ${PAGE_TIMEOUT_SECONDS:-45}
+      SNAPSHOT_DIR: /data
+      TZ: ${TZ:-Asia/Shanghai}
+    volumes:
+      - collector_data:/data
+
+volumes:
+  browser_profile_v2:
+  collector_data:

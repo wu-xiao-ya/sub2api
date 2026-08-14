@@ -778,6 +778,22 @@ func markGroupLifecycleSeen(seen map[batchSeenKey]struct{}, groupID int64) {
 	}
 }
 
+// RefreshAccount updates the account cache and immediately rebuilds all affected
+// scheduler buckets. Approval/revocation uses this to avoid waiting for the
+// asynchronous scheduler outbox consumer.
+func (s *SchedulerSnapshotService) RefreshAccount(ctx context.Context, account *Account, groupIDs []int64, reason string) error {
+	if s == nil || s.cache == nil || account == nil {
+		return nil
+	}
+	if err := s.cache.SetAccount(ctx, account); err != nil {
+		return err
+	}
+	if len(groupIDs) == 0 {
+		groupIDs = account.GroupIDs
+	}
+	return s.rebuildByAccount(ctx, account, groupIDs, reason, nil)
+}
+
 func (s *SchedulerSnapshotService) rebuildByAccount(ctx context.Context, account *Account, groupIDs []int64, reason string, seen map[batchSeenKey]struct{}) error {
 	if account == nil {
 		return nil

@@ -39,8 +39,19 @@ func RegisterAdminRoutes(
 		// 账号管理
 		registerAccountRoutes(admin, h, stepUpAuth)
 
+		// 共享号池审核
+		accountContributions := admin.Group("/account-contributions")
+		{
+			accountContributions.GET("", h.AccountContribution.ListPending)
+			accountContributions.POST("/:id/approve", h.AccountContribution.Approve)
+			accountContributions.POST("/:id/reject", h.AccountContribution.Reject)
+		}
+
 		// 公告管理
 		registerAnnouncementRoutes(admin, h)
+
+		// 分组限时活动
+		registerGroupPromotionRoutes(admin, h)
 
 		// OpenAI OAuth
 		registerOpenAIOAuthRoutes(admin, h)
@@ -113,6 +124,13 @@ func RegisterAdminRoutes(
 
 		// 邀请返利（专属用户管理）
 		registerAffiliateRoutes(admin, h)
+
+		// 财务资金流水
+		finance := admin.Group("/finance")
+		{
+			finance.GET("/ledger", h.Admin.Payment.ListFinanceLedger)
+			finance.GET("/ledger/export", h.Admin.Payment.ExportFinanceLedger)
+		}
 
 		// 操作审计日志
 		registerAuditLogRoutes(admin, h, stepUpAuth)
@@ -242,6 +260,7 @@ func registerOpsRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 
 		// Upstream errors (independent upstream failures)
 		ops.GET("/upstream-errors", h.Admin.Ops.ListUpstreamErrors)
+		ops.GET("/upstream-errors/attribution", h.Admin.Ops.GetUpstreamErrorAttribution)
 		ops.GET("/upstream-errors/:id", h.Admin.Ops.GetUpstreamError)
 		ops.PUT("/upstream-errors/:id/resolve", h.Admin.Ops.ResolveUpstreamError)
 
@@ -341,6 +360,10 @@ func registerAccountRoutes(admin *gin.RouterGroup, h *handler.Handlers, stepUpAu
 		accounts.GET("/upstream-billing-probe/settings", h.Admin.Account.GetUpstreamBillingProbeSettings)
 		accounts.PUT("/upstream-billing-probe/settings", h.Admin.Account.UpdateUpstreamBillingProbeSettings)
 		accounts.POST("/upstream-billing-probe/batch", h.Admin.Account.ProbeUpstreamBillingBatch)
+		accounts.GET("/pool-groups", h.Admin.Account.ListPoolGroups)
+		accounts.POST("/pool-groups", h.Admin.Account.CreatePoolGroup)
+		accounts.PUT("/pool-groups/:id", h.Admin.Account.UpdatePoolGroup)
+		accounts.DELETE("/pool-groups/:id", h.Admin.Account.DeletePoolGroup)
 		accounts.GET("/:id", h.Admin.Account.GetByID)
 		accounts.POST("", h.Admin.Account.Create)
 		accounts.POST("/:id/duplicate", h.Admin.Account.Duplicate)
@@ -363,6 +386,7 @@ func registerAccountRoutes(admin *gin.RouterGroup, h *handler.Handlers, stepUpAu
 		accounts.POST("/:id/revert-proxy-fallback", h.Admin.Account.RevertProxyFallback)
 		accounts.GET("/:id/usage", h.Admin.Account.GetUsage)
 		accounts.GET("/:id/today-stats", h.Admin.Account.GetTodayStats)
+		accounts.POST("/usage/batch", h.Admin.Account.GetBatchUsage)
 		accounts.POST("/today-stats/batch", h.Admin.Account.GetBatchTodayStats)
 		accounts.POST("/:id/clear-rate-limit", h.Admin.Account.ClearRateLimit)
 		accounts.POST("/:id/reset-quota", h.Admin.Account.ResetQuota)
@@ -410,6 +434,17 @@ func registerAnnouncementRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 	}
 }
 
+func registerGroupPromotionRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
+	promotions := admin.Group("/group-promotions")
+	{
+		promotions.GET("", h.Admin.GroupPromotion.List)
+		promotions.POST("", h.Admin.GroupPromotion.Create)
+		promotions.GET("/:id", h.Admin.GroupPromotion.GetByID)
+		promotions.PUT("/:id", h.Admin.GroupPromotion.Update)
+		promotions.DELETE("/:id", h.Admin.GroupPromotion.Delete)
+	}
+}
+
 func registerOpenAIOAuthRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 	openai := admin.Group("/openai")
 	{
@@ -445,9 +480,12 @@ func registerAntigravityOAuthRoutes(admin *gin.RouterGroup, h *handler.Handlers)
 func registerGrokOAuthRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 	grok := admin.Group("/grok")
 	{
+		grok.GET("/oauth/capabilities", h.Admin.GrokOAuth.GetCapabilities)
 		grok.POST("/oauth/auth-url", h.Admin.GrokOAuth.GenerateAuthURL)
 		grok.POST("/oauth/exchange-code", h.Admin.GrokOAuth.ExchangeCode)
 		grok.POST("/oauth/refresh-token", h.Admin.GrokOAuth.RefreshToken)
+		grok.POST("/oauth/sso-token", h.Admin.GrokOAuth.ValidateSSOToken)
+		grok.POST("/oauth/password", h.Admin.GrokOAuth.AuthorizePassword)
 		grok.POST("/oauth/create-from-oauth", h.Admin.GrokOAuth.CreateAccountFromOAuth)
 		grok.POST("/sso-to-oauth", h.Admin.GrokOAuth.CreateAccountsFromSSO)
 		grok.POST("/oauth/reconcile", h.Admin.GrokOAuth.ReconcileOAuthAccounts)
@@ -512,6 +550,8 @@ func registerSettingsRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 	{
 		adminSettings.GET("", h.Admin.Setting.GetSettings)
 		adminSettings.PUT("", h.Admin.Setting.UpdateSettings)
+		adminSettings.GET("/image-upstream-cost", h.Admin.Setting.GetImageUpstreamCost)
+		adminSettings.PUT("/image-upstream-cost", h.Admin.Setting.UpdateImageUpstreamCost)
 		adminSettings.POST("/test-smtp", h.Admin.Setting.TestSMTPConnection)
 		adminSettings.POST("/send-test-email", h.Admin.Setting.SendTestEmail)
 		adminSettings.GET("/email-templates", h.Admin.Setting.ListEmailTemplates)
@@ -719,6 +759,7 @@ func registerChannelMonitorRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		monitors.DELETE("/:id", h.Admin.ChannelMonitor.Delete)
 		monitors.POST("/:id/run", h.Admin.ChannelMonitor.Run)
 		monitors.GET("/:id/history", h.Admin.ChannelMonitor.History)
+		monitors.GET("/:id/image", h.Admin.ChannelMonitor.Image)
 	}
 
 	templates := admin.Group("/channel-monitor-templates")

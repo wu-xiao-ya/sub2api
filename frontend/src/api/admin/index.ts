@@ -11,6 +11,7 @@ import proxiesAPI from './proxies'
 import redeemAPI from './redeem'
 import promoAPI from './promo'
 import announcementsAPI from './announcements'
+import groupPromotionsAPI from './groupPromotions'
 import settingsAPI from './settings'
 import systemAPI from './system'
 import subscriptionsAPI from './subscriptions'
@@ -33,7 +34,9 @@ import adminPaymentAPI from './payment'
 import affiliatesAPI from './affiliates'
 import riskControlAPI from './riskControl'
 import adminComplianceAPI from './compliance'
+import adminAccountContributionsAPI from './accountContributions'
 import auditAPI from './audit'
+import financeAPI from './finance'
 
 /**
  * Unified admin API object for convenient access
@@ -47,6 +50,7 @@ export const adminAPI = {
   redeem: redeemAPI,
   promo: promoAPI,
   announcements: announcementsAPI,
+  groupPromotions: groupPromotionsAPI,
   settings: settingsAPI,
   system: systemAPI,
   subscriptions: subscriptionsAPI,
@@ -69,7 +73,9 @@ export const adminAPI = {
   affiliates: affiliatesAPI,
   riskControl: riskControlAPI,
   compliance: adminComplianceAPI,
-  audit: auditAPI
+  accountContributions: adminAccountContributionsAPI,
+  audit: auditAPI,
+  finance: financeAPI
 }
 
 export {
@@ -81,6 +87,7 @@ export {
   redeemAPI,
   promoAPI,
   announcementsAPI,
+  groupPromotionsAPI,
   settingsAPI,
   systemAPI,
   subscriptionsAPI,
@@ -103,7 +110,9 @@ export {
   affiliatesAPI,
   riskControlAPI,
   adminComplianceAPI,
-  auditAPI
+  adminAccountContributionsAPI,
+  auditAPI,
+  financeAPI
 }
 
 export default adminAPI
@@ -115,3 +124,11 @@ export type { ErrorPassthroughRule, CreateRuleRequest, UpdateRuleRequest } from 
 export type { BackupAgentHealth, DataManagementConfig } from './dataManagement'
 export type { TLSFingerprintProfile, CreateProfileRequest, UpdateProfileRequest } from './tlsFingerprintProfile'
 export type { ContentModerationConfig, ContentModerationLog, ModerationMode } from './riskControl'
+export type {
+  FinanceLedgerDirection,
+  FinanceLedgerEntry,
+  FinanceLedgerQuery,
+  FinanceLedgerResponse,
+  FinanceLedgerSource,
+  FinanceLedgerSummary,
+} from './finance'

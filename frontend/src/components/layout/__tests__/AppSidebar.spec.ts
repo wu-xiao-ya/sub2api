@@ -42,6 +42,16 @@ describe('AppSidebar scroll position persistence', () => {
   })
 })
 
+describe('AppSidebar server monitor entry', () => {
+  it('opens the standalone server monitor as an external admin entry', () => {
+    expect(componentSource).toContain("path: '/server-monitor'")
+    expect(componentSource).toContain("externalUrl: '/server-monitor/'")
+    expect(componentSource).toContain("label: t('nav.serverMonitor')")
+    expect(componentSource).toContain('target="_blank"')
+    expect(componentSource).toContain('rel="noopener noreferrer"')
+  })
+})
+
 describe('AppSidebar header styles', () => {
   it('does not clip the version badge dropdown', () => {
     const sidebarHeaderBlockMatch = styleSource.match(/\.sidebar-header\s*\{[\s\S]*?\n {2}\}/)

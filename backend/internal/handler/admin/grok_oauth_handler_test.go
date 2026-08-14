@@ -4,6 +4,7 @@ package admin
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -12,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 
@@ -187,6 +189,84 @@ func TestGrokOAuthHandlerRuntimeSanityDoesNotExposeSecrets(t *testing.T) {
 	require.NotContains(t, rec.Body.String(), "access_token")
 	require.NotContains(t, rec.Body.String(), "secret")
 	require.NotContains(t, rec.Body.String(), "client-secret-like-value")
+}
+
+type grokOAuthHandlerClient struct{}
+
+func (c *grokOAuthHandlerClient) ExchangeCode(context.Context, string, string, string, string, string) (*xai.TokenResponse, error) {
+	return nil, errors.New("unexpected exchange")
+}
+
+func (c *grokOAuthHandlerClient) RefreshToken(context.Context, string, string, string) (*xai.TokenResponse, error) {
+	return &xai.TokenResponse{AccessToken: "access-token", RefreshToken: "refresh-token", ExpiresIn: 3600}, nil
+}
+
+func (c *grokOAuthHandlerClient) LoginWithPassword(_ context.Context, email, _ string, _ string) (*service.GrokPasswordLoginResult, error) {
+	return &service.GrokPasswordLoginResult{
+		Email:    email,
+		SSOToken: "sso-from-password",
+	}, nil
+}
+
+func (c *grokOAuthHandlerClient) ConvertSSOToBuild(context.Context, string, string) (*xai.TokenResponse, error) {
+	return &xai.TokenResponse{AccessToken: "access-token", RefreshToken: "refresh-token", ExpiresIn: 3600}, nil
+}
+
+func TestGrokOAuthHandlerValidateSSOTokenReturnsTokenInfo(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	oauthClient := &grokOAuthHandlerClient{}
+	oauthService := service.NewGrokOAuthService(nil, oauthClient)
+	defer oauthService.Stop()
+	handler := NewGrokOAuthHandler(oauthService, nil, nil, nil)
+
+	router := gin.New()
+	router.POST("/api/v1/admin/grok/oauth/sso-token", handler.ValidateSSOToken)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/grok/oauth/sso-token", strings.NewReader(`{"sso_token":"sso-token"}`))
+	req.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Contains(t, rec.Body.String(), `"access_token":"access-token"`)
+	require.NotContains(t, rec.Body.String(), `"sso_token"`)
+}
+
+func TestGrokOAuthHandlerAuthorizePasswordReturnsTokenInfoWithoutPassword(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	oauthClient := &grokOAuthHandlerClient{}
+	cfg := &config.Config{}
+	cfg.Gateway.Grok.PasswordAuthEnabled = true
+	oauthService := service.NewGrokOAuthService(nil, oauthClient, cfg)
+	defer oauthService.Stop()
+	handler := NewGrokOAuthHandler(oauthService, nil, nil, nil)
+
+	router := gin.New()
+	router.POST("/api/v1/admin/grok/oauth/password", handler.AuthorizePassword)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/grok/oauth/password", strings.NewReader(`{"email":"user@example.com","password":"super-secret"}`))
+	req.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Contains(t, rec.Body.String(), `"access_token":"access-token"`)
+	require.NotContains(t, rec.Body.String(), "super-secret")
+}
+
+func TestGrokOAuthHandlerPasswordCapabilityDefaultsToDisabled(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	oauthService := service.NewGrokOAuthService(nil, &grokOAuthHandlerClient{})
+	defer oauthService.Stop()
+	handler := NewGrokOAuthHandler(oauthService, nil, nil, nil)
+
+	router := gin.New()
+	router.GET("/api/v1/admin/grok/oauth/capabilities", handler.GetCapabilities)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/admin/grok/oauth/capabilities", nil))
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Contains(t, rec.Body.String(), `"password_auth_enabled":false`)
 }
 
 func TestGrokSSOImportExpiryUsesTokenExpiryWithoutRefreshToken(t *testing.T) {

@@ -231,7 +231,7 @@ import Icon from '@/components/icons/Icon.vue'
 import UserErrorRequestsTable from '@/components/user/UserErrorRequestsTable.vue'
 import { getPersistedPageSize } from '@/composables/usePersistedPageSize'
 import { formatReasoningEffort } from '@/utils/format'
-import { BILLING_MODE_IMAGE, getBillingModeLabel } from '@/utils/billingMode'
+import { getBillingModeLabel, getDisplayBillingMode as resolveDisplayBillingMode } from '@/utils/billingMode'
 import { resolveUsageRequestType, requestTypeToLegacyStream } from '@/utils/usageRequestType'
 import type {
   ApiKey,
@@ -603,10 +603,7 @@ const getRequestTypeExportText = (log: UsageLog): string => {
 
 const getDisplayBillingMode = (
   row: Pick<UsageLog, 'billing_mode' | 'image_count'> | null | undefined
-): string | null | undefined => {
-  if ((row?.image_count ?? 0) > 0) return BILLING_MODE_IMAGE
-  return row?.billing_mode
-}
+): string | null | undefined => resolveDisplayBillingMode(row)
 
 const escapeCSVValue = (value: unknown): string => {
   if (value == null) return ''
@@ -615,6 +612,12 @@ const escapeCSVValue = (value: unknown): string => {
   if (/^[=+\-@\t\r]/.test(str)) return `"\'${escaped}"`
   if (/[,"\n\r]/.test(str)) return `"${escaped}"`
   return str
+}
+
+const promotionPricePercent = (log: Pick<UsageLog, 'base_rate_multiplier' | 'rate_multiplier'>): string => {
+  const baseRate = log.base_rate_multiplier
+  if (baseRate == null || baseRate <= 0) return ''
+  return (log.rate_multiplier / baseRate * 100).toFixed(2)
 }
 
 const exportToCSV = async () => {
@@ -649,6 +652,10 @@ const exportToCSV = async () => {
       'Output Tokens',
       'Cache Read Tokens',
       'Cache Creation Tokens',
+      t('usage.promotion'),
+      t('usage.promotionBaseRate'),
+      t('usage.promotionFinalRate'),
+      t('usage.promotionPricePercent'),
       'Rate Multiplier',
       'Billed Cost',
       'Original Cost',
@@ -668,6 +675,10 @@ const exportToCSV = async () => {
       log.output_tokens,
       log.cache_read_tokens,
       log.cache_creation_tokens,
+      log.promotion_name || '',
+      log.base_rate_multiplier ?? '',
+      log.rate_multiplier,
+      promotionPricePercent(log),
       log.rate_multiplier,
       log.actual_cost.toFixed(8),
       log.total_cost.toFixed(8),
@@ -705,6 +716,7 @@ const allColumns = computed<Column[]>(() => [
   { key: 'endpoint', label: t('usage.endpoint'), sortable: false },
   { key: 'ip_address', label: 'IP', sortable: false },
   { key: 'group', label: t('admin.usage.group'), sortable: false },
+  { key: 'promotion', label: t('usage.promotion'), sortable: false },
   { key: 'stream', label: t('usage.type'), sortable: false },
   { key: 'billing_mode', label: t('admin.usage.billingMode'), sortable: false },
   { key: 'tokens', label: t('usage.tokens'), sortable: false },

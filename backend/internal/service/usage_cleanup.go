@@ -55,6 +55,18 @@ type UsageCleanupTask struct {
 	UpdatedAt   time.Time
 }
 
+// UsageLogArchiveWindow 表示一个可以被归档的完整 usage_logs 时间窗口。
+type UsageLogArchiveWindow struct {
+	StartTime time.Time
+	EndTime   time.Time
+}
+
+// UsageLogArchiveResult 表示一次旧明细归档的结果。
+type UsageLogArchiveResult struct {
+	SummaryRows int64
+	DeletedRows int64
+}
+
 // UsageCleanupRepository 定义清理任务持久层接口
 type UsageCleanupRepository interface {
 	CreateTask(ctx context.Context, task *UsageCleanupTask) error
@@ -72,4 +84,6 @@ type UsageCleanupRepository interface {
 	MarkTaskSucceeded(ctx context.Context, taskID int64, deletedRows int64) error
 	MarkTaskFailed(ctx context.Context, taskID int64, deletedRows int64, errorMsg string) error
 	DeleteUsageLogsBatch(ctx context.Context, filters UsageCleanupFilters, limit int) (int64, error)
+	FindNextUsageLogArchiveWindow(ctx context.Context, cutoff time.Time, window time.Duration) (*UsageLogArchiveWindow, error)
+	ArchiveUsageLogsWindow(ctx context.Context, start, end time.Time) (*UsageLogArchiveResult, error)
 }

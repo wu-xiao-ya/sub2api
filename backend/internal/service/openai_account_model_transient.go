@@ -20,16 +20,20 @@ type openAIAccountModelKey struct {
 }
 
 type openAIAccountModelTransientEntry struct {
-	failureStreak int
-	lastFailure   time.Time
-	blockUntil    time.Time
-	lastTouched   time.Time
+	failureStreak  int
+	lastFailure    time.Time
+	blockUntil     time.Time
+	cooldownActive bool
+	lastTouched    time.Time
 }
 
 type openAIAccountModelTransientDecision struct {
-	FailureStreak int
-	Cooldown      time.Duration
-	BlockUntil    time.Time
+	FailureStreak      int
+	Cooldown           time.Duration
+	BlockUntil         time.Time
+	PreviousBlockUntil time.Time
+	ExpiredBlockUntil  time.Time
+	WasBlocked         bool
 }
 
 type openAIAccountModelTransientState struct {
@@ -86,9 +90,20 @@ func (s *openAIAccountModelTransientState) recordFailure(accountID int64, model 
 	if !exists {
 		s.evictOldestLocked()
 	}
+	expiredBlockUntil := time.Time{}
+	if exists && entry.cooldownActive && !entry.blockUntil.IsZero() && !now.Before(entry.blockUntil) {
+		expiredBlockUntil = entry.blockUntil
+		entry.cooldownActive = false
+	}
 	if !exists || entry.lastFailure.IsZero() || now.Sub(entry.lastFailure) > openAIModelTransientFailureWindow || now.Before(entry.lastFailure) {
 		entry.failureStreak = 0
 		entry.blockUntil = time.Time{}
+		entry.cooldownActive = false
+	}
+	wasBlocked := entry.cooldownActive && !entry.blockUntil.IsZero() && now.Before(entry.blockUntil)
+	previousBlockUntil := time.Time{}
+	if wasBlocked {
+		previousBlockUntil = entry.blockUntil
 	}
 	entry.failureStreak++
 	entry.lastFailure = now
@@ -103,31 +118,46 @@ func (s *openAIAccountModelTransientState) recordFailure(accountID int64, model 
 	}
 	if cooldown > 0 {
 		entry.blockUntil = now.Add(cooldown)
+		entry.cooldownActive = true
 	} else {
 		entry.blockUntil = time.Time{}
+		entry.cooldownActive = false
 	}
 	s.entries[key] = entry
 	return openAIAccountModelTransientDecision{
-		FailureStreak: entry.failureStreak,
-		Cooldown:      cooldown,
-		BlockUntil:    entry.blockUntil,
+		FailureStreak:      entry.failureStreak,
+		Cooldown:           cooldown,
+		BlockUntil:         entry.blockUntil,
+		PreviousBlockUntil: previousBlockUntil,
+		ExpiredBlockUntil:  expiredBlockUntil,
+		WasBlocked:         wasBlocked,
 	}
 }
 
-func (s *openAIAccountModelTransientState) recordSuccess(accountID int64, model string) {
+func (s *openAIAccountModelTransientState) recordSuccess(accountID int64, model string) (time.Time, bool) {
 	key, ok := openAIAccountModelTransientKey(accountID, model)
 	if s == nil || !ok {
-		return
+		return time.Time{}, false
 	}
 	s.mu.Lock()
+	entry, exists := s.entries[key]
 	delete(s.entries, key)
 	s.mu.Unlock()
+	if !exists || !entry.cooldownActive || entry.blockUntil.IsZero() {
+		return time.Time{}, false
+	}
+	return entry.blockUntil, true
 }
 
 func (s *openAIAccountModelTransientState) isBlocked(accountID int64, model string, now time.Time) bool {
+	blocked, _ := s.checkBlocked(accountID, model, now)
+	return blocked
+}
+
+func (s *openAIAccountModelTransientState) checkBlocked(accountID int64, model string, now time.Time) (bool, time.Time) {
 	key, ok := openAIAccountModelTransientKey(accountID, model)
 	if s == nil || !ok {
-		return false
+		return false, time.Time{}
 	}
 	if now.IsZero() {
 		now = time.Now()
@@ -137,15 +167,25 @@ func (s *openAIAccountModelTransientState) isBlocked(accountID int64, model stri
 	defer s.mu.Unlock()
 	entry, exists := s.entries[key]
 	if !exists {
-		return false
+		return false, time.Time{}
 	}
 	if !entry.lastFailure.IsZero() && now.Sub(entry.lastFailure) > openAIModelTransientFailureWindow {
+		clearedUntil := time.Time{}
+		if entry.cooldownActive {
+			clearedUntil = entry.blockUntil
+		}
 		delete(s.entries, key)
-		return false
+		return false, clearedUntil
 	}
 	entry.lastTouched = now
+	if entry.cooldownActive && !entry.blockUntil.IsZero() && !now.Before(entry.blockUntil) {
+		clearedUntil := entry.blockUntil
+		entry.cooldownActive = false
+		s.entries[key] = entry
+		return false, clearedUntil
+	}
 	s.entries[key] = entry
-	return !entry.blockUntil.IsZero() && now.Before(entry.blockUntil)
+	return entry.cooldownActive && !entry.blockUntil.IsZero() && now.Before(entry.blockUntil), time.Time{}
 }
 
 func (s *openAIAccountModelTransientState) size() int {

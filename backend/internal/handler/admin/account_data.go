@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -25,14 +26,24 @@ const (
 )
 
 type DataPayload struct {
-	Type       string        `json:"type,omitempty"`
-	Version    int           `json:"version,omitempty"`
-	ExportedAt string        `json:"exported_at"`
-	Proxies    []DataProxy   `json:"proxies"`
-	Accounts   []DataAccount `json:"accounts"`
+	Type       string                 `json:"type,omitempty"`
+	Version    int                    `json:"version,omitempty"`
+	ExportedAt string                 `json:"exported_at"`
+	PoolGroups []DataAccountPoolGroup `json:"pool_groups,omitempty"`
+	Proxies    []DataProxy            `json:"proxies"`
+	Accounts   []DataAccount          `json:"accounts"`
 	// SkippedShadows 记录导出时被排除的 spark 影子账号数量(见 ExportData)。仅作可见性提示,
 	// 导入侧忽略该字段;omitempty 保持向后兼容。
 	SkippedShadows int `json:"skipped_shadows,omitempty"`
+}
+
+type DataAccountPoolGroup struct {
+	PoolGroupKey string `json:"pool_group_key,omitempty"`
+	Name         string `json:"name"`
+	UpstreamKey  string `json:"upstream_key,omitempty"`
+	Description  string `json:"description,omitempty"`
+	SortOrder    int    `json:"sort_order,omitempty"`
+	Status       string `json:"status,omitempty"`
 }
 
 type DataProxy struct {
@@ -65,6 +76,7 @@ type DataAccount struct {
 	Credentials        map[string]any `json:"credentials"`
 	Extra              map[string]any `json:"extra,omitempty"`
 	ProxyKey           *string        `json:"proxy_key,omitempty"`
+	PoolGroupKey       *string        `json:"pool_group_key,omitempty"`
 	Concurrency        int            `json:"concurrency"`
 	Priority           int            `json:"priority"`
 	RateMultiplier     *float64       `json:"rate_multiplier,omitempty"`
@@ -78,12 +90,15 @@ type DataImportRequest struct {
 }
 
 type DataImportResult struct {
-	ProxyCreated   int               `json:"proxy_created"`
-	ProxyReused    int               `json:"proxy_reused"`
-	ProxyFailed    int               `json:"proxy_failed"`
-	AccountCreated int               `json:"account_created"`
-	AccountFailed  int               `json:"account_failed"`
-	Errors         []DataImportError `json:"errors,omitempty"`
+	PoolGroupCreated int               `json:"pool_group_created,omitempty"`
+	PoolGroupReused  int               `json:"pool_group_reused,omitempty"`
+	PoolGroupFailed  int               `json:"pool_group_failed,omitempty"`
+	ProxyCreated     int               `json:"proxy_created"`
+	ProxyReused      int               `json:"proxy_reused"`
+	ProxyFailed      int               `json:"proxy_failed"`
+	AccountCreated   int               `json:"account_created"`
+	AccountFailed    int               `json:"account_failed"`
+	Errors           []DataImportError `json:"errors,omitempty"`
 }
 
 type DataImportError struct {
@@ -95,6 +110,35 @@ type DataImportError struct {
 
 func buildProxyKey(protocol, host string, port int, username, password string) string {
 	return fmt.Sprintf("%s|%s|%d|%s|%s", strings.TrimSpace(protocol), strings.TrimSpace(host), port, strings.TrimSpace(username), strings.TrimSpace(password))
+}
+
+func buildAccountPoolGroupKey(upstreamKey, name string) string {
+	upstreamKey = strings.TrimSpace(upstreamKey)
+	name = strings.TrimSpace(name)
+	if upstreamKey == "" {
+		return name
+	}
+	return upstreamKey + "::" + name
+}
+
+func normalizeAccountPoolGroupLookupKey(key string) string {
+	return strings.ToLower(strings.TrimSpace(key))
+}
+
+func accountPoolGroupLookupKeys(upstreamKey, name, exportedKey string) []string {
+	keys := make([]string, 0, 2)
+	if normalized := normalizeAccountPoolGroupLookupKey(exportedKey); normalized != "" {
+		keys = append(keys, normalized)
+	}
+	if normalized := normalizeAccountPoolGroupLookupKey(buildAccountPoolGroupKey(upstreamKey, name)); normalized != "" {
+		for _, existing := range keys {
+			if existing == normalized {
+				return keys
+			}
+		}
+		keys = append(keys, normalized)
+	}
+	return keys
 }
 
 func (h *AccountHandler) ExportData(c *gin.Context) {
@@ -185,6 +229,7 @@ func (h *AccountHandler) ExportData(c *gin.Context) {
 		})
 	}
 
+	poolGroupByKey := make(map[string]DataAccountPoolGroup)
 	dataAccounts := make([]DataAccount, 0, len(accounts))
 	for i := range accounts {
 		acc := accounts[i]
@@ -199,6 +244,21 @@ func (h *AccountHandler) ExportData(c *gin.Context) {
 			v := acc.ExpiresAt.Unix()
 			expiresAt = &v
 		}
+		var poolGroupKey *string
+		if acc.PoolGroup != nil {
+			key := buildAccountPoolGroupKey(acc.PoolGroup.UpstreamKey, acc.PoolGroup.Name)
+			if key != "" {
+				poolGroupKey = &key
+				poolGroupByKey[normalizeAccountPoolGroupLookupKey(key)] = DataAccountPoolGroup{
+					PoolGroupKey: key,
+					Name:         acc.PoolGroup.Name,
+					UpstreamKey:  acc.PoolGroup.UpstreamKey,
+					Description:  acc.PoolGroup.Description,
+					SortOrder:    acc.PoolGroup.SortOrder,
+					Status:       acc.PoolGroup.Status,
+				}
+			}
+		}
 		dataAccounts = append(dataAccounts, DataAccount{
 			Name:               acc.Name,
 			Notes:              acc.Notes,
@@ -207,6 +267,7 @@ func (h *AccountHandler) ExportData(c *gin.Context) {
 			Credentials:        acc.Credentials,
 			Extra:              acc.Extra,
 			ProxyKey:           proxyKey,
+			PoolGroupKey:       poolGroupKey,
 			Concurrency:        acc.Concurrency,
 			Priority:           acc.Priority,
 			RateMultiplier:     acc.RateMultiplier,
@@ -215,8 +276,19 @@ func (h *AccountHandler) ExportData(c *gin.Context) {
 		})
 	}
 
+	poolGroupKeys := make([]string, 0, len(poolGroupByKey))
+	for key := range poolGroupByKey {
+		poolGroupKeys = append(poolGroupKeys, key)
+	}
+	sort.Strings(poolGroupKeys)
+	dataPoolGroups := make([]DataAccountPoolGroup, 0, len(poolGroupKeys))
+	for _, key := range poolGroupKeys {
+		dataPoolGroups = append(dataPoolGroups, poolGroupByKey[key])
+	}
+
 	payload := DataPayload{
 		ExportedAt:     time.Now().UTC().Format(time.RFC3339),
+		PoolGroups:     dataPoolGroups,
 		Proxies:        dataProxies,
 		Accounts:       dataAccounts,
 		SkippedShadows: skippedShadows,
@@ -250,6 +322,11 @@ func (h *AccountHandler) importData(ctx context.Context, req DataImportRequest) 
 
 	dataPayload := req.Data
 	result := DataImportResult{}
+
+	poolGroupKeyToID, err := h.resolveDataPoolGroups(ctx, dataPayload.PoolGroups, &result)
+	if err != nil {
+		return result, err
+	}
 
 	existingProxies, err := h.listAllProxies(ctx)
 	if err != nil {
@@ -426,6 +503,21 @@ func (h *AccountHandler) importData(ctx context.Context, req DataImportRequest) 
 				continue
 			}
 		}
+		var poolGroupID *int64
+		if item.PoolGroupKey != nil && strings.TrimSpace(*item.PoolGroupKey) != "" {
+			key := normalizeAccountPoolGroupLookupKey(*item.PoolGroupKey)
+			if id, ok := poolGroupKeyToID[key]; ok {
+				poolGroupID = &id
+			} else {
+				result.AccountFailed++
+				result.Errors = append(result.Errors, DataImportError{
+					Kind:    "account",
+					Name:    item.Name,
+					Message: fmt.Sprintf("account pool group key %q not found", *item.PoolGroupKey),
+				})
+				continue
+			}
+		}
 
 		enrichCredentialsFromIDToken(&item)
 
@@ -440,6 +532,7 @@ func (h *AccountHandler) importData(ctx context.Context, req DataImportRequest) 
 			Concurrency:          item.Concurrency,
 			Priority:             item.Priority,
 			RateMultiplier:       item.RateMultiplier,
+			PoolGroupID:          poolGroupID,
 			GroupIDs:             nil,
 			ExpiresAt:            item.ExpiresAt,
 			AutoPauseOnExpired:   item.AutoPauseOnExpired,
@@ -484,6 +577,86 @@ func (h *AccountHandler) importData(ctx context.Context, req DataImportRequest) 
 	return result, nil
 }
 
+func (h *AccountHandler) resolveDataPoolGroups(ctx context.Context, items []DataAccountPoolGroup, result *DataImportResult) (map[string]int64, error) {
+	keyToID := make(map[string]int64)
+
+	existing, err := h.adminService.ListAccountPoolGroups(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for i := range existing {
+		group := existing[i]
+		for _, key := range accountPoolGroupLookupKeys(group.UpstreamKey, group.Name, "") {
+			keyToID[key] = group.ID
+		}
+	}
+
+	for i := range items {
+		item := items[i]
+		if err := validateDataAccountPoolGroup(item); err != nil {
+			if result != nil {
+				result.PoolGroupFailed++
+				result.Errors = append(result.Errors, DataImportError{
+					Kind:    "pool_group",
+					Name:    item.Name,
+					Message: err.Error(),
+				})
+			}
+			continue
+		}
+
+		exportedKey := strings.TrimSpace(item.PoolGroupKey)
+		if exportedKey == "" {
+			exportedKey = buildAccountPoolGroupKey(item.UpstreamKey, item.Name)
+		}
+		lookupKeys := accountPoolGroupLookupKeys(item.UpstreamKey, item.Name, exportedKey)
+		existingID := int64(0)
+		for _, key := range lookupKeys {
+			if id, ok := keyToID[key]; ok {
+				existingID = id
+				break
+			}
+		}
+		if existingID > 0 {
+			for _, key := range lookupKeys {
+				keyToID[key] = existingID
+			}
+			if result != nil {
+				result.PoolGroupReused++
+			}
+			continue
+		}
+
+		status := normalizeDataPoolGroupStatus(item.Status)
+		created, err := h.adminService.CreateAccountPoolGroup(ctx, &service.CreateAccountPoolGroupInput{
+			Name:        item.Name,
+			UpstreamKey: item.UpstreamKey,
+			Description: item.Description,
+			SortOrder:   item.SortOrder,
+			Status:      status,
+		})
+		if err != nil {
+			if result != nil {
+				result.PoolGroupFailed++
+				result.Errors = append(result.Errors, DataImportError{
+					Kind:    "pool_group",
+					Name:    item.Name,
+					Message: err.Error(),
+				})
+			}
+			continue
+		}
+		for _, key := range lookupKeys {
+			keyToID[key] = created.ID
+		}
+		if result != nil {
+			result.PoolGroupCreated++
+		}
+	}
+
+	return keyToID, nil
+}
+
 func (h *AccountHandler) listAllProxies(ctx context.Context) ([]service.Proxy, error) {
 	page := 1
 	pageSize := dataPageCap
@@ -502,12 +675,12 @@ func (h *AccountHandler) listAllProxies(ctx context.Context) ([]service.Proxy, e
 	return out, nil
 }
 
-func (h *AccountHandler) listAccountsFiltered(ctx context.Context, platform, accountType, status, search string, groupID int64, privacyMode, sortBy, sortOrder string) ([]service.Account, error) {
+func (h *AccountHandler) listAccountsFiltered(ctx context.Context, platform, accountType, status, search string, groupID int64, privacyMode string, poolGroupID int64, sortBy, sortOrder string) ([]service.Account, error) {
 	page := 1
 	pageSize := dataPageCap
 	var out []service.Account
 	for {
-		items, total, err := h.adminService.ListAccounts(ctx, page, pageSize, platform, accountType, status, search, groupID, privacyMode, sortBy, sortOrder)
+		items, total, err := h.adminService.ListAccounts(ctx, page, pageSize, platform, accountType, status, search, groupID, privacyMode, poolGroupID, sortBy, sortOrder)
 		if err != nil {
 			return nil, err
 		}
@@ -560,7 +733,12 @@ func (h *AccountHandler) resolveExportAccounts(ctx context.Context, ids []int64,
 		}
 	}
 
-	return h.listAccountsFiltered(ctx, platform, accountType, status, search, groupID, privacyMode, sortBy, sortOrder)
+	poolGroupID, err := parseAccountPoolGroupFilter(c.Query("pool_group"))
+	if err != nil {
+		return nil, err
+	}
+
+	return h.listAccountsFiltered(ctx, platform, accountType, status, search, groupID, privacyMode, poolGroupID, sortBy, sortOrder)
 }
 
 func (h *AccountHandler) resolveExportProxies(ctx context.Context, accounts []service.Account) ([]service.Proxy, error) {
@@ -673,6 +851,25 @@ func validateDataProxy(item DataProxy) error {
 		}
 	}
 	return nil
+}
+
+func validateDataAccountPoolGroup(item DataAccountPoolGroup) error {
+	if strings.TrimSpace(item.Name) == "" {
+		return errors.New("account pool group name is required")
+	}
+	status := normalizeDataPoolGroupStatus(item.Status)
+	if status != service.AccountPoolGroupStatusActive && status != service.AccountPoolGroupStatusInactive {
+		return fmt.Errorf("account pool group status is invalid: %s", item.Status)
+	}
+	return nil
+}
+
+func normalizeDataPoolGroupStatus(status string) string {
+	status = strings.TrimSpace(status)
+	if status == "" {
+		return service.AccountPoolGroupStatusActive
+	}
+	return status
 }
 
 func validateDataAccount(item DataAccount) error {

@@ -21,6 +21,7 @@ export * as batchImageAPI from './batchImage'
 export { totpAPI } from './totp'
 export { default as announcementsAPI } from './announcements'
 export { channelMonitorUserAPI } from './channelMonitor'
+export { accountContributionsAPI } from './accountContributions'
 
 // Admin APIs
 export { adminAPI } from './admin'

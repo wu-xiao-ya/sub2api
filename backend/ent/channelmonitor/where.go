@@ -95,6 +95,11 @@ func GroupName(v string) predicate.ChannelMonitor {
 	return predicate.ChannelMonitor(sql.FieldEQ(FieldGroupName, v))
 }
 
+// AccountGroupID applies equality check predicate on the "account_group_id" field. It's identical to AccountGroupIDEQ.
+func AccountGroupID(v int64) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldEQ(FieldAccountGroupID, v))
+}
+
 // Enabled applies equality check predicate on the "enabled" field. It's identical to EnabledEQ.
 func Enabled(v bool) predicate.ChannelMonitor {
 	return predicate.ChannelMonitor(sql.FieldEQ(FieldEnabled, v))
@@ -108,6 +113,11 @@ func IntervalSeconds(v int) predicate.ChannelMonitor {
 // JitterSeconds applies equality check predicate on the "jitter_seconds" field. It's identical to JitterSecondsEQ.
 func JitterSeconds(v int) predicate.ChannelMonitor {
 	return predicate.ChannelMonitor(sql.FieldEQ(FieldJitterSeconds, v))
+}
+
+// RequestTimeoutSeconds applies equality check predicate on the "request_timeout_seconds" field. It's identical to RequestTimeoutSecondsEQ.
+func RequestTimeoutSeconds(v int) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldEQ(FieldRequestTimeoutSeconds, v))
 }
 
 // LastCheckedAt applies equality check predicate on the "last_checked_at" field. It's identical to LastCheckedAtEQ.
@@ -630,6 +640,56 @@ func GroupNameContainsFold(v string) predicate.ChannelMonitor {
 	return predicate.ChannelMonitor(sql.FieldContainsFold(FieldGroupName, v))
 }
 
+// AccountGroupIDEQ applies the EQ predicate on the "account_group_id" field.
+func AccountGroupIDEQ(v int64) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldEQ(FieldAccountGroupID, v))
+}
+
+// AccountGroupIDNEQ applies the NEQ predicate on the "account_group_id" field.
+func AccountGroupIDNEQ(v int64) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldNEQ(FieldAccountGroupID, v))
+}
+
+// AccountGroupIDIn applies the In predicate on the "account_group_id" field.
+func AccountGroupIDIn(vs ...int64) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldIn(FieldAccountGroupID, vs...))
+}
+
+// AccountGroupIDNotIn applies the NotIn predicate on the "account_group_id" field.
+func AccountGroupIDNotIn(vs ...int64) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldNotIn(FieldAccountGroupID, vs...))
+}
+
+// AccountGroupIDGT applies the GT predicate on the "account_group_id" field.
+func AccountGroupIDGT(v int64) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldGT(FieldAccountGroupID, v))
+}
+
+// AccountGroupIDGTE applies the GTE predicate on the "account_group_id" field.
+func AccountGroupIDGTE(v int64) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldGTE(FieldAccountGroupID, v))
+}
+
+// AccountGroupIDLT applies the LT predicate on the "account_group_id" field.
+func AccountGroupIDLT(v int64) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldLT(FieldAccountGroupID, v))
+}
+
+// AccountGroupIDLTE applies the LTE predicate on the "account_group_id" field.
+func AccountGroupIDLTE(v int64) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldLTE(FieldAccountGroupID, v))
+}
+
+// AccountGroupIDIsNil applies the IsNil predicate on the "account_group_id" field.
+func AccountGroupIDIsNil() predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldIsNull(FieldAccountGroupID))
+}
+
+// AccountGroupIDNotNil applies the NotNil predicate on the "account_group_id" field.
+func AccountGroupIDNotNil() predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldNotNull(FieldAccountGroupID))
+}
+
 // EnabledEQ applies the EQ predicate on the "enabled" field.
 func EnabledEQ(v bool) predicate.ChannelMonitor {
 	return predicate.ChannelMonitor(sql.FieldEQ(FieldEnabled, v))
@@ -718,6 +778,46 @@ func JitterSecondsLT(v int) predicate.ChannelMonitor {
 // JitterSecondsLTE applies the LTE predicate on the "jitter_seconds" field.
 func JitterSecondsLTE(v int) predicate.ChannelMonitor {
 	return predicate.ChannelMonitor(sql.FieldLTE(FieldJitterSeconds, v))
+}
+
+// RequestTimeoutSecondsEQ applies the EQ predicate on the "request_timeout_seconds" field.
+func RequestTimeoutSecondsEQ(v int) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldEQ(FieldRequestTimeoutSeconds, v))
+}
+
+// RequestTimeoutSecondsNEQ applies the NEQ predicate on the "request_timeout_seconds" field.
+func RequestTimeoutSecondsNEQ(v int) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldNEQ(FieldRequestTimeoutSeconds, v))
+}
+
+// RequestTimeoutSecondsIn applies the In predicate on the "request_timeout_seconds" field.
+func RequestTimeoutSecondsIn(vs ...int) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldIn(FieldRequestTimeoutSeconds, vs...))
+}
+
+// RequestTimeoutSecondsNotIn applies the NotIn predicate on the "request_timeout_seconds" field.
+func RequestTimeoutSecondsNotIn(vs ...int) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldNotIn(FieldRequestTimeoutSeconds, vs...))
+}
+
+// RequestTimeoutSecondsGT applies the GT predicate on the "request_timeout_seconds" field.
+func RequestTimeoutSecondsGT(v int) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldGT(FieldRequestTimeoutSeconds, v))
+}
+
+// RequestTimeoutSecondsGTE applies the GTE predicate on the "request_timeout_seconds" field.
+func RequestTimeoutSecondsGTE(v int) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldGTE(FieldRequestTimeoutSeconds, v))
+}
+
+// RequestTimeoutSecondsLT applies the LT predicate on the "request_timeout_seconds" field.
+func RequestTimeoutSecondsLT(v int) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldLT(FieldRequestTimeoutSeconds, v))
+}
+
+// RequestTimeoutSecondsLTE applies the LTE predicate on the "request_timeout_seconds" field.
+func RequestTimeoutSecondsLTE(v int) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldLTE(FieldRequestTimeoutSeconds, v))
 }
 
 // LastCheckedAtEQ applies the EQ predicate on the "last_checked_at" field.

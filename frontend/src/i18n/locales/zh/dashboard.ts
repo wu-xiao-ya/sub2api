@@ -9,6 +9,10 @@ export default {
     todayTokens: '今日 Token',
     totalTokens: '累计 Token',
     cacheToday: '今日缓存',
+    cacheHitRate: '缓存命中率',
+    todayCacheHitRate: '今日缓存命中率',
+    historicalCacheHitRate: '历史缓存命中率',
+    cacheReadTokens: '缓存读取',
     performance: '性能指标',
     avgResponse: '平均响应',
     averageTime: '平均时间',
@@ -76,6 +80,15 @@ export default {
       copiedHint: '已复制到剪贴板',
       clickToCopy: '点击可复制此端点',
       speedTest: '测速',
+      checking: '检测中',
+      unknown: '待检测',
+      offline: '异常',
+      timeout: '检测超时',
+      requestFailed: '检测失败',
+      httpError: '健康检查返回 {status}',
+      lastCheckedAt: '上次检测：{time}',
+      notChecked: '尚未检测',
+      refresh: '重新检测',
     },
     allGroups: '全部分组',
     allStatus: '全部状态',
@@ -173,16 +186,24 @@ export default {
         note: '这些环境变量将在当前终端会话中生效。如需永久配置，请将其添加到 ~/.bashrc、~/.zshrc 或相应的配置文件中。'
       },
       grok: {
-        description: '配置 Grok Build、Claude Code、Codex 或 OpenCode，让请求通过当前 Sub2API Grok 分组发送。',
+        description:
+          '配置 Grok CLI、Claude Code、Codex 或 OpenCode，让请求通过当前 Sub2API Grok 分组发送。文本模型走 Responses；图片/视频使用 Imagine 模型 ID 与媒体端点。',
         claudeDescription: '配置 Claude Code，让 Messages API 请求通过当前 Sub2API Grok 分组发送。',
         codexDescription: '配置 Codex，让 Responses API 请求通过当前 Sub2API Grok 分组发送。',
-        configTomlHint: '如已有 config.toml，请先备份再合并此模型配置。保存后运行 grok inspect 验证生效配置。',
-        codexConfigTomlHint: '如已有 config.toml，请先备份再合并此服务商配置。',
-        note: '保存为 ~/.grok/config.toml，然后运行 grok inspect，并在 /model 中选择 grok。',
-        noteWindows: '保存为 %USERPROFILE%\\.grok\\config.toml，然后运行 grok inspect，并在 /model 中选择 grok。',
-        claudeNote: '二选一即可：终端命令仅在当前会话生效；保存 settings.json 可作为用户级持久配置。',
-        codexNote: '将 config.toml 保存到 ~/.codex，并在启动 Codex 前设置 SUB2API_API_KEY。',
-        codexNoteWindows: '将 config.toml 保存到 %USERPROFILE%\\.codex，并在 PowerShell 中设置 SUB2API_API_KEY 后启动 Codex。'
+        configTomlHint:
+          '官方路径：~/.grok/config.toml（或 $GROK_HOME）。请填写 [endpoints]（models_base_url / models_list_url / xai_api_base_url / cli_chat_proxy_base_url）、[auth] preferred_method=api_key、[models]、[session]、[features] 图片/视频覆盖。优先 env_key，勿硬编码 api_key；文本模型必须 api_backend=responses。合并前备份，保存后运行 grok inspect。',
+        codexConfigTomlHint:
+          'Codex 官方：wire_api 仅支持 "responses"；优先 env_key，勿与 experimental_bearer_token 混用；非 OpenAI 网关默认 supports_websockets = false（Sub2API 仍可接客户端 WS 并桥接到 HTTP/SSE）。合并前备份 ~/.codex/config.toml。',
+        note:
+          '导出 GROK_MODELS_BASE_URL 与 XAI_API_KEY，将完整 config.toml（endpoints/auth/models/session/features）保存为 ~/.grok/config.toml，运行 grok inspect，再用 /model 选择 grok-4.5（编程场景可用 grok-build-0.1）。',
+        noteWindows:
+          '设置 GROK_MODELS_BASE_URL 与 XAI_API_KEY，将完整 config.toml 保存为 %USERPROFILE%\\.grok\\config.toml，运行 grok inspect，再用 /model 选择 grok-4.5（编程场景可用 grok-build-0.1）。',
+        claudeNote:
+          '二选一：终端环境变量仅当前会话；~/.claude/settings.json 可持久化。请勿把含 API Key 的文件提交到仓库。',
+        codexNote:
+          '导出 SUB2API_API_KEY，将 config.toml 保存到 ~/.codex（可用 mkdir -p ~/.codex）。优先 env_key，勿提交密钥。',
+        codexNoteWindows:
+          '设置 $env:SUB2API_API_KEY，将 config.toml 保存到 %USERPROFILE%\\.codex。优先 env_key，勿提交密钥。'
       },
       opencode: {
         title: 'OpenCode 配置示例',
@@ -361,6 +382,11 @@ export default {
     serviceTierFlex: 'Flex',
     serviceTierStandard: 'Standard',
     rate: '倍率',
+    promotion: '活动优惠',
+    promotionRate: '优惠倍率',
+    promotionBaseRate: '活动前倍率',
+    promotionFinalRate: '活动后倍率',
+    promotionPricePercent: '活动计费比例 (%)',
     original: '原始',
     billed: '计费',
     noRecords: '未找到使用记录，请尝试调整筛选条件。',
@@ -412,7 +438,7 @@ export default {
   monitorCommon: {
     status: {
       operational: '正常',
-      degraded: '降级',
+      degraded: '响应偏慢',
       failed: '失败',
       error: '错误',
       unknown: '-'
@@ -421,7 +447,11 @@ export default {
       openai: 'OpenAI',
       anthropic: 'Anthropic',
       gemini: 'Gemini',
-      grok: 'Grok'
+      grok: 'Grok',
+      antigravity: 'Antigravity',
+      deepseek: 'DeepSeek',
+      kimi: 'Kimi',
+      glm: 'GLM'
     },
     extraModelsHeader: '附加模型',
     extraModelsEmpty: '无附加模型',
@@ -450,6 +480,32 @@ export default {
     searchPlaceholder: '搜索渠道...',
     allProviders: '全部供应商',
     loadError: '加载渠道状态失败',
+    imageLoadError: '加载最近生图失败',
+    latestImage: '最近一次生图',
+    latestImageEmpty: '暂无成功生成的测试图',
+    modelMonitoring: '模型监测',
+    modelsCount: '{n} 个模型',
+    availableModels: '可用模型',
+    leadLatency: '当前延迟',
+    sourceLabel: '来源',
+    source: {
+      traffic: '用户请求',
+      probe: '站内探测',
+      mixed: '混合来源',
+    },
+    latencyMetric: {
+      traffic: '用户请求：近期成功请求的首字延迟中位数；没有首字记录时回退总耗时',
+      probe: '站内探测：本次探测的完整响应耗时',
+      unknown: '当前延迟',
+    },
+    latencyKind: {
+      firstToken: '首字',
+      probe: '探测',
+    },
+    primaryModel: '独立监测',
+    responseLatency: '响应延迟',
+    windowAvailability: '{window} 可用率',
+    viewDetail: '查看渠道详情',
     detailLoadError: '加载渠道详情失败',
     detailTitle: '渠道详情',
     closeDetail: '关闭',
@@ -459,9 +515,16 @@ export default {
       '30d': '30 天'
     },
     overall: {
-      operational: 'OPERATIONAL',
-      degraded: 'DEGRADED',
-      unavailable: 'UNAVAILABLE'
+      operational: '运行正常',
+      slow_response: '响应偏慢',
+      partial: '部分渠道异常',
+      unavailable: '渠道不可用'
+    },
+    health: {
+      operational: '正常',
+      slow_response: '响应偏慢',
+      partial: '部分模型异常',
+      unavailable: '不可用'
     },
     columns: {
       name: '名称',
@@ -473,6 +536,7 @@ export default {
     },
     detailColumns: {
       model: '模型',
+      source: '数据来源',
       latestStatus: '最新状态',
       latestLatency: '最新延迟 (ms)',
       availability7d: '7 天可用率',
@@ -488,16 +552,41 @@ export default {
 
   // Available Channels (user-facing)
   availableChannels: {
-    title: '可用渠道',
-    description: '查看您可访问的渠道与其支持的模型、定价',
-    searchPlaceholder: '搜索渠道或模型...',
+    title: '模型广场',
+    description: '浏览全部可用模型、当前价格与可用分组',
+    searchPlaceholder: '搜索模型、分组或平台...',
+    allPlatforms: '全部平台',
+    platformFilter: '筛选平台',
+    channelCount: '{count} 个渠道',
+    groupCount: '{count} 个分组',
+    modelCount: '{count} 个模型',
+    groupUnit: '个分组',
+    modelUnit: '个模型',
+    groupsLabel: '可用分组',
+    modelsLabel: '可用模型',
     empty: '暂无可用渠道',
+    emptyDescription: '暂时没有可供使用的渠道。',
+    noMatching: '没有匹配的渠道',
     noModels: '未配置模型',
+    noGroups: '未开放分组',
     noPricing: '未配置定价',
     exclusive: '专属',
     public: '公开',
     exclusiveTooltip: '管理员授权给你的专属分组',
     publicTooltip: '对所有用户公开的分组',
+    filtersTitle: '筛选',
+    clearFilters: '清除',
+    providersTitle: '厂商',
+    groupsFilterTitle: '分组',
+    billingFilterTitle: '计费模式',
+    tokenUnit: 'Token 价格单位',
+    sortLabel: '排序方式',
+    sortDefault: '排序 · 默认',
+    sortName: '排序 · 模型名称',
+    sortRate: '排序 · 最低倍率',
+    lowestRate: '最低',
+    sourceLabel: '渠道：{name}',
+    filterByGroup: '按分组「{name}」筛选',
     columns: {
       name: '渠道名',
       description: '描述',
@@ -568,6 +657,179 @@ export default {
       line2: '被邀请用户充值后，你可获得 {rate} 的返利额度。',
       line3: '返利额度可随时转入账户余额。',
       line4: '新产生的返利需要经过冻结期后才能提现。'
+    }
+  },
+
+  accountContributions: {
+    title: '共享号池贡献',
+    callbackTitle: '贡献账号授权回调',
+    description: '贡献自己的 OpenAI OAuth 账号到共享号池，审核通过后按分组奖励倍率获得余额奖励',
+    startOAuth: '授权 OpenAI 账号',
+    startingOAuth: '正在跳转...',
+    revoke: '撤回',
+    republish: '重新发布',
+    revoked: '贡献账号已撤回',
+    republished: '贡献账号已重新提交审核',
+    backToList: '返回贡献列表',
+    contributeOpenAI: {
+      title: '贡献 OpenAI OAuth 账号',
+      description: '授权后账号会先进入待审核状态，管理员通过后才会进入共享调度池。'
+    },
+    proxy: {
+      url: '专属代理 URL（可选）',
+      placeholder: '例如：http://user:pass@1.2.3.4:8080 或 socks5://1.2.3.4:1080',
+      hint: '填写后会为这个贡献账号创建专属代理；账号撤回时会一并删除。',
+      importHint: '填写后会为本次导入的每个贡献账号创建专属代理；撤回时自动删除。'
+    },
+    oauthDialog: {
+      title: '授权 OpenAI 账号',
+      warning: 'OpenAI/Codex OAuth 客户端通常只接受已注册的 localhost 回调地址。授权完成后若浏览器打不开 localhost，把完整回调 URL 复制回来即可。',
+      redirectURI: 'OAuth 回调地址',
+      redirectURIHint: '建议保留默认值。',
+      generate: '生成授权链接',
+      generating: '生成中...',
+      generated: '授权链接已生成，请打开链接完成登录',
+      openAuthURL: '打开授权页面',
+      authURL: '授权链接',
+      callbackURL: '回调 URL / code 内容',
+      callbackPlaceholder: '粘贴授权后地址栏中的完整回调 URL',
+      submitCallback: '提交授权结果',
+      submitting: '提交中...',
+      copyFailed: '复制授权链接失败',
+      steps: {
+        line1: '1. 生成授权链接并打开授权页面。',
+        line2: '2. 登录 OpenAI 并授权后复制完整回调 URL。',
+        line3: '3. 粘贴回调 URL 提交，账号将进入待审核。'
+      }
+    },
+    importJson: {
+      title: '导入 OpenAI 账号 JSON',
+      button: '导入 JSON',
+      hint: '支持账号管理导出的 JSON 文件；只接受 OpenAI OAuth 账号，导入后统一进入待审核。',
+      warning: '用户侧导入不会直接进入调度池。',
+      file: 'JSON 文件',
+      selectFile: '请选择 JSON 文件',
+      selectedFiles: '已选择 {count} 个文件',
+      fileHint: '支持一个或多个 sub2api-data / sub2api-bundle JSON 文件',
+      submit: '导入为贡献账号',
+      importing: '导入中...',
+      result: '导入结果',
+      resultSummary: '总计 {total} 个，成功 {created} 个，失败 {failed} 个',
+      errors: '失败明细',
+      invalidFile: '{file} 不是有效的账号导入 JSON',
+      proxyNotSupported: '{file} 包含代理数据；将按账号 proxy_key 导入为用户专属代理',
+      parseFailed: 'JSON 解析失败',
+      failed: '导入贡献账号失败',
+      success: '已提交 {created} 个贡献账号，等待管理员审核',
+      completedWithErrors: '导入完成：成功 {created} 个，失败 {failed} 个',
+      preview: '导入预览',
+      previewTotal: '总账号数',
+      previewValid: '有效可导入',
+      previewDuplicate: '重复',
+      previewUnsupported: '不支持/无效',
+      previewFailed: '预览导入 JSON 失败',
+      previewDuplicateMessage: '重复贡献或本次文件内重复',
+      previewUnsupportedMessage: '仅支持 OpenAI OAuth 账号',
+      previewInvalidMessage: '账号数据不完整'
+    },
+    rules: {
+      title: '共享号池规则',
+      line1: '1. 待审核、拒绝、撤回的账号不会参与调度。',
+      line2: '2. 已撤回账号可重新发布进入审核。',
+      line3: '3. 审核通过后按分组奖励倍率实时结算余额奖励。'
+    },
+    stats: {
+      totalAccounts: '贡献账号数',
+      pageRewards: '本页收益',
+      totalRewards: '累计收益',
+      todayRewards: '今日收益',
+      last7dRewards: '近 7 日收益'
+    },
+    status: {
+      pending: '待审核',
+      approved: '已通过',
+      rejected: '已拒绝',
+      revoked: '已撤回'
+    },
+    accounts: {
+      title: '我的贡献账号',
+      description: '查看审核状态；待审核或已通过的账号可随时撤回。',
+      submitted: '提交',
+      approved: '通过',
+      revoked: '撤回',
+      columns: {
+        id: 'ID',
+        account: '账号',
+        status: '状态',
+        groups: '分组',
+        todayStats: '今日',
+        usage: '用量',
+        timeline: '时间线'
+      }
+    },
+    settings: {
+      title: '共享账号配置',
+      button: '设置',
+      saved: '账号配置已保存',
+      accountLevel: '账号等级',
+      groups: '分组',
+      name: '名称',
+      notes: '备注',
+      concurrency: '并发数',
+      loadFactor: '负载因子',
+      expiresAt: '过期时间',
+      autoPauseOnExpired: '过期后自动暂停',
+      tempUnschedulable: '临时不可调度规则',
+      addRule: '添加规则',
+      errorCode: '状态码',
+      keywords: '关键词',
+      durationMinutes: '分钟',
+      ruleDescription: '描述',
+      codexProtection: 'Codex 限额保护',
+      threshold5h: '5h 阈值 (%)',
+      threshold7d: '7d 阈值 (%)',
+      disable5h: '禁用 5h 保护',
+      disable7d: '禁用 7d 保护'
+    },
+    rewards: {
+      title: '贡献收益明细',
+      description: '每次成功计费后的幂等奖励流水。',
+      columns: {
+        createdAt: '时间',
+        account: '账号',
+        group: '分组',
+        totalCost: '原始成本',
+        actualCost: '实际扣费',
+        multiplier: '奖励倍率',
+        reward: '奖励',
+        request: '请求 ID'
+      }
+    },
+    callback: {
+      processingTitle: '正在提交贡献账号',
+      processingMessage: 'OAuth 回调处理中，请稍候。',
+      successTitle: '提交成功',
+      successMessage: '账号已进入待审核状态，管理员通过后才会参与调度。',
+      failedTitle: '提交失败',
+      failedMessage: '授权回调未完成。',
+      retry: '重试提交',
+      submitted: '贡献账号提交成功',
+      submitFailed: '提交贡献账号失败',
+      missingCode: 'OAuth 回调缺少 code',
+      missingState: 'OAuth 回调缺少 state',
+      missingSession: '找不到授权会话，请重新发起授权',
+      stateMismatch: 'OAuth state 不匹配，请重新发起授权'
+    },
+    errors: {
+      startOAuthFailed: '生成 OpenAI 授权链接失败',
+      loadAccountsFailed: '加载贡献账号失败',
+      loadRewardsFailed: '加载收益明细失败',
+      loadRewardSummaryFailed: '加载收益统计失败',
+      loadTodayStatsFailed: '加载今日统计失败',
+      loadUsageFailed: '加载用量失败',
+      saveSettingsFailed: '保存账号配置失败',
+      revokeFailed: '撤回贡献账号失败',
+      republishFailed: '重新发布贡献账号失败'
     }
   },
 

@@ -102,6 +102,14 @@ func (s *cleanupRepoStub) DeleteUsageLogsBatch(ctx context.Context, filters serv
 	return 0, nil
 }
 
+func (s *cleanupRepoStub) FindNextUsageLogArchiveWindow(ctx context.Context, cutoff time.Time, window time.Duration) (*service.UsageLogArchiveWindow, error) {
+	return nil, nil
+}
+
+func (s *cleanupRepoStub) ArchiveUsageLogsWindow(ctx context.Context, start, end time.Time) (*service.UsageLogArchiveResult, error) {
+	return nil, nil
+}
+
 var _ service.UsageCleanupRepository = (*cleanupRepoStub)(nil)
 
 func setupCleanupRouter(cleanupService *service.UsageCleanupService, userID int64) *gin.Engine {

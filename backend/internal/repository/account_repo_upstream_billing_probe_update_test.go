@@ -80,7 +80,7 @@ func TestLockAndMergeAccountProbeExtraUsesCurrentDatabaseSnapshot(t *testing.T) 
 			t.Cleanup(func() { _ = client.Close() })
 
 			mock.ExpectQuery(`(?s)`+regexp.QuoteMeta("SELECT")+`.*`+regexp.QuoteMeta("FOR NO KEY UPDATE")).
-				WithArgs(int64(27), service.PlatformOpenAI, service.AccountTypeAPIKey, `{"api_key":"sk-test"}`, nil).
+				WithArgs(int64(27), service.PlatformOpenAI, service.AccountTypeAPIKey, `{"api_key":"sk-test"}`, nil, service.AnthropicAPIKeyAuthSchemeXAPIKey).
 				WillReturnRows(sqlmock.NewRows([]string{"identity_unchanged", "enabled", "snapshot"}).
 					AddRow(tt.identityUnchanged, tt.databaseEnabled, tt.databaseSnapshot))
 
@@ -102,6 +102,42 @@ func TestLockAndMergeAccountProbeExtraUsesCurrentDatabaseSnapshot(t *testing.T) 
 			require.NoError(t, mock.ExpectationsWereMet())
 		})
 	}
+}
+
+func TestLockAndMergeAccountProbeExtraPreservesAnthropicManualSnapshot(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	client := dbent.NewClient(dbent.Driver(entsql.OpenDB(dialect.Postgres, db)))
+	t.Cleanup(func() { _ = client.Close() })
+
+	mock.ExpectQuery(`(?s)`+regexp.QuoteMeta("SELECT")+`.*`+regexp.QuoteMeta("anthropic_apikey_auth_scheme")+`.*`+regexp.QuoteMeta("FOR NO KEY UPDATE")).
+		WithArgs(
+			int64(31),
+			service.PlatformAnthropic,
+			service.AccountTypeAPIKey,
+			`{"api_key":"sk-ant-test","base_url":"https://cc.example"}`,
+			nil,
+			service.AnthropicAPIKeyAuthSchemeAuthorizationBearer,
+		).
+		WillReturnRows(sqlmock.NewRows([]string{"identity_unchanged", "enabled", "snapshot"}).
+			AddRow(true, nil, []byte(`{"status":"ok"}`)))
+
+	account := &service.Account{
+		ID:          31,
+		Platform:    service.PlatformAnthropic,
+		Type:        service.AccountTypeAPIKey,
+		Credentials: map[string]any{"api_key": "sk-ant-test", "base_url": "https://cc.example"},
+		Extra: map[string]any{
+			"anthropic_apikey_auth_scheme": service.AnthropicAPIKeyAuthSchemeAuthorizationBearer,
+		},
+	}
+	got, err := lockAndMergeAccountProbeExtra(context.Background(), client, account, nil)
+
+	require.NoError(t, err)
+	require.Equal(t, map[string]any{"status": "ok"}, got[service.UpstreamBillingProbeExtraKey])
+	require.NotContains(t, got, service.UpstreamBillingProbeEnabledExtraKey)
+	require.NoError(t, mock.ExpectationsWereMet())
 }
 
 func TestUpdateExtraExplicitProbeDisableRemovesSnapshot(t *testing.T) {
@@ -226,6 +262,29 @@ func TestUpdateCredentialsAtomicallyClearsProbeForOpenAIAPIKeyIdentityChange(t *
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestUpdateCredentialsAtomicallyClearsProbeForAnthropicAPIKeyIdentityChange(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	client := dbent.NewClient(dbent.Driver(entsql.OpenDB(dialect.Postgres, db)))
+	t.Cleanup(func() { _ = client.Close() })
+
+	mock.ExpectBegin()
+	mock.ExpectExec(`(?s)UPDATE accounts.*platform IN \('openai', 'anthropic'\).*credentials IS DISTINCT FROM \$1::jsonb.*- 'upstream_billing_probe'`).
+		WithArgs(`{"api_key":"sk-ant-new"}`, int64(31)).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec(regexp.QuoteMeta("INSERT INTO scheduler_outbox")).
+		WithArgs(service.SchedulerOutboxEventAccountChanged, int64(31), nil, nil, sqlmock.AnyArg()).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectCommit()
+	repo := newAccountRepositoryWithSQL(client, db, nil)
+
+	err = repo.UpdateCredentials(context.Background(), 31, map[string]any{"api_key": "sk-ant-new"})
+
+	require.NoError(t, err)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestUpdateWithUpstreamBillingProbeEnabledRollsBackWhenOutboxFails(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
@@ -235,7 +294,7 @@ func TestUpdateWithUpstreamBillingProbeEnabledRollsBackWhenOutboxFails(t *testin
 
 	mock.ExpectBegin()
 	mock.ExpectQuery(`(?s)`+regexp.QuoteMeta("SELECT")+`.*`+regexp.QuoteMeta("FOR NO KEY UPDATE")).
-		WithArgs(int64(27), service.PlatformOpenAI, service.AccountTypeAPIKey, `{"api_key":"sk-test"}`, nil).
+		WithArgs(int64(27), service.PlatformOpenAI, service.AccountTypeAPIKey, `{"api_key":"sk-test"}`, nil, service.AnthropicAPIKeyAuthSchemeXAPIKey).
 		WillReturnRows(sqlmock.NewRows([]string{"identity_unchanged", "enabled", "snapshot"}).
 			AddRow(true, []byte(`true`), []byte(`{"status":"ok"}`)))
 	mock.ExpectExec(`(?s)UPDATE .*accounts.*SET.*WHERE .*id.*`).
@@ -243,6 +302,9 @@ func TestUpdateWithUpstreamBillingProbeEnabledRollsBackWhenOutboxFails(t *testin
 	mock.ExpectQuery(`(?s)SELECT .* FROM "accounts" WHERE "id" = \$1`).
 		WithArgs(int64(27)).
 		WillReturnRows(updatedAccountRows(27, `{"upstream_billing_probe_enabled":false}`))
+	mock.ExpectExec(regexp.QuoteMeta("UPDATE accounts SET pool_group_id = NULL WHERE id = $1 AND deleted_at IS NULL")).
+		WithArgs(int64(27)).
+		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectExec(regexp.QuoteMeta("INSERT INTO scheduler_outbox")).WillReturnError(errors.New("outbox failed"))
 	mock.ExpectRollback()
 
@@ -340,7 +402,14 @@ func updatedAccountRows(id int64, extra string) *sqlmock.Rows {
 	return sqlmock.NewRows(dbaccount.Columns).AddRow(
 		id, now, now, nil, "test", nil, service.PlatformOpenAI, service.AccountTypeAPIKey,
 		[]byte(`{"api_key":"sk-test"}`), []byte(extra), nil, nil, 1, nil, 1, 1.0,
-		service.StatusActive, nil, nil, nil, false, true, nil, nil, nil, nil, nil, nil,
-		nil, nil, nil, service.QuotaDimensionGlobal,
+		service.StatusActive, nil, nil, nil,
+		false, // auto_pause_on_expired
+		nil,   // owner_user_id
+		"",    // contribution_status
+		nil, nil, nil,
+		true, // schedulable
+		nil, nil, nil, nil, nil,
+		nil, nil, nil, nil,
+		service.QuotaDimensionGlobal,
 	)
 }

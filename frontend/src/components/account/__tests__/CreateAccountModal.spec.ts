@@ -86,7 +86,7 @@ const OAuthAuthorizationFlowStub = defineComponent({
 
 function mountModal() {
   return mount(CreateAccountModal, {
-    props: { show: true, proxies: [], groups: [] },
+    props: { show: true, proxies: [], groups: [], poolGroups: [] },
     global: {
       stubs: {
         BaseDialog: BaseDialogStub,

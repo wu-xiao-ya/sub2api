@@ -112,6 +112,9 @@ func (h *DashboardHandler) GetStats(c *gin.Context) {
 		"today_tokens":                stats.TodayTokens,
 		"today_cost":                  stats.TodayCost,       // 今日标准计费
 		"today_actual_cost":           stats.TodayActualCost, // 今日实际扣除
+		"today_monitor_requests":      stats.TodayMonitorRequests,
+		"today_monitor_actual_cost":   stats.TodayMonitorActualCost,
+		"today_monitor_account_cost":  stats.TodayMonitorAccountCost,
 
 		// 系统运行统计
 		"average_duration_ms": stats.AverageDurationMs,
@@ -193,6 +196,7 @@ func (h *DashboardHandler) GetRealtimeMetrics(c *gin.Context) {
 func (h *DashboardHandler) GetUsageTrend(c *gin.Context) {
 	startTime, endTime := parseTimeRange(c)
 	granularity := c.DefaultQuery("granularity", "day")
+	includeMonitorUsage := parseBoolQueryWithDefault(c.Query("include_monitor_usage"), true)
 
 	// Parse optional filter params
 	var userID, apiKeyID, accountID, groupID int64
@@ -250,7 +254,7 @@ func (h *DashboardHandler) GetUsageTrend(c *gin.Context) {
 		}
 	}
 
-	trend, hit, err := h.getUsageTrendCached(c.Request.Context(), startTime, endTime, granularity, userID, apiKeyID, accountID, groupID, model, requestType, stream, billingType)
+	trend, hit, err := h.getUsageTrendCached(c.Request.Context(), startTime, endTime, granularity, userID, apiKeyID, accountID, groupID, model, requestType, stream, billingType, includeMonitorUsage)
 	if err != nil {
 		response.Error(c, 500, "Failed to get usage trend")
 		return
@@ -270,6 +274,7 @@ func (h *DashboardHandler) GetUsageTrend(c *gin.Context) {
 // Query params: start_date, end_date (YYYY-MM-DD), user_id, api_key_id, account_id, group_id, request_type, stream, billing_type
 func (h *DashboardHandler) GetModelStats(c *gin.Context) {
 	startTime, endTime := parseTimeRange(c)
+	includeMonitorUsage := parseBoolQueryWithDefault(c.Query("include_monitor_usage"), true)
 
 	// Parse optional filter params
 	var userID, apiKeyID, accountID, groupID int64
@@ -331,7 +336,7 @@ func (h *DashboardHandler) GetModelStats(c *gin.Context) {
 		}
 	}
 
-	stats, hit, err := h.getModelStatsCached(c.Request.Context(), startTime, endTime, userID, apiKeyID, accountID, groupID, modelSource, requestType, stream, billingType)
+	stats, hit, err := h.getModelStatsCached(c.Request.Context(), startTime, endTime, userID, apiKeyID, accountID, groupID, modelSource, requestType, stream, billingType, includeMonitorUsage)
 	if err != nil {
 		response.Error(c, 500, "Failed to get model statistics")
 		return
@@ -350,6 +355,7 @@ func (h *DashboardHandler) GetModelStats(c *gin.Context) {
 // Query params: start_date, end_date (YYYY-MM-DD), user_id, api_key_id, account_id, group_id, request_type, stream, billing_type
 func (h *DashboardHandler) GetGroupStats(c *gin.Context) {
 	startTime, endTime := parseTimeRange(c)
+	includeMonitorUsage := parseBoolQueryWithDefault(c.Query("include_monitor_usage"), true)
 
 	var userID, apiKeyID, accountID, groupID int64
 	var requestType *int16
@@ -402,7 +408,7 @@ func (h *DashboardHandler) GetGroupStats(c *gin.Context) {
 		}
 	}
 
-	stats, hit, err := h.getGroupStatsCached(c.Request.Context(), startTime, endTime, userID, apiKeyID, accountID, groupID, requestType, stream, billingType)
+	stats, hit, err := h.getGroupStatsCached(c.Request.Context(), startTime, endTime, userID, apiKeyID, accountID, groupID, requestType, stream, billingType, nil, nil, includeMonitorUsage)
 	if err != nil {
 		response.Error(c, 500, "Failed to get group statistics")
 		return

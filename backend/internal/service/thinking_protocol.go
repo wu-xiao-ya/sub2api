@@ -60,7 +60,9 @@ func ResolveThinkingProtocol(modelID string) ThinkingProtocol {
 	case strings.HasPrefix(id, "deepseek-"),
 		strings.HasPrefix(id, "kimi-"),
 		strings.HasPrefix(id, "moonshot-"),
-		strings.HasPrefix(id, "glm-"):
+		strings.HasPrefix(id, "glm-"),
+		id == "k3",
+		id == "k3-256k":
 		return ThinkingProtocolPassbackRequired
 	}
 	// MiniMax M 系列：走 https://api.minimax.io/anthropic 端点，
