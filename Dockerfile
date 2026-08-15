@@ -28,8 +28,9 @@ WORKDIR /app/frontend
 # Install the same pnpm major used by CI so frozen-lockfile validation is identical.
 RUN corepack enable && corepack prepare pnpm@11 --activate
 
-# Install dependencies first (better caching)
-COPY frontend/package.json frontend/pnpm-lock.yaml ./
+# Install dependencies first (better caching). pnpm-workspace.yaml carries the
+# approved dependency build-script policy used by pnpm 11.
+COPY frontend/package.json frontend/pnpm-lock.yaml frontend/pnpm-workspace.yaml ./
 RUN --mount=type=cache,id=sub2api-pnpm-store,target=/root/.local/share/pnpm/store \
     if [ -n "${NPM_CONFIG_REGISTRY}" ]; then pnpm config set registry "${NPM_CONFIG_REGISTRY}"; fi && \
     pnpm install --frozen-lockfile --prefer-offline
