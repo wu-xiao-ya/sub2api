@@ -255,6 +255,44 @@ func TestIsModelRateLimited_OpenAIImageGenerationIntentBlocksTextModelImageTool(
 	require.True(t, account.isModelRateLimitedWithContext(WithOpenAIImageGenerationIntent(context.Background()), "gpt-5.4"))
 }
 
+func TestIsModelRateLimited_OpenAIImageEndpointScopesDoNotCrossBlock(t *testing.T) {
+	future := time.Now().Add(10 * time.Minute).Format(time.RFC3339)
+	generationsScope := openAIImageRequestRateLimitKey(openAIImagesGenerationsEndpoint)
+	editsScope := openAIImageRequestRateLimitKey(openAIImagesEditsEndpoint)
+
+	t.Run("edits cooldown does not block generations", func(t *testing.T) {
+		account := &Account{
+			Platform: PlatformOpenAI,
+			Extra: map[string]any{
+				modelRateLimitsKey: map[string]any{
+					editsScope: map[string]any{
+						"rate_limit_reset_at": future,
+					},
+				},
+			},
+		}
+
+		require.False(t, account.isModelRateLimitedWithContext(WithOpenAIImageRequestScope(context.Background(), openAIImagesGenerationsEndpoint), "gpt-image-2"))
+		require.True(t, account.isModelRateLimitedWithContext(WithOpenAIImageRequestScope(context.Background(), openAIImagesEditsEndpoint), "gpt-image-2"))
+	})
+
+	t.Run("generations cooldown does not block edits", func(t *testing.T) {
+		account := &Account{
+			Platform: PlatformOpenAI,
+			Extra: map[string]any{
+				modelRateLimitsKey: map[string]any{
+					generationsScope: map[string]any{
+						"rate_limit_reset_at": future,
+					},
+				},
+			},
+		}
+
+		require.True(t, account.isModelRateLimitedWithContext(WithOpenAIImageRequestScope(context.Background(), openAIImagesGenerationsEndpoint), "gpt-image-2"))
+		require.False(t, account.isModelRateLimitedWithContext(WithOpenAIImageRequestScope(context.Background(), openAIImagesEditsEndpoint), "gpt-image-2"))
+	})
+}
+
 func TestIsModelRateLimited_Antigravity_ThinkingAffectsModelKey(t *testing.T) {
 	now := time.Now()
 	future := now.Add(10 * time.Minute).Format(time.RFC3339)

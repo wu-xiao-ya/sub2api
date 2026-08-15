@@ -65,8 +65,9 @@ func (s adaptiveSettingsProvider) GetChannelMonitorAccountProbeSettings(context.
 
 type adaptiveMonitorRepoStub struct {
 	*groupProbeRepoStub
-	mu     sync.Mutex
-	states map[string]*ChannelMonitorAccountProbeState
+	mu          sync.Mutex
+	states      map[string]*ChannelMonitorAccountProbeState
+	latestImage *ChannelMonitorLatestImage
 }
 
 func adaptiveStateKey(monitorID int64, model string) string {
@@ -138,6 +139,26 @@ func (r *adaptiveMonitorRepoStub) ClearAccountProbeStates(_ context.Context, mon
 		}
 	}
 	return nil
+}
+
+func (r *adaptiveMonitorRepoStub) UpsertLatestImage(_ context.Context, image *ChannelMonitorLatestImage) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	copy := *image
+	copy.Data = append([]byte(nil), image.Data...)
+	r.latestImage = &copy
+	return nil
+}
+
+func (r *adaptiveMonitorRepoStub) GetLatestImage(_ context.Context, monitorID int64) (*ChannelMonitorLatestImage, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.latestImage == nil || r.latestImage.MonitorID != monitorID {
+		return nil, ErrChannelMonitorLatestImageNotFound
+	}
+	copy := *r.latestImage
+	copy.Data = append([]byte(nil), r.latestImage.Data...)
+	return &copy, nil
 }
 
 func newAdaptiveMonitorTestService(
@@ -576,14 +597,12 @@ func TestAdaptiveAccountProbeKeepsAbnormalStateOnFullSweepAndRepeatsNextRun(t *t
 	}
 }
 
-func TestAdaptiveImageProbeDoesNotFanOutByDefault(t *testing.T) {
+func TestAdaptiveImageProbeRotatesNextCycleWithoutFanout(t *testing.T) {
 	accountID := int64(1)
 	executor := &adaptiveProbeExecutorStub{
 		results: map[int64][]AccountMonitorProbeResult{
-			1: {
-				{Success: false, LatencyMs: 30, Message: "image down"},
-				{Success: false, LatencyMs: 31, Message: "image still down"},
-			},
+			1: {{Success: false, LatencyMs: 30, Message: "image down"}},
+			2: {{Success: true, LatencyMs: 31, Message: "image healthy"}},
 		},
 		callIndex: map[int64]int{},
 	}
@@ -599,15 +618,57 @@ func TestAdaptiveImageProbeDoesNotFanOutByDefault(t *testing.T) {
 	baseRepo := svc.repo.(*adaptiveMonitorRepoStub)
 	baseRepo.monitors[11] = monitor
 
+	firstResults, err := svc.RunCheck(context.Background(), 11)
+	if err != nil {
+		t.Fatalf("RunCheck: %v", err)
+	}
+	if len(firstResults) != 1 || firstResults[0].ProbeMode != accountProbeModeSticky ||
+		firstResults[0].Status != MonitorStatusFailed {
+		t.Fatalf("first result = %#v, want one failed sticky image probe", firstResults)
+	}
+	if executor.count(1) != 1 || executor.count(2) != 0 {
+		t.Fatalf("first-cycle image calls = line1:%d line2:%d, want 1/0", executor.count(1), executor.count(2))
+	}
+
+	secondResults, err := svc.RunCheck(context.Background(), 11)
+	if err != nil {
+		t.Fatalf("second RunCheck: %v", err)
+	}
+	if len(secondResults) != 1 || secondResults[0].ProbeMode != accountProbeModeFull ||
+		secondResults[0].Status != MonitorStatusOperational ||
+		secondResults[0].AccountID == nil || *secondResults[0].AccountID != 2 {
+		t.Fatalf("second result = %#v, want one operational rotated image probe", secondResults)
+	}
+	if executor.count(1) != 1 || executor.count(2) != 1 {
+		t.Fatalf("two-cycle image calls = line1:%d line2:%d, want 1/1", executor.count(1), executor.count(2))
+	}
+}
+
+func TestAdaptiveImageProbeWithoutFanoutOnlyChecksPrimaryModel(t *testing.T) {
+	executor := &adaptiveProbeExecutorStub{
+		results: map[int64][]AccountMonitorProbeResult{
+			1: {{Success: true, LatencyMs: 30, Message: "image healthy"}},
+		},
+		callIndex: map[int64]int{},
+	}
+	svc, _ := newAdaptiveMonitorTestService(t, nil, executor)
+	monitor, err := svc.repo.GetByID(context.Background(), 11)
+	if err != nil {
+		t.Fatalf("monitor: %v", err)
+	}
+	monitor.APIMode = MonitorAPIModeImages
+	monitor.ExtraModels = []string{"gpt-image-extra"}
+	svc.repo.(*adaptiveMonitorRepoStub).monitors[11] = monitor
+
 	results, err := svc.RunCheck(context.Background(), 11)
 	if err != nil {
 		t.Fatalf("RunCheck: %v", err)
 	}
-	if len(results) != 1 || results[0].ProbeMode != accountProbeModeConfirm {
-		t.Fatalf("result = %#v, want confirmed single-account image probe", results)
+	if len(results) != 1 || results[0].Model != monitor.PrimaryModel {
+		t.Fatalf("results = %#v, want only primary image model", results)
 	}
-	if executor.count(1) != 2 || executor.count(2) != 0 {
-		t.Fatalf("image calls = line1:%d line2:%d, want 2/0 without fan-out", executor.count(1), executor.count(2))
+	if len(executor.calls) != 1 || executor.calls[0].model != monitor.PrimaryModel {
+		t.Fatalf("image calls = %#v, want one primary-model request", executor.calls)
 	}
 }
 

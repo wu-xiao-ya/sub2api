@@ -43,7 +43,7 @@ func (s *AccountTestService) ProbeForChannelMonitor(
 		WithContext(withAccountTestProbeOnly(ctx))
 
 	testErr := s.TestAccountConnection(ginCtx, accountID, model, "", AccountTestModeDefault)
-	success, message, usage := parseChannelMonitorAccountProbeOutput(recorder.Body.String(), testErr)
+	success, message, usage, latestImage := parseChannelMonitorAccountProbeOutput(recorder.Body.String(), testErr)
 
 	return &AccountMonitorProbeResult{
 		Success:          success,
@@ -51,15 +51,17 @@ func (s *AccountTestService) ProbeForChannelMonitor(
 		Message:          message,
 		Usage:            usage,
 		RequestAttempted: true,
+		LatestImage:      latestImage,
 	}, nil
 }
 
-func parseChannelMonitorAccountProbeOutput(body string, testErr error) (bool, string, monitorUsage) {
+func parseChannelMonitorAccountProbeOutput(body string, testErr error) (bool, string, monitorUsage, *monitorLatestImagePayload) {
 	var (
 		completed bool
 		success   bool
 		errMsg    string
 		usage     monitorUsage
+		image     *monitorLatestImagePayload
 	)
 
 	for _, line := range strings.Split(body, "\n") {
@@ -80,6 +82,10 @@ func parseChannelMonitorAccountProbeOutput(body string, testErr error) (bool, st
 			if observed := monitorUsageFromTestEventData(event.Data); observed.Observed {
 				usage = observed
 			}
+		case "image":
+			if decoded, err := decodeBase64Image(strings.TrimSpace(event.ImageURL)); err == nil {
+				image = decoded
+			}
 		case "test_complete":
 			completed = true
 			success = event.Success
@@ -87,16 +93,16 @@ func parseChannelMonitorAccountProbeOutput(body string, testErr error) (bool, st
 	}
 
 	if errMsg != "" {
-		return false, errMsg, usage
+		return false, errMsg, usage, image
 	}
 	if testErr != nil {
-		return false, testErr.Error(), usage
+		return false, testErr.Error(), usage, image
 	}
 	if !completed {
-		return false, "account test ended without a completion event", usage
+		return false, "account test ended without a completion event", usage, image
 	}
 	if !success {
-		return false, "account test completed without success", usage
+		return false, "account test completed without success", usage, image
 	}
-	return true, "account test completed", usage
+	return true, "account test completed", usage, image
 }

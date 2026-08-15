@@ -12,6 +12,7 @@ const (
 	modelRateLimitsKey                 = "model_rate_limits"
 	antigravityGeminiModelRateLimitKey = "antigravity:gemini"
 	openAIImageGenerationRateLimitKey  = "openai:image_generation"
+	openAIImageRequestRateLimitPrefix  = "openai:image_endpoint:"
 	// anthropicFableRateLimitKey 是 Anthropic 7d_oi（Fable 专属 7d 窗口）限流的
 	// 家族级 scope：命中后所有 Fable 变体（含 [1m] 等后缀）都不再调度到该账号。
 	anthropicFableRateLimitKey = "claude-fable-5"
@@ -82,6 +83,13 @@ func (a *Account) modelRateLimitKeysForRequest(ctx context.Context, requestedMod
 			keys = append(keys, antigravityGeminiModelRateLimitKey)
 		}
 	case PlatformOpenAI:
+		if scopeKey := openAIImageRequestRateLimitKeyFromContext(ctx); scopeKey != "" {
+			keys = []string{scopeKey}
+			if openAIImageGenerationRateLimitApplies(ctx, requestedModel, modelKey) && scopeKey != openAIImageGenerationRateLimitKey {
+				keys = append(keys, openAIImageGenerationRateLimitKey)
+			}
+			return keys
+		}
 		if openAIImageGenerationRateLimitApplies(ctx, requestedModel, modelKey) && modelKey != openAIImageGenerationRateLimitKey {
 			keys = append(keys, openAIImageGenerationRateLimitKey)
 		}
@@ -110,6 +118,42 @@ func WithOpenAIImageGenerationIntent(ctx context.Context) context.Context {
 		ctx = context.Background()
 	}
 	return context.WithValue(ctx, ctxkey.OpenAIImageGenerationIntent, true)
+}
+
+type openAIImageRequestScopeContextKey struct{}
+
+// WithOpenAIImageRequestScope separates generations and edits cooldowns.
+func WithOpenAIImageRequestScope(ctx context.Context, endpoint string) context.Context {
+	endpoint = strings.TrimSpace(endpoint)
+	switch endpoint {
+	case openAIImagesGenerationsEndpoint, openAIImagesEditsEndpoint:
+	default:
+		return ctx
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return context.WithValue(ctx, openAIImageRequestScopeContextKey{}, endpoint)
+}
+
+func openAIImageRequestScopeFromContext(ctx context.Context) string {
+	if ctx == nil {
+		return ""
+	}
+	scope, _ := ctx.Value(openAIImageRequestScopeContextKey{}).(string)
+	return strings.TrimSpace(scope)
+}
+
+func openAIImageRequestRateLimitKey(scope string) string {
+	scope = strings.TrimSpace(scope)
+	if scope == "" {
+		return ""
+	}
+	return openAIImageRequestRateLimitPrefix + scope
+}
+
+func openAIImageRequestRateLimitKeyFromContext(ctx context.Context) string {
+	return openAIImageRequestRateLimitKey(openAIImageRequestScopeFromContext(ctx))
 }
 
 func OpenAIImageGenerationIntentFromContext(ctx context.Context) bool {

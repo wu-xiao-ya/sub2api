@@ -2223,6 +2223,9 @@ func (s *RateLimitService) HandleUpstreamModelNotFound(ctx context.Context, acco
 }
 
 func modelRateLimitKeyForUpstreamModelNotFound(ctx context.Context, account *Account, requestedModel string) string {
+	if scopeKey := openAIImageRequestRateLimitKeyFromContext(ctx); scopeKey != "" {
+		return scopeKey
+	}
 	modelKey := strings.TrimSpace(requestedModel)
 	if account == nil || modelKey == "" {
 		return modelKey
@@ -2260,6 +2263,9 @@ func withTempUnschedulableModel(ctx context.Context, requestedModel []string) co
 }
 
 func tempUnschedulableModel(ctx context.Context, requestedModel []string) string {
+	if scopeKey := openAIImageRequestRateLimitKeyFromContext(ctx); scopeKey != "" {
+		return scopeKey
+	}
 	if model := firstRequestedModel(requestedModel); model != "" {
 		return model
 	}

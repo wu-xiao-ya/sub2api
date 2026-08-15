@@ -135,7 +135,10 @@ func (h *OpenAIGatewayHandler) Images(c *gin.Context) {
 	}
 
 	sessionHash := h.gatewayService.GenerateExplicitSessionHash(c, body)
-	requestCtx := service.WithOpenAIImageGenerationIntent(c.Request.Context())
+	requestCtx := service.WithOpenAIImageRequestScope(
+		service.WithOpenAIImageGenerationIntent(c.Request.Context()),
+		parsed.Endpoint,
+	)
 
 	maxAccountSwitches := h.maxAccountSwitches
 	switchCount := 0

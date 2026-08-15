@@ -30,6 +30,7 @@ type AccountMonitorProbeResult struct {
 	Message          string
 	Usage            monitorUsage
 	RequestAttempted bool
+	LatestImage      *monitorLatestImagePayload
 }
 
 type channelMonitorAccountProbeExecutor interface {
@@ -142,6 +143,9 @@ func (s *ChannelMonitorService) runAdaptiveAccountGroupProbeIfConfigured(
 	}
 
 	models := uniqueMonitorModels(m)
+	if defaultAPIMode(m.APIMode) == MonitorAPIModeImages && !settings.AllowImageFanout && len(models) > 1 {
+		models = models[:1]
+	}
 	results := make([]*CheckResult, 0, len(models))
 	for _, model := range models {
 		var result *CheckResult
@@ -305,11 +309,9 @@ func limitAdaptiveProbeAccounts(
 	return limited
 }
 
-// runAdaptiveImageSingleProbe keeps real image monitoring billable but bounded:
-// when image fan-out is disabled it only probes the sticky account (or the
-// highest-priority viable account on first run) and never expands after a
-// failure. Administrators can explicitly enable fan-out when they want the
-// text-monitor recovery behavior for images too.
+// runAdaptiveImageSingleProbe keeps real image monitoring billable but bounded.
+// It makes exactly one image request per cycle. A healthy account remains
+// sticky; an abnormal account rotates to the next candidate on the next cycle.
 func (s *ChannelMonitorService) runAdaptiveImageSingleProbe(
 	ctx context.Context,
 	monitor *ChannelMonitor,
@@ -339,28 +341,27 @@ func (s *ChannelMonitorService) runAdaptiveImageSingleProbe(
 		}, false)
 	}
 
-	selected := modelAccounts[0]
+	selectedIndex := 0
+	probeMode := accountProbeModeFull
 	if state != nil && state.AccountID != nil {
-		for _, account := range modelAccounts {
+		for i, account := range modelAccounts {
 			if account.ID == *state.AccountID {
-				selected = account
+				selectedIndex = i
+				if state.FinalStatus == MonitorStatusOperational {
+					probeMode = accountProbeModeSticky
+				} else if len(modelAccounts) > 1 {
+					selectedIndex = (i + 1) % len(modelAccounts)
+				}
 				break
 			}
 		}
 	}
+	selected := modelAccounts[selectedIndex]
 
-	result := s.probeAdaptiveAccount(ctx, monitor, model, selected, accountProbeModeSticky, settings)
+	result := s.probeAdaptiveAccount(ctx, monitor, model, selected, probeMode, settings)
 	result.CandidateCount = 1
-	if result.Status == MonitorStatusOperational || settings.ConfirmAttempts == 0 {
-		return s.persistAdaptiveState(ctx, monitor, model, result, false)
-	}
-	for attempt := 0; attempt < settings.ConfirmAttempts; attempt++ {
-		confirmed := s.probeAdaptiveAccount(ctx, monitor, model, selected, accountProbeModeConfirm, settings)
-		confirmed.CandidateCount = 1
-		if confirmed.Status == MonitorStatusOperational {
-			return s.persistAdaptiveState(ctx, monitor, model, confirmed, false)
-		}
-		result = confirmed
+	if result.Status == MonitorStatusOperational {
+		result.HealthyCount = 1
 	}
 	return s.persistAdaptiveState(ctx, monitor, model, result, false)
 }
@@ -585,6 +586,7 @@ func (s *ChannelMonitorService) runLegacyAdaptiveAccountTestProbe(
 	}
 	result.monitorUsage = probe.Usage
 	result.monitorRequestAttempted = probe.RequestAttempted
+	result.monitorLatestImage = probe.LatestImage
 	s.recordMonitorCost(ctx, monitor, result, account)
 	latency := probe.LatencyMs
 	result.LatencyMs = &latency

@@ -870,6 +870,14 @@ func (s *ChannelMonitorService) persistCheckResults(
 	persistCtx, cancel := monitorPersistenceContext(ctx)
 	defer cancel()
 
+	if latestImage == nil {
+		for _, result := range results {
+			if result != nil && result.monitorLatestImage != nil {
+				latestImage = result.monitorLatestImage
+				break
+			}
+		}
+	}
 	for _, result := range results {
 		s.recordMonitorCost(persistCtx, m, result, nil)
 	}

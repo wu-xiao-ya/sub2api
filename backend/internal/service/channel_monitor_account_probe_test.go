@@ -68,6 +68,7 @@ type accountProbeHTTPStub struct {
 	order     []int64
 	delays    map[int64]time.Duration
 	texts     map[int64]string
+	imageData map[int64]string
 	statuses  map[int64]int
 	started   chan int64
 	release   <-chan struct{}
@@ -138,6 +139,12 @@ func (u *accountProbeHTTPStub) DoWithTLS(
 	responseBody := fmt.Sprintf(`{"choices":[{"message":{"content":%q}}]}`, text)
 	if strings.HasSuffix(req.URL.Path, "/responses") {
 		responseBody = fmt.Sprintf(`{"output_text":%q}`, text)
+	} else if strings.HasSuffix(req.URL.Path, openAIImagesGenerationsEndpoint) {
+		encoded := u.imageData[accountID]
+		if encoded == "" {
+			encoded = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl2nQAAAABJRU5ErkJggg=="
+		}
+		responseBody = fmt.Sprintf(`{"data":[{"b64_json":%q}]}`, encoded)
 	}
 	return &http.Response{
 		StatusCode: status,
@@ -330,6 +337,77 @@ func TestResolveBusinessGroupProbeSkipsImageMode(t *testing.T) {
 	}
 	if len(accountRepo.calls) != 0 {
 		t.Fatalf("image mode should not query account groups, calls=%#v", accountRepo.calls)
+	}
+}
+
+func TestAdaptiveImageAccountProbeUsesAccountUpstreamAndPersistsLatestImage(t *testing.T) {
+	groupID := int64(7)
+	monitor := &ChannelMonitor{
+		ID:             30,
+		Name:           "image-group",
+		Provider:       MonitorProviderOpenAI,
+		APIMode:        MonitorAPIModeImages,
+		Endpoint:       "https://static-monitor.example.com",
+		APIKey:         "sk-static-fallback",
+		PrimaryModel:   "gpt-image-2",
+		AccountGroupID: &groupID,
+		Enabled:        true,
+	}
+	repo := &adaptiveMonitorRepoStub{
+		groupProbeRepoStub: &groupProbeRepoStub{
+			monitors: map[int64]*ChannelMonitor{monitor.ID: monitor},
+		},
+		states: map[string]*ChannelMonitorAccountProbeState{},
+	}
+	account := openAIProbeAccount(1, "image-line", 1, map[string]any{
+		"gpt-image-2": "upstream-image-2",
+	})
+	account.Credentials["base_url"] = "https://image-upstream.example/v1"
+	accountRepo := &accountProbeRepoStub{accounts: []Account{account}}
+	upstream := &accountProbeHTTPStub{}
+	svc := NewChannelMonitorService(repo, groupProbeEncryptor{})
+	svc.SetAccountProbeDependencies(accountRepo, upstream, &config.Config{}, nil)
+
+	results, err := svc.RunCheck(context.Background(), monitor.ID)
+	if err != nil {
+		t.Fatalf("RunCheck: %v", err)
+	}
+	if len(results) != 1 || results[0].Status != MonitorStatusOperational {
+		t.Fatalf("results = %#v, want one operational image probe", results)
+	}
+	if results[0].AccountID == nil || *results[0].AccountID != account.ID {
+		t.Fatalf("account id = %v, want %d", results[0].AccountID, account.ID)
+	}
+	if results[0].CandidateCount != 1 || results[0].HealthyCount != 1 {
+		t.Fatalf("candidate summary = %d/%d, want 1/1", results[0].HealthyCount, results[0].CandidateCount)
+	}
+
+	upstream.mu.Lock()
+	request := upstream.requests[account.ID]
+	callCount := upstream.doWithTLS
+	upstream.mu.Unlock()
+	if callCount != 1 {
+		t.Fatalf("image upstream calls = %d, want exactly 1", callCount)
+	}
+	if request.path != "/v1/images/generations" {
+		t.Fatalf("request path = %q, want /v1/images/generations", request.path)
+	}
+	if request.auth != "Bearer sk-image-line" {
+		t.Fatalf("authorization = %q, want account API key", request.auth)
+	}
+	if request.body["model"] != "upstream-image-2" {
+		t.Fatalf("request model = %#v, want mapped model", request.body["model"])
+	}
+	if request.body["prompt"] != MonitorImageCheckPrompt || request.body["n"] != float64(1) {
+		t.Fatalf("unexpected image monitor body: %#v", request.body)
+	}
+
+	image, err := repo.GetLatestImage(context.Background(), monitor.ID)
+	if err != nil {
+		t.Fatalf("GetLatestImage: %v", err)
+	}
+	if image.ContentType != "image/png" || len(image.Data) == 0 {
+		t.Fatalf("latest image = %#v, want persisted PNG", image)
 	}
 }
 

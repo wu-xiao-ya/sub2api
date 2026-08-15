@@ -75,7 +75,7 @@ func TestMonitorUsageFromOpenAIResponseSeparatesCachedInputTokens(t *testing.T) 
 }
 
 func TestParseChannelMonitorAccountProbeOutputCarriesUsageEvent(t *testing.T) {
-	success, message, usage := parseChannelMonitorAccountProbeOutput(`
+	success, message, usage, _ := parseChannelMonitorAccountProbeOutput(`
 data: {"type":"usage","data":{"input_tokens":12,"output_tokens":3,"cache_read_tokens":8,"observed":true}}
 
 data: {"type":"test_complete","success":true}
@@ -87,6 +87,19 @@ data: {"type":"test_complete","success":true}
 	require.Equal(t, 12, usage.Tokens.InputTokens)
 	require.Equal(t, 3, usage.Tokens.OutputTokens)
 	require.Equal(t, 8, usage.Tokens.CacheReadTokens)
+}
+
+func TestParseChannelMonitorAccountProbeOutputCarriesLatestImage(t *testing.T) {
+	success, _, _, image := parseChannelMonitorAccountProbeOutput(`
+data: {"type":"image","image_url":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl2nQAAAABJRU5ErkJggg==","mime_type":"image/png"}
+
+data: {"type":"test_complete","success":true}
+`, nil)
+
+	require.True(t, success)
+	require.NotNil(t, image)
+	require.Equal(t, "image/png", image.ContentType)
+	require.NotEmpty(t, image.Data)
 }
 
 func TestAdaptiveFullProbeRecordsEveryAccountCostEvent(t *testing.T) {

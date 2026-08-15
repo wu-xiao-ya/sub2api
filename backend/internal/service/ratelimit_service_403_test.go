@@ -122,6 +122,42 @@ func TestRateLimitService_HandleUpstreamError_OpenAIGenericBlocked403UsesModelCo
 	require.WithinDuration(t, time.Now().Add(10*time.Minute), repo.modelRateLimitCalls[0].resetAt, 5*time.Second)
 }
 
+func TestRateLimitService_HandleUpstreamError_OpenAIImage403UsesEndpointCooldown(t *testing.T) {
+	repo := &modelNotFoundAccountRepoStub{}
+	counter := &openAI403CounterCacheStub{
+		modelDistinct: []int64{1},
+		modelAdded:    []bool{true},
+	}
+	service := NewRateLimitService(repo, nil, &config.Config{}, nil, nil)
+	service.SetOpenAI403CounterCache(counter)
+	account := &Account{
+		ID:       306,
+		Name:     "image-gateway",
+		Platform: PlatformOpenAI,
+		Type:     AccountTypeAPIKey,
+	}
+	ctx := WithOpenAIImageRequestScope(
+		WithOpenAIImageGenerationIntent(context.Background()),
+		openAIImagesEditsEndpoint,
+	)
+
+	shouldFailover := service.HandleUpstreamError(
+		ctx,
+		account,
+		http.StatusForbidden,
+		http.Header{"X-Request-Id": []string{"req-image-edit-403"}},
+		[]byte(`Your request was blocked.`),
+		"gpt-image-2",
+	)
+
+	expectedScope := openAIImageRequestRateLimitKey(openAIImagesEditsEndpoint)
+	require.True(t, shouldFailover)
+	require.Equal(t, []string{expectedScope}, counter.modelRecords)
+	require.Len(t, repo.modelRateLimitCalls, 1)
+	require.Equal(t, expectedScope, repo.modelRateLimitCalls[0].scope)
+	require.Zero(t, repo.tempCalls)
+}
+
 func TestRateLimitService_HandleUpstreamError_OpenAIGenericBlocked403SecondModelEscalatesAccount(t *testing.T) {
 	repo := &rateLimitAccountRepoStub{}
 	counter := &openAI403CounterCacheStub{

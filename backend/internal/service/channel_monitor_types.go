@@ -168,6 +168,7 @@ type CheckResult struct {
 	monitorRequestAttempted bool
 	monitorCostRecorded     bool
 	monitorCostModel        string
+	monitorLatestImage      *monitorLatestImagePayload
 }
 
 // ChannelMonitorAccountProbeState is the durable selected account for one

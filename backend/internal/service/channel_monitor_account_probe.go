@@ -3,6 +3,7 @@ package service
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
@@ -190,6 +191,9 @@ func (s *ChannelMonitorService) runOpenAIAPIKeyAccountProbe(
 	}
 
 	opts := accountProbeCheckOptions(m)
+	if checkAPIMode(opts) == MonitorAPIModeImages {
+		return s.runOpenAIAPIKeyImageAccountProbe(ctx, m, account, baseURL, apiKey, opts)
+	}
 	challenge := generateChallengeForOptions(opts)
 	req, apiMode, err := buildOpenAIAccountProbeRequest(ctx, baseURL, apiKey, m, account, challenge.Prompt, opts)
 	if err != nil {
@@ -246,6 +250,99 @@ func (s *ChannelMonitorService) runOpenAIAPIKeyAccountProbe(
 	return finalizeOperationalOrDegraded(res, latency, latencyMs)
 }
 
+func (s *ChannelMonitorService) runOpenAIAPIKeyImageAccountProbe(
+	ctx context.Context,
+	m *ChannelMonitor,
+	account *Account,
+	baseURL, apiKey string,
+	opts *CheckOptions,
+) *CheckResult {
+	res := &CheckResult{
+		Model:     m.PrimaryModel,
+		Status:    MonitorStatusError,
+		CheckedAt: time.Now(),
+	}
+	model := strings.TrimSpace(account.GetMappedModel(m.PrimaryModel))
+	if model == "" {
+		model = strings.TrimSpace(m.PrimaryModel)
+	}
+	res.monitorCostModel = model
+
+	body, err := json.Marshal(map[string]any{
+		"model":           model,
+		"prompt":          MonitorImageCheckPrompt,
+		"n":               1,
+		"size":            "1024x1024",
+		"response_format": "b64_json",
+	})
+	if err != nil {
+		res.Message = truncateMessage(sanitizeErrorMessage(fmt.Sprintf("marshal image health-check body: %v", err)))
+		return res
+	}
+
+	requestCtx, cancel := context.WithTimeout(ctx, imageRequestTimeout(opts))
+	defer cancel()
+	req, err := http.NewRequestWithContext(
+		requestCtx,
+		http.MethodPost,
+		buildOpenAIImagesURL(baseURL, openAIImagesGenerationsEndpoint),
+		bytes.NewReader(body),
+	)
+	if err != nil {
+		res.Message = truncateMessage(sanitizeErrorMessage(fmt.Sprintf("build image request: %v", err)))
+		return res
+	}
+	req = req.WithContext(WithHTTPUpstreamProfile(req.Context(), HTTPUpstreamProfileOpenAI))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+	for key, value := range mergeHeaders(map[string]string{"Authorization": "Bearer " + apiKey}, opts) {
+		req.Header.Set(key, value)
+	}
+	account.ApplyHeaderOverrides(req.Header)
+	usagesource.SetChannelMonitor(req.Header)
+
+	start := time.Now()
+	res.monitorRequestAttempted = true
+	resp, err := s.doAccountProbeRequest(req, account)
+	latency := time.Since(start)
+	latencyMs := int(latency / time.Millisecond)
+	res.LatencyMs = &latencyMs
+	res.PingLatencyMs = pingEndpointOrigin(ctx, baseURL)
+	if err != nil {
+		res.Message = truncateMessage(sanitizeErrorMessage(fmt.Sprintf("do image request: %v", err)))
+		return res
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	respBytes, readErr := io.ReadAll(io.LimitReader(resp.Body, monitorImageResponseMaxBytes+1))
+	if readErr != nil {
+		res.Message = truncateMessage(sanitizeErrorMessage(fmt.Sprintf("read image body: %v", readErr)))
+		return res
+	}
+	if len(respBytes) > monitorImageResponseMaxBytes {
+		res.Message = truncateMessage("image response exceeded monitor size limit")
+		return res
+	}
+	if imageCount := monitorImageCountFromResponse(respBytes); imageCount > 0 {
+		res.monitorUsage = monitorUsage{ImageCount: imageCount, Observed: true}
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		res.Message = truncateMessage(sanitizeErrorMessage(fmt.Sprintf(
+			"upstream HTTP %d: %s", resp.StatusCode, truncateForErrorBody(string(respBytes)),
+		)))
+		return res
+	}
+
+	image, err := decodeGeneratedImage(ctx, respBytes)
+	if err != nil {
+		res.Status = MonitorStatusFailed
+		res.Message = truncateMessage(sanitizeErrorMessage(err.Error()))
+		return res
+	}
+	res.monitorLatestImage = image
+	return finalizeOperationalOrDegraded(res, latency, latencyMs)
+}
+
 func (s *ChannelMonitorService) validateAccountProbeBaseURL(raw string) (string, error) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
@@ -268,6 +365,7 @@ func accountProbeCheckOptions(m *ChannelMonitor) *CheckOptions {
 	return &CheckOptions{
 		APIMode:          m.APIMode,
 		LowCost:          true,
+		RequestTimeout:   monitorRequestTimeoutFor(m),
 		ExtraHeaders:     m.ExtraHeaders,
 		BodyOverrideMode: m.BodyOverrideMode,
 		BodyOverride:     m.BodyOverride,
