@@ -1,13 +1,19 @@
 package service
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
+	"net/http"
 	"sort"
 	"strings"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/pkg/usagesource"
+	"github.com/Wei-Shaw/sub2api/internal/util/urlvalidator"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -534,6 +540,11 @@ func (s *ChannelMonitorService) runLowCostAdaptiveAccountProbe(
 	if s.httpUpstream == nil {
 		return s.runLegacyAdaptiveAccountTestProbe(ctx, monitor, model, account)
 	}
+	if account.Platform == PlatformAnthropic && account.Type == AccountTypeAPIKey {
+		result := s.runAnthropicAPIKeyAdaptiveAccountProbe(ctx, model, account)
+		s.recordMonitorCost(ctx, monitor, result, account)
+		return result
+	}
 	if account.IsOpenAICompatible() && account.Type == AccountTypeAPIKey {
 		scoped := *monitor
 		scoped.PrimaryModel = model
@@ -554,6 +565,158 @@ func (s *ChannelMonitorService) runLowCostAdaptiveAccountProbe(
 	result.AccountID = &accountID
 	result.Message = truncateMessage(fmt.Sprintf("account %d does not support low-cost adaptive probing", account.ID))
 	return result
+}
+
+func (s *ChannelMonitorService) runAnthropicAPIKeyAdaptiveAccountProbe(
+	ctx context.Context,
+	model string,
+	account *Account,
+) *CheckResult {
+	result := &CheckResult{
+		Model:            model,
+		Status:           MonitorStatusError,
+		CheckedAt:        time.Now(),
+		AccountName:      account.Name,
+		monitorCostModel: strings.TrimSpace(account.GetMappedModel(model)),
+	}
+	accountID := account.ID
+	result.AccountID = &accountID
+	if result.monitorCostModel == "" {
+		result.monitorCostModel = model
+	}
+
+	apiKey := strings.TrimSpace(account.GetCredential("api_key"))
+	if apiKey == "" {
+		result.Message = "account missing API key"
+		return result
+	}
+
+	baseURL, err := s.validateAnthropicAdaptiveAccountProbeBaseURL(account.GetBaseURL())
+	if err != nil {
+		result.Message = truncateMessage(sanitizeErrorMessage(fmt.Sprintf("invalid account base_url: %v", err)))
+		return result
+	}
+
+	req, err := buildAnthropicAdaptiveAccountProbeRequest(ctx, baseURL, apiKey, account, model, result.monitorCostModel)
+	if err != nil {
+		result.Message = truncateMessage(sanitizeErrorMessage(fmt.Sprintf("build anthropic request: %v", err)))
+		return result
+	}
+
+	start := time.Now()
+	result.monitorRequestAttempted = true
+	resp, err := s.doAccountProbeRequest(req, account)
+	latency := time.Since(start)
+	latencyMs := int(latency / time.Millisecond)
+	result.LatencyMs = &latencyMs
+	if err != nil {
+		result.Message = truncateMessage(sanitizeErrorMessage(fmt.Sprintf("do anthropic request: %v", err)))
+		return result
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	respBytes, readErr := io.ReadAll(io.LimitReader(resp.Body, monitorResponseMaxBytes+1))
+	if readErr != nil {
+		result.Message = truncateMessage(sanitizeErrorMessage(fmt.Sprintf("read anthropic body: %v", readErr)))
+		return result
+	}
+	if len(respBytes) > monitorResponseMaxBytes {
+		result.Message = truncateMessage("anthropic response exceeded monitor size limit")
+		return result
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		result.Message = truncateMessage(sanitizeErrorMessage(fmt.Sprintf(
+			"upstream HTTP %d: %s", resp.StatusCode, truncateForErrorBody(string(respBytes)),
+		)))
+		return result
+	}
+
+	result.monitorUsage = monitorUsageFromAnthropicPayload(genericJSONPayload(respBytes))
+	respText := extractAnthropicMonitorText(respBytes)
+	if !validateMonitorChallengeResponse(
+		MonitorProviderAnthropic,
+		respText,
+		respBytes,
+		"1",
+		&CheckOptions{LowCost: true},
+	) {
+		result.Status = MonitorStatusFailed
+		result.Message = truncateMessage(sanitizeErrorMessage(fmt.Sprintf(
+			"anthropic low-cost challenge mismatch: got %q",
+			respText,
+		)))
+		return result
+	}
+	result.Status = MonitorStatusOperational
+	return result
+}
+
+func buildAnthropicAdaptiveAccountProbeRequest(
+	ctx context.Context,
+	baseURL, apiKey string,
+	account *Account,
+	monitorModel, mappedModel string,
+) (*http.Request, error) {
+	if account == nil {
+		return nil, fmt.Errorf("missing account")
+	}
+	if strings.TrimSpace(mappedModel) == "" {
+		mappedModel = strings.TrimSpace(monitorModel)
+	}
+	if strings.TrimSpace(baseURL) == "" {
+		baseURL = "https://api.anthropic.com"
+	}
+	body, err := json.Marshal(map[string]any{
+		"model":      mappedModel,
+		"messages":   []map[string]string{{"role": "user", "content": monitorLowCostChallengePrompt}},
+		"max_tokens": monitorLowCostMaxTokens,
+		"stream":     false,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("marshal anthropic probe body: %w", err)
+	}
+	req, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodPost,
+		strings.TrimSuffix(baseURL, "/")+providerAnthropicPath,
+		bytes.NewReader(body),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("build anthropic request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("anthropic-version", monitorAnthropicAPIVersion)
+	setAnthropicAPIKeyAuthHeader(req.Header, account, apiKey)
+	account.ApplyHeaderOverrides(req.Header)
+	usagesource.SetChannelMonitor(req.Header)
+	return req, nil
+}
+
+func (s *ChannelMonitorService) validateAnthropicAdaptiveAccountProbeBaseURL(raw string) (string, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		raw = "https://api.anthropic.com"
+	}
+	if s.cfg == nil {
+		return urlvalidator.ValidateHTTPSURL(raw, urlvalidator.ValidationOptions{})
+	}
+	if !s.cfg.Security.URLAllowlist.Enabled {
+		return urlvalidator.ValidateURLFormat(raw, s.cfg.Security.URLAllowlist.AllowInsecureHTTP)
+	}
+	return urlvalidator.ValidateHTTPSURL(raw, urlvalidator.ValidationOptions{
+		AllowedHosts:     s.cfg.Security.URLAllowlist.UpstreamHosts,
+		RequireAllowlist: true,
+		AllowPrivate:     s.cfg.Security.URLAllowlist.AllowPrivateHosts,
+	})
+}
+
+func genericJSONPayload(respBytes []byte) map[string]any {
+	var payload map[string]any
+	if err := json.Unmarshal(respBytes, &payload); err != nil {
+		return map[string]any{}
+	}
+	return payload
 }
 
 func (s *ChannelMonitorService) runLegacyAdaptiveAccountTestProbe(

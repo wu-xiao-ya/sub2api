@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"database/sql"
 	"reflect"
 	"strings"
 	"testing"
@@ -40,5 +41,20 @@ func TestOpsErrorLogInsertDoesNotPersistRequestReplayFields(t *testing.T) {
 		if _, ok := inputType.FieldByName(field); ok {
 			t.Fatalf("OpsInsertErrorLogInput still carries replay field %q", field)
 		}
+	}
+}
+
+func TestOpsErrorLogInsertPersistsUsageSource(t *testing.T) {
+	if !strings.Contains(strings.ToLower(insertOpsErrorLogSQL), "usage_source") {
+		t.Fatal("ops error log insert must persist usage_source")
+	}
+
+	args := opsInsertErrorLogArgs(&service.OpsInsertErrorLogInput{UsageSource: "channel_monitor"})
+	if len(args) != 39 {
+		t.Fatalf("ops error insert args = %d, want 39", len(args))
+	}
+	got, ok := args[17].(sql.NullString)
+	if !ok || !got.Valid || got.String != "channel_monitor" {
+		t.Fatalf("usage_source arg = %#v, want valid channel_monitor", args[17])
 	}
 }

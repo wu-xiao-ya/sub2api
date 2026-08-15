@@ -9,11 +9,26 @@ import (
 	"testing"
 	"unicode/utf8"
 
+	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/usagesource"
 	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )
+
+func TestOpsUsageSourceFromRequest(t *testing.T) {
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	req := httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
+	req = req.WithContext(context.WithValue(req.Context(), ctxkey.UsageSource, usagesource.ChannelMonitor))
+	c.Request = req
+
+	require.Equal(t, usagesource.ChannelMonitor, opsUsageSourceFromRequest(c))
+
+	c.Request = req.WithContext(context.WithValue(req.Context(), ctxkey.UsageSource, "untrusted"))
+	require.Empty(t, opsUsageSourceFromRequest(c))
+	require.Empty(t, opsUsageSourceFromRequest(nil))
+}
 
 type ingressRejectSettingRepo struct {
 	service.SettingRepository

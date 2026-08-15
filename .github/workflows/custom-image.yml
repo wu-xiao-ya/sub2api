@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - codex/consumption-concurrency
+      - codex/channel-monitor-v2-hybrid
   workflow_dispatch:
 
 permissions:

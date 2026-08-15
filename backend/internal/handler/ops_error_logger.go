@@ -20,6 +20,7 @@ import (
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ip"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/usagesource"
 	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
@@ -910,7 +911,8 @@ func OpsErrorLoggerMiddleware(ops *service.OpsService) gin.HandlerFunc {
 					}
 					return nil
 				}(),
-				UserAgent: c.GetHeader("User-Agent"),
+				UserAgent:   c.GetHeader("User-Agent"),
+				UsageSource: opsUsageSourceFromRequest(c),
 
 				ErrorPhase: recoveredPhase,
 				ErrorType:  "upstream_error",
@@ -1053,7 +1055,8 @@ func OpsErrorLoggerMiddleware(ops *service.OpsService) gin.HandlerFunc {
 				}
 				return nil
 			}(),
-			UserAgent: c.GetHeader("User-Agent"),
+			UserAgent:   c.GetHeader("User-Agent"),
+			UsageSource: opsUsageSourceFromRequest(c),
 
 			ErrorPhase:        phase,
 			ErrorType:         normalizedType,
@@ -1205,7 +1208,8 @@ func logOpsStreamError(c *gin.Context, ops *service.OpsService, wireStatus int) 
 			}
 			return nil
 		}(),
-		UserAgent: c.GetHeader("User-Agent"),
+		UserAgent:   c.GetHeader("User-Agent"),
+		UsageSource: opsUsageSourceFromRequest(c),
 
 		ErrorPhase:        phase,
 		ErrorType:         normalizedType,
@@ -1250,6 +1254,18 @@ func isCountTokensRequest(c *gin.Context) bool {
 		return false
 	}
 	return strings.Contains(c.Request.URL.Path, "/count_tokens")
+}
+
+func opsUsageSourceFromRequest(c *gin.Context) string {
+	if c == nil || c.Request == nil {
+		return ""
+	}
+	source, _ := c.Request.Context().Value(ctxkey.UsageSource).(string)
+	normalized, ok := usagesource.Normalize(source)
+	if !ok {
+		return ""
+	}
+	return normalized
 }
 
 func applyOpsLatencyFieldsFromContext(c *gin.Context, entry *service.OpsInsertErrorLogInput) {

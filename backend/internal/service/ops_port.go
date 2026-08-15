@@ -88,6 +88,8 @@ type OpsInsertErrorLogInput struct {
 	// Matches service.RequestType enum semantics from usage_log.go.
 	RequestType *int16
 	UserAgent   string
+	// UsageSource marks trusted internal request origins such as channel_monitor.
+	UsageSource string
 
 	ErrorPhase        string
 	ErrorType         string

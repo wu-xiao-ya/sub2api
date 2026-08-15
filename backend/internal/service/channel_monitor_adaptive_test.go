@@ -4,12 +4,17 @@ package service
 
 import (
 	"context"
+	"encoding/json"
+	"io"
+	"net/http"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/tlsfingerprint"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/usagesource"
 )
 
 type adaptiveProbeCall struct {
@@ -61,6 +66,92 @@ type adaptiveSettingsProvider struct {
 
 func (s adaptiveSettingsProvider) GetChannelMonitorAccountProbeSettings(context.Context) ChannelMonitorAccountProbeSettings {
 	return s.settings
+}
+
+type anthropicAdaptiveRequestSnapshot struct {
+	url         string
+	headers     http.Header
+	body        map[string]any
+	proxyURL    string
+	accountID   int64
+	concurrency int
+}
+
+type anthropicAdaptiveHTTPStub struct {
+	mu           sync.Mutex
+	status       int
+	responseBody string
+	requests     []anthropicAdaptiveRequestSnapshot
+}
+
+func (s *anthropicAdaptiveHTTPStub) Do(
+	req *http.Request,
+	proxyURL string,
+	accountID int64,
+	accountConcurrency int,
+) (*http.Response, error) {
+	return s.DoWithTLS(req, proxyURL, accountID, accountConcurrency, nil)
+}
+
+func (s *anthropicAdaptiveHTTPStub) DoWithTLS(
+	req *http.Request,
+	proxyURL string,
+	accountID int64,
+	accountConcurrency int,
+	_ *tlsfingerprint.Profile,
+) (*http.Response, error) {
+	rawBody, err := io.ReadAll(req.Body)
+	if err != nil {
+		return nil, err
+	}
+	body := map[string]any{}
+	if err := json.Unmarshal(rawBody, &body); err != nil {
+		return nil, err
+	}
+
+	s.mu.Lock()
+	s.requests = append(s.requests, anthropicAdaptiveRequestSnapshot{
+		url:         req.URL.String(),
+		headers:     req.Header.Clone(),
+		body:        body,
+		proxyURL:    proxyURL,
+		accountID:   accountID,
+		concurrency: accountConcurrency,
+	})
+	s.mu.Unlock()
+
+	status := s.status
+	if status == 0 {
+		status = http.StatusOK
+	}
+	responseBody := s.responseBody
+	if responseBody == "" {
+		responseBody = `{"content":[{"type":"text","text":"1"}],"usage":{"input_tokens":3,"output_tokens":1}}`
+	}
+	return &http.Response{
+		StatusCode: status,
+		Header:     http.Header{"Content-Type": []string{"application/json"}},
+		Body:       io.NopCloser(strings.NewReader(responseBody)),
+	}, nil
+}
+
+func (s *anthropicAdaptiveHTTPStub) latestRequest(t *testing.T) anthropicAdaptiveRequestSnapshot {
+	t.Helper()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if len(s.requests) == 0 {
+		t.Fatal("expected an Anthropic adaptive probe request")
+	}
+	return s.requests[len(s.requests)-1]
+}
+
+func adaptiveHeaderValue(headers http.Header, name string) string {
+	for existing, values := range headers {
+		if strings.EqualFold(existing, name) && len(values) > 0 {
+			return values[0]
+		}
+	}
+	return ""
 }
 
 type adaptiveMonitorRepoStub struct {
@@ -326,6 +417,146 @@ func TestAdaptiveAccountProbeUsesLowCostChatCompletionsForGroupedAccounts(t *tes
 	}
 	if len(repo.rows) != 1 || repo.rows[0].AccountName != "line-1" {
 		t.Fatalf("persisted history = %#v, want sticky grouped account", repo.rows)
+	}
+}
+
+func TestAdaptiveAccountProbeUsesLowCostAnthropicAPIKeyRequest(t *testing.T) {
+	executor := &adaptiveProbeExecutorStub{results: map[int64][]AccountMonitorProbeResult{}, callIndex: map[int64]int{}}
+	svc, repo := newAdaptiveMonitorTestService(t, nil, executor)
+	accountRepo := svc.accountProbeRepo.(*accountProbeRepoStub)
+	accountRepo.groupPlatform = PlatformAnthropic
+	proxyID := int64(9)
+	accountRepo.accounts = []Account{{
+		ID:          101,
+		Name:        "cc-line",
+		Platform:    PlatformAnthropic,
+		Type:        AccountTypeAPIKey,
+		Status:      StatusActive,
+		Schedulable: true,
+		Concurrency: 3,
+		Priority:    1,
+		ProxyID:     &proxyID,
+		Proxy: &Proxy{
+			ID:       proxyID,
+			Protocol: "http",
+			Host:     "proxy.example.com",
+			Port:     3128,
+			Status:   StatusActive,
+		},
+		Credentials: map[string]any{
+			"api_key":  "sk-cc",
+			"base_url": "https://cc.example.com",
+			"model_mapping": map[string]any{
+				"claude-sonnet-5": "P6.1-claude-sonnet-5",
+			},
+			credKeyHeaderOverrideEnabled: true,
+			credKeyHeaderOverrides: map[string]any{
+				"x-cc-route": "kiro",
+			},
+		},
+	}}
+	upstream := &anthropicAdaptiveHTTPStub{}
+	svc.SetAccountProbeDependencies(accountRepo, upstream, &config.Config{}, nil)
+
+	monitor := repo.monitors[11]
+	monitor.Provider = MonitorProviderAnthropic
+	monitor.PrimaryModel = "claude-sonnet-5"
+
+	results, err := svc.RunCheck(context.Background(), 11)
+	if err != nil {
+		t.Fatalf("RunCheck: %v", err)
+	}
+	if len(results) != 1 || results[0].Status != MonitorStatusOperational {
+		t.Fatalf("results = %#v, want one operational Anthropic result", results)
+	}
+	if len(executor.calls) != 0 {
+		t.Fatalf("legacy full account test must stay unused, calls=%#v", executor.calls)
+	}
+	if results[0].monitorCostModel != "P6.1-claude-sonnet-5" {
+		t.Fatalf("monitor cost model = %q, want mapped model", results[0].monitorCostModel)
+	}
+	if !results[0].monitorUsage.Observed ||
+		results[0].monitorUsage.Tokens.InputTokens != 3 ||
+		results[0].monitorUsage.Tokens.OutputTokens != 1 {
+		t.Fatalf("monitor usage = %#v, want observed 3/1 tokens", results[0].monitorUsage)
+	}
+
+	request := upstream.latestRequest(t)
+	if request.url != "https://cc.example.com/v1/messages" {
+		t.Fatalf("request URL = %q", request.url)
+	}
+	if request.headers.Get("x-api-key") != "sk-cc" {
+		t.Fatalf("x-api-key = %q", request.headers.Get("x-api-key"))
+	}
+	if request.headers.Get("anthropic-version") != monitorAnthropicAPIVersion {
+		t.Fatalf("anthropic-version = %q", request.headers.Get("anthropic-version"))
+	}
+	if adaptiveHeaderValue(request.headers, "x-cc-route") != "kiro" {
+		t.Fatalf("header override = %q", adaptiveHeaderValue(request.headers, "x-cc-route"))
+	}
+	if request.headers.Get(usagesource.Header) != usagesource.ChannelMonitor ||
+		request.headers.Get(usagesource.SignatureHeader) == "" {
+		t.Fatalf("request is missing trusted channel monitor headers")
+	}
+	if request.proxyURL != "http://proxy.example.com:3128" || request.accountID != 101 || request.concurrency != 3 {
+		t.Fatalf("request transport metadata = %#v", request)
+	}
+	if request.body["model"] != "P6.1-claude-sonnet-5" {
+		t.Fatalf("body model = %#v", request.body["model"])
+	}
+	if request.body["max_tokens"] != float64(monitorLowCostMaxTokens) || request.body["stream"] != false {
+		t.Fatalf("low-cost body = %#v", request.body)
+	}
+	if _, ok := request.body["system"]; ok {
+		t.Fatalf("low-cost Anthropic probe must not include a full system prompt: %#v", request.body)
+	}
+	messages, ok := request.body["messages"].([]any)
+	if !ok || len(messages) != 1 {
+		t.Fatalf("messages = %#v", request.body["messages"])
+	}
+	message, ok := messages[0].(map[string]any)
+	if !ok || message["content"] != monitorLowCostChallengePrompt {
+		t.Fatalf("probe message = %#v", messages[0])
+	}
+}
+
+func TestAdaptiveAccountProbeAnthropicAPIKeyReportsUpstreamFailure(t *testing.T) {
+	executor := &adaptiveProbeExecutorStub{results: map[int64][]AccountMonitorProbeResult{}, callIndex: map[int64]int{}}
+	svc, repo := newAdaptiveMonitorTestService(t, nil, executor)
+	accountRepo := svc.accountProbeRepo.(*accountProbeRepoStub)
+	accountRepo.groupPlatform = PlatformAnthropic
+	accountRepo.accounts = []Account{{
+		ID:          102,
+		Name:        "cc-failed",
+		Platform:    PlatformAnthropic,
+		Type:        AccountTypeAPIKey,
+		Status:      StatusActive,
+		Schedulable: true,
+		Concurrency: 1,
+		Credentials: map[string]any{
+			"api_key":  "sk-cc-failed",
+			"base_url": "https://cc.example.com",
+		},
+	}}
+	upstream := &anthropicAdaptiveHTTPStub{
+		status:       http.StatusBadGateway,
+		responseBody: `{"error":{"message":"temporary upstream failure"}}`,
+	}
+	svc.SetAccountProbeDependencies(accountRepo, upstream, &config.Config{}, nil)
+	monitor := repo.monitors[11]
+	monitor.Provider = MonitorProviderAnthropic
+	monitor.PrimaryModel = "claude-sonnet-5"
+
+	results, err := svc.RunCheck(context.Background(), 11)
+	if err != nil {
+		t.Fatalf("RunCheck: %v", err)
+	}
+	if len(results) != 1 || results[0].Status != MonitorStatusError {
+		t.Fatalf("results = %#v, want one Anthropic error", results)
+	}
+	if !strings.Contains(results[0].Message, "upstream HTTP 502") ||
+		!strings.Contains(results[0].Message, "temporary upstream failure") {
+		t.Fatalf("error message = %q", results[0].Message)
 	}
 }
 

@@ -10,6 +10,7 @@ import (
 // Platform is derived from group/account (usage_logs has no provider column on upstream schema).
 const channelMonitorV2PlatformSQL = `lower(` + usageLogEffectivePlatformExpr + `)`
 const channelMonitorV2ModelSQL = `COALESCE(NULLIF(TRIM(ul.requested_model), ''), NULLIF(TRIM(ul.model), ''), 'unknown')`
+const channelMonitorV2UsageSourceExcludeSQL = `(ul.usage_source IS NULL OR ul.usage_source <> 'channel_monitor')`
 
 // Tiered retention balances UI windows against storage:
 //
@@ -184,6 +185,7 @@ FROM usage_logs ul
 LEFT JOIN groups g ON g.id = ul.group_id
 LEFT JOIN accounts a ON a.id = ul.account_id
 WHERE ul.created_at >= $1 AND ul.created_at < $2
+  AND ` + channelMonitorV2UsageSourceExcludeSQL + `
 GROUP BY 1, 2, 3, 4`
 
 const channelMonitorV2UserMetricsSQL = `
@@ -207,6 +209,7 @@ FROM usage_logs ul
 LEFT JOIN groups g ON g.id = ul.group_id
 LEFT JOIN accounts a ON a.id = ul.account_id
 WHERE ul.created_at >= $1 AND ul.created_at < $2 AND ul.user_id IS NOT NULL
+  AND ` + channelMonitorV2UsageSourceExcludeSQL + `
 GROUP BY 1, 2, 3, 4, 5`
 
 const channelMonitorV2HistogramSQL = `
@@ -221,6 +224,7 @@ LEFT JOIN accounts a ON a.id = ul.account_id
 CROSS JOIN LATERAL (VALUES (0::bigint), (ul.user_id)) audience(user_id)
 CROSS JOIN LATERAL (VALUES ('ttft'::text, ul.first_token_ms), ('duration'::text, ul.duration_ms)) latency(metric, value_ms)
 WHERE ul.created_at >= $1 AND ul.created_at < $2
+  AND ` + channelMonitorV2UsageSourceExcludeSQL + `
   AND audience.user_id IS NOT NULL AND latency.value_ms IS NOT NULL AND latency.value_ms >= 0
   AND ` + usageLogSuccessFilterUL + `
 GROUP BY 1, 2, 3, 4, 5, 6, 7`
@@ -243,7 +247,9 @@ WITH dedup AS (
   WITH candidate_ids AS MATERIALIZED (
     SELECT DISTINCT request_id
     FROM ops_error_logs
-    WHERE created_at >= $1 AND created_at < $2 AND NULLIF(request_id, '') IS NOT NULL
+    WHERE created_at >= $1 AND created_at < $2
+      AND (usage_source IS NULL OR usage_source <> 'channel_monitor')
+      AND NULLIF(request_id, '') IS NOT NULL
   )
   SELECT DISTINCT ON (COALESCE(NULLIF(request_id, ''), 'error:' || id::text))
     date_trunc('minute', created_at) AS bucket_start,
@@ -261,6 +267,7 @@ WITH dedup AS (
       (NULLIF(current_error.request_id, '') IS NULL AND current_error.created_at >= $1 AND current_error.created_at < $2)
       OR current_error.request_id IN (SELECT request_id FROM candidate_ids)
     )
+    AND (current_error.usage_source IS NULL OR current_error.usage_source <> 'channel_monitor')
     AND NOT current_error.is_count_tokens
     AND (COALESCE(current_error.status_code, 0) >= 400 OR current_error.error_type = 'cyber_policy')
   ORDER BY COALESCE(NULLIF(request_id, ''), 'error:' || id::text), created_at DESC, id DESC

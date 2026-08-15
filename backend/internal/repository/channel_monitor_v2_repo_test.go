@@ -99,6 +99,8 @@ func TestChannelMonitorV2ErrorAggregationCountsFinalUserErrorsOnly(t *testing.T)
 	require.Contains(t, query, "error_type = 'cyber_policy'")
 	require.Contains(t, query, "distinct on")
 	require.Contains(t, query, "candidate_ids")
+	require.Contains(t, query, "current_error.usage_source is null or current_error.usage_source <> 'channel_monitor'")
+	require.Contains(t, query, "usage_source is null or usage_source <> 'channel_monitor'")
 	require.Contains(t, query, "where bucket_start >= $1 and bucket_start < $2")
 	require.Contains(t, query, "upstream_affected_requests")
 	require.Contains(t, query, "jsonb_array_length(upstream_errors) > 0")
@@ -108,10 +110,13 @@ func TestChannelMonitorV2UsageSuccessExcludesCyberBillingRows(t *testing.T) {
 	for _, query := range []string{channelMonitorV2UsageMetricsSQL, channelMonitorV2UserMetricsSQL} {
 		require.Contains(t, query, "COALESCE(ul.request_type, 0) NOT IN (4, 6)")
 		require.Contains(t, query, "ul.actual_cost > 0")
+		require.Contains(t, strings.ToLower(query), "ul.usage_source is null or ul.usage_source <> 'channel_monitor'")
 	}
+	require.Contains(t, channelMonitorV2HistogramSQL, "ul.actual_cost > 0")
+	require.Contains(t, strings.ToLower(channelMonitorV2HistogramSQL), "ul.usage_source is null or ul.usage_source <> 'channel_monitor'")
 	require.Contains(t, channelMonitorV2PlatformSQL, "COALESCE(NULLIF(g.platform,''), a.platform)")
 	require.Contains(t, channelMonitorV2PlatformSQL, "a.platform")
-	require.Contains(t, channelMonitorV2HistogramSQL, "ul.actual_cost > 0")
+	require.Contains(t, channelMonitorV2UsageSourceExcludeSQL, "ul.usage_source IS NULL")
 }
 
 func TestChannelMonitorV2RatesUseCoveredWindow(t *testing.T) {
