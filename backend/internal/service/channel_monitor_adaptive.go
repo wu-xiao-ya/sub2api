@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/pkg/geminicli"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/usagesource"
 	"github.com/Wei-Shaw/sub2api/internal/util/urlvalidator"
 	"golang.org/x/sync/errgroup"
@@ -545,6 +546,11 @@ func (s *ChannelMonitorService) runLowCostAdaptiveAccountProbe(
 		s.recordMonitorCost(ctx, monitor, result, account)
 		return result
 	}
+	if account.Platform == PlatformGemini && account.Type == AccountTypeAPIKey {
+		result := s.runGeminiAPIKeyAdaptiveAccountProbe(ctx, monitor, model, account)
+		s.recordMonitorCost(ctx, monitor, result, account)
+		return result
+	}
 	if account.IsOpenAICompatible() && account.Type == AccountTypeAPIKey {
 		scoped := *monitor
 		scoped.PrimaryModel = model
@@ -564,6 +570,114 @@ func (s *ChannelMonitorService) runLowCostAdaptiveAccountProbe(
 	accountID := account.ID
 	result.AccountID = &accountID
 	result.Message = truncateMessage(fmt.Sprintf("account %d does not support low-cost adaptive probing", account.ID))
+	return result
+}
+
+func (s *ChannelMonitorService) runGeminiAPIKeyAdaptiveAccountProbe(
+	ctx context.Context,
+	monitor *ChannelMonitor,
+	model string,
+	account *Account,
+) *CheckResult {
+	result := &CheckResult{
+		Model:            model,
+		Status:           MonitorStatusError,
+		CheckedAt:        time.Now(),
+		AccountName:      account.Name,
+		monitorCostModel: strings.TrimSpace(account.GetMappedModel(model)),
+	}
+	accountID := account.ID
+	result.AccountID = &accountID
+	if result.monitorCostModel == "" {
+		result.monitorCostModel = model
+	}
+
+	apiKey := strings.TrimSpace(account.GetCredential("api_key"))
+	if apiKey == "" {
+		result.Message = "account missing API key"
+		return result
+	}
+
+	baseURL, err := s.validateAccountProbeBaseURL(account.GetGeminiBaseURL(geminicli.AIStudioBaseURL))
+	if err != nil {
+		result.Message = truncateMessage(sanitizeErrorMessage(fmt.Sprintf("invalid account base_url: %v", err)))
+		return result
+	}
+
+	opts := accountProbeCheckOptions(monitor)
+	adapter, apiMode, ok := providerAdapterFor(MonitorProviderGemini, checkAPIMode(opts))
+	if !ok {
+		result.Message = "Gemini monitor adapter is unavailable"
+		return result
+	}
+	body, err := buildRequestBody(adapter, MonitorProviderGemini, apiMode, result.monitorCostModel, monitorLowCostChallengePrompt, opts)
+	if err != nil {
+		result.Message = truncateMessage(sanitizeErrorMessage(fmt.Sprintf("build Gemini request: %v", err)))
+		return result
+	}
+	req, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodPost,
+		joinURL(baseURL, adapter.buildPath(result.monitorCostModel)),
+		bytes.NewReader(body),
+	)
+	if err != nil {
+		result.Message = truncateMessage(sanitizeErrorMessage(fmt.Sprintf("build Gemini request: %v", err)))
+		return result
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+	for key, value := range mergeHeaders(adapter.buildHeaders(apiKey), opts) {
+		req.Header.Set(key, value)
+	}
+	account.ApplyHeaderOverrides(req.Header)
+	usagesource.SetChannelMonitor(req.Header)
+
+	start := time.Now()
+	result.monitorRequestAttempted = true
+	resp, err := s.doAccountProbeRequest(req, account)
+	latency := time.Since(start)
+	latencyMs := int(latency / time.Millisecond)
+	result.LatencyMs = &latencyMs
+	result.PingLatencyMs = pingEndpointOrigin(ctx, baseURL)
+	if err != nil {
+		result.Message = truncateMessage(sanitizeErrorMessage(fmt.Sprintf("do Gemini request: %v", err)))
+		return result
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	respBytes, readErr := io.ReadAll(io.LimitReader(resp.Body, monitorResponseMaxBytes+1))
+	if readErr != nil {
+		result.Message = truncateMessage(sanitizeErrorMessage(fmt.Sprintf("read Gemini body: %v", readErr)))
+		return result
+	}
+	if len(respBytes) > monitorResponseMaxBytes {
+		result.Message = truncateMessage("Gemini response exceeded monitor size limit")
+		return result
+	}
+	result.monitorUsage = monitorUsageFromGeminiPayload(genericJSONPayload(respBytes))
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		result.Message = truncateMessage(sanitizeErrorMessage(fmt.Sprintf(
+			"upstream HTTP %d: %s", resp.StatusCode, truncateForErrorBody(string(respBytes)),
+		)))
+		return result
+	}
+
+	respText := extractMonitorResponseText(adapter, respBytes)
+	if !validateMonitorChallengeResponse(
+		MonitorProviderGemini,
+		respText,
+		respBytes,
+		"1",
+		opts,
+	) {
+		result.Status = MonitorStatusFailed
+		result.Message = truncateMessage(sanitizeErrorMessage(fmt.Sprintf(
+			"Gemini low-cost challenge mismatch: got %q", respText,
+		)))
+		return result
+	}
+	result.Status = MonitorStatusOperational
 	return result
 }
 
