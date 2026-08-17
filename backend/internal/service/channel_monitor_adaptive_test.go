@@ -84,6 +84,74 @@ type anthropicAdaptiveHTTPStub struct {
 	requests     []anthropicAdaptiveRequestSnapshot
 }
 
+type geminiAdaptiveHTTPStub struct {
+	mu           sync.Mutex
+	status       int
+	responseBody string
+	requests     []anthropicAdaptiveRequestSnapshot
+}
+
+func (s *geminiAdaptiveHTTPStub) Do(
+	req *http.Request,
+	proxyURL string,
+	accountID int64,
+	accountConcurrency int,
+) (*http.Response, error) {
+	return s.DoWithTLS(req, proxyURL, accountID, accountConcurrency, nil)
+}
+
+func (s *geminiAdaptiveHTTPStub) DoWithTLS(
+	req *http.Request,
+	proxyURL string,
+	accountID int64,
+	accountConcurrency int,
+	_ *tlsfingerprint.Profile,
+) (*http.Response, error) {
+	rawBody, err := io.ReadAll(req.Body)
+	if err != nil {
+		return nil, err
+	}
+	body := map[string]any{}
+	if err := json.Unmarshal(rawBody, &body); err != nil {
+		return nil, err
+	}
+
+	s.mu.Lock()
+	s.requests = append(s.requests, anthropicAdaptiveRequestSnapshot{
+		url:         req.URL.String(),
+		headers:     req.Header.Clone(),
+		body:        body,
+		proxyURL:    proxyURL,
+		accountID:   accountID,
+		concurrency: accountConcurrency,
+	})
+	s.mu.Unlock()
+
+	status := s.status
+	if status == 0 {
+		status = http.StatusOK
+	}
+	responseBody := s.responseBody
+	if responseBody == "" {
+		responseBody = `{"candidates":[{"content":{"parts":[{"text":"1"}]}}],"usageMetadata":{"promptTokenCount":4,"candidatesTokenCount":1,"cachedContentTokenCount":1}}`
+	}
+	return &http.Response{
+		StatusCode: status,
+		Header:     http.Header{"Content-Type": []string{"application/json"}},
+		Body:       io.NopCloser(strings.NewReader(responseBody)),
+	}, nil
+}
+
+func (s *geminiAdaptiveHTTPStub) latestRequest(t *testing.T) anthropicAdaptiveRequestSnapshot {
+	t.Helper()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if len(s.requests) == 0 {
+		t.Fatal("expected a Gemini adaptive probe request")
+	}
+	return s.requests[len(s.requests)-1]
+}
+
 func (s *anthropicAdaptiveHTTPStub) Do(
 	req *http.Request,
 	proxyURL string,
@@ -557,6 +625,164 @@ func TestAdaptiveAccountProbeAnthropicAPIKeyReportsUpstreamFailure(t *testing.T)
 	if !strings.Contains(results[0].Message, "upstream HTTP 502") ||
 		!strings.Contains(results[0].Message, "temporary upstream failure") {
 		t.Fatalf("error message = %q", results[0].Message)
+	}
+}
+
+func TestAdaptiveAccountProbeUsesLowCostGeminiAPIKeyRequest(t *testing.T) {
+	executor := &adaptiveProbeExecutorStub{results: map[int64][]AccountMonitorProbeResult{}, callIndex: map[int64]int{}}
+	svc, repo := newAdaptiveMonitorTestService(t, nil, executor)
+	accountRepo := svc.accountProbeRepo.(*accountProbeRepoStub)
+	accountRepo.groupPlatform = PlatformGemini
+	proxyID := int64(12)
+	accountRepo.accounts = []Account{{
+		ID:          120,
+		Name:        "gemini-line",
+		Platform:    PlatformGemini,
+		Type:        AccountTypeAPIKey,
+		Status:      StatusActive,
+		Schedulable: true,
+		Concurrency: 4,
+		Priority:    1,
+		ProxyID:     &proxyID,
+		Proxy: &Proxy{
+			ID:       proxyID,
+			Protocol: "http",
+			Host:     "proxy.example.com",
+			Port:     3128,
+			Status:   StatusActive,
+		},
+		Credentials: map[string]any{
+			"api_key":  "AIza-gemini",
+			"base_url": "https://gemini.example.com",
+			"model_mapping": map[string]any{
+				"gemini-3.7-flash": "upstream-model",
+			},
+			credKeyHeaderOverrideEnabled: true,
+			credKeyHeaderOverrides: map[string]any{
+				"x-gemini-route": "line-a",
+			},
+		},
+	}}
+	upstream := &geminiAdaptiveHTTPStub{}
+	svc.SetAccountProbeDependencies(accountRepo, upstream, &config.Config{}, nil)
+
+	monitor := repo.monitors[11]
+	monitor.Provider = MonitorProviderGemini
+	monitor.PrimaryModel = "gemini-3.7-flash"
+
+	results, err := svc.RunCheck(context.Background(), 11)
+	if err != nil {
+		t.Fatalf("RunCheck: %v", err)
+	}
+	if len(results) != 1 || results[0].Status != MonitorStatusOperational {
+		t.Fatalf("results = %#v, want one operational Gemini result", results)
+	}
+	if len(executor.calls) != 0 {
+		t.Fatalf("legacy account test must stay unused, calls=%#v", executor.calls)
+	}
+	if results[0].monitorCostModel != "upstream-model" {
+		t.Fatalf("monitor cost model = %q, want mapped model", results[0].monitorCostModel)
+	}
+	if !results[0].monitorUsage.Observed ||
+		results[0].monitorUsage.Tokens.InputTokens != 3 ||
+		results[0].monitorUsage.Tokens.OutputTokens != 1 ||
+		results[0].monitorUsage.Tokens.CacheReadTokens != 1 {
+		t.Fatalf("monitor usage = %#v, want observed 3/1 with one cached token", results[0].monitorUsage)
+	}
+
+	request := upstream.latestRequest(t)
+	if request.url != "https://gemini.example.com/v1beta/models/upstream-model:generateContent" {
+		t.Fatalf("request URL = %q", request.url)
+	}
+	if request.headers.Get("x-goog-api-key") != "AIza-gemini" {
+		t.Fatalf("x-goog-api-key = %q", request.headers.Get("x-goog-api-key"))
+	}
+	if adaptiveHeaderValue(request.headers, "x-gemini-route") != "line-a" {
+		t.Fatalf("header override = %q", adaptiveHeaderValue(request.headers, "x-gemini-route"))
+	}
+	if request.headers.Get(usagesource.Header) != usagesource.ChannelMonitor ||
+		request.headers.Get(usagesource.SignatureHeader) == "" {
+		t.Fatalf("request is missing trusted channel monitor headers")
+	}
+	if request.proxyURL != "http://proxy.example.com:3128" || request.accountID != 120 || request.concurrency != 4 {
+		t.Fatalf("request transport metadata = %#v", request)
+	}
+	if request.body["contents"] == nil {
+		t.Fatalf("Gemini body is missing contents: %#v", request.body)
+	}
+	generationConfig, ok := request.body["generationConfig"].(map[string]any)
+	if !ok || generationConfig["maxOutputTokens"] != float64(monitorLowCostMaxTokens) {
+		t.Fatalf("low-cost generation config = %#v", request.body["generationConfig"])
+	}
+}
+
+func TestAdaptiveAccountProbeGeminiAPIKeyReportsUpstreamFailure(t *testing.T) {
+	executor := &adaptiveProbeExecutorStub{results: map[int64][]AccountMonitorProbeResult{}, callIndex: map[int64]int{}}
+	svc, repo := newAdaptiveMonitorTestService(t, nil, executor)
+	accountRepo := svc.accountProbeRepo.(*accountProbeRepoStub)
+	accountRepo.groupPlatform = PlatformGemini
+	accountRepo.accounts = []Account{{
+		ID:          121,
+		Name:        "gemini-failed",
+		Platform:    PlatformGemini,
+		Type:        AccountTypeAPIKey,
+		Status:      StatusActive,
+		Schedulable: true,
+		Credentials: map[string]any{
+			"api_key":  "AIza-failed",
+			"base_url": "https://gemini.example.com",
+		},
+	}}
+	upstream := &geminiAdaptiveHTTPStub{
+		status:       http.StatusBadGateway,
+		responseBody: `{"error":{"message":"temporary Gemini upstream failure"}}`,
+	}
+	svc.SetAccountProbeDependencies(accountRepo, upstream, &config.Config{}, nil)
+	monitor := repo.monitors[11]
+	monitor.Provider = MonitorProviderGemini
+	monitor.PrimaryModel = "gemini-3.7-flash"
+
+	results, err := svc.RunCheck(context.Background(), 11)
+	if err != nil {
+		t.Fatalf("RunCheck: %v", err)
+	}
+	if len(results) != 1 || results[0].Status != MonitorStatusError {
+		t.Fatalf("results = %#v, want one Gemini error", results)
+	}
+	if !strings.Contains(results[0].Message, "upstream HTTP 502") ||
+		!strings.Contains(results[0].Message, "temporary Gemini upstream failure") {
+		t.Fatalf("error message = %q", results[0].Message)
+	}
+}
+
+func TestAdaptiveAccountProbeKeepsUnsupportedGeminiAccountTypeError(t *testing.T) {
+	svc, _ := newAdaptiveMonitorTestService(t, nil, &adaptiveProbeExecutorStub{
+		results:   map[int64][]AccountMonitorProbeResult{},
+		callIndex: map[int64]int{},
+	})
+	svc.SetAccountProbeDependencies(
+		svc.accountProbeRepo,
+		&geminiAdaptiveHTTPStub{},
+		&config.Config{},
+		nil,
+	)
+	account := &Account{
+		ID:       122,
+		Name:     "gemini-oauth",
+		Platform: PlatformGemini,
+		Type:     AccountTypeOAuth,
+	}
+	result := svc.runLowCostAdaptiveAccountProbe(
+		context.Background(),
+		&ChannelMonitor{Provider: MonitorProviderGemini},
+		"gemini-3.7-flash",
+		account,
+	)
+	if result == nil || result.Status != MonitorStatusError || result.monitorRequestAttempted {
+		t.Fatalf("result = %#v, want an unattempted unsupported-account error", result)
+	}
+	if !strings.Contains(result.Message, "does not support low-cost adaptive probing") {
+		t.Fatalf("error message = %q", result.Message)
 	}
 }
 

@@ -29,7 +29,7 @@ func TestIsHeaderOverrideEligible(t *testing.T) {
 		{"openai apikey", PlatformOpenAI, AccountTypeAPIKey, true},
 		{"anthropic oauth", PlatformAnthropic, AccountTypeOAuth, false},
 		{"openai oauth", PlatformOpenAI, AccountTypeOAuth, false},
-		{"gemini apikey", PlatformGemini, AccountTypeAPIKey, false},
+		{"gemini apikey", PlatformGemini, AccountTypeAPIKey, true},
 		{"grok apikey", PlatformGrok, AccountTypeAPIKey, true},
 		{"grok oauth", PlatformGrok, AccountTypeOAuth, true},
 		{"antigravity apikey", PlatformAntigravity, AccountTypeAPIKey, false},
@@ -67,7 +67,7 @@ func TestIsHeaderOverrideEnabled(t *testing.T) {
 	require.False(t, headerOverrideTestAccount(PlatformAnthropic, AccountTypeOAuth, map[string]any{
 		credKeyHeaderOverrideEnabled: true,
 	}).IsHeaderOverrideEnabled())
-	require.False(t, headerOverrideTestAccount(PlatformGemini, AccountTypeAPIKey, map[string]any{
+	require.True(t, headerOverrideTestAccount(PlatformGemini, AccountTypeAPIKey, map[string]any{
 		credKeyHeaderOverrideEnabled: true,
 	}).IsHeaderOverrideEnabled())
 }
