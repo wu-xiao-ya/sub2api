@@ -189,6 +189,12 @@ func TestDefaultPricingIncludesOfficialGPT56Rates(t *testing.T) {
 	pricingSvc.pricingData = pricingData
 	billingSvc := NewBillingService(&config.Config{}, pricingSvc)
 
+	var modelMetadata map[string]struct {
+		MaxInputTokens int `json:"max_input_tokens"`
+	}
+	require.NoError(t, json.Unmarshal(data, &modelMetadata))
+	const expectedGPT56MaxInputTokens = 1050000
+
 	tests := []struct {
 		model                                                             string
 		input, cached, cacheWrite, output                                 float64
@@ -200,6 +206,10 @@ func TestDefaultPricingIncludesOfficialGPT56Rates(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.model, func(t *testing.T) {
+			metadata, ok := modelMetadata[tt.model]
+			require.True(t, ok)
+			require.Equal(t, expectedGPT56MaxInputTokens, metadata.MaxInputTokens)
+
 			pricing, err := billingSvc.GetModelPricing(tt.model)
 			require.NoError(t, err)
 			require.InDelta(t, tt.input, pricing.InputPricePerToken, 1e-12)

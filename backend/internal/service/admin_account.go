@@ -398,7 +398,7 @@ func normalizeOpenAILongContextBillingExtra(platform string, extra map[string]an
 	}
 	_, exists := normalized[openAILongContextBillingEnabledKey]
 	if !exists {
-		normalized[openAILongContextBillingEnabledKey] = false
+		normalized[openAILongContextBillingEnabledKey] = true
 	}
 	return normalized, nil
 }
