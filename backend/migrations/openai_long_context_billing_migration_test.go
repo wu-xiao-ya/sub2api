@@ -34,3 +34,20 @@ func TestMigration175GuardsMixedVersionAccountWrites(t *testing.T) {
 	require.Contains(t, sql, "TG_OP = 'UPDATE'")
 	require.Contains(t, sql, "OLD.extra->'openai_long_context_billing_enabled'")
 }
+
+func TestMigration230EnablesOpenAILongContextBillingByDefault(t *testing.T) {
+	content, err := FS.ReadFile("230_enable_openai_long_context_billing_by_default.sql")
+	require.NoError(t, err)
+
+	sql := string(content)
+	require.Contains(t, sql, "UPDATE accounts")
+	require.Contains(t, sql, "WHERE platform = 'openai'")
+	require.Contains(t, sql, "'true'::jsonb")
+	require.Contains(t, sql, "RETURNING id")
+	require.Contains(t, sql, "INSERT INTO scheduler_outbox")
+	require.Contains(t, sql, "CREATE OR REPLACE FUNCTION public.enforce_openai_long_context_billing_extra()")
+	require.Contains(t, sql, "COALESCE(parent_effective_value, 'true'::jsonb)")
+	require.Contains(t, sql, "OLD.extra->'openai_long_context_billing_enabled'")
+	require.Contains(t, sql, "CREATE TRIGGER accounts_enforce_openai_long_context_billing_extra")
+	require.Contains(t, sql, "CREATE TRIGGER accounts_propagate_openai_long_context_billing_extra")
+}
