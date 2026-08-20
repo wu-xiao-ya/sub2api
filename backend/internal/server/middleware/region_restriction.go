@@ -134,8 +134,10 @@ func writeRegionRestrictionError(c *gin.Context) {
 	switch {
 	case path == "/v1/messages", path == "/v1/messages/count_tokens":
 		AnthropicErrorWriter(c, http.StatusForbidden, regionRestrictedMessage)
+		c.Abort()
 	case strings.HasPrefix(path, "/v1beta/"), strings.HasPrefix(path, "/antigravity/v1beta/"):
 		GoogleErrorWriter(c, http.StatusForbidden, regionRestrictedMessage)
+		c.Abort()
 	case strings.HasPrefix(path, "/v1/"):
 		c.JSON(http.StatusForbidden, gin.H{
 			"error": gin.H{
