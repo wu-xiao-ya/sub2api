@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
@@ -11,8 +12,7 @@ import (
 )
 
 const (
-	regionRestrictedCode    = "REGION_RESTRICTED"
-	regionRestrictedMessage = "This service is not available in your region."
+	regionRestrictedCode = "REGION_RESTRICTED"
 )
 
 // RegionRestriction uses a trusted CDN country header to block configured
@@ -77,6 +77,7 @@ func newRegionRestriction(cfg config.RegionRestrictionConfig, now func() time.Ti
 
 		c.Header("Cache-Control", "no-store")
 		c.Header("X-Region-Restricted", country)
+		message := regionRestrictionMessage(effectiveAt)
 
 		if isBrowserNavigation(c.Request) {
 			query := url.Values{}
@@ -86,7 +87,7 @@ func newRegionRestriction(cfg config.RegionRestrictionConfig, now func() time.Ti
 			return
 		}
 
-		writeRegionRestrictionError(c)
+		writeRegionRestrictionError(c, message)
 	}
 }
 
@@ -129,25 +130,40 @@ func isBrowserNavigation(request *http.Request) bool {
 	return strings.Contains(strings.ToLower(request.Header.Get("Accept")), "text/html")
 }
 
-func writeRegionRestrictionError(c *gin.Context) {
+func regionRestrictionMessage(effectiveAt time.Time) string {
+	if effectiveAt.IsZero() {
+		return "中国大陆地区暂不可用。中国香港、中国澳门、中国台湾及其他支持地区不受影响。 Service unavailable in mainland China. Hong Kong, Macao, Taiwan, and other supported regions remain available."
+	}
+
+	effectiveAt = effectiveAt.In(time.FixedZone("Asia/Shanghai", 8*60*60))
+	chineseTime := effectiveAt.Format("2006年1月2日 15:04")
+	englishTime := effectiveAt.Format("January 2, 2006 15:04")
+	return fmt.Sprintf(
+		"自 %s（北京时间）起，中国大陆地区暂不可用。中国香港、中国澳门、中国台湾及其他支持地区不受影响。 Service unavailable in mainland China from %s (Asia/Shanghai). Hong Kong, Macao, Taiwan, and other supported regions remain available.",
+		chineseTime,
+		englishTime,
+	)
+}
+
+func writeRegionRestrictionError(c *gin.Context, message string) {
 	path := normalizeRegionPath(c.Request.URL.Path)
 	switch {
 	case path == "/v1/messages", path == "/v1/messages/count_tokens":
-		AnthropicErrorWriter(c, http.StatusForbidden, regionRestrictedMessage)
+		AnthropicErrorWriter(c, http.StatusForbidden, message)
 		c.Abort()
 	case strings.HasPrefix(path, "/v1beta/"), strings.HasPrefix(path, "/antigravity/v1beta/"):
-		GoogleErrorWriter(c, http.StatusForbidden, regionRestrictedMessage)
+		GoogleErrorWriter(c, http.StatusForbidden, message)
 		c.Abort()
 	case strings.HasPrefix(path, "/v1/"):
 		c.JSON(http.StatusForbidden, gin.H{
 			"error": gin.H{
 				"type":    "permission_error",
 				"code":    regionRestrictedCode,
-				"message": regionRestrictedMessage,
+				"message": message,
 			},
 		})
 		c.Abort()
 	default:
-		AbortWithError(c, http.StatusForbidden, regionRestrictedCode, regionRestrictedMessage)
+		AbortWithError(c, http.StatusForbidden, regionRestrictedCode, message)
 	}
 }

@@ -105,7 +105,7 @@ func TestRegionRestriction(t *testing.T) {
 			path:       "/v1/responses",
 			country:    "CN",
 			wantStatus: http.StatusForbidden,
-			wantBody:   `{"error":{"type":"permission_error","code":"REGION_RESTRICTED","message":"This service is not available in your region."}}`,
+			wantBody:   `{"error":{"type":"permission_error","code":"REGION_RESTRICTED","message":"自 2026年8月24日 00:00（北京时间）起，中国大陆地区暂不可用。中国香港、中国澳门、中国台湾及其他支持地区不受影响。 Service unavailable in mainland China from August 24, 2026 00:00 (Asia/Shanghai). Hong Kong, Macao, Taiwan, and other supported regions remain available."}}`,
 		},
 		{
 			name:       "anthropic request receives anthropic error",
@@ -114,7 +114,7 @@ func TestRegionRestriction(t *testing.T) {
 			path:       "/v1/messages",
 			country:    "CN",
 			wantStatus: http.StatusForbidden,
-			wantBody:   `{"type":"error","error":{"type":"permission_error","message":"This service is not available in your region."}}`,
+			wantBody:   `{"type":"error","error":{"type":"permission_error","message":"自 2026年8月24日 00:00（北京时间）起，中国大陆地区暂不可用。中国香港、中国澳门、中国台湾及其他支持地区不受影响。 Service unavailable in mainland China from August 24, 2026 00:00 (Asia/Shanghai). Hong Kong, Macao, Taiwan, and other supported regions remain available."}}`,
 		},
 		{
 			name:       "gemini request receives google error",
@@ -123,7 +123,7 @@ func TestRegionRestriction(t *testing.T) {
 			path:       "/v1beta/models/gemini:generateContent",
 			country:    "CN",
 			wantStatus: http.StatusForbidden,
-			wantBody:   `{"error":{"code":403,"message":"This service is not available in your region.","status":"PERMISSION_DENIED"}}`,
+			wantBody:   `{"error":{"code":403,"message":"自 2026年8月24日 00:00（北京时间）起，中国大陆地区暂不可用。中国香港、中国澳门、中国台湾及其他支持地区不受影响。 Service unavailable in mainland China from August 24, 2026 00:00 (Asia/Shanghai). Hong Kong, Macao, Taiwan, and other supported regions remain available.","status":"PERMISSION_DENIED"}}`,
 		},
 		{
 			name:       "console api receives platform error",
@@ -132,7 +132,7 @@ func TestRegionRestriction(t *testing.T) {
 			path:       "/api/v1/auth/me",
 			country:    "CN",
 			wantStatus: http.StatusForbidden,
-			wantBody:   `{"code":"REGION_RESTRICTED","message":"This service is not available in your region."}`,
+			wantBody:   `{"code":"REGION_RESTRICTED","message":"自 2026年8月24日 00:00（北京时间）起，中国大陆地区暂不可用。中国香港、中国澳门、中国台湾及其他支持地区不受影响。 Service unavailable in mainland China from August 24, 2026 00:00 (Asia/Shanghai). Hong Kong, Macao, Taiwan, and other supported regions remain available."}`,
 		},
 		{
 			name:            "restriction page remains accessible",

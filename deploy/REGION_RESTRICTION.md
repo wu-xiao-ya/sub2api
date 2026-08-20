@@ -53,7 +53,7 @@ available unless they are explicitly added to `blocked_countries`.
 
 - Browser navigations receive a `307` redirect to `/region-restricted`.
 - OpenAI-compatible endpoints receive an OpenAI permission error with code
-  `REGION_RESTRICTED`.
+  `REGION_RESTRICTED` and the effective date/region notice in `error.message`.
 - Anthropic and Gemini endpoints receive their native permission-error shapes.
 - Console APIs receive the standard Sub2API `REGION_RESTRICTED` response.
 - Missing country headers fail open to preserve health checks and local
