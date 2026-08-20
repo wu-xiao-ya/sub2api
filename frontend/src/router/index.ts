@@ -176,6 +176,15 @@ const routes: RouteRecordRaw[] = [
       title: 'Legal Document'
     }
   },
+  {
+    path: '/region-restricted',
+    name: 'RegionRestricted',
+    component: () => import('@/views/public/RegionRestrictedView.vue'),
+    meta: {
+      requiresAuth: false,
+      title: 'Region Restricted'
+    }
+  },
 
   // ==================== User Routes ====================
   {
