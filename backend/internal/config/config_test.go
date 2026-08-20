@@ -67,17 +67,17 @@ func TestLoadRegionRestrictionDefaultsAndEnvironment(t *testing.T) {
 	t.Run("enabled by environment", func(t *testing.T) {
 		resetViperWithJWTSecret(t)
 		t.Setenv("SECURITY_REGION_RESTRICTION_ENABLED", "true")
-		t.Setenv("SECURITY_REGION_RESTRICTION_EFFECTIVE_AT", "2026-08-20T00:00:00+08:00")
+		t.Setenv("SECURITY_REGION_RESTRICTION_EFFECTIVE_AT", "2026-08-24T00:00:00+08:00")
 
 		cfg, err := LoadForBootstrap()
 		require.NoError(t, err)
 		require.True(t, cfg.Security.RegionRestriction.Enabled)
-		require.Equal(t, "2026-08-20T00:00:00+08:00", cfg.Security.RegionRestriction.EffectiveAt)
+		require.Equal(t, "2026-08-24T00:00:00+08:00", cfg.Security.RegionRestriction.EffectiveAt)
 
 		cfg, err = ProvideConfig()
 		require.NoError(t, err)
 		require.True(t, cfg.Security.RegionRestriction.Enabled)
-		require.Equal(t, "2026-08-20T00:00:00+08:00", cfg.Security.RegionRestriction.EffectiveAt)
+		require.Equal(t, "2026-08-24T00:00:00+08:00", cfg.Security.RegionRestriction.EffectiveAt)
 	})
 }
 
@@ -105,7 +105,7 @@ func TestValidateRegionRestriction(t *testing.T) {
 					Enabled:          true,
 					CountryHeader:    "CF-IPCountry",
 					BlockedCountries: []string{"CN"},
-					EffectiveAt:      "2026-08-20",
+					EffectiveAt:      "2026-08-24",
 					RestrictedPath:   "/region-restricted",
 				},
 			},

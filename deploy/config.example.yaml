@@ -139,7 +139,7 @@ security:
       - "CN"
     # RFC3339. Leave empty to take effect immediately after enabling.
     # RFC3339 时间；留空表示启用后立即生效。
-    effective_at: "2026-08-20T00:00:00+08:00"
+    effective_at: "2026-08-24T00:00:00+08:00"
     restricted_path: "/region-restricted"
     exempt_paths:
       - "/health"

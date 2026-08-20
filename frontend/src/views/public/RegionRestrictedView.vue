@@ -48,7 +48,7 @@ const detectedCountry = computed(() => {
       <h1 id="restriction-title">暂不向中国大陆地区提供服务</h1>
       <p class="restriction-summary">
         根据平台区域合规、网络稳定性及风险控制策略，自
-        <strong>2026年8月20日</strong>
+        <strong>2026年8月24日</strong>
         起，本站控制台及 API 服务将不再向中国大陆地区开放。
       </p>
 
@@ -57,12 +57,13 @@ const detectedCountry = computed(() => {
       <div class="restriction-details">
         <p>
           系统判断当前连接来源于中国大陆地区，因此本次访问已被拒绝。账户数据、API
-          密钥及余额信息将按照平台现有规则保留和处理。
+          密钥及余额信息将按照平台现有规则保留和处理。中国香港、中国澳门、中国台湾及其他地区不受本次调整影响。
         </p>
         <p lang="en">
           This service is not currently available in mainland China. Account data, API
           keys, and balances will continue to be handled under the platform's existing
-          policies.
+          policies. Hong Kong, Macao, Taiwan, and other supported regions are not
+          affected by this adjustment.
         </p>
       </div>
 

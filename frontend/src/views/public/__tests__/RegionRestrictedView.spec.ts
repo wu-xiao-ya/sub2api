@@ -30,8 +30,9 @@ describe('RegionRestrictedView', () => {
     })
 
     expect(wrapper.text()).toContain('暂不向中国大陆地区提供服务')
-    expect(wrapper.text()).toContain('2026年8月20日')
+    expect(wrapper.text()).toContain('2026年8月24日')
     expect(wrapper.text()).toContain('REGION CN')
+    expect(wrapper.text()).toContain('中国香港、中国澳门、中国台湾及其他地区不受本次调整影响')
     expect(wrapper.text()).toContain('PetraFlux Labs')
     expect(wrapper.text()).toContain('Telegram: @petraflux')
     expect(wrapper.get('.restriction-logo').attributes('src')).toBe('/custom-logo.png')

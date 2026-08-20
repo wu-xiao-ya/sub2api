@@ -26,7 +26,7 @@ security:
     country_header: "CF-IPCountry"
     blocked_countries:
       - "CN"
-    effective_at: "2026-08-20T00:00:00+08:00"
+    effective_at: "2026-08-24T00:00:00+08:00"
     restricted_path: "/region-restricted"
     exempt_paths:
       - "/health"
@@ -39,12 +39,15 @@ Environment-variable activation:
 
 ```text
 SECURITY_REGION_RESTRICTION_ENABLED=true
-SECURITY_REGION_RESTRICTION_EFFECTIVE_AT=2026-08-20T00:00:00+08:00
+SECURITY_REGION_RESTRICTION_EFFECTIVE_AT=2026-08-24T00:00:00+08:00
 ```
 
 Keep `enabled=false` while validating a candidate image. Enabling it with the
-example date takes effect immediately because August 20, 2026 has already
-started in Asia/Shanghai.
+example date takes effect at midnight on August 24, 2026 in Asia/Shanghai.
+
+`CN` refers only to mainland China in Cloudflare's country code. Hong Kong
+(`HK`), Macao (`MO`), Taiwan (`TW`), and all other countries or regions remain
+available unless they are explicitly added to `blocked_countries`.
 
 ## Behavior
 
