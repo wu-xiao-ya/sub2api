@@ -13,7 +13,7 @@ import (
 
 func TestRegionRestriction(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	effectiveAt := time.Date(2026, 8, 20, 0, 0, 0, 0, time.FixedZone("CST", 8*60*60))
+	effectiveAt := time.Date(2026, 8, 24, 0, 0, 0, 0, time.FixedZone("CST", 8*60*60))
 	cfg := config.RegionRestrictionConfig{
 		Enabled:          true,
 		CountryHeader:    "CF-IPCountry",
@@ -50,6 +50,33 @@ func TestRegionRestriction(t *testing.T) {
 			method:          http.MethodPost,
 			path:            "/v1/responses",
 			country:         "US",
+			wantStatus:      http.StatusNoContent,
+			wantNextHandler: true,
+		},
+		{
+			name:            "hong kong remains supported",
+			now:             effectiveAt,
+			method:          http.MethodPost,
+			path:            "/v1/responses",
+			country:         "HK",
+			wantStatus:      http.StatusNoContent,
+			wantNextHandler: true,
+		},
+		{
+			name:            "macao remains supported",
+			now:             effectiveAt,
+			method:          http.MethodPost,
+			path:            "/v1/responses",
+			country:         "MO",
+			wantStatus:      http.StatusNoContent,
+			wantNextHandler: true,
+		},
+		{
+			name:            "taiwan remains supported",
+			now:             effectiveAt,
+			method:          http.MethodPost,
+			path:            "/v1/responses",
+			country:         "TW",
 			wantStatus:      http.StatusNoContent,
 			wantNextHandler: true,
 		},
