@@ -705,16 +705,26 @@ type ForwardedClientIPSettings struct {
 }
 
 type SecurityConfig struct {
-	URLAllowlist    URLAllowlistConfig   `mapstructure:"url_allowlist"`
-	ResponseHeaders ResponseHeaderConfig `mapstructure:"response_headers"`
-	CSP             CSPConfig            `mapstructure:"csp"`
-	ProxyFallback   ProxyFallbackConfig  `mapstructure:"proxy_fallback"`
-	ProxyProbe      ProxyProbeConfig     `mapstructure:"proxy_probe"`
+	URLAllowlist      URLAllowlistConfig      `mapstructure:"url_allowlist"`
+	ResponseHeaders   ResponseHeaderConfig    `mapstructure:"response_headers"`
+	CSP               CSPConfig               `mapstructure:"csp"`
+	ProxyFallback     ProxyFallbackConfig     `mapstructure:"proxy_fallback"`
+	ProxyProbe        ProxyProbeConfig        `mapstructure:"proxy_probe"`
+	RegionRestriction RegionRestrictionConfig `mapstructure:"region_restriction"`
 	// TrustForwardedIPForAPIKeyACL enables legacy raw forwarded-header takeover.
 	// When disabled, server.trusted_proxies is authoritative for all client-IP consumers.
 	TrustForwardedIPForAPIKeyACL  bool                                       `mapstructure:"trust_forwarded_ip_for_api_key_acl"`
 	ForwardedClientIPHeaders      []string                                   `mapstructure:"forwarded_client_ip_headers" json:"forwarded_client_ip_headers" yaml:"forwarded_client_ip_headers"`
 	forwardedClientIPSettingsLive *atomic.Pointer[ForwardedClientIPSettings] `mapstructure:"-" json:"-" yaml:"-"`
+}
+
+type RegionRestrictionConfig struct {
+	Enabled          bool     `mapstructure:"enabled"`
+	CountryHeader    string   `mapstructure:"country_header"`
+	BlockedCountries []string `mapstructure:"blocked_countries"`
+	EffectiveAt      string   `mapstructure:"effective_at"`
+	RestrictedPath   string   `mapstructure:"restricted_path"`
+	ExemptPaths      []string `mapstructure:"exempt_paths"`
 }
 
 func NormalizeForwardedClientIPHeaders(headers []string) ([]string, error) {
@@ -1981,6 +1991,17 @@ func setDefaults() {
 	viper.SetDefault("security.csp.policy", DefaultCSPPolicy)
 	viper.SetDefault("security.proxy_probe.insecure_skip_verify", false)
 	viper.SetDefault("security.trust_forwarded_ip_for_api_key_acl", true)
+	viper.SetDefault("security.region_restriction.enabled", false)
+	viper.SetDefault("security.region_restriction.country_header", "CF-IPCountry")
+	viper.SetDefault("security.region_restriction.blocked_countries", []string{"CN"})
+	viper.SetDefault("security.region_restriction.effective_at", "")
+	viper.SetDefault("security.region_restriction.restricted_path", "/region-restricted")
+	viper.SetDefault("security.region_restriction.exempt_paths", []string{
+		"/health",
+		"/api/v1/settings/public",
+		"/api/v1/setup/status",
+		"/api/v1/payment/webhook",
+	})
 
 	// Security - disable direct fallback on proxy error
 	viper.SetDefault("security.proxy_fallback.allow_direct_on_error", false)
@@ -2557,6 +2578,23 @@ func (c *Config) Validate() error {
 	}
 	c.Security.ForwardedClientIPHeaders = forwardedClientIPHeaders
 	c.SetForwardedClientIPSettings(c.Security.TrustForwardedIPForAPIKeyACL, forwardedClientIPHeaders)
+	regionRestriction := c.Security.RegionRestriction
+	if regionRestriction.Enabled {
+		if !httpguts.ValidHeaderFieldName(strings.TrimSpace(regionRestriction.CountryHeader)) {
+			return fmt.Errorf("security.region_restriction.country_header must be a valid HTTP header name")
+		}
+		if len(regionRestriction.BlockedCountries) == 0 {
+			return fmt.Errorf("security.region_restriction.blocked_countries must not be empty when enabled")
+		}
+		if restrictedPath := strings.TrimSpace(regionRestriction.RestrictedPath); restrictedPath == "" || !strings.HasPrefix(restrictedPath, "/") {
+			return fmt.Errorf("security.region_restriction.restricted_path must start with /")
+		}
+		if effectiveAt := strings.TrimSpace(regionRestriction.EffectiveAt); effectiveAt != "" {
+			if _, err := time.Parse(time.RFC3339, effectiveAt); err != nil {
+				return fmt.Errorf("security.region_restriction.effective_at must be RFC3339: %w", err)
+			}
+		}
+	}
 	if c.Server.ReadHeaderTimeout < 1 || c.Server.ReadHeaderTimeout > 60 {
 		return fmt.Errorf("server.read_header_timeout must be between 1 and 60 seconds")
 	}

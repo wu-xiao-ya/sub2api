@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { RouterView, useRouter, useRoute } from 'vue-router'
-import { onMounted, onBeforeUnmount, watch } from 'vue'
+import { computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import Toast from '@/components/common/Toast.vue'
 import NavigationProgress from '@/components/common/NavigationProgress.vue'
 import AdminComplianceDialog from '@/components/admin/AdminComplianceDialog.vue'
@@ -18,6 +18,7 @@ const subscriptionStore = useSubscriptionStore()
 const announcementStore = useAnnouncementStore()
 const adminComplianceStore = useAdminComplianceStore()
 const adminSettingsStore = useAdminSettingsStore()
+const isRegionRestrictedRoute = computed(() => route.path === '/region-restricted')
 
 function updateDocumentTitle() {
   const customMenuItems = [
@@ -54,7 +55,11 @@ watch(
 
 // Watch for authentication state and manage subscription data + announcements
 function onVisibilityChange() {
-  if (document.visibilityState === 'visible' && authStore.isAuthenticated) {
+  if (
+    !isRegionRestrictedRoute.value &&
+    document.visibilityState === 'visible' &&
+    authStore.isAuthenticated
+  ) {
     announcementStore.fetchAnnouncements()
   }
 }
@@ -67,6 +72,14 @@ function onAdminComplianceRequired(event: Event) {
 watch(
   () => authStore.isAuthenticated,
   (isAuthenticated, oldValue) => {
+    if (isRegionRestrictedRoute.value) {
+      subscriptionStore.clear()
+      subscriptionStore.stopPolling()
+      announcementStore.reset()
+      adminComplianceStore.reset()
+      return
+    }
+
     if (isAuthenticated) {
       if (authStore.isAdmin) {
         adminComplianceStore.fetchStatus().catch((error) => {
@@ -104,7 +117,7 @@ watch(
 
 // Route change trigger (throttled by store)
 router.afterEach(() => {
-  if (authStore.isAuthenticated) {
+  if (!isRegionRestrictedRoute.value && authStore.isAuthenticated) {
     announcementStore.fetchAnnouncements()
   }
 })
@@ -116,6 +129,16 @@ onBeforeUnmount(() => {
 
 onMounted(async () => {
   window.addEventListener('admin-compliance-required', onAdminComplianceRequired)
+
+  // The region restriction page must remain renderable while API access is
+  // denied or unavailable. Apply embedded settings without making a request.
+  if (isRegionRestrictedRoute.value) {
+    if (window.__APP_CONFIG__) {
+      await appStore.fetchPublicSettings()
+    }
+    updateDocumentTitle()
+    return
+  }
 
   // Check if setup is needed
   try {
@@ -137,9 +160,9 @@ onMounted(async () => {
 </script>
 
 <template>
-  <NavigationProgress />
+  <NavigationProgress v-if="!isRegionRestrictedRoute" />
   <RouterView />
-  <Toast />
-  <AnnouncementPopup />
-  <AdminComplianceDialog />
+  <Toast v-if="!isRegionRestrictedRoute" />
+  <AnnouncementPopup v-if="!isRegionRestrictedRoute" />
+  <AdminComplianceDialog v-if="!isRegionRestrictedRoute" />
 </template>

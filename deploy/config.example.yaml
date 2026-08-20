@@ -129,6 +129,23 @@ security:
   # 仅在上方旧版兼容开关为 true 时生效；最多配置 16 个不重复的合法 HTTP 头名。
   # Environment / 环境变量: SECURITY_FORWARDED_CLIENT_IP_HEADERS=True-Client-IP,X-CDN-Client-IP
   forwarded_client_ip_headers: []
+  # Optional country-level service restriction. The CDN must overwrite this
+  # header, and the origin must not be directly reachable from the public web.
+  # 可选的国家/地区服务限制。必须由 CDN 覆盖地区请求头，并禁止公网绕过 CDN 直连源站。
+  region_restriction:
+    enabled: false
+    country_header: "CF-IPCountry"
+    blocked_countries:
+      - "CN"
+    # RFC3339. Leave empty to take effect immediately after enabling.
+    # RFC3339 时间；留空表示启用后立即生效。
+    effective_at: "2026-08-20T00:00:00+08:00"
+    restricted_path: "/region-restricted"
+    exempt_paths:
+      - "/health"
+      - "/api/v1/settings/public"
+      - "/api/v1/setup/status"
+      - "/api/v1/payment/webhook"
   # Example / 示例:
   # forwarded_client_ip_headers:
   #   - "True-Client-IP"

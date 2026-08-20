@@ -52,6 +52,65 @@ func TestLoadHTTPIngressSafetyDefaults(t *testing.T) {
 	require.Equal(t, 16384, cfg.APIKeyAuth.InvalidAbuse.Capacity)
 }
 
+func TestLoadRegionRestrictionDefaultsAndEnvironment(t *testing.T) {
+	t.Run("disabled by default", func(t *testing.T) {
+		resetViperWithJWTSecret(t)
+
+		cfg, err := Load()
+		require.NoError(t, err)
+		require.False(t, cfg.Security.RegionRestriction.Enabled)
+		require.Equal(t, "CF-IPCountry", cfg.Security.RegionRestriction.CountryHeader)
+		require.Equal(t, []string{"CN"}, cfg.Security.RegionRestriction.BlockedCountries)
+		require.Equal(t, "/region-restricted", cfg.Security.RegionRestriction.RestrictedPath)
+	})
+
+	t.Run("enabled by environment", func(t *testing.T) {
+		resetViperWithJWTSecret(t)
+		t.Setenv("SECURITY_REGION_RESTRICTION_ENABLED", "true")
+		t.Setenv("SECURITY_REGION_RESTRICTION_EFFECTIVE_AT", "2026-08-20T00:00:00+08:00")
+
+		cfg, err := Load()
+		require.NoError(t, err)
+		require.True(t, cfg.Security.RegionRestriction.Enabled)
+		require.Equal(t, "2026-08-20T00:00:00+08:00", cfg.Security.RegionRestriction.EffectiveAt)
+	})
+}
+
+func TestValidateRegionRestriction(t *testing.T) {
+	t.Run("rejects invalid country header", func(t *testing.T) {
+		cfg := &Config{
+			Security: SecurityConfig{
+				RegionRestriction: RegionRestrictionConfig{
+					Enabled:          true,
+					CountryHeader:    "X Invalid",
+					BlockedCountries: []string{"CN"},
+					RestrictedPath:   "/region-restricted",
+				},
+			},
+		}
+
+		err := cfg.Validate()
+		require.ErrorContains(t, err, "country_header")
+	})
+
+	t.Run("rejects invalid effective time", func(t *testing.T) {
+		cfg := &Config{
+			Security: SecurityConfig{
+				RegionRestriction: RegionRestrictionConfig{
+					Enabled:          true,
+					CountryHeader:    "CF-IPCountry",
+					BlockedCountries: []string{"CN"},
+					EffectiveAt:      "2026-08-20",
+					RestrictedPath:   "/region-restricted",
+				},
+			},
+		}
+
+		err := cfg.Validate()
+		require.ErrorContains(t, err, "effective_at must be RFC3339")
+	})
+}
+
 func TestNormalizeForwardedClientIPHeaders(t *testing.T) {
 	headers, err := NormalizeForwardedClientIPHeaders([]string{
 		" x-cdn-client-ip ",
