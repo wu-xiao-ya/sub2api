@@ -141,7 +141,9 @@ func TestRegionRestriction(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			router := gin.New()
 			router.Use(newRegionRestriction(cfg, func() time.Time { return tt.now }))
+			nextHandlerCalled := false
 			router.Any("/*path", func(c *gin.Context) {
+				nextHandlerCalled = true
 				c.Status(http.StatusNoContent)
 			})
 
@@ -163,6 +165,7 @@ func TestRegionRestriction(t *testing.T) {
 			if tt.wantNextHandler {
 				require.Empty(t, recorder.Header().Get("X-Region-Restricted"))
 			}
+			require.Equal(t, tt.wantNextHandler, nextHandlerCalled)
 		})
 	}
 }

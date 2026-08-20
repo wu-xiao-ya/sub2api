@@ -69,7 +69,12 @@ func TestLoadRegionRestrictionDefaultsAndEnvironment(t *testing.T) {
 		t.Setenv("SECURITY_REGION_RESTRICTION_ENABLED", "true")
 		t.Setenv("SECURITY_REGION_RESTRICTION_EFFECTIVE_AT", "2026-08-20T00:00:00+08:00")
 
-		cfg, err := Load()
+		cfg, err := LoadForBootstrap()
+		require.NoError(t, err)
+		require.True(t, cfg.Security.RegionRestriction.Enabled)
+		require.Equal(t, "2026-08-20T00:00:00+08:00", cfg.Security.RegionRestriction.EffectiveAt)
+
+		cfg, err = ProvideConfig()
 		require.NoError(t, err)
 		require.True(t, cfg.Security.RegionRestriction.Enabled)
 		require.Equal(t, "2026-08-20T00:00:00+08:00", cfg.Security.RegionRestriction.EffectiveAt)
