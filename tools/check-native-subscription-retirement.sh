@@ -12,16 +12,17 @@ for migration in \
   test -f "$migration_root/$migration"
 done
 
-if rg -n \
-  --glob '*.go' \
-  --glob '!**/*_test.go' \
-  'UPDATE[[:space:]]+user_subscriptions|INSERT[[:space:]]+INTO[[:space:]]+user_subscriptions|DELETE[[:space:]]+FROM[[:space:]]+user_subscriptions|UserSubscription\.(Create|Update|Delete)' \
-  "$repo_root/backend/internal"; then
+runtime_files="$repo_root/backend/internal"
+if find "$runtime_files" -type f -name '*.go' ! -name '*_test.go' -print0 |
+  xargs -0 grep -nE \
+    'UPDATE[[:space:]]+user_subscriptions|INSERT[[:space:]]+INTO[[:space:]]+user_subscriptions|DELETE[[:space:]]+FROM[[:space:]]+user_subscriptions|UserSubscription\.(Create|Update|Delete)'; then
   echo "retired native subscription write path detected" >&2
   exit 1
 fi
 
-if ! rg -n "subscription_purchase_id" "$repo_root/backend/internal/service" "$repo_root/backend/internal/repository" >/dev/null; then
+if ! grep -R -n -E "subscription_purchase_id" \
+  "$repo_root/backend/internal/service" \
+  "$repo_root/backend/internal/repository" >/dev/null; then
   echo "purchase attribution path is missing" >&2
   exit 1
 fi
