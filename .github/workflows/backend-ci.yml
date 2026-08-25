@@ -57,9 +57,10 @@ jobs:
         working-directory: backend
         run: go generate ./cmd/server
       - name: Verify native subscription retirement guard
-        run: |
-          bash tools/check-native-subscription-retirement.sh
-          go test ./migrations -run '^Test(SubscriptionPurchase|NativeSubscriptionBackfill|LegacyUsageAttribution)' -count=1
+        run: bash tools/check-native-subscription-retirement.sh
+      - name: Test subscription retirement migrations
+        working-directory: backend
+        run: go test ./migrations -run '^Test(SubscriptionPurchase|NativeSubscriptionBackfill|LegacyUsageAttribution)' -count=1
       - name: Build backend
         working-directory: backend
         run: make build
