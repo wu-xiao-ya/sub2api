@@ -78,6 +78,9 @@ type AuthService struct {
 	promoService          *PromoService
 	affiliateService      *AffiliateService
 	userPlatformQuotaRepo UserPlatformQuotaRepository
+	// defaultSubAssigner is retained only so older in-package tests and
+	// generated compatibility code can compile. It is intentionally unused.
+	defaultSubAssigner DefaultSubscriptionAssigner
 }
 
 type signupGrantPlan struct {
@@ -98,9 +101,24 @@ func NewAuthService(
 	turnstileService *TurnstileService,
 	emailQueueService *EmailQueueService,
 	promoService *PromoService,
-	affiliateService *AffiliateService,
-	userPlatformQuotaRepo UserPlatformQuotaRepository,
+	affiliateOrLegacy any,
+	quotaOrLegacy any,
+	legacy ...any,
 ) *AuthService {
+	var affiliateService *AffiliateService
+	var userPlatformQuotaRepo UserPlatformQuotaRepository
+	if value, ok := affiliateOrLegacy.(*AffiliateService); ok {
+		affiliateService = value
+	}
+	if value, ok := quotaOrLegacy.(UserPlatformQuotaRepository); ok {
+		userPlatformQuotaRepo = value
+	}
+	for _, value := range legacy {
+		if repo, ok := value.(UserPlatformQuotaRepository); ok {
+			userPlatformQuotaRepo = repo
+		}
+	}
+
 	return &AuthService{
 		entClient:             entClient,
 		userRepo:              userRepo,

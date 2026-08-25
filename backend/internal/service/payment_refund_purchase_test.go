@@ -276,7 +276,7 @@ func TestRollbackRefundLeavesUntouchedPurchaseAlone(t *testing.T) {
 
 func TestRefundIsFullOrderAmountUsesCurrencyTolerance(t *testing.T) {
 	t.Parallel()
-	order := &dbent.PaymentOrder{Amount: 80, Currency: "CNY"}
+	order := &dbent.PaymentOrder{Amount: 80}
 	require.True(t, refundIsFullOrderAmount(&RefundPlan{Order: order, RefundAmount: 80}))
 	require.True(t, refundIsFullOrderAmount(&RefundPlan{Order: order, RefundAmount: 79.999}), "float noise must not read as partial")
 	require.False(t, refundIsFullOrderAmount(&RefundPlan{Order: order, RefundAmount: 40}))
