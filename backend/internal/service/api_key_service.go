@@ -228,6 +228,7 @@ type APIKeyService struct {
 	groupRepo                 GroupRepository
 	userSubRepo               UserSubscriptionRepository
 	userGroupRateRepo         UserGroupRateRepository
+	subscriptionService       *SubscriptionService
 	cache                     APIKeyCache
 	rateLimitCacheInvalid     RateLimitCacheInvalidator // optional: invalidate Redis rate limit cache
 	concurrencyService        *ConcurrencyService
@@ -309,6 +310,13 @@ func (s *APIKeyService) SetConcurrencyService(concurrencyService *ConcurrencySer
 	s.concurrencyService = concurrencyService
 }
 
+// SetSubscriptionService connects shared subscription authorization after
+// construction. This keeps the existing constructor and its test doubles
+// backward compatible while allowing API key creation to see new purchases.
+func (s *APIKeyService) SetSubscriptionService(subscriptionService *SubscriptionService) {
+	s.subscriptionService = subscriptionService
+}
+
 func (s *APIKeyService) compileAPIKeyIPRules(apiKey *APIKey) {
 	if apiKey == nil {
 		return
@@ -384,16 +392,25 @@ func (s *APIKeyService) incrementAPIKeyErrorCount(ctx context.Context, userID in
 	_ = s.cache.IncrementCreateAttemptCount(ctx, userID)
 }
 
-// canUserBindGroup 检查用户是否可以绑定指定分组
-// 对于订阅类型分组：检查用户是否有有效订阅
-// 对于标准类型分组：使用原有的 AllowedGroups 和 IsExclusive 逻辑
+// canUserBindGroup 检查用户是否可以绑定指定分组。
+// Subscription groups are authorized only by subscription_purchases; the
+// legacy user_subscriptions table is frozen and is never consulted.
 func (s *APIKeyService) canUserBindGroup(ctx context.Context, user *User, group *Group) bool {
-	// 订阅类型分组：需要有效订阅
 	if group.IsSubscriptionType() {
-		_, err := s.userSubRepo.GetActiveByUserIDAndGroupID(ctx, user.ID, group.ID)
-		return err == nil // 有有效订阅则允许
+		if s.subscriptionService == nil {
+			return false
+		}
+		groupIDs, err := s.subscriptionService.ListActiveSharedGroupIDs(ctx, user.ID)
+		if err != nil {
+			return false
+		}
+		for _, groupID := range groupIDs {
+			if groupID == group.ID {
+				return true
+			}
+		}
+		return false
 	}
-	// 标准类型分组：使用原有逻辑
 	return user.CanBindGroup(group.ID, group.IsExclusive)
 }
 
@@ -939,16 +956,16 @@ func (s *APIKeyService) GetAvailableGroups(ctx context.Context, userID int64) ([
 		return nil, fmt.Errorf("list active groups: %w", err)
 	}
 
-	// 获取用户的所有有效订阅
-	activeSubscriptions, err := s.userSubRepo.ListActiveByUserID(ctx, userID)
-	if err != nil {
-		return nil, fmt.Errorf("list active subscriptions: %w", err)
-	}
-
-	// 构建订阅分组 ID 集合
+	// Build the entitlement group set from active purchase snapshots only.
 	subscribedGroupIDs := make(map[int64]bool)
-	for _, sub := range activeSubscriptions {
-		subscribedGroupIDs[sub.GroupID] = true
+	if s.subscriptionService != nil {
+		sharedGroupIDs, sharedErr := s.subscriptionService.ListActiveSharedGroupIDs(ctx, userID)
+		if sharedErr != nil {
+			return nil, fmt.Errorf("list active purchase groups: %w", sharedErr)
+		}
+		for _, groupID := range sharedGroupIDs {
+			subscribedGroupIDs[groupID] = true
+		}
 	}
 
 	// 过滤出用户有权限的分组

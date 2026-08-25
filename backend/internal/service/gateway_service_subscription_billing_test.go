@@ -14,7 +14,7 @@ func TestBuildUsageBillingCommand_SubscriptionAppliesRateMultiplier(t *testing.T
 	t.Parallel()
 
 	groupID := int64(7)
-	subID := int64(42)
+	purchaseID := int64(42)
 
 	tests := []struct {
 		name           string
@@ -66,7 +66,7 @@ func TestBuildUsageBillingCommand_SubscriptionAppliesRateMultiplier(t *testing.T
 				User:               &User{ID: 1},
 				APIKey:             &APIKey{ID: 2, GroupID: &groupID},
 				Account:            &Account{ID: 3},
-				Subscription:       &UserSubscription{ID: subID},
+				Subscription:       &UserSubscription{SubscriptionPurchaseID: &purchaseID},
 				IsSubscriptionBill: tt.isSubscription,
 			}
 

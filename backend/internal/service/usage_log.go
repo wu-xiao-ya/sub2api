@@ -130,8 +130,9 @@ type UsageLog struct {
 	// UsageSource marks internal request origins, e.g. channel_monitor.
 	UsageSource *string
 
-	GroupID        *int64
-	SubscriptionID *int64
+	GroupID                *int64
+	SubscriptionID         *int64
+	SubscriptionPurchaseID *int64
 
 	InputTokens         int
 	OutputTokens        int

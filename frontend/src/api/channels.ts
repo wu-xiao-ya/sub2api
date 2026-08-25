@@ -43,6 +43,11 @@ export interface UserSupportedModelPricing {
   image_output_price: number | null
   per_request_price: number | null
   intervals: UserPricingInterval[]
+  /** OpenAI long-context pricing metadata. Absent/null means unavailable. */
+  long_context_enabled?: boolean | null
+  long_context_input_token_threshold?: number | null
+  long_context_input_multiplier?: number | null
+  long_context_output_multiplier?: number | null
 }
 
 export interface UserSupportedModel {

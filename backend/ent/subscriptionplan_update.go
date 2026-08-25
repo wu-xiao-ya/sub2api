@@ -13,6 +13,7 @@ import (
 	"entgo.io/ent/schema/field"
 	"github.com/Wei-Shaw/sub2api/ent/predicate"
 	"github.com/Wei-Shaw/sub2api/ent/subscriptionplan"
+	"github.com/Wei-Shaw/sub2api/ent/subscriptionplangroup"
 )
 
 // SubscriptionPlanUpdate is the builder for updating SubscriptionPlan entities.
@@ -46,6 +47,20 @@ func (_u *SubscriptionPlanUpdate) SetNillableGroupID(v *int64) *SubscriptionPlan
 // AddGroupID adds value to the "group_id" field.
 func (_u *SubscriptionPlanUpdate) AddGroupID(v int64) *SubscriptionPlanUpdate {
 	_u.mutation.AddGroupID(v)
+	return _u
+}
+
+// SetTierCode sets the "tier_code" field.
+func (_u *SubscriptionPlanUpdate) SetTierCode(v string) *SubscriptionPlanUpdate {
+	_u.mutation.SetTierCode(v)
+	return _u
+}
+
+// SetNillableTierCode sets the "tier_code" field if the given value is not nil.
+func (_u *SubscriptionPlanUpdate) SetNillableTierCode(v *string) *SubscriptionPlanUpdate {
+	if v != nil {
+		_u.SetTierCode(*v)
+	}
 	return _u
 }
 
@@ -237,15 +252,156 @@ func (_u *SubscriptionPlanUpdate) AddSortOrder(v int) *SubscriptionPlanUpdate {
 	return _u
 }
 
+// SetConcurrencyEntitlement sets the "concurrency_entitlement" field.
+func (_u *SubscriptionPlanUpdate) SetConcurrencyEntitlement(v int) *SubscriptionPlanUpdate {
+	_u.mutation.ResetConcurrencyEntitlement()
+	_u.mutation.SetConcurrencyEntitlement(v)
+	return _u
+}
+
+// SetNillableConcurrencyEntitlement sets the "concurrency_entitlement" field if the given value is not nil.
+func (_u *SubscriptionPlanUpdate) SetNillableConcurrencyEntitlement(v *int) *SubscriptionPlanUpdate {
+	if v != nil {
+		_u.SetConcurrencyEntitlement(*v)
+	}
+	return _u
+}
+
+// AddConcurrencyEntitlement adds value to the "concurrency_entitlement" field.
+func (_u *SubscriptionPlanUpdate) AddConcurrencyEntitlement(v int) *SubscriptionPlanUpdate {
+	_u.mutation.AddConcurrencyEntitlement(v)
+	return _u
+}
+
+// SetLifetimeQuotaUsd sets the "lifetime_quota_usd" field.
+func (_u *SubscriptionPlanUpdate) SetLifetimeQuotaUsd(v float64) *SubscriptionPlanUpdate {
+	_u.mutation.ResetLifetimeQuotaUsd()
+	_u.mutation.SetLifetimeQuotaUsd(v)
+	return _u
+}
+
+// SetNillableLifetimeQuotaUsd sets the "lifetime_quota_usd" field if the given value is not nil.
+func (_u *SubscriptionPlanUpdate) SetNillableLifetimeQuotaUsd(v *float64) *SubscriptionPlanUpdate {
+	if v != nil {
+		_u.SetLifetimeQuotaUsd(*v)
+	}
+	return _u
+}
+
+// AddLifetimeQuotaUsd adds value to the "lifetime_quota_usd" field.
+func (_u *SubscriptionPlanUpdate) AddLifetimeQuotaUsd(v float64) *SubscriptionPlanUpdate {
+	_u.mutation.AddLifetimeQuotaUsd(v)
+	return _u
+}
+
+// SetDailyQuotaUsd sets the "daily_quota_usd" field.
+func (_u *SubscriptionPlanUpdate) SetDailyQuotaUsd(v float64) *SubscriptionPlanUpdate {
+	_u.mutation.ResetDailyQuotaUsd()
+	_u.mutation.SetDailyQuotaUsd(v)
+	return _u
+}
+
+// SetNillableDailyQuotaUsd sets the "daily_quota_usd" field if the given value is not nil.
+func (_u *SubscriptionPlanUpdate) SetNillableDailyQuotaUsd(v *float64) *SubscriptionPlanUpdate {
+	if v != nil {
+		_u.SetDailyQuotaUsd(*v)
+	}
+	return _u
+}
+
+// AddDailyQuotaUsd adds value to the "daily_quota_usd" field.
+func (_u *SubscriptionPlanUpdate) AddDailyQuotaUsd(v float64) *SubscriptionPlanUpdate {
+	_u.mutation.AddDailyQuotaUsd(v)
+	return _u
+}
+
+// SetWeeklyQuotaUsd sets the "weekly_quota_usd" field.
+func (_u *SubscriptionPlanUpdate) SetWeeklyQuotaUsd(v float64) *SubscriptionPlanUpdate {
+	_u.mutation.ResetWeeklyQuotaUsd()
+	_u.mutation.SetWeeklyQuotaUsd(v)
+	return _u
+}
+
+// SetNillableWeeklyQuotaUsd sets the "weekly_quota_usd" field if the given value is not nil.
+func (_u *SubscriptionPlanUpdate) SetNillableWeeklyQuotaUsd(v *float64) *SubscriptionPlanUpdate {
+	if v != nil {
+		_u.SetWeeklyQuotaUsd(*v)
+	}
+	return _u
+}
+
+// AddWeeklyQuotaUsd adds value to the "weekly_quota_usd" field.
+func (_u *SubscriptionPlanUpdate) AddWeeklyQuotaUsd(v float64) *SubscriptionPlanUpdate {
+	_u.mutation.AddWeeklyQuotaUsd(v)
+	return _u
+}
+
+// SetMonthlyQuotaUsd sets the "monthly_quota_usd" field.
+func (_u *SubscriptionPlanUpdate) SetMonthlyQuotaUsd(v float64) *SubscriptionPlanUpdate {
+	_u.mutation.ResetMonthlyQuotaUsd()
+	_u.mutation.SetMonthlyQuotaUsd(v)
+	return _u
+}
+
+// SetNillableMonthlyQuotaUsd sets the "monthly_quota_usd" field if the given value is not nil.
+func (_u *SubscriptionPlanUpdate) SetNillableMonthlyQuotaUsd(v *float64) *SubscriptionPlanUpdate {
+	if v != nil {
+		_u.SetMonthlyQuotaUsd(*v)
+	}
+	return _u
+}
+
+// AddMonthlyQuotaUsd adds value to the "monthly_quota_usd" field.
+func (_u *SubscriptionPlanUpdate) AddMonthlyQuotaUsd(v float64) *SubscriptionPlanUpdate {
+	_u.mutation.AddMonthlyQuotaUsd(v)
+	return _u
+}
+
 // SetUpdatedAt sets the "updated_at" field.
 func (_u *SubscriptionPlanUpdate) SetUpdatedAt(v time.Time) *SubscriptionPlanUpdate {
 	_u.mutation.SetUpdatedAt(v)
 	return _u
 }
 
+// AddGroupIDs adds the "groups" edge to the SubscriptionPlanGroup entity by IDs.
+func (_u *SubscriptionPlanUpdate) AddGroupIDs(ids ...int64) *SubscriptionPlanUpdate {
+	_u.mutation.AddGroupIDs(ids...)
+	return _u
+}
+
+// AddGroups adds the "groups" edges to the SubscriptionPlanGroup entity.
+func (_u *SubscriptionPlanUpdate) AddGroups(v ...*SubscriptionPlanGroup) *SubscriptionPlanUpdate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddGroupIDs(ids...)
+}
+
 // Mutation returns the SubscriptionPlanMutation object of the builder.
 func (_u *SubscriptionPlanUpdate) Mutation() *SubscriptionPlanMutation {
 	return _u.mutation
+}
+
+// ClearGroups clears all "groups" edges to the SubscriptionPlanGroup entity.
+func (_u *SubscriptionPlanUpdate) ClearGroups() *SubscriptionPlanUpdate {
+	_u.mutation.ClearGroups()
+	return _u
+}
+
+// RemoveGroupIDs removes the "groups" edge to SubscriptionPlanGroup entities by IDs.
+func (_u *SubscriptionPlanUpdate) RemoveGroupIDs(ids ...int64) *SubscriptionPlanUpdate {
+	_u.mutation.RemoveGroupIDs(ids...)
+	return _u
+}
+
+// RemoveGroups removes "groups" edges to SubscriptionPlanGroup entities.
+func (_u *SubscriptionPlanUpdate) RemoveGroups(v ...*SubscriptionPlanGroup) *SubscriptionPlanUpdate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveGroupIDs(ids...)
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
@@ -286,6 +442,11 @@ func (_u *SubscriptionPlanUpdate) defaults() {
 
 // check runs all checks and user-defined validators on the builder.
 func (_u *SubscriptionPlanUpdate) check() error {
+	if v, ok := _u.mutation.TierCode(); ok {
+		if err := subscriptionplan.TierCodeValidator(v); err != nil {
+			return &ValidationError{Name: "tier_code", err: fmt.Errorf(`ent: validator failed for field "SubscriptionPlan.tier_code": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.Name(); ok {
 		if err := subscriptionplan.NameValidator(v); err != nil {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "SubscriptionPlan.name": %w`, err)}
@@ -326,6 +487,9 @@ func (_u *SubscriptionPlanUpdate) sqlSave(ctx context.Context) (_node int, err e
 	}
 	if value, ok := _u.mutation.AddedGroupID(); ok {
 		_spec.AddField(subscriptionplan.FieldGroupID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.TierCode(); ok {
+		_spec.SetField(subscriptionplan.FieldTierCode, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.Name(); ok {
 		_spec.SetField(subscriptionplan.FieldName, field.TypeString, value)
@@ -375,8 +539,83 @@ func (_u *SubscriptionPlanUpdate) sqlSave(ctx context.Context) (_node int, err e
 	if value, ok := _u.mutation.AddedSortOrder(); ok {
 		_spec.AddField(subscriptionplan.FieldSortOrder, field.TypeInt, value)
 	}
+	if value, ok := _u.mutation.ConcurrencyEntitlement(); ok {
+		_spec.SetField(subscriptionplan.FieldConcurrencyEntitlement, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedConcurrencyEntitlement(); ok {
+		_spec.AddField(subscriptionplan.FieldConcurrencyEntitlement, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.LifetimeQuotaUsd(); ok {
+		_spec.SetField(subscriptionplan.FieldLifetimeQuotaUsd, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedLifetimeQuotaUsd(); ok {
+		_spec.AddField(subscriptionplan.FieldLifetimeQuotaUsd, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.DailyQuotaUsd(); ok {
+		_spec.SetField(subscriptionplan.FieldDailyQuotaUsd, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedDailyQuotaUsd(); ok {
+		_spec.AddField(subscriptionplan.FieldDailyQuotaUsd, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.WeeklyQuotaUsd(); ok {
+		_spec.SetField(subscriptionplan.FieldWeeklyQuotaUsd, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedWeeklyQuotaUsd(); ok {
+		_spec.AddField(subscriptionplan.FieldWeeklyQuotaUsd, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.MonthlyQuotaUsd(); ok {
+		_spec.SetField(subscriptionplan.FieldMonthlyQuotaUsd, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedMonthlyQuotaUsd(); ok {
+		_spec.AddField(subscriptionplan.FieldMonthlyQuotaUsd, field.TypeFloat64, value)
+	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(subscriptionplan.FieldUpdatedAt, field.TypeTime, value)
+	}
+	if _u.mutation.GroupsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   subscriptionplan.GroupsTable,
+			Columns: []string{subscriptionplan.GroupsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(subscriptionplangroup.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedGroupsIDs(); len(nodes) > 0 && !_u.mutation.GroupsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   subscriptionplan.GroupsTable,
+			Columns: []string{subscriptionplan.GroupsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(subscriptionplangroup.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.GroupsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   subscriptionplan.GroupsTable,
+			Columns: []string{subscriptionplan.GroupsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(subscriptionplangroup.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -416,6 +655,20 @@ func (_u *SubscriptionPlanUpdateOne) SetNillableGroupID(v *int64) *SubscriptionP
 // AddGroupID adds value to the "group_id" field.
 func (_u *SubscriptionPlanUpdateOne) AddGroupID(v int64) *SubscriptionPlanUpdateOne {
 	_u.mutation.AddGroupID(v)
+	return _u
+}
+
+// SetTierCode sets the "tier_code" field.
+func (_u *SubscriptionPlanUpdateOne) SetTierCode(v string) *SubscriptionPlanUpdateOne {
+	_u.mutation.SetTierCode(v)
+	return _u
+}
+
+// SetNillableTierCode sets the "tier_code" field if the given value is not nil.
+func (_u *SubscriptionPlanUpdateOne) SetNillableTierCode(v *string) *SubscriptionPlanUpdateOne {
+	if v != nil {
+		_u.SetTierCode(*v)
+	}
 	return _u
 }
 
@@ -607,15 +860,156 @@ func (_u *SubscriptionPlanUpdateOne) AddSortOrder(v int) *SubscriptionPlanUpdate
 	return _u
 }
 
+// SetConcurrencyEntitlement sets the "concurrency_entitlement" field.
+func (_u *SubscriptionPlanUpdateOne) SetConcurrencyEntitlement(v int) *SubscriptionPlanUpdateOne {
+	_u.mutation.ResetConcurrencyEntitlement()
+	_u.mutation.SetConcurrencyEntitlement(v)
+	return _u
+}
+
+// SetNillableConcurrencyEntitlement sets the "concurrency_entitlement" field if the given value is not nil.
+func (_u *SubscriptionPlanUpdateOne) SetNillableConcurrencyEntitlement(v *int) *SubscriptionPlanUpdateOne {
+	if v != nil {
+		_u.SetConcurrencyEntitlement(*v)
+	}
+	return _u
+}
+
+// AddConcurrencyEntitlement adds value to the "concurrency_entitlement" field.
+func (_u *SubscriptionPlanUpdateOne) AddConcurrencyEntitlement(v int) *SubscriptionPlanUpdateOne {
+	_u.mutation.AddConcurrencyEntitlement(v)
+	return _u
+}
+
+// SetLifetimeQuotaUsd sets the "lifetime_quota_usd" field.
+func (_u *SubscriptionPlanUpdateOne) SetLifetimeQuotaUsd(v float64) *SubscriptionPlanUpdateOne {
+	_u.mutation.ResetLifetimeQuotaUsd()
+	_u.mutation.SetLifetimeQuotaUsd(v)
+	return _u
+}
+
+// SetNillableLifetimeQuotaUsd sets the "lifetime_quota_usd" field if the given value is not nil.
+func (_u *SubscriptionPlanUpdateOne) SetNillableLifetimeQuotaUsd(v *float64) *SubscriptionPlanUpdateOne {
+	if v != nil {
+		_u.SetLifetimeQuotaUsd(*v)
+	}
+	return _u
+}
+
+// AddLifetimeQuotaUsd adds value to the "lifetime_quota_usd" field.
+func (_u *SubscriptionPlanUpdateOne) AddLifetimeQuotaUsd(v float64) *SubscriptionPlanUpdateOne {
+	_u.mutation.AddLifetimeQuotaUsd(v)
+	return _u
+}
+
+// SetDailyQuotaUsd sets the "daily_quota_usd" field.
+func (_u *SubscriptionPlanUpdateOne) SetDailyQuotaUsd(v float64) *SubscriptionPlanUpdateOne {
+	_u.mutation.ResetDailyQuotaUsd()
+	_u.mutation.SetDailyQuotaUsd(v)
+	return _u
+}
+
+// SetNillableDailyQuotaUsd sets the "daily_quota_usd" field if the given value is not nil.
+func (_u *SubscriptionPlanUpdateOne) SetNillableDailyQuotaUsd(v *float64) *SubscriptionPlanUpdateOne {
+	if v != nil {
+		_u.SetDailyQuotaUsd(*v)
+	}
+	return _u
+}
+
+// AddDailyQuotaUsd adds value to the "daily_quota_usd" field.
+func (_u *SubscriptionPlanUpdateOne) AddDailyQuotaUsd(v float64) *SubscriptionPlanUpdateOne {
+	_u.mutation.AddDailyQuotaUsd(v)
+	return _u
+}
+
+// SetWeeklyQuotaUsd sets the "weekly_quota_usd" field.
+func (_u *SubscriptionPlanUpdateOne) SetWeeklyQuotaUsd(v float64) *SubscriptionPlanUpdateOne {
+	_u.mutation.ResetWeeklyQuotaUsd()
+	_u.mutation.SetWeeklyQuotaUsd(v)
+	return _u
+}
+
+// SetNillableWeeklyQuotaUsd sets the "weekly_quota_usd" field if the given value is not nil.
+func (_u *SubscriptionPlanUpdateOne) SetNillableWeeklyQuotaUsd(v *float64) *SubscriptionPlanUpdateOne {
+	if v != nil {
+		_u.SetWeeklyQuotaUsd(*v)
+	}
+	return _u
+}
+
+// AddWeeklyQuotaUsd adds value to the "weekly_quota_usd" field.
+func (_u *SubscriptionPlanUpdateOne) AddWeeklyQuotaUsd(v float64) *SubscriptionPlanUpdateOne {
+	_u.mutation.AddWeeklyQuotaUsd(v)
+	return _u
+}
+
+// SetMonthlyQuotaUsd sets the "monthly_quota_usd" field.
+func (_u *SubscriptionPlanUpdateOne) SetMonthlyQuotaUsd(v float64) *SubscriptionPlanUpdateOne {
+	_u.mutation.ResetMonthlyQuotaUsd()
+	_u.mutation.SetMonthlyQuotaUsd(v)
+	return _u
+}
+
+// SetNillableMonthlyQuotaUsd sets the "monthly_quota_usd" field if the given value is not nil.
+func (_u *SubscriptionPlanUpdateOne) SetNillableMonthlyQuotaUsd(v *float64) *SubscriptionPlanUpdateOne {
+	if v != nil {
+		_u.SetMonthlyQuotaUsd(*v)
+	}
+	return _u
+}
+
+// AddMonthlyQuotaUsd adds value to the "monthly_quota_usd" field.
+func (_u *SubscriptionPlanUpdateOne) AddMonthlyQuotaUsd(v float64) *SubscriptionPlanUpdateOne {
+	_u.mutation.AddMonthlyQuotaUsd(v)
+	return _u
+}
+
 // SetUpdatedAt sets the "updated_at" field.
 func (_u *SubscriptionPlanUpdateOne) SetUpdatedAt(v time.Time) *SubscriptionPlanUpdateOne {
 	_u.mutation.SetUpdatedAt(v)
 	return _u
 }
 
+// AddGroupIDs adds the "groups" edge to the SubscriptionPlanGroup entity by IDs.
+func (_u *SubscriptionPlanUpdateOne) AddGroupIDs(ids ...int64) *SubscriptionPlanUpdateOne {
+	_u.mutation.AddGroupIDs(ids...)
+	return _u
+}
+
+// AddGroups adds the "groups" edges to the SubscriptionPlanGroup entity.
+func (_u *SubscriptionPlanUpdateOne) AddGroups(v ...*SubscriptionPlanGroup) *SubscriptionPlanUpdateOne {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddGroupIDs(ids...)
+}
+
 // Mutation returns the SubscriptionPlanMutation object of the builder.
 func (_u *SubscriptionPlanUpdateOne) Mutation() *SubscriptionPlanMutation {
 	return _u.mutation
+}
+
+// ClearGroups clears all "groups" edges to the SubscriptionPlanGroup entity.
+func (_u *SubscriptionPlanUpdateOne) ClearGroups() *SubscriptionPlanUpdateOne {
+	_u.mutation.ClearGroups()
+	return _u
+}
+
+// RemoveGroupIDs removes the "groups" edge to SubscriptionPlanGroup entities by IDs.
+func (_u *SubscriptionPlanUpdateOne) RemoveGroupIDs(ids ...int64) *SubscriptionPlanUpdateOne {
+	_u.mutation.RemoveGroupIDs(ids...)
+	return _u
+}
+
+// RemoveGroups removes "groups" edges to SubscriptionPlanGroup entities.
+func (_u *SubscriptionPlanUpdateOne) RemoveGroups(v ...*SubscriptionPlanGroup) *SubscriptionPlanUpdateOne {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveGroupIDs(ids...)
 }
 
 // Where appends a list predicates to the SubscriptionPlanUpdate builder.
@@ -669,6 +1063,11 @@ func (_u *SubscriptionPlanUpdateOne) defaults() {
 
 // check runs all checks and user-defined validators on the builder.
 func (_u *SubscriptionPlanUpdateOne) check() error {
+	if v, ok := _u.mutation.TierCode(); ok {
+		if err := subscriptionplan.TierCodeValidator(v); err != nil {
+			return &ValidationError{Name: "tier_code", err: fmt.Errorf(`ent: validator failed for field "SubscriptionPlan.tier_code": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.Name(); ok {
 		if err := subscriptionplan.NameValidator(v); err != nil {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "SubscriptionPlan.name": %w`, err)}
@@ -727,6 +1126,9 @@ func (_u *SubscriptionPlanUpdateOne) sqlSave(ctx context.Context) (_node *Subscr
 	if value, ok := _u.mutation.AddedGroupID(); ok {
 		_spec.AddField(subscriptionplan.FieldGroupID, field.TypeInt64, value)
 	}
+	if value, ok := _u.mutation.TierCode(); ok {
+		_spec.SetField(subscriptionplan.FieldTierCode, field.TypeString, value)
+	}
 	if value, ok := _u.mutation.Name(); ok {
 		_spec.SetField(subscriptionplan.FieldName, field.TypeString, value)
 	}
@@ -775,8 +1177,83 @@ func (_u *SubscriptionPlanUpdateOne) sqlSave(ctx context.Context) (_node *Subscr
 	if value, ok := _u.mutation.AddedSortOrder(); ok {
 		_spec.AddField(subscriptionplan.FieldSortOrder, field.TypeInt, value)
 	}
+	if value, ok := _u.mutation.ConcurrencyEntitlement(); ok {
+		_spec.SetField(subscriptionplan.FieldConcurrencyEntitlement, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedConcurrencyEntitlement(); ok {
+		_spec.AddField(subscriptionplan.FieldConcurrencyEntitlement, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.LifetimeQuotaUsd(); ok {
+		_spec.SetField(subscriptionplan.FieldLifetimeQuotaUsd, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedLifetimeQuotaUsd(); ok {
+		_spec.AddField(subscriptionplan.FieldLifetimeQuotaUsd, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.DailyQuotaUsd(); ok {
+		_spec.SetField(subscriptionplan.FieldDailyQuotaUsd, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedDailyQuotaUsd(); ok {
+		_spec.AddField(subscriptionplan.FieldDailyQuotaUsd, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.WeeklyQuotaUsd(); ok {
+		_spec.SetField(subscriptionplan.FieldWeeklyQuotaUsd, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedWeeklyQuotaUsd(); ok {
+		_spec.AddField(subscriptionplan.FieldWeeklyQuotaUsd, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.MonthlyQuotaUsd(); ok {
+		_spec.SetField(subscriptionplan.FieldMonthlyQuotaUsd, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedMonthlyQuotaUsd(); ok {
+		_spec.AddField(subscriptionplan.FieldMonthlyQuotaUsd, field.TypeFloat64, value)
+	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(subscriptionplan.FieldUpdatedAt, field.TypeTime, value)
+	}
+	if _u.mutation.GroupsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   subscriptionplan.GroupsTable,
+			Columns: []string{subscriptionplan.GroupsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(subscriptionplangroup.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedGroupsIDs(); len(nodes) > 0 && !_u.mutation.GroupsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   subscriptionplan.GroupsTable,
+			Columns: []string{subscriptionplan.GroupsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(subscriptionplangroup.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.GroupsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   subscriptionplan.GroupsTable,
+			Columns: []string{subscriptionplan.GroupsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(subscriptionplangroup.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
 	_node = &SubscriptionPlan{config: _u.config}
 	_spec.Assign = _node.assignValues

@@ -822,8 +822,13 @@ func (r *groupRepository) DeleteCascade(ctx context.Context, id int64) ([]int64,
 
 	var affectedUserIDs []int64
 	if groupSvc.IsSubscriptionType() {
-		// 只查询未软删除的订阅，避免通知已取消订阅的用户
-		rows, err := exec.QueryContext(ctx, "SELECT user_id FROM user_subscriptions WHERE group_id = $1 AND deleted_at IS NULL", id)
+		// Purchase snapshots are immutable. Collect affected users only for
+		// cache invalidation; never mutate the frozen user_subscriptions table.
+		rows, err := exec.QueryContext(ctx, "SELECT DISTINCT p.user_id "+
+			"FROM subscription_purchases p "+
+			"JOIN subscription_purchase_groups pg ON pg.purchase_id = p.id "+
+			"WHERE pg.group_id = $1 AND p.status = 'active' "+
+			"AND p.starts_at <= NOW() AND p.expires_at > NOW()", id)
 		if err != nil {
 			return nil, err
 		}
@@ -839,11 +844,6 @@ func (r *groupRepository) DeleteCascade(ctx context.Context, id int64) ([]int64,
 			return nil, err
 		}
 		if err := rows.Err(); err != nil {
-			return nil, err
-		}
-
-		// 软删除订阅：设置 deleted_at 而非硬删除
-		if _, err := exec.ExecContext(ctx, "UPDATE user_subscriptions SET deleted_at = NOW() WHERE group_id = $1 AND deleted_at IS NULL", id); err != nil {
 			return nil, err
 		}
 	}

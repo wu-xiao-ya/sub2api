@@ -183,6 +183,20 @@ func (_c *UsageLogCreate) SetNillableSubscriptionID(v *int64) *UsageLogCreate {
 	return _c
 }
 
+// SetSubscriptionPurchaseID sets the "subscription_purchase_id" field.
+func (_c *UsageLogCreate) SetSubscriptionPurchaseID(v int64) *UsageLogCreate {
+	_c.mutation.SetSubscriptionPurchaseID(v)
+	return _c
+}
+
+// SetNillableSubscriptionPurchaseID sets the "subscription_purchase_id" field if the given value is not nil.
+func (_c *UsageLogCreate) SetNillableSubscriptionPurchaseID(v *int64) *UsageLogCreate {
+	if v != nil {
+		_c.SetSubscriptionPurchaseID(*v)
+	}
+	return _c
+}
+
 // SetInputTokens sets the "input_tokens" field.
 func (_c *UsageLogCreate) SetInputTokens(v int) *UsageLogCreate {
 	_c.mutation.SetInputTokens(v)
@@ -1036,6 +1050,10 @@ func (_c *UsageLogCreate) createSpec() (*UsageLog, *sqlgraph.CreateSpec) {
 		_spec.SetField(usagelog.FieldUsageSource, field.TypeString, value)
 		_node.UsageSource = &value
 	}
+	if value, ok := _c.mutation.SubscriptionPurchaseID(); ok {
+		_spec.SetField(usagelog.FieldSubscriptionPurchaseID, field.TypeInt64, value)
+		_node.SubscriptionPurchaseID = &value
+	}
 	if value, ok := _c.mutation.InputTokens(); ok {
 		_spec.SetField(usagelog.FieldInputTokens, field.TypeInt, value)
 		_node.InputTokens = value
@@ -1538,6 +1556,30 @@ func (u *UsageLogUpsert) UpdateSubscriptionID() *UsageLogUpsert {
 // ClearSubscriptionID clears the value of the "subscription_id" field.
 func (u *UsageLogUpsert) ClearSubscriptionID() *UsageLogUpsert {
 	u.SetNull(usagelog.FieldSubscriptionID)
+	return u
+}
+
+// SetSubscriptionPurchaseID sets the "subscription_purchase_id" field.
+func (u *UsageLogUpsert) SetSubscriptionPurchaseID(v int64) *UsageLogUpsert {
+	u.Set(usagelog.FieldSubscriptionPurchaseID, v)
+	return u
+}
+
+// UpdateSubscriptionPurchaseID sets the "subscription_purchase_id" field to the value that was provided on create.
+func (u *UsageLogUpsert) UpdateSubscriptionPurchaseID() *UsageLogUpsert {
+	u.SetExcluded(usagelog.FieldSubscriptionPurchaseID)
+	return u
+}
+
+// AddSubscriptionPurchaseID adds v to the "subscription_purchase_id" field.
+func (u *UsageLogUpsert) AddSubscriptionPurchaseID(v int64) *UsageLogUpsert {
+	u.Add(usagelog.FieldSubscriptionPurchaseID, v)
+	return u
+}
+
+// ClearSubscriptionPurchaseID clears the value of the "subscription_purchase_id" field.
+func (u *UsageLogUpsert) ClearSubscriptionPurchaseID() *UsageLogUpsert {
+	u.SetNull(usagelog.FieldSubscriptionPurchaseID)
 	return u
 }
 
@@ -2479,6 +2521,34 @@ func (u *UsageLogUpsertOne) UpdateSubscriptionID() *UsageLogUpsertOne {
 func (u *UsageLogUpsertOne) ClearSubscriptionID() *UsageLogUpsertOne {
 	return u.Update(func(s *UsageLogUpsert) {
 		s.ClearSubscriptionID()
+	})
+}
+
+// SetSubscriptionPurchaseID sets the "subscription_purchase_id" field.
+func (u *UsageLogUpsertOne) SetSubscriptionPurchaseID(v int64) *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.SetSubscriptionPurchaseID(v)
+	})
+}
+
+// AddSubscriptionPurchaseID adds v to the "subscription_purchase_id" field.
+func (u *UsageLogUpsertOne) AddSubscriptionPurchaseID(v int64) *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.AddSubscriptionPurchaseID(v)
+	})
+}
+
+// UpdateSubscriptionPurchaseID sets the "subscription_purchase_id" field to the value that was provided on create.
+func (u *UsageLogUpsertOne) UpdateSubscriptionPurchaseID() *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.UpdateSubscriptionPurchaseID()
+	})
+}
+
+// ClearSubscriptionPurchaseID clears the value of the "subscription_purchase_id" field.
+func (u *UsageLogUpsertOne) ClearSubscriptionPurchaseID() *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.ClearSubscriptionPurchaseID()
 	})
 }
 
@@ -3691,6 +3761,34 @@ func (u *UsageLogUpsertBulk) UpdateSubscriptionID() *UsageLogUpsertBulk {
 func (u *UsageLogUpsertBulk) ClearSubscriptionID() *UsageLogUpsertBulk {
 	return u.Update(func(s *UsageLogUpsert) {
 		s.ClearSubscriptionID()
+	})
+}
+
+// SetSubscriptionPurchaseID sets the "subscription_purchase_id" field.
+func (u *UsageLogUpsertBulk) SetSubscriptionPurchaseID(v int64) *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.SetSubscriptionPurchaseID(v)
+	})
+}
+
+// AddSubscriptionPurchaseID adds v to the "subscription_purchase_id" field.
+func (u *UsageLogUpsertBulk) AddSubscriptionPurchaseID(v int64) *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.AddSubscriptionPurchaseID(v)
+	})
+}
+
+// UpdateSubscriptionPurchaseID sets the "subscription_purchase_id" field to the value that was provided on create.
+func (u *UsageLogUpsertBulk) UpdateSubscriptionPurchaseID() *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.UpdateSubscriptionPurchaseID()
+	})
+}
+
+// ClearSubscriptionPurchaseID clears the value of the "subscription_purchase_id" field.
+func (u *UsageLogUpsertBulk) ClearSubscriptionPurchaseID() *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.ClearSubscriptionPurchaseID()
 	})
 }
 

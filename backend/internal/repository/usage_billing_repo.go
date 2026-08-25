@@ -180,8 +180,15 @@ func (r *usageBillingRepository) applyBatchImageBalanceHold(
 }
 
 func (r *usageBillingRepository) applyUsageBillingEffects(ctx context.Context, tx *sql.Tx, cmd *service.UsageBillingCommand, result *service.UsageBillingApplyResult) error {
-	if cmd.SubscriptionCost > 0 && cmd.SubscriptionID != nil {
-		if err := incrementUsageBillingSubscription(ctx, tx, *cmd.SubscriptionID, cmd.SubscriptionCost); err != nil {
+	if cmd.SubscriptionCost > 0 {
+		if cmd.SubscriptionPurchaseID == nil || *cmd.SubscriptionPurchaseID <= 0 {
+			// The native user_subscriptions model is frozen after migration 233.
+			// Never silently bill a subscription without an explicit purchase
+			// snapshot: doing so would either lose quota usage or revive the
+			// retired table through a compatibility path.
+			return service.ErrNativeSubscriptionRetired
+		}
+		if err := incrementUsageBillingSubscriptionPurchase(ctx, tx, *cmd.SubscriptionPurchaseID, cmd.SubscriptionCost); err != nil {
 			return err
 		}
 	}
@@ -336,21 +343,36 @@ func (r *usageBillingRepository) applyConsumptionConcurrencyReward(
 	return nil
 }
 
-func incrementUsageBillingSubscription(ctx context.Context, tx *sql.Tx, subscriptionID int64, costUSD float64) error {
-	const updateSQL = `
-		UPDATE user_subscriptions us
-		SET
-			daily_usage_usd = us.daily_usage_usd + $1,
-			weekly_usage_usd = us.weekly_usage_usd + $1,
-			monthly_usage_usd = us.monthly_usage_usd + $1,
-			updated_at = NOW()
-		FROM groups g
-		WHERE us.id = $2
-			AND us.deleted_at IS NULL
-			AND us.group_id = g.id
-			AND g.deleted_at IS NULL
-	`
-	res, err := tx.ExecContext(ctx, updateSQL, costUSD, subscriptionID)
+func incrementUsageBillingSubscriptionPurchase(ctx context.Context, tx *sql.Tx, purchaseID int64, costUSD float64) error {
+	const sharedUpdateSQL = `
+			UPDATE subscription_purchases
+			SET
+				lifetime_usage_usd = lifetime_usage_usd + $1,
+				daily_usage_usd = CASE
+					WHEN daily_window_start IS NULL OR daily_window_start < date_trunc('day', NOW())
+					THEN $1 ELSE daily_usage_usd + $1 END,
+				daily_window_start = CASE
+					WHEN daily_window_start IS NULL OR daily_window_start < date_trunc('day', NOW())
+					THEN date_trunc('day', NOW()) ELSE daily_window_start END,
+				weekly_usage_usd = CASE
+					WHEN weekly_window_start IS NULL OR weekly_window_start < NOW() - INTERVAL '7 days'
+					THEN $1 ELSE weekly_usage_usd + $1 END,
+				weekly_window_start = CASE
+					WHEN weekly_window_start IS NULL OR weekly_window_start < NOW() - INTERVAL '7 days'
+					THEN NOW() ELSE weekly_window_start END,
+				monthly_usage_usd = CASE
+					WHEN monthly_window_start IS NULL OR monthly_window_start < NOW() - INTERVAL '30 days'
+					THEN $1 ELSE monthly_usage_usd + $1 END,
+				monthly_window_start = CASE
+					WHEN monthly_window_start IS NULL OR monthly_window_start < NOW() - INTERVAL '30 days'
+					THEN NOW() ELSE monthly_window_start END,
+				updated_at = NOW()
+			WHERE id = $2
+				AND status = 'active'
+				AND starts_at <= NOW()
+				AND expires_at > NOW()
+		`
+	res, err := tx.ExecContext(ctx, sharedUpdateSQL, costUSD, purchaseID)
 	if err != nil {
 		return err
 	}

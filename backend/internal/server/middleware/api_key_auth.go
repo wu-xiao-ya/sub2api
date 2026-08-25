@@ -188,27 +188,53 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 			return
 		}
 
-		// ── 5. 按端点需要加载订阅 ───────────────────────────────────
+		// ── 5. 按端点需要加载订阅（仅 subscription_purchases） ──────────
 
 		var subscription *service.UserSubscription
+		var sharedPurchase *service.SharedSubscriptionEntitlement
+		var sharedConcurrencyPlan *service.SubscriptionConcurrencyPlan
 		isSubscriptionType := apiKey.Group != nil && apiKey.Group.IsSubscriptionType()
 
-		// 倍率自省不需要订阅数据；/v1/usage 仍保留原有订阅读取行为。
-		if isSubscriptionType && subscriptionService != nil && !billingInfoRequest {
-			sub, subErr := subscriptionService.GetActiveSubscription(
+		// Purchase snapshots are the only runtime entitlement source. A snapshot
+		// authorizes every group recorded in subscription_purchase_groups, so this
+		// lookup must not be narrowed to one platform (previously OpenAI-only).
+		planLoaded := false
+		if apiKey.Group != nil && subscriptionService != nil && !billingInfoRequest {
+			if plan, planErr := sharedSubscriptionConcurrencyPlan(
 				c.Request.Context(),
+				subscriptionService,
 				apiKey.User.ID,
 				apiKey.Group.ID,
-			)
-			if subErr != nil {
-				if !skipBilling {
-					AbortWithError(c, 403, "SUBSCRIPTION_NOT_FOUND", "No active subscription found for this group")
+				apiKey.User.Concurrency,
+			); planErr == nil {
+				planLoaded = true
+				sharedConcurrencyPlan = plan
+				for i := range plan.Entitlements {
+					entitlement := &plan.Entitlements[i]
+					if entitlement.SharedSubscription == nil {
+						continue
+					}
+					entitlement.Subscription = entitlement.SharedSubscription.AsLegacySubscription(apiKey.Group)
+					if sharedPurchase == nil {
+						sharedPurchase = entitlement.SharedSubscription
+						subscription = entitlement.Subscription
+						c.Set(string(ContextKeySharedSubscription), sharedPurchase)
+					}
+				}
+				if sharedPurchase == nil && !plan.AllowBalanceTopup {
+					AbortWithError(c, http.StatusTooManyRequests, "USAGE_LIMIT_EXCEEDED", "All active subscription quotas for this group are exhausted")
 					return
 				}
-				// skipBilling: 订阅不存在也放行，handler 会返回可用的数据
-			} else {
-				subscription = sub
 			}
+		}
+
+		// Subscription-type groups have no legacy user_subscriptions fallback:
+		// without a purchase snapshot the request carries no entitlement.
+		// skipBilling endpoints (/v1/usage, billing introspection, async image
+		// task reads) stay reachable so a key can still read its own data.
+		if isSubscriptionType && !planLoaded && !skipBilling {
+			AbortWithError(c, 403, "SUBSCRIPTION_NOT_FOUND", "No active subscription found for this group")
+			return
 		}
 
 		// ── 6. 计费执行（skipBilling 时整块跳过） ────────────────────
@@ -234,32 +260,32 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 				return
 			}
 
-			// 订阅模式：验证订阅限额
-			if subscription != nil {
-				needsMaintenance, validateErr := subscriptionService.ValidateAndCheckLimits(subscription, apiKey.Group)
-				if needsMaintenance {
-					refreshed, maintenanceErr := subscriptionService.EnsureWindowMaintenance(c.Request.Context(), subscription)
-					if maintenanceErr != nil {
-						AbortWithError(c, 500, "SUBSCRIPTION_MAINTENANCE_FAILED", "Failed to maintain subscription usage windows")
-						return
+				// Subscription mode: validate the purchase snapshot directly.
+				// user_subscriptions is never read here; rolling quota windows are
+				// already normalised by the purchase reader, so no legacy
+				// window-maintenance write is required.
+				if sharedPurchase != nil {
+					if validateErr := subscriptionService.ValidateSharedPurchase(sharedPurchase, 0); validateErr != nil {
+						if sharedPurchase.BalanceTopupEnabled && isSharedSubscriptionQuotaError(validateErr) {
+							// Quota drained but the purchase allows spilling over to account
+							// balance: drop the entitlement and fall through to the balance check.
+							subscription = nil
+							sharedPurchase = nil
+							c.Set(string(ContextKeySharedSubscription), nil)
+						} else {
+							code := "SUBSCRIPTION_INVALID"
+							status := 403
+							if isSharedSubscriptionQuotaError(validateErr) {
+								code = "USAGE_LIMIT_EXCEEDED"
+								status = 429
+							}
+							AbortWithError(c, status, code, validateErr.Error())
+							return
+						}
 					}
-					subscription = refreshed
-					_, validateErr = subscriptionService.ValidateAndCheckLimits(subscription, apiKey.Group)
 				}
-				if validateErr != nil {
-					code := "SUBSCRIPTION_INVALID"
-					status := 403
-					if errors.Is(validateErr, service.ErrDailyLimitExceeded) ||
-						errors.Is(validateErr, service.ErrWeeklyLimitExceeded) ||
-						errors.Is(validateErr, service.ErrMonthlyLimitExceeded) {
-						code = "USAGE_LIMIT_EXCEEDED"
-						status = 429
-					}
-					AbortWithError(c, status, code, validateErr.Error())
-					return
-				}
-			} else {
-				// 非订阅模式 或 订阅模式但 subscriptionService 未注入：回退到余额检查
+				if subscription == nil {
+					// No purchase snapshot (or balance fallback allowed): check balance.
 				if apiKeyBalanceBelowAuthThreshold(apiKey.User.Balance, cfg) {
 					AbortWithError(c, 403, "INSUFFICIENT_BALANCE", "Insufficient account balance")
 					return
@@ -271,6 +297,9 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 
 		if subscription != nil {
 			c.Set(string(ContextKeySubscription), subscription)
+		}
+		if sharedConcurrencyPlan != nil {
+			c.Request = c.Request.WithContext(service.WithSubscriptionConcurrencyPlan(c.Request.Context(), sharedConcurrencyPlan))
 		}
 		c.Set(string(ContextKeyAPIKey), apiKey)
 		c.Set(string(ContextKeyUser), AuthSubject{

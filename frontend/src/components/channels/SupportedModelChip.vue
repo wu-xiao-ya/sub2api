@@ -129,6 +129,30 @@
             />
 
             <div
+              v-if="hasLongContext"
+              class="mt-2 border-t pt-2"
+              :class="[popoverBorderClass]"
+            >
+              <div class="mb-1 font-medium text-amber-700 dark:text-amber-300">
+                {{ t(prefixKey('longContext')) }}
+              </div>
+              <div class="space-y-1 text-[11px]">
+                <div class="flex justify-between gap-3">
+                  <span class="text-gray-500 dark:text-gray-400">{{ t(prefixKey('longContextThresholdLabel')) }}</span>
+                  <span>{{ t(prefixKey('longContextThreshold'), { threshold: formatTokenThreshold }) }}</span>
+                </div>
+                <div class="flex justify-between gap-3">
+                  <span class="text-gray-500 dark:text-gray-400">{{ t(prefixKey('longContextInputMultiplierLabel')) }}</span>
+                  <span>{{ t(prefixKey('longContextInputMultiplier'), { multiplier: formatMultiplier(longContextInputMultiplier) }) }}</span>
+                </div>
+                <div class="flex justify-between gap-3">
+                  <span class="text-gray-500 dark:text-gray-400">{{ t(prefixKey('longContextOutputMultiplierLabel')) }}</span>
+                  <span>{{ t(prefixKey('longContextOutputMultiplier'), { multiplier: formatMultiplier(longContextOutputMultiplier) }) }}</span>
+                </div>
+              </div>
+            </div>
+
+            <div
               v-if="model.pricing.intervals && model.pricing.intervals.length > 0"
               class="mt-2 border-t pt-2"
               :class="[popoverBorderClass]"
@@ -202,6 +226,24 @@ const { t } = useI18n()
 
 /** 按 token 定价展示时的换算单位：每百万 token。 */
 const perMillionScale = 1_000_000
+const longContextPricing = computed(() => {
+  const pricing = props.model.pricing
+  return pricing?.long_context_enabled === true ? pricing : null
+})
+const hasLongContext = computed(() => longContextPricing.value !== null)
+const longContextInputMultiplier = computed(
+  () => longContextPricing.value?.long_context_input_multiplier ?? 2,
+)
+const longContextOutputMultiplier = computed(
+  () => longContextPricing.value?.long_context_output_multiplier ?? 1.5,
+)
+const formatTokenThreshold = computed(() => {
+  const threshold = longContextPricing.value?.long_context_input_token_threshold
+  if (threshold == null || !Number.isFinite(threshold)) return '-'
+  if (threshold >= 1_000_000) return `${formatMultiplier(threshold / 1_000_000)}M`
+  if (threshold >= 1_000) return `${formatMultiplier(threshold / 1_000)}K`
+  return `${formatMultiplier(threshold)}`
+})
 
 // Popover border + header classes echo the platform theme so each card reads
 // at a glance which model family it belongs to.
@@ -246,6 +288,10 @@ function formatInterval(iv: UserPricingInterval, mode: BillingMode): string {
   const input = formatScaled(iv.input_price, perMillionScale)
   const output = formatScaled(iv.output_price, perMillionScale)
   return `${input} / ${output}`
+}
+
+function formatMultiplier(value: number): string {
+  return Number.isFinite(value) ? value.toFixed(2).replace(/\.?0+$/, '') : '-'
 }
 
 // ── Popover positioning ─────────────────────────────────────────────

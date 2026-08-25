@@ -257,6 +257,11 @@ func (s *RedeemService) CreateCode(ctx context.Context, code *RedeemCode) error 
 	if code.Type != RedeemTypeInvitation && code.Value == 0 {
 		return errors.New("value must not be zero")
 	}
+	// 新版订阅兑换码必须以正数 plan_id 关联共享订阅套餐，不再接受仅分组
+	// （group_id-only）的原生订阅授予（历史已发出的分组码仍可兑换，见 Redeem）。
+	if code.Type == RedeemTypeSubscription && (code.PlanID == nil || *code.PlanID <= 0) {
+		return errors.New("plan_id is required for subscription type")
+	}
 	if code.Status == "" {
 		code.Status = StatusUnused
 	}
@@ -421,7 +426,7 @@ func (s *RedeemService) Redeem(ctx context.Context, userID int64, code string) (
 	switch redeemCode.Type {
 	case RedeemTypeBalance, RedeemTypeConcurrency:
 	case RedeemTypeSubscription:
-		if redeemCode.GroupID == nil {
+		if (redeemCode.PlanID == nil || *redeemCode.PlanID <= 0) && redeemCode.GroupID == nil {
 			return nil, infraerrors.BadRequest("REDEEM_CODE_INVALID", "invalid subscription redeem code: missing group_id")
 		}
 	default:
@@ -482,26 +487,11 @@ func (s *RedeemService) Redeem(ctx context.Context, userID int64, code string) (
 		}
 
 	case RedeemTypeSubscription:
-		validityDays := redeemCode.ValidityDays
-		if validityDays < 0 {
-			// 负数天数：缩短订阅，减到 0 则取消订阅
-			if err := s.reduceOrCancelSubscription(txCtx, userID, *redeemCode.GroupID, -validityDays, redeemCode.Code); err != nil {
-				return nil, fmt.Errorf("reduce or cancel subscription: %w", err)
-			}
-		} else {
-			if validityDays == 0 {
-				validityDays = 30
-			}
-			_, _, err := s.subscriptionService.AssignOrExtendSubscription(txCtx, &AssignSubscriptionInput{
-				UserID:       userID,
-				GroupID:      *redeemCode.GroupID,
-				ValidityDays: validityDays,
-				AssignedBy:   0, // 系统分配
-				Notes:        fmt.Sprintf("通过兑换码 %s 兑换", redeemCode.Code),
-			})
-			if err != nil {
-				return nil, fmt.Errorf("assign or extend subscription: %w", err)
-			}
+		// 订阅兑换码统一走共享订阅套餐（plan_id）或历史分组码（group_id）的
+		// 不可变 subscription_purchase 快照授予；不再写 user_subscriptions 原生订阅。
+		// 生成路径已要求 plan_id > 0；历史分组码仍可兑换为单组 purchase 快照。
+		if _, err := s.subscriptionService.GrantRedeemCodePurchase(txCtx, userID, redeemCode); err != nil {
+			return nil, fmt.Errorf("grant subscription purchase from redeem code: %w", err)
 		}
 
 	default:
@@ -553,19 +543,10 @@ func (s *RedeemService) invalidateRedeemCaches(ctx context.Context, userID int64
 			return
 		}
 	case RedeemTypeSubscription:
+		// 订阅兑换码已改为创建 subscription_purchase 快照，不再写 user_subscriptions
+		// 原生订阅行，因此无需再失效原生订阅缓存；保留 auth 缓存失效即可。
 		if s.authCacheInvalidator != nil {
 			s.authCacheInvalidator.InvalidateAuthCacheByUserID(ctx, userID)
-		}
-		if s.billingCacheService == nil {
-			return
-		}
-		if redeemCode.GroupID != nil {
-			groupID := *redeemCode.GroupID
-			go func() {
-				cacheCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-				defer cancel()
-				_ = s.billingCacheService.InvalidateSubscription(cacheCtx, userID, groupID)
-			}()
 		}
 	}
 }
@@ -660,52 +641,4 @@ func (s *RedeemService) GetUserHistory(ctx context.Context, userID int64, limit 
 		return nil, fmt.Errorf("get user redeem history: %w", err)
 	}
 	return codes, nil
-}
-
-// reduceOrCancelSubscription 缩短订阅天数，剩余天数 <= 0 时取消订阅
-func (s *RedeemService) reduceOrCancelSubscription(ctx context.Context, userID, groupID int64, reduceDays int, code string) error {
-	sub, err := s.subscriptionService.userSubRepo.GetByUserIDAndGroupID(ctx, userID, groupID)
-	if err != nil {
-		return ErrSubscriptionNotFound
-	}
-
-	now := time.Now()
-	remaining := int(sub.ExpiresAt.Sub(now).Hours() / 24)
-	if remaining < 0 {
-		remaining = 0
-	}
-
-	notes := fmt.Sprintf("通过兑换码 %s 退款扣减 %d 天", code, reduceDays)
-
-	if remaining <= reduceDays {
-		// 剩余天数不足，直接取消订阅
-		if err := s.subscriptionService.userSubRepo.UpdateStatus(ctx, sub.ID, SubscriptionStatusExpired); err != nil {
-			return fmt.Errorf("cancel subscription: %w", err)
-		}
-		// 设置过期时间为当前时间
-		if err := s.subscriptionService.userSubRepo.ExtendExpiry(ctx, sub.ID, now); err != nil {
-			return fmt.Errorf("set subscription expiry: %w", err)
-		}
-	} else {
-		// 缩短天数
-		newExpiresAt := sub.ExpiresAt.AddDate(0, 0, -reduceDays)
-		if err := s.subscriptionService.userSubRepo.ExtendExpiry(ctx, sub.ID, newExpiresAt); err != nil {
-			return fmt.Errorf("reduce subscription: %w", err)
-		}
-	}
-
-	// 追加备注
-	newNotes := sub.Notes
-	if newNotes != "" {
-		newNotes += "\n"
-	}
-	newNotes += notes
-	if err := s.subscriptionService.userSubRepo.UpdateNotes(ctx, sub.ID, newNotes); err != nil {
-		return fmt.Errorf("update subscription notes: %w", err)
-	}
-
-	// 失效缓存
-	s.subscriptionService.InvalidateSubCache(userID, groupID)
-
-	return nil
 }

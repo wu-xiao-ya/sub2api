@@ -322,6 +322,9 @@ export default {
       },
       selectGroup: 'Select Group',
       selectGroupPlaceholder: 'Choose a subscription group',
+      selectPlan: 'Select Plan',
+      selectPlanPlaceholder: 'Choose a shared subscription plan',
+      planHint: 'Selecting a plan uses its saved group list and quota snapshot.',
       validityDays: 'Validity Days',
       codeExpiry: 'Code Expiry',
       neverExpires: 'Never expires',
@@ -330,6 +333,7 @@ export default {
       customExpiryDays: 'Custom days',
       expiryDaysRequired: 'Please enter a valid expiry day count',
       groupRequired: 'Please select a subscription group',
+      groupOrPlanRequired: 'Please select a subscription group or plan',
       days: ' days',
       status: {
         unused: 'Unused',
@@ -634,6 +638,44 @@ export default {
           canceled: 'Canceled'
         }
       }
+    },
+
+    subscriptionPurchases: {
+      title: 'Subscription Purchases',
+      description: 'Manage canonical purchase snapshots. Native subscriptions remain audit-only during the freeze window.',
+      grantTitle: 'Grant by plan',
+      grantHint: 'Enter one or more user IDs. All plan groups are copied into the purchase snapshot.',
+      userIds: 'User IDs',
+      userIdsPlaceholder: 'For example: 1001,1002',
+      plan: 'Plan',
+      selectPlan: 'Select a plan',
+      notes: 'Notes',
+      grant: 'Grant',
+      bulkGrant: 'Bulk grant',
+      keyword: 'Email, username, or purchase ID',
+      userId: 'User ID',
+      platform: 'Platform',
+      allStatuses: 'All statuses',
+      id: 'Purchase ID',
+      user: 'User',
+      groups: 'Authorized groups',
+      statusLabel: 'Status',
+      usage: 'Quota / concurrency',
+      concurrency: 'Concurrency',
+      unlimited: 'Unlimited',
+      empty: 'No purchase records',
+      total: '{count} records',
+      loadFailed: 'Failed to load purchase records',
+      grantSuccess: 'Subscription granted',
+      grantFailed: 'Failed to grant subscription',
+      actionFailed: 'Operation failed',
+      extend: 'Extend',
+      extendPrompt: 'Enter days to extend. Negative values shorten the expiry:',
+      revoke: 'Revoke',
+      restore: 'Restore',
+      resetQuota: 'Reset quota',
+      status: { active: 'Active', revoked: 'Revoked', suspended: 'Suspended' },
+      confirm: { revoke: 'Revoke this purchase record?', restore: 'Restore this purchase record?', resetQuota: 'Reset daily, weekly, and monthly quota?' }
     },
 
     // Ops Monitoring

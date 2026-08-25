@@ -203,11 +203,14 @@ func TestPricingNeedsFallback(t *testing.T) {
 
 func TestSynthesizePricingFromLiteLLM_TokenMode(t *testing.T) {
 	lp := &LiteLLMModelPricing{
-		Mode:                        "chat",
-		InputCostPerToken:           3e-6,
-		OutputCostPerToken:          1.5e-5,
-		CacheCreationInputTokenCost: 3.75e-6,
-		CacheReadInputTokenCost:     3e-7,
+		Mode:                            "chat",
+		InputCostPerToken:               3e-6,
+		OutputCostPerToken:              1.5e-5,
+		CacheCreationInputTokenCost:     3.75e-6,
+		CacheReadInputTokenCost:         3e-7,
+		LongContextInputTokenThreshold:  272000,
+		LongContextInputCostMultiplier:  2,
+		LongContextOutputCostMultiplier: 1.5,
 	}
 	got := synthesizePricingFromLiteLLM(lp, nil)
 	require.NotNil(t, got)
@@ -215,6 +218,42 @@ func TestSynthesizePricingFromLiteLLM_TokenMode(t *testing.T) {
 	require.NotNil(t, got.InputPrice)
 	require.InDelta(t, 3e-6, *got.InputPrice, 1e-12)
 	require.NotNil(t, got.CacheReadPrice)
+	require.NotNil(t, got.LongContextInputTokenThreshold)
+	require.Equal(t, 272000, *got.LongContextInputTokenThreshold)
+	require.NotNil(t, got.LongContextInputCostMultiplier)
+	require.InDelta(t, 2.0, *got.LongContextInputCostMultiplier, 1e-12)
+	require.NotNil(t, got.LongContextOutputCostMultiplier)
+	require.InDelta(t, 1.5, *got.LongContextOutputCostMultiplier, 1e-12)
+}
+
+func TestSynthesizePricingFromLiteLLM_PreservesCustomBasePricesAndAddsLongContext(t *testing.T) {
+	lp := &LiteLLMModelPricing{
+		Mode:                            "chat",
+		InputCostPerToken:               1e-6,
+		OutputCostPerToken:              2e-6,
+		CacheReadInputTokenCost:         3e-7,
+		LongContextInputTokenThreshold:  272000,
+		LongContextInputCostMultiplier:  2,
+		LongContextOutputCostMultiplier: 1.5,
+	}
+	existing := &ChannelModelPricing{
+		BillingMode:    BillingModeToken,
+		InputPrice:     testPtrFloat64(9e-6),
+		OutputPrice:    testPtrFloat64(8e-6),
+		CacheReadPrice: testPtrFloat64(7e-7),
+	}
+
+	got := synthesizePricingFromLiteLLM(lp, existing)
+	require.NotNil(t, got)
+	require.InDelta(t, 9e-6, *got.InputPrice, 1e-12)
+	require.InDelta(t, 8e-6, *got.OutputPrice, 1e-12)
+	require.InDelta(t, 7e-7, *got.CacheReadPrice, 1e-12)
+	require.NotNil(t, got.LongContextInputTokenThreshold)
+	require.Equal(t, 272000, *got.LongContextInputTokenThreshold)
+	require.NotNil(t, got.LongContextInputCostMultiplier)
+	require.InDelta(t, 2.0, *got.LongContextInputCostMultiplier, 1e-12)
+	require.NotNil(t, got.LongContextOutputCostMultiplier)
+	require.InDelta(t, 1.5, *got.LongContextOutputCostMultiplier, 1e-12)
 }
 
 func TestSynthesizePricingFromLiteLLM_ImageGenerationMode(t *testing.T) {
@@ -304,6 +343,34 @@ func TestFillGlobalPricingFallback_KeepsExistingPrice(t *testing.T) {
 	}
 	svc.fillGlobalPricingFallback(models)
 	require.Same(t, existing, models[0].Pricing)
+}
+
+func TestFillGlobalPricingFallback_EnrichesCustomPriceWithLongContext(t *testing.T) {
+	pricingSvc := newStubPricingServiceFromMap(map[string]*LiteLLMModelPricing{
+		"gpt-5.6-sol": {
+			Mode:                            "chat",
+			InputCostPerToken:               1e-6,
+			OutputCostPerToken:              2e-6,
+			LongContextInputTokenThreshold:  272000,
+			LongContextInputCostMultiplier:  2,
+			LongContextOutputCostMultiplier: 1.5,
+		},
+	})
+	svc := &ChannelService{pricingService: pricingSvc}
+	models := []SupportedModel{{
+		Name:     "gpt-5.6-sol",
+		Platform: "openai",
+		Pricing: &ChannelModelPricing{
+			BillingMode: BillingModeToken,
+			InputPrice:  testPtrFloat64(9e-6),
+		},
+	}}
+
+	svc.fillGlobalPricingFallback(models)
+
+	require.InDelta(t, 9e-6, *models[0].Pricing.InputPrice, 1e-12)
+	require.NotNil(t, models[0].Pricing.LongContextInputTokenThreshold)
+	require.Equal(t, 272000, *models[0].Pricing.LongContextInputTokenThreshold)
 }
 
 func newStubPricingServiceFromMap(data map[string]*LiteLLMModelPricing) *PricingService {

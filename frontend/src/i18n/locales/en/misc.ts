@@ -135,7 +135,14 @@ export default {
     resetIn: 'Resets in {time}',
     quotaEndsIn: 'Quota ends in {time}',
     windowNotActive: 'Awaiting first use',
-    usageOf: '{used} of {limit}'
+    usageOf: '{used} of {limit}',
+    sharedTitle: 'Shared subscription plans',
+    sharedDescription: 'Shared quota across the groups included in each purchase',
+    sharedGroups: 'Included groups',
+    sharedConcurrency: 'Subscription concurrency',
+    balanceTopup: 'Use balance when subscription concurrency is full',
+    lifetime: 'Lifetime',
+    failedToUpdate: 'Failed to update subscription settings'
   },
 
   // Onboarding Tour
@@ -561,6 +568,17 @@ export default {
       features: 'Features',
       featuresHint: 'One feature per line',
       featuresPlaceholder: 'Enter plan features...',
+      tier: 'Commercial tier',
+      tierStandard: 'Standard',
+      tierPro: 'Pro',
+      tierPlus: 'Plus',
+      includedGroups: 'Included OpenAI groups',
+      noOpenaiGroups: 'No OpenAI groups available',
+      concurrency: 'Subscription concurrency',
+      lifetimeQuota: 'Lifetime quota (USD)',
+      dailyQuota: 'Daily quota (USD)',
+      weeklyQuota: 'Weekly quota (USD)',
+      monthlyQuota: 'Monthly quota (USD)',
       providerManagement: 'Provider Management',
       providerManagementDesc: 'Manage payment provider instances',
       createProvider: 'Create Provider',

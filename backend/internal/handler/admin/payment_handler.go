@@ -454,7 +454,19 @@ func (h *PaymentHandler) ListPlans(c *gin.Context) {
 		response.ErrorFrom(c, err)
 		return
 	}
-	response.Success(c, plans)
+	type planResponse struct {
+		*dbent.SubscriptionPlan
+		GroupIDs []int64 `json:"group_ids"`
+	}
+	out := make([]planResponse, 0, len(plans))
+	for _, plan := range plans {
+		ids, idsErr := h.configService.ListPlanGroupIDs(c.Request.Context(), plan)
+		if idsErr != nil {
+			ids = []int64{plan.GroupID}
+		}
+		out = append(out, planResponse{SubscriptionPlan: plan, GroupIDs: ids})
+	}
+	response.Success(c, out)
 }
 
 // CreatePlan creates a new subscription plan.

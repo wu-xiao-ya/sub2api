@@ -400,53 +400,14 @@ func TestAPIContracts(t *testing.T) {
 			}`,
 		},
 		{
-			name: "GET /api/v1/subscriptions",
-			setup: func(t *testing.T, deps *contractDeps) {
-				t.Helper()
-				// 普通用户订阅接口不应包含 assigned_* / notes 等管理员字段。
-				deps.userSubRepo.SetByUserID(1, []service.UserSubscription{
-					{
-						ID:              501,
-						UserID:          1,
-						GroupID:         10,
-						StartsAt:        deps.now,
-						ExpiresAt:       time.Date(2099, 1, 2, 3, 4, 5, 0, time.UTC), // 使用未来日期避免 normalizeSubscriptionStatus 标记为过期
-						Status:          service.SubscriptionStatusActive,
-						DailyUsageUSD:   1.23,
-						WeeklyUsageUSD:  2.34,
-						MonthlyUsageUSD: 3.45,
-						AssignedBy:      ptr(int64(999)),
-						AssignedAt:      deps.now,
-						Notes:           "admin-note",
-						CreatedAt:       deps.now,
-						UpdatedAt:       deps.now,
-					},
-				})
-			},
+			name:       "GET /api/v1/subscriptions/shared",
 			method:     http.MethodGet,
-			path:       "/api/v1/subscriptions",
+			path:       "/api/v1/subscriptions/shared",
 			wantStatus: http.StatusOK,
 			wantJSON: `{
 				"code": 0,
 				"message": "success",
-				"data": [
-					{
-						"id": 501,
-						"user_id": 1,
-						"group_id": 10,
-						"starts_at": "2025-01-02T03:04:05Z",
-						"expires_at": "2099-01-02T03:04:05Z",
-						"status": "active",
-						"daily_window_start": null,
-						"weekly_window_start": null,
-						"monthly_window_start": null,
-						"daily_usage_usd": 1.23,
-						"weekly_usage_usd": 2.34,
-						"monthly_usage_usd": 3.45,
-						"created_at": "2025-01-02T03:04:05Z",
-						"updated_at": "2025-01-02T03:04:05Z"
-					}
-				]
+				"data": []
 			}`,
 		},
 		{
@@ -1512,7 +1473,7 @@ func newContractDeps(t *testing.T) *contractDeps {
 
 	v1Subs := v1.Group("")
 	v1Subs.Use(jwtAuth)
-	v1Subs.GET("/subscriptions", subscriptionHandler.List)
+	v1Subs.GET("/subscriptions/shared", subscriptionHandler.ListShared)
 
 	v1Redeem := v1.Group("")
 	v1Redeem.Use(jwtAuth)

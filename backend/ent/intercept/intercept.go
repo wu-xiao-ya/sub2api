@@ -39,6 +39,9 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/securitysecret"
 	"github.com/Wei-Shaw/sub2api/ent/setting"
 	"github.com/Wei-Shaw/sub2api/ent/subscriptionplan"
+	"github.com/Wei-Shaw/sub2api/ent/subscriptionplangroup"
+	"github.com/Wei-Shaw/sub2api/ent/subscriptionpurchase"
+	"github.com/Wei-Shaw/sub2api/ent/subscriptionpurchasegroup"
 	"github.com/Wei-Shaw/sub2api/ent/tlsfingerprintprofile"
 	"github.com/Wei-Shaw/sub2api/ent/usagecleanuptask"
 	"github.com/Wei-Shaw/sub2api/ent/usagelog"
@@ -916,6 +919,87 @@ func (f TraverseSubscriptionPlan) Traverse(ctx context.Context, q ent.Query) err
 	return fmt.Errorf("unexpected query type %T. expect *ent.SubscriptionPlanQuery", q)
 }
 
+// The SubscriptionPlanGroupFunc type is an adapter to allow the use of ordinary function as a Querier.
+type SubscriptionPlanGroupFunc func(context.Context, *ent.SubscriptionPlanGroupQuery) (ent.Value, error)
+
+// Query calls f(ctx, q).
+func (f SubscriptionPlanGroupFunc) Query(ctx context.Context, q ent.Query) (ent.Value, error) {
+	if q, ok := q.(*ent.SubscriptionPlanGroupQuery); ok {
+		return f(ctx, q)
+	}
+	return nil, fmt.Errorf("unexpected query type %T. expect *ent.SubscriptionPlanGroupQuery", q)
+}
+
+// The TraverseSubscriptionPlanGroup type is an adapter to allow the use of ordinary function as Traverser.
+type TraverseSubscriptionPlanGroup func(context.Context, *ent.SubscriptionPlanGroupQuery) error
+
+// Intercept is a dummy implementation of Intercept that returns the next Querier in the pipeline.
+func (f TraverseSubscriptionPlanGroup) Intercept(next ent.Querier) ent.Querier {
+	return next
+}
+
+// Traverse calls f(ctx, q).
+func (f TraverseSubscriptionPlanGroup) Traverse(ctx context.Context, q ent.Query) error {
+	if q, ok := q.(*ent.SubscriptionPlanGroupQuery); ok {
+		return f(ctx, q)
+	}
+	return fmt.Errorf("unexpected query type %T. expect *ent.SubscriptionPlanGroupQuery", q)
+}
+
+// The SubscriptionPurchaseFunc type is an adapter to allow the use of ordinary function as a Querier.
+type SubscriptionPurchaseFunc func(context.Context, *ent.SubscriptionPurchaseQuery) (ent.Value, error)
+
+// Query calls f(ctx, q).
+func (f SubscriptionPurchaseFunc) Query(ctx context.Context, q ent.Query) (ent.Value, error) {
+	if q, ok := q.(*ent.SubscriptionPurchaseQuery); ok {
+		return f(ctx, q)
+	}
+	return nil, fmt.Errorf("unexpected query type %T. expect *ent.SubscriptionPurchaseQuery", q)
+}
+
+// The TraverseSubscriptionPurchase type is an adapter to allow the use of ordinary function as Traverser.
+type TraverseSubscriptionPurchase func(context.Context, *ent.SubscriptionPurchaseQuery) error
+
+// Intercept is a dummy implementation of Intercept that returns the next Querier in the pipeline.
+func (f TraverseSubscriptionPurchase) Intercept(next ent.Querier) ent.Querier {
+	return next
+}
+
+// Traverse calls f(ctx, q).
+func (f TraverseSubscriptionPurchase) Traverse(ctx context.Context, q ent.Query) error {
+	if q, ok := q.(*ent.SubscriptionPurchaseQuery); ok {
+		return f(ctx, q)
+	}
+	return fmt.Errorf("unexpected query type %T. expect *ent.SubscriptionPurchaseQuery", q)
+}
+
+// The SubscriptionPurchaseGroupFunc type is an adapter to allow the use of ordinary function as a Querier.
+type SubscriptionPurchaseGroupFunc func(context.Context, *ent.SubscriptionPurchaseGroupQuery) (ent.Value, error)
+
+// Query calls f(ctx, q).
+func (f SubscriptionPurchaseGroupFunc) Query(ctx context.Context, q ent.Query) (ent.Value, error) {
+	if q, ok := q.(*ent.SubscriptionPurchaseGroupQuery); ok {
+		return f(ctx, q)
+	}
+	return nil, fmt.Errorf("unexpected query type %T. expect *ent.SubscriptionPurchaseGroupQuery", q)
+}
+
+// The TraverseSubscriptionPurchaseGroup type is an adapter to allow the use of ordinary function as Traverser.
+type TraverseSubscriptionPurchaseGroup func(context.Context, *ent.SubscriptionPurchaseGroupQuery) error
+
+// Intercept is a dummy implementation of Intercept that returns the next Querier in the pipeline.
+func (f TraverseSubscriptionPurchaseGroup) Intercept(next ent.Querier) ent.Querier {
+	return next
+}
+
+// Traverse calls f(ctx, q).
+func (f TraverseSubscriptionPurchaseGroup) Traverse(ctx context.Context, q ent.Query) error {
+	if q, ok := q.(*ent.SubscriptionPurchaseGroupQuery); ok {
+		return f(ctx, q)
+	}
+	return fmt.Errorf("unexpected query type %T. expect *ent.SubscriptionPurchaseGroupQuery", q)
+}
+
 // The TLSFingerprintProfileFunc type is an adapter to allow the use of ordinary function as a Querier.
 type TLSFingerprintProfileFunc func(context.Context, *ent.TLSFingerprintProfileQuery) (ent.Value, error)
 
@@ -1222,6 +1306,12 @@ func NewQuery(q ent.Query) (Query, error) {
 		return &query[*ent.SettingQuery, predicate.Setting, setting.OrderOption]{typ: ent.TypeSetting, tq: q}, nil
 	case *ent.SubscriptionPlanQuery:
 		return &query[*ent.SubscriptionPlanQuery, predicate.SubscriptionPlan, subscriptionplan.OrderOption]{typ: ent.TypeSubscriptionPlan, tq: q}, nil
+	case *ent.SubscriptionPlanGroupQuery:
+		return &query[*ent.SubscriptionPlanGroupQuery, predicate.SubscriptionPlanGroup, subscriptionplangroup.OrderOption]{typ: ent.TypeSubscriptionPlanGroup, tq: q}, nil
+	case *ent.SubscriptionPurchaseQuery:
+		return &query[*ent.SubscriptionPurchaseQuery, predicate.SubscriptionPurchase, subscriptionpurchase.OrderOption]{typ: ent.TypeSubscriptionPurchase, tq: q}, nil
+	case *ent.SubscriptionPurchaseGroupQuery:
+		return &query[*ent.SubscriptionPurchaseGroupQuery, predicate.SubscriptionPurchaseGroup, subscriptionpurchasegroup.OrderOption]{typ: ent.TypeSubscriptionPurchaseGroup, tq: q}, nil
 	case *ent.TLSFingerprintProfileQuery:
 		return &query[*ent.TLSFingerprintProfileQuery, predicate.TLSFingerprintProfile, tlsfingerprintprofile.OrderOption]{typ: ent.TypeTLSFingerprintProfile, tq: q}, nil
 	case *ent.UsageCleanupTaskQuery:

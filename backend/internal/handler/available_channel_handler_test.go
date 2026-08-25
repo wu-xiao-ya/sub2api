@@ -131,6 +131,25 @@ func TestUserAvailableChannel_FieldWhitelist(t *testing.T) {
 	}
 }
 
+func TestToUserPricing_ExposesLongContextMetadata(t *testing.T) {
+	threshold := 272000
+	inputMultiplier := 2.0
+	outputMultiplier := 1.5
+
+	pricing := toUserPricing(&service.ChannelModelPricing{
+		BillingMode:                     service.BillingModeToken,
+		LongContextInputTokenThreshold:  &threshold,
+		LongContextInputCostMultiplier:  &inputMultiplier,
+		LongContextOutputCostMultiplier: &outputMultiplier,
+	})
+
+	require.NotNil(t, pricing)
+	require.True(t, pricing.LongContextEnabled)
+	require.Equal(t, threshold, *pricing.LongContextInputTokenThreshold)
+	require.InDelta(t, inputMultiplier, *pricing.LongContextInputMultiplier, 1e-12)
+	require.InDelta(t, outputMultiplier, *pricing.LongContextOutputMultiplier, 1e-12)
+}
+
 func TestBuildPlatformSections_GroupsByPlatform(t *testing.T) {
 	// 一个渠道横跨 anthropic / openai / 空平台：应该生成 2 个 section，
 	// 按 platform 字母序排序，各自 groups 和 supported_models 只含同平台条目。

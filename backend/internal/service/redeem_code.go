@@ -20,6 +20,7 @@ type RedeemCode struct {
 
 	GroupID      *int64
 	ValidityDays int
+	PlanID       *int64
 
 	User  *User
 	Group *Group

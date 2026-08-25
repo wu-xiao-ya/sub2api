@@ -8,6 +8,8 @@ import (
 	"time"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
+	"github.com/Wei-Shaw/sub2api/ent/subscriptionpurchase"
+	"github.com/Wei-Shaw/sub2api/ent/subscriptionpurchasegroup"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/antigravity"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/claude"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
@@ -923,16 +925,26 @@ func (s *adminServiceImpl) AdminUpdateAPIKeyGroupID(ctx context.Context, keyID i
 		if group.Status != StatusActive {
 			return nil, infraerrors.BadRequest("GROUP_NOT_ACTIVE", "target group is not active")
 		}
-		// 订阅类型分组：用户须持有该分组的有效订阅才可绑定
+		// Subscription groups are authorized by immutable purchase snapshots.
 		if group.IsSubscriptionType() {
-			if s.userSubRepo == nil {
-				return nil, infraerrors.InternalServer("SUBSCRIPTION_REPOSITORY_UNAVAILABLE", "subscription repository is not configured")
+			if s.entClient == nil {
+				return nil, infraerrors.InternalServer("SUBSCRIPTION_SERVICE_UNAVAILABLE", "subscription purchase service is not configured")
 			}
-			if _, err := s.userSubRepo.GetActiveByUserIDAndGroupID(ctx, apiKey.UserID, *groupID); err != nil {
-				if errors.Is(err, ErrSubscriptionNotFound) {
-					return nil, infraerrors.BadRequest("SUBSCRIPTION_REQUIRED", "user does not have an active subscription for this group")
-				}
+			now := time.Now()
+			hasPurchase, err := s.entClient.SubscriptionPurchase.Query().
+				Where(
+					subscriptionpurchase.UserIDEQ(apiKey.UserID),
+					subscriptionpurchase.StatusEQ(PurchaseStatusActive),
+					subscriptionpurchase.StartsAtLTE(now),
+					subscriptionpurchase.ExpiresAtGT(now),
+					subscriptionpurchase.HasGroupsWith(subscriptionpurchasegroup.GroupIDEQ(*groupID)),
+				).
+				Exist(ctx)
+			if err != nil {
 				return nil, err
+			}
+			if !hasPurchase {
+				return nil, infraerrors.BadRequest("SUBSCRIPTION_REQUIRED", "user does not have an active subscription purchase for this group")
 			}
 		}
 

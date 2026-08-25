@@ -14,7 +14,6 @@ import announcementsAPI from './announcements'
 import groupPromotionsAPI from './groupPromotions'
 import settingsAPI from './settings'
 import systemAPI from './system'
-import subscriptionsAPI from './subscriptions'
 import usageAPI from './usage'
 import geminiAPI from './gemini'
 import antigravityAPI from './antigravity'
@@ -37,6 +36,7 @@ import adminComplianceAPI from './compliance'
 import adminAccountContributionsAPI from './accountContributions'
 import auditAPI from './audit'
 import financeAPI from './finance'
+import subscriptionPurchasesAPI from './subscriptionPurchases'
 
 /**
  * Unified admin API object for convenient access
@@ -53,7 +53,6 @@ export const adminAPI = {
   groupPromotions: groupPromotionsAPI,
   settings: settingsAPI,
   system: systemAPI,
-  subscriptions: subscriptionsAPI,
   usage: usageAPI,
   gemini: geminiAPI,
   antigravity: antigravityAPI,
@@ -75,7 +74,8 @@ export const adminAPI = {
   compliance: adminComplianceAPI,
   accountContributions: adminAccountContributionsAPI,
   audit: auditAPI,
-  finance: financeAPI
+  finance: financeAPI,
+  subscriptionPurchases: subscriptionPurchasesAPI
 }
 
 export {
@@ -90,7 +90,6 @@ export {
   groupPromotionsAPI,
   settingsAPI,
   systemAPI,
-  subscriptionsAPI,
   usageAPI,
   geminiAPI,
   antigravityAPI,
@@ -112,7 +111,8 @@ export {
   adminComplianceAPI,
   adminAccountContributionsAPI,
   auditAPI,
-  financeAPI
+  financeAPI,
+  subscriptionPurchasesAPI
 }
 
 export default adminAPI

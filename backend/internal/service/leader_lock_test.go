@@ -86,59 +86,36 @@ func TestTryAcquireSingletonLeaderLock_CacheErrorFallsThrough(t *testing.T) {
 	require.NotPanics(t, release)
 }
 
-func TestSubscriptionExpiryService_ReminderSkipsScanWhenNotLeader(t *testing.T) {
-	cache := &fakeLeaderLockCache{}
-	// A peer already holds the reminder leader lock.
-	_, _ = cache.TryAcquireLeaderLock(context.Background(), subscriptionExpiryReminderLeaderLockKey, "peer", time.Minute)
-
-	repo := &subscriptionExpiryRepoStub{}
-	settingRepo := &subscriptionExpirySettingRepoStub{values: map[string]string{}}
-	svc := NewSubscriptionExpiryService(repo, time.Minute)
-	svc.SetSettingRepository(settingRepo)
-	svc.SetNotificationEmailService(NewNotificationEmailService(settingRepo, nil))
-	svc.SetLeaderLock(cache, nil)
-
-	svc.sendExpiryReminders(context.Background())
-
-	require.Zero(t, repo.listCalls, "non-leader must not scan active subscriptions")
-}
-
-func TestSubscriptionExpiryService_ReminderScansWhenLeader(t *testing.T) {
-	repo := &subscriptionExpiryRepoStub{}
-	settingRepo := &subscriptionExpirySettingRepoStub{values: map[string]string{}}
-	svc := NewSubscriptionExpiryService(repo, time.Minute)
-	svc.SetSettingRepository(settingRepo)
-	svc.SetNotificationEmailService(NewNotificationEmailService(settingRepo, nil))
-	svc.SetLeaderLock(&fakeLeaderLockCache{}, nil)
-
-	svc.sendExpiryReminders(context.Background())
-
-	require.Equal(t, 1, repo.listCalls, "leader should scan active subscriptions once")
-}
-
-// Single-instance correctness: the lock is released at the end of each cycle, so
-// the same instance must re-acquire it and run on every subsequent cycle (no
-// self-lockout). Covers both the cache-backed path and the no-backend path.
-func TestSubscriptionExpiryService_ReminderRunsEveryCycleSingleInstance(t *testing.T) {
-	cases := map[string]LeaderLockCache{
-		"with_cache": &fakeLeaderLockCache{},
-		"no_backend": nil,
+// The subscription-expiry reminder worker is retired and inert: sendExpiryReminders
+// never scans or mutates user_subscriptions and never sends native reminder emails,
+// regardless of leader-lock state. These subtests pin that the reminder path stays
+// decoupled from both the repository and the lock.
+func TestSubscriptionExpiryService_ReminderInertRegardlessOfLeadership(t *testing.T) {
+	setup := func(cache LeaderLockCache) (*subscriptionExpiryRepoStub, *SubscriptionExpiryService) {
+		repo := &subscriptionExpiryRepoStub{}
+		svc := NewSubscriptionExpiryService(repo, time.Minute)
+		svc.SetLeaderLock(cache, nil)
+		return repo, svc
 	}
-	for name, cache := range cases {
-		t.Run(name, func(t *testing.T) {
-			repo := &subscriptionExpiryRepoStub{}
-			settingRepo := &subscriptionExpirySettingRepoStub{values: map[string]string{}}
-			svc := NewSubscriptionExpiryService(repo, time.Minute)
-			svc.SetSettingRepository(settingRepo)
-			svc.SetNotificationEmailService(NewNotificationEmailService(settingRepo, nil))
-			svc.SetLeaderLock(cache, nil)
 
-			// Three consecutive cycles, mimicking the ticker loop.
-			svc.sendExpiryReminders(context.Background())
-			svc.sendExpiryReminders(context.Background())
-			svc.sendExpiryReminders(context.Background())
-
-			require.Equal(t, 3, repo.listCalls, "single instance must run every cycle")
-		})
-	}
+	t.Run("leader", func(t *testing.T) {
+		repo, svc := setup(&fakeLeaderLockCache{})
+		svc.sendExpiryReminders(context.Background())
+		require.Zero(t, repo.listCalls, "inert reminder path must not scan active subscriptions")
+		require.Zero(t, repo.batchUpdateCalls)
+	})
+	t.Run("non_leader", func(t *testing.T) {
+		cache := &fakeLeaderLockCache{}
+		_, _ = cache.TryAcquireLeaderLock(context.Background(), subscriptionExpiryReminderLeaderLockKey, "peer", time.Minute)
+		repo, svc := setup(cache)
+		svc.sendExpiryReminders(context.Background())
+		require.Zero(t, repo.listCalls, "inert reminder path must not scan active subscriptions")
+		require.Zero(t, repo.batchUpdateCalls)
+	})
+	t.Run("no_backend", func(t *testing.T) {
+		repo, svc := setup(nil)
+		svc.sendExpiryReminders(context.Background())
+		require.Zero(t, repo.listCalls, "inert reminder path must not scan active subscriptions")
+		require.Zero(t, repo.batchUpdateCalls)
+	})
 }

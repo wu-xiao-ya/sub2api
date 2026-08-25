@@ -157,13 +157,20 @@ func (s *openAIRecordUsageUserRepoStub) DeductBalance(ctx context.Context, id in
 type openAIRecordUsageSubRepoStub struct {
 	UserSubscriptionRepository
 
-	incrementCalls int
-	incrementErr   error
-	lastCtxErr     error
+	incrementCalls         int
+	purchaseIncrementCalls int
+	incrementErr           error
+	lastCtxErr             error
 }
 
 func (s *openAIRecordUsageSubRepoStub) IncrementUsage(ctx context.Context, id int64, costUSD float64) error {
 	s.incrementCalls++
+	s.lastCtxErr = ctx.Err()
+	return s.incrementErr
+}
+
+func (s *openAIRecordUsageSubRepoStub) IncrementPurchaseUsage(ctx context.Context, purchaseID int64, costUSD float64) error {
+	s.purchaseIncrementCalls++
 	s.lastCtxErr = ctx.Err()
 	return s.incrementErr
 }
@@ -1671,7 +1678,8 @@ func TestOpenAIGatewayServiceRecordUsage_SubscriptionBillingSetsSubscriptionFiel
 	userRepo := &openAIRecordUsageUserRepoStub{}
 	subRepo := &openAIRecordUsageSubRepoStub{}
 	svc := newOpenAIRecordUsageServiceForTest(usageRepo, userRepo, subRepo, nil)
-	subscription := &UserSubscription{ID: 99}
+	purchaseID := int64(99)
+	subscription := &UserSubscription{SubscriptionPurchaseID: &purchaseID}
 
 	err := svc.RecordUsage(context.Background(), &OpenAIRecordUsageInput{
 		Result: &OpenAIForwardResult{
@@ -1689,9 +1697,11 @@ func TestOpenAIGatewayServiceRecordUsage_SubscriptionBillingSetsSubscriptionFiel
 	require.NoError(t, err)
 	require.NotNil(t, usageRepo.lastLog)
 	require.Equal(t, BillingTypeSubscription, usageRepo.lastLog.BillingType)
-	require.NotNil(t, usageRepo.lastLog.SubscriptionID)
-	require.Equal(t, subscription.ID, *usageRepo.lastLog.SubscriptionID)
-	require.Equal(t, 1, subRepo.incrementCalls)
+	require.Nil(t, usageRepo.lastLog.SubscriptionID)
+	require.NotNil(t, usageRepo.lastLog.SubscriptionPurchaseID)
+	require.Equal(t, purchaseID, *usageRepo.lastLog.SubscriptionPurchaseID)
+	require.Equal(t, 1, subRepo.purchaseIncrementCalls)
+	require.Zero(t, subRepo.incrementCalls)
 	require.Equal(t, 0, userRepo.deductCalls)
 }
 

@@ -153,7 +153,6 @@ func (s *adminServiceImpl) CreateUser(ctx context.Context, input *CreateUserInpu
 		logger.LegacyPrintf("service.admin", "audit: admin user created actor_admin_id=%d target_user_id=%d",
 			input.ActorAdminID, user.ID)
 	}
-	s.assignDefaultSubscriptions(ctx, user.ID)
 	return user, nil
 }
 
@@ -175,25 +174,8 @@ func (s *adminServiceImpl) ensureNotLastAdmin(ctx context.Context) error {
 	return nil
 }
 
-func (s *adminServiceImpl) assignDefaultSubscriptions(ctx context.Context, userID int64) {
-	if s.settingService == nil || s.defaultSubAssigner == nil || userID <= 0 {
-		return
-	}
-	items := s.settingService.GetDefaultSubscriptions(ctx)
-	for _, item := range items {
-		if _, _, err := s.defaultSubAssigner.AssignOrExtendSubscription(ctx, &AssignSubscriptionInput{
-			UserID:       userID,
-			GroupID:      item.GroupID,
-			ValidityDays: item.ValidityDays,
-			Notes:        "auto assigned by default user subscriptions setting",
-		}); err != nil {
-			logger.LegacyPrintf("service.admin", "failed to assign default subscription: user_id=%d group_id=%d err=%v", userID, item.GroupID, err)
-		}
-	}
-}
-
 func (s *adminServiceImpl) UpdateUser(ctx context.Context, id int64, input *UpdateUserInput) (*User, error) {
-	// 校验用户专属分组倍率：必须 > 0（nil 合法，表示清除专属倍率）
+	// Validate user-specific group rates before loading or mutating the user.
 	if input.GroupRates != nil {
 		for groupID, rate := range input.GroupRates {
 			if rate != nil && *rate <= 0 {
@@ -1234,16 +1216,33 @@ func (s *adminServiceImpl) GenerateRedeemCodes(ctx context.Context, input *Gener
 
 	// 如果是订阅类型，验证必须有 GroupID
 	if input.Type == RedeemTypeSubscription {
-		if input.GroupID == nil {
-			return nil, errors.New("group_id is required for subscription type")
-		}
-		// 验证分组存在且为订阅类型
-		group, err := s.groupRepo.GetByID(ctx, *input.GroupID)
-		if err != nil {
-			return nil, fmt.Errorf("group not found: %w", err)
-		}
-		if !group.IsSubscriptionType() {
-			return nil, errors.New("group must be subscription type")
+		if input.PlanID != nil && *input.PlanID > 0 {
+			plan, err := s.entClient.SubscriptionPlan.Get(ctx, *input.PlanID)
+			if err != nil {
+				return nil, fmt.Errorf("subscription plan not found: %w", err)
+			}
+			groups, err := plan.QueryGroups().All(ctx)
+			if err != nil || len(groups) == 0 {
+				return nil, errors.New("subscription plan has no groups")
+			}
+			for _, planGroup := range groups {
+				group, groupErr := s.groupRepo.GetByID(ctx, planGroup.GroupID)
+				if groupErr != nil || group == nil || !strings.EqualFold(group.Platform, PlatformOpenAI) {
+					return nil, errors.New("subscription plan groups must use openai platform")
+				}
+			}
+		} else {
+			if input.GroupID == nil {
+				return nil, errors.New("group_id is required for subscription type")
+			}
+			// 验证分组存在且为订阅类型
+			group, err := s.groupRepo.GetByID(ctx, *input.GroupID)
+			if err != nil {
+				return nil, fmt.Errorf("group not found: %w", err)
+			}
+			if !group.IsSubscriptionType() {
+				return nil, errors.New("group must be subscription type")
+			}
 		}
 	}
 
@@ -1263,8 +1262,9 @@ func (s *adminServiceImpl) GenerateRedeemCodes(ctx context.Context, input *Gener
 		// 订阅类型专用字段
 		if input.Type == RedeemTypeSubscription {
 			code.GroupID = input.GroupID
+			code.PlanID = input.PlanID
 			code.ValidityDays = input.ValidityDays
-			if code.ValidityDays <= 0 {
+			if code.PlanID == nil && code.ValidityDays <= 0 {
 				code.ValidityDays = 30 // 默认30天
 			}
 		}

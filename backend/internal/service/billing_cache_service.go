@@ -413,31 +413,10 @@ func (s *BillingCacheService) InvalidateUserBalance(ctx context.Context, userID 
 
 // GetSubscriptionStatus 获取订阅状态（优先从缓存读取）
 func (s *BillingCacheService) GetSubscriptionStatus(ctx context.Context, userID, groupID int64) (*subscriptionCacheData, error) {
-	if s.cache == nil {
-		return s.getSubscriptionFromDB(ctx, userID, groupID)
-	}
-
-	// 尝试从缓存读取
-	cacheData, err := s.cache.GetSubscriptionCache(ctx, userID, groupID)
-	if err == nil && cacheData != nil {
-		return s.convertFromPortsData(cacheData), nil
-	}
-
-	// 缓存未命中，从数据库读取
-	data, err := s.getSubscriptionFromDB(ctx, userID, groupID)
-	if err != nil {
-		return nil, err
-	}
-
-	// 异步建立缓存
-	_ = s.enqueueCacheWrite(cacheWriteTask{
-		kind:             cacheWriteSetSubscription,
-		userID:           userID,
-		groupID:          groupID,
-		subscriptionData: data,
-	})
-
-	return data, nil
+	// Native one-group subscriptions are retired. Runtime authorization is
+	// loaded from subscription_purchases by SubscriptionService and passed to
+	// handlers as a purchase-backed compatibility snapshot.
+	return nil, ErrNativeSubscriptionRetired
 }
 
 func (s *BillingCacheService) convertFromPortsData(data *SubscriptionCacheData) *subscriptionCacheData {
@@ -464,19 +443,7 @@ func (s *BillingCacheService) convertToPortsData(data *subscriptionCacheData) *S
 
 // getSubscriptionFromDB 从数据库获取订阅数据
 func (s *BillingCacheService) getSubscriptionFromDB(ctx context.Context, userID, groupID int64) (*subscriptionCacheData, error) {
-	sub, err := s.subRepo.GetActiveByUserIDAndGroupID(ctx, userID, groupID)
-	if err != nil {
-		return nil, fmt.Errorf("get subscription: %w", err)
-	}
-
-	return &subscriptionCacheData{
-		Status:       sub.Status,
-		ExpiresAt:    sub.ExpiresAt,
-		DailyUsage:   sub.DailyUsageUSD,
-		WeeklyUsage:  sub.WeeklyUsageUSD,
-		MonthlyUsage: sub.MonthlyUsageUSD,
-		Version:      sub.UpdatedAt.Unix(),
-	}, nil
+	return nil, ErrNativeSubscriptionRetired
 }
 
 // setSubscriptionCache 设置订阅缓存
@@ -745,6 +712,9 @@ func (s *BillingCacheService) CheckBillingEligibility(ctx context.Context, user 
 	isSubscriptionMode := group != nil && group.IsSubscriptionType() && subscription != nil
 
 	if isSubscriptionMode {
+		if subscription.SubscriptionPurchaseID == nil || *subscription.SubscriptionPurchaseID <= 0 {
+			return ErrNativeSubscriptionRetired
+		}
 		if err := s.checkSubscriptionEligibility(ctx, user.ID, group, subscription); err != nil {
 			return err
 		}
@@ -898,39 +868,33 @@ func (s *BillingCacheService) checkBalanceEligibility(ctx context.Context, userI
 
 // checkSubscriptionEligibility 检查订阅模式资格
 func (s *BillingCacheService) checkSubscriptionEligibility(ctx context.Context, userID int64, group *Group, subscription *UserSubscription) error {
-	// 获取订阅缓存数据
-	subData, err := s.GetSubscriptionStatus(ctx, userID, group.ID)
-	if err != nil {
-		if s.circuitBreaker != nil {
-			s.circuitBreaker.OnFailure(err)
-		}
-		logger.LegacyPrintf("service.billing_cache", "ALERT: billing subscription check failed for user %d group %d: %v", userID, group.ID, err)
-		return ErrBillingServiceUnavailable.WithCause(err)
+	if subscription == nil || subscription.SubscriptionPurchaseID == nil || *subscription.SubscriptionPurchaseID <= 0 {
+		return ErrNativeSubscriptionRetired
 	}
-	if s.circuitBreaker != nil {
-		s.circuitBreaker.OnSuccess()
-	}
-
-	// 检查订阅状态
-	if subData.Status != SubscriptionStatusActive {
+	if subscription.Status != SubscriptionStatusActive {
 		return ErrSubscriptionInvalid
 	}
 
 	// 检查是否过期
-	if time.Now().After(subData.ExpiresAt) {
+	if time.Now().After(subscription.ExpiresAt) {
 		return ErrSubscriptionInvalid
 	}
 
-	// 检查限额（使用传入的Group限额配置）
-	if group.HasDailyLimit() && subData.DailyUsage >= *group.DailyLimitUSD {
+	// The compatibility snapshot carries purchase usage and its quota-backed
+	// group copy. No legacy table or legacy cache read is allowed here.
+	quotaGroup := group
+	if subscription.Group != nil {
+		quotaGroup = subscription.Group
+	}
+	if quotaGroup != nil && quotaGroup.HasDailyLimit() && subscription.DailyUsageUSD >= *quotaGroup.DailyLimitUSD {
 		return ErrDailyLimitExceeded
 	}
 
-	if group.HasWeeklyLimit() && subData.WeeklyUsage >= *group.WeeklyLimitUSD {
+	if quotaGroup != nil && quotaGroup.HasWeeklyLimit() && subscription.WeeklyUsageUSD >= *quotaGroup.WeeklyLimitUSD {
 		return ErrWeeklyLimitExceeded
 	}
 
-	if group.HasMonthlyLimit() && subData.MonthlyUsage >= *group.MonthlyLimitUSD {
+	if quotaGroup != nil && quotaGroup.HasMonthlyLimit() && subscription.MonthlyUsageUSD >= *quotaGroup.MonthlyLimitUSD {
 		return ErrMonthlyLimitExceeded
 	}
 

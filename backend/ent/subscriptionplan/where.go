@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"entgo.io/ent/dialect/sql"
+	"entgo.io/ent/dialect/sql/sqlgraph"
 	"github.com/Wei-Shaw/sub2api/ent/predicate"
 )
 
@@ -57,6 +58,11 @@ func IDLTE(id int64) predicate.SubscriptionPlan {
 // GroupID applies equality check predicate on the "group_id" field. It's identical to GroupIDEQ.
 func GroupID(v int64) predicate.SubscriptionPlan {
 	return predicate.SubscriptionPlan(sql.FieldEQ(FieldGroupID, v))
+}
+
+// TierCode applies equality check predicate on the "tier_code" field. It's identical to TierCodeEQ.
+func TierCode(v string) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldEQ(FieldTierCode, v))
 }
 
 // Name applies equality check predicate on the "name" field. It's identical to NameEQ.
@@ -114,6 +120,31 @@ func SortOrder(v int) predicate.SubscriptionPlan {
 	return predicate.SubscriptionPlan(sql.FieldEQ(FieldSortOrder, v))
 }
 
+// ConcurrencyEntitlement applies equality check predicate on the "concurrency_entitlement" field. It's identical to ConcurrencyEntitlementEQ.
+func ConcurrencyEntitlement(v int) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldEQ(FieldConcurrencyEntitlement, v))
+}
+
+// LifetimeQuotaUsd applies equality check predicate on the "lifetime_quota_usd" field. It's identical to LifetimeQuotaUsdEQ.
+func LifetimeQuotaUsd(v float64) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldEQ(FieldLifetimeQuotaUsd, v))
+}
+
+// DailyQuotaUsd applies equality check predicate on the "daily_quota_usd" field. It's identical to DailyQuotaUsdEQ.
+func DailyQuotaUsd(v float64) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldEQ(FieldDailyQuotaUsd, v))
+}
+
+// WeeklyQuotaUsd applies equality check predicate on the "weekly_quota_usd" field. It's identical to WeeklyQuotaUsdEQ.
+func WeeklyQuotaUsd(v float64) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldEQ(FieldWeeklyQuotaUsd, v))
+}
+
+// MonthlyQuotaUsd applies equality check predicate on the "monthly_quota_usd" field. It's identical to MonthlyQuotaUsdEQ.
+func MonthlyQuotaUsd(v float64) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldEQ(FieldMonthlyQuotaUsd, v))
+}
+
 // CreatedAt applies equality check predicate on the "created_at" field. It's identical to CreatedAtEQ.
 func CreatedAt(v time.Time) predicate.SubscriptionPlan {
 	return predicate.SubscriptionPlan(sql.FieldEQ(FieldCreatedAt, v))
@@ -162,6 +193,71 @@ func GroupIDLT(v int64) predicate.SubscriptionPlan {
 // GroupIDLTE applies the LTE predicate on the "group_id" field.
 func GroupIDLTE(v int64) predicate.SubscriptionPlan {
 	return predicate.SubscriptionPlan(sql.FieldLTE(FieldGroupID, v))
+}
+
+// TierCodeEQ applies the EQ predicate on the "tier_code" field.
+func TierCodeEQ(v string) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldEQ(FieldTierCode, v))
+}
+
+// TierCodeNEQ applies the NEQ predicate on the "tier_code" field.
+func TierCodeNEQ(v string) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldNEQ(FieldTierCode, v))
+}
+
+// TierCodeIn applies the In predicate on the "tier_code" field.
+func TierCodeIn(vs ...string) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldIn(FieldTierCode, vs...))
+}
+
+// TierCodeNotIn applies the NotIn predicate on the "tier_code" field.
+func TierCodeNotIn(vs ...string) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldNotIn(FieldTierCode, vs...))
+}
+
+// TierCodeGT applies the GT predicate on the "tier_code" field.
+func TierCodeGT(v string) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldGT(FieldTierCode, v))
+}
+
+// TierCodeGTE applies the GTE predicate on the "tier_code" field.
+func TierCodeGTE(v string) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldGTE(FieldTierCode, v))
+}
+
+// TierCodeLT applies the LT predicate on the "tier_code" field.
+func TierCodeLT(v string) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldLT(FieldTierCode, v))
+}
+
+// TierCodeLTE applies the LTE predicate on the "tier_code" field.
+func TierCodeLTE(v string) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldLTE(FieldTierCode, v))
+}
+
+// TierCodeContains applies the Contains predicate on the "tier_code" field.
+func TierCodeContains(v string) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldContains(FieldTierCode, v))
+}
+
+// TierCodeHasPrefix applies the HasPrefix predicate on the "tier_code" field.
+func TierCodeHasPrefix(v string) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldHasPrefix(FieldTierCode, v))
+}
+
+// TierCodeHasSuffix applies the HasSuffix predicate on the "tier_code" field.
+func TierCodeHasSuffix(v string) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldHasSuffix(FieldTierCode, v))
+}
+
+// TierCodeEqualFold applies the EqualFold predicate on the "tier_code" field.
+func TierCodeEqualFold(v string) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldEqualFold(FieldTierCode, v))
+}
+
+// TierCodeContainsFold applies the ContainsFold predicate on the "tier_code" field.
+func TierCodeContainsFold(v string) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldContainsFold(FieldTierCode, v))
 }
 
 // NameEQ applies the EQ predicate on the "name" field.
@@ -734,6 +830,206 @@ func SortOrderLTE(v int) predicate.SubscriptionPlan {
 	return predicate.SubscriptionPlan(sql.FieldLTE(FieldSortOrder, v))
 }
 
+// ConcurrencyEntitlementEQ applies the EQ predicate on the "concurrency_entitlement" field.
+func ConcurrencyEntitlementEQ(v int) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldEQ(FieldConcurrencyEntitlement, v))
+}
+
+// ConcurrencyEntitlementNEQ applies the NEQ predicate on the "concurrency_entitlement" field.
+func ConcurrencyEntitlementNEQ(v int) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldNEQ(FieldConcurrencyEntitlement, v))
+}
+
+// ConcurrencyEntitlementIn applies the In predicate on the "concurrency_entitlement" field.
+func ConcurrencyEntitlementIn(vs ...int) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldIn(FieldConcurrencyEntitlement, vs...))
+}
+
+// ConcurrencyEntitlementNotIn applies the NotIn predicate on the "concurrency_entitlement" field.
+func ConcurrencyEntitlementNotIn(vs ...int) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldNotIn(FieldConcurrencyEntitlement, vs...))
+}
+
+// ConcurrencyEntitlementGT applies the GT predicate on the "concurrency_entitlement" field.
+func ConcurrencyEntitlementGT(v int) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldGT(FieldConcurrencyEntitlement, v))
+}
+
+// ConcurrencyEntitlementGTE applies the GTE predicate on the "concurrency_entitlement" field.
+func ConcurrencyEntitlementGTE(v int) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldGTE(FieldConcurrencyEntitlement, v))
+}
+
+// ConcurrencyEntitlementLT applies the LT predicate on the "concurrency_entitlement" field.
+func ConcurrencyEntitlementLT(v int) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldLT(FieldConcurrencyEntitlement, v))
+}
+
+// ConcurrencyEntitlementLTE applies the LTE predicate on the "concurrency_entitlement" field.
+func ConcurrencyEntitlementLTE(v int) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldLTE(FieldConcurrencyEntitlement, v))
+}
+
+// LifetimeQuotaUsdEQ applies the EQ predicate on the "lifetime_quota_usd" field.
+func LifetimeQuotaUsdEQ(v float64) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldEQ(FieldLifetimeQuotaUsd, v))
+}
+
+// LifetimeQuotaUsdNEQ applies the NEQ predicate on the "lifetime_quota_usd" field.
+func LifetimeQuotaUsdNEQ(v float64) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldNEQ(FieldLifetimeQuotaUsd, v))
+}
+
+// LifetimeQuotaUsdIn applies the In predicate on the "lifetime_quota_usd" field.
+func LifetimeQuotaUsdIn(vs ...float64) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldIn(FieldLifetimeQuotaUsd, vs...))
+}
+
+// LifetimeQuotaUsdNotIn applies the NotIn predicate on the "lifetime_quota_usd" field.
+func LifetimeQuotaUsdNotIn(vs ...float64) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldNotIn(FieldLifetimeQuotaUsd, vs...))
+}
+
+// LifetimeQuotaUsdGT applies the GT predicate on the "lifetime_quota_usd" field.
+func LifetimeQuotaUsdGT(v float64) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldGT(FieldLifetimeQuotaUsd, v))
+}
+
+// LifetimeQuotaUsdGTE applies the GTE predicate on the "lifetime_quota_usd" field.
+func LifetimeQuotaUsdGTE(v float64) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldGTE(FieldLifetimeQuotaUsd, v))
+}
+
+// LifetimeQuotaUsdLT applies the LT predicate on the "lifetime_quota_usd" field.
+func LifetimeQuotaUsdLT(v float64) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldLT(FieldLifetimeQuotaUsd, v))
+}
+
+// LifetimeQuotaUsdLTE applies the LTE predicate on the "lifetime_quota_usd" field.
+func LifetimeQuotaUsdLTE(v float64) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldLTE(FieldLifetimeQuotaUsd, v))
+}
+
+// DailyQuotaUsdEQ applies the EQ predicate on the "daily_quota_usd" field.
+func DailyQuotaUsdEQ(v float64) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldEQ(FieldDailyQuotaUsd, v))
+}
+
+// DailyQuotaUsdNEQ applies the NEQ predicate on the "daily_quota_usd" field.
+func DailyQuotaUsdNEQ(v float64) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldNEQ(FieldDailyQuotaUsd, v))
+}
+
+// DailyQuotaUsdIn applies the In predicate on the "daily_quota_usd" field.
+func DailyQuotaUsdIn(vs ...float64) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldIn(FieldDailyQuotaUsd, vs...))
+}
+
+// DailyQuotaUsdNotIn applies the NotIn predicate on the "daily_quota_usd" field.
+func DailyQuotaUsdNotIn(vs ...float64) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldNotIn(FieldDailyQuotaUsd, vs...))
+}
+
+// DailyQuotaUsdGT applies the GT predicate on the "daily_quota_usd" field.
+func DailyQuotaUsdGT(v float64) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldGT(FieldDailyQuotaUsd, v))
+}
+
+// DailyQuotaUsdGTE applies the GTE predicate on the "daily_quota_usd" field.
+func DailyQuotaUsdGTE(v float64) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldGTE(FieldDailyQuotaUsd, v))
+}
+
+// DailyQuotaUsdLT applies the LT predicate on the "daily_quota_usd" field.
+func DailyQuotaUsdLT(v float64) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldLT(FieldDailyQuotaUsd, v))
+}
+
+// DailyQuotaUsdLTE applies the LTE predicate on the "daily_quota_usd" field.
+func DailyQuotaUsdLTE(v float64) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldLTE(FieldDailyQuotaUsd, v))
+}
+
+// WeeklyQuotaUsdEQ applies the EQ predicate on the "weekly_quota_usd" field.
+func WeeklyQuotaUsdEQ(v float64) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldEQ(FieldWeeklyQuotaUsd, v))
+}
+
+// WeeklyQuotaUsdNEQ applies the NEQ predicate on the "weekly_quota_usd" field.
+func WeeklyQuotaUsdNEQ(v float64) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldNEQ(FieldWeeklyQuotaUsd, v))
+}
+
+// WeeklyQuotaUsdIn applies the In predicate on the "weekly_quota_usd" field.
+func WeeklyQuotaUsdIn(vs ...float64) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldIn(FieldWeeklyQuotaUsd, vs...))
+}
+
+// WeeklyQuotaUsdNotIn applies the NotIn predicate on the "weekly_quota_usd" field.
+func WeeklyQuotaUsdNotIn(vs ...float64) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldNotIn(FieldWeeklyQuotaUsd, vs...))
+}
+
+// WeeklyQuotaUsdGT applies the GT predicate on the "weekly_quota_usd" field.
+func WeeklyQuotaUsdGT(v float64) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldGT(FieldWeeklyQuotaUsd, v))
+}
+
+// WeeklyQuotaUsdGTE applies the GTE predicate on the "weekly_quota_usd" field.
+func WeeklyQuotaUsdGTE(v float64) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldGTE(FieldWeeklyQuotaUsd, v))
+}
+
+// WeeklyQuotaUsdLT applies the LT predicate on the "weekly_quota_usd" field.
+func WeeklyQuotaUsdLT(v float64) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldLT(FieldWeeklyQuotaUsd, v))
+}
+
+// WeeklyQuotaUsdLTE applies the LTE predicate on the "weekly_quota_usd" field.
+func WeeklyQuotaUsdLTE(v float64) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldLTE(FieldWeeklyQuotaUsd, v))
+}
+
+// MonthlyQuotaUsdEQ applies the EQ predicate on the "monthly_quota_usd" field.
+func MonthlyQuotaUsdEQ(v float64) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldEQ(FieldMonthlyQuotaUsd, v))
+}
+
+// MonthlyQuotaUsdNEQ applies the NEQ predicate on the "monthly_quota_usd" field.
+func MonthlyQuotaUsdNEQ(v float64) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldNEQ(FieldMonthlyQuotaUsd, v))
+}
+
+// MonthlyQuotaUsdIn applies the In predicate on the "monthly_quota_usd" field.
+func MonthlyQuotaUsdIn(vs ...float64) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldIn(FieldMonthlyQuotaUsd, vs...))
+}
+
+// MonthlyQuotaUsdNotIn applies the NotIn predicate on the "monthly_quota_usd" field.
+func MonthlyQuotaUsdNotIn(vs ...float64) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldNotIn(FieldMonthlyQuotaUsd, vs...))
+}
+
+// MonthlyQuotaUsdGT applies the GT predicate on the "monthly_quota_usd" field.
+func MonthlyQuotaUsdGT(v float64) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldGT(FieldMonthlyQuotaUsd, v))
+}
+
+// MonthlyQuotaUsdGTE applies the GTE predicate on the "monthly_quota_usd" field.
+func MonthlyQuotaUsdGTE(v float64) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldGTE(FieldMonthlyQuotaUsd, v))
+}
+
+// MonthlyQuotaUsdLT applies the LT predicate on the "monthly_quota_usd" field.
+func MonthlyQuotaUsdLT(v float64) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldLT(FieldMonthlyQuotaUsd, v))
+}
+
+// MonthlyQuotaUsdLTE applies the LTE predicate on the "monthly_quota_usd" field.
+func MonthlyQuotaUsdLTE(v float64) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(sql.FieldLTE(FieldMonthlyQuotaUsd, v))
+}
+
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.
 func CreatedAtEQ(v time.Time) predicate.SubscriptionPlan {
 	return predicate.SubscriptionPlan(sql.FieldEQ(FieldCreatedAt, v))
@@ -812,6 +1108,29 @@ func UpdatedAtLT(v time.Time) predicate.SubscriptionPlan {
 // UpdatedAtLTE applies the LTE predicate on the "updated_at" field.
 func UpdatedAtLTE(v time.Time) predicate.SubscriptionPlan {
 	return predicate.SubscriptionPlan(sql.FieldLTE(FieldUpdatedAt, v))
+}
+
+// HasGroups applies the HasEdge predicate on the "groups" edge.
+func HasGroups() predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, GroupsTable, GroupsColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasGroupsWith applies the HasEdge predicate on the "groups" edge with a given conditions (other predicates).
+func HasGroupsWith(preds ...predicate.SubscriptionPlanGroup) predicate.SubscriptionPlan {
+	return predicate.SubscriptionPlan(func(s *sql.Selector) {
+		step := newGroupsStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
 }
 
 // And groups predicates with the AND operator between them.

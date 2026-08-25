@@ -27,6 +27,12 @@
           <span v-if="lowestRate !== null" class="font-medium text-emerald-600 dark:text-emerald-400">
             {{ t('availableChannels.lowestRate') }} x{{ formatRate(lowestRate) }}
           </span>
+          <span
+            v-if="hasLongContext"
+            class="inline-flex items-center rounded bg-amber-50 px-1.5 py-0.5 font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"
+          >
+            {{ t('availableChannels.pricing.longContext') }}
+          </span>
         </div>
       </div>
     </header>
@@ -102,6 +108,16 @@
         class="mt-2 text-right font-mono text-[10px] text-gray-400 dark:text-dark-500"
       >
         / {{ tokenUnitLabel }} tokens
+      </div>
+
+      <div
+        v-if="hasLongContext"
+        class="mt-2 border-t border-gray-200/80 pt-2 text-[10px] text-amber-700 dark:border-dark-700 dark:text-amber-300"
+      >
+        {{ t('availableChannels.pricing.longContext') }}：
+        {{ t('availableChannels.pricing.longContextThreshold', { threshold: formatTokenThreshold }) }}，
+        {{ t('availableChannels.pricing.longContextInputMultiplier', { multiplier: formatMultiplier(longContextInputMultiplier) }) }}，
+        {{ t('availableChannels.pricing.longContextOutputMultiplier', { multiplier: formatMultiplier(longContextOutputMultiplier) }) }}
       </div>
     </section>
 
@@ -184,6 +200,24 @@ const { t } = useI18n()
 
 const lowestRate = computed(() => lowestGroupRate(props.item.groups, props.userGroupRates))
 const tokenUnitLabel = computed(() => (props.tokenScale === 1_000 ? '1K' : '1M'))
+const longContextPricing = computed(() => {
+  const pricing = props.item.model.pricing
+  return pricing?.long_context_enabled === true ? pricing : null
+})
+const hasLongContext = computed(() => longContextPricing.value !== null)
+const longContextInputMultiplier = computed(
+  () => longContextPricing.value?.long_context_input_multiplier ?? 2,
+)
+const longContextOutputMultiplier = computed(
+  () => longContextPricing.value?.long_context_output_multiplier ?? 1.5,
+)
+const formatTokenThreshold = computed(() => {
+  const threshold = longContextPricing.value?.long_context_input_token_threshold
+  if (threshold == null || !Number.isFinite(threshold)) return '-'
+  if (threshold >= 1_000_000) return `${formatMultiplier(threshold / 1_000_000)}M`
+  if (threshold >= 1_000) return `${formatMultiplier(threshold / 1_000)}K`
+  return `${formatMultiplier(threshold)}`
+})
 
 const billingModeLabel = computed(() => {
   switch (props.item.model.pricing?.billing_mode) {
@@ -204,5 +238,9 @@ function formatTokenPrice(value: number | null): string {
 
 function formatRate(value: number): string {
   return Number.isInteger(value) ? String(value) : value.toFixed(3).replace(/\.?0+$/, '')
+}
+
+function formatMultiplier(value: number): string {
+  return Number.isFinite(value) ? value.toFixed(2).replace(/\.?0+$/, '') : '-'
 }
 </script>

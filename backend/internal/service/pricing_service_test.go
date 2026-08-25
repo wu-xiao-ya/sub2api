@@ -46,6 +46,62 @@ func TestParsePricingData_ParsesPriorityAndServiceTierFields(t *testing.T) {
 	require.True(t, pricing.SupportsServiceTier)
 }
 
+func TestParsePricingData_NormalizesAbove272KLongContextFields(t *testing.T) {
+	svc := &PricingService{}
+	body := []byte(`{
+		"gpt-5.4": {
+			"input_cost_per_token": 0.0000025,
+			"input_cost_per_token_above_272k_tokens": 0.000005,
+			"output_cost_per_token": 0.000015,
+			"output_cost_per_token_above_272k_tokens": 0.0000225,
+			"cache_read_input_token_cost": 0.00000025,
+			"cache_read_input_token_cost_above_272k_tokens": 0.0000005,
+			"litellm_provider": "openai",
+			"mode": "chat"
+		}
+	}`)
+
+	data, err := svc.parsePricingData(body)
+	require.NoError(t, err)
+	pricing := data["gpt-5.4"]
+	require.NotNil(t, pricing)
+	require.Equal(t, 272000, pricing.LongContextInputTokenThreshold)
+	require.InDelta(t, 2.0, pricing.LongContextInputCostMultiplier, 1e-12)
+	require.InDelta(t, 1.5, pricing.LongContextOutputCostMultiplier, 1e-12)
+}
+
+func TestApplyOfficialDeepSeekPricingOverrides(t *testing.T) {
+	data := map[string]*LiteLLMModelPricing{
+		"deepseek-v4-flash": {
+			InputCostPerToken:       1.4e-7,
+			OutputCostPerToken:      2.8e-7,
+			CacheReadInputTokenCost: 2.8e-9,
+		},
+		"deepseek-chat": {
+			InputCostPerToken:       2.8e-7,
+			OutputCostPerToken:      4.2e-7,
+			CacheReadInputTokenCost: 2.8e-8,
+		},
+	}
+
+	applyOfficialDeepSeekPricingOverrides(data)
+
+	for _, model := range []string{"deepseek-v4-flash", "deepseek-chat", "deepseek-reasoner"} {
+		pricing := data[model]
+		require.NotNil(t, pricing, model)
+		require.InDelta(t, 0.22e-6, pricing.InputCostPerToken, 1e-15, model)
+		require.InDelta(t, 0.66e-6, pricing.OutputCostPerToken, 1e-15, model)
+		require.InDelta(t, 0.007e-6, pricing.CacheReadInputTokenCost, 1e-15, model)
+		require.Equal(t, "deepseek", pricing.LiteLLMProvider, model)
+	}
+
+	pro := data["deepseek-v4-pro"]
+	require.NotNil(t, pro)
+	require.InDelta(t, 0.66e-6, pro.InputCostPerToken, 1e-15)
+	require.InDelta(t, 1.98e-6, pro.OutputCostPerToken, 1e-15)
+	require.InDelta(t, 0.022e-6, pro.CacheReadInputTokenCost, 1e-15)
+}
+
 func TestBillingService_GPT56CacheWritePricingUsesOfficialMultiplier(t *testing.T) {
 	tests := []struct {
 		model             string

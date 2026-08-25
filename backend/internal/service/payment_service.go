@@ -132,6 +132,28 @@ type RefundPlan struct {
 	BalanceToDeduct float64
 	SubDaysToDeduct int
 	SubscriptionID  int64
+
+	// PurchaseID is the subscription_purchases row this refund withdraws from.
+	// It is resolved either as the exact purchase this order created
+	// (source='payment_order', source_id=order.id) or, for historical orders,
+	// as the migrated legacy_user_subscription purchase pinned to the order's
+	// user/group through subscription_purchase_groups. Zero means no purchase
+	// was attributed and no entitlement will be touched.
+	PurchaseID int64
+	// PurchasePrior captures the purchase status/expiry observed before this
+	// refund withdrew entitlement, so a gateway failure or pending-refund
+	// reversal can restore exactly that state instead of assuming defaults.
+	PurchasePrior *SharedPurchaseRecord
+	// PurchaseWithdrawn records whether this attempt actually changed the
+	// purchase status. Only a withdrawal this attempt performed is rolled back;
+	// an already-withdrawn purchase is left alone.
+	PurchaseWithdrawn bool
+	// PurchaseLegacyDeduct marks a migrated legacy_user_subscription purchase.
+	// It tells the withdrawal step to apply the historical day-deduction
+	// semantics (reduce expires_at by SubDaysToDeduct, revoke only on
+	// would-expire) instead of the full revocation used for payment_order
+	// purchases. user_subscriptions is never touched on either path.
+	PurchaseLegacyDeduct bool
 }
 
 type RefundResult struct {

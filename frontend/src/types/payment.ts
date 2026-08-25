@@ -109,6 +109,8 @@ export interface PaymentOrder {
 export interface SubscriptionPlan {
   id: number
   group_id: number
+  group_ids?: number[]
+  tier_code?: 'standard' | 'pro' | 'plus' | string
   group_platform?: string
   group_name?: string
   rate_multiplier?: number
@@ -119,6 +121,11 @@ export interface SubscriptionPlan {
   daily_limit_usd?: number | null
   weekly_limit_usd?: number | null
   monthly_limit_usd?: number | null
+  concurrency_entitlement?: number
+  lifetime_quota_usd?: number
+  daily_quota_usd?: number
+  weekly_quota_usd?: number
+  monthly_quota_usd?: number
   supported_model_scopes?: string[]
   name: string
   description: string

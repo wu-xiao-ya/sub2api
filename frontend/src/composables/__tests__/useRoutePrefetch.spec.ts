@@ -28,7 +28,6 @@ const createMockRouter = (): Router => {
     { path: '/admin/accounts', components: { default: mockImportFn } },
     { path: '/admin/users', components: { default: mockImportFn } },
     { path: '/admin/groups', components: { default: mockImportFn } },
-    { path: '/admin/subscriptions', components: { default: mockImportFn } },
     { path: '/admin/redeem', components: { default: mockImportFn } },
     { path: '/dashboard', components: { default: mockImportFn } },
     { path: '/keys', components: { default: mockImportFn } },
@@ -188,9 +187,11 @@ describe('useRoutePrefetch', () => {
   })
 
   describe('预加载映射表', () => {
-    it('管理员预加载映射表应该包含正确的路由', () => {
+    it('管理员预加载映射表不再引用旧订阅管理路由', () => {
       expect(_adminPrefetchMap).toHaveProperty('/admin/dashboard')
       expect(_adminPrefetchMap['/admin/dashboard']).toHaveLength(2)
+      expect(_adminPrefetchMap).not.toHaveProperty('/admin/subscriptions')
+      expect(Object.values(_adminPrefetchMap).flat()).not.toContain('/admin/subscriptions')
     })
 
     it('用户预加载映射表应该包含正确的路由', () => {

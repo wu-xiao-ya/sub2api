@@ -28,6 +28,8 @@ const (
 	accountSlotKeyPrefix = "concurrency:account:"
 	// 格式: concurrency:user:{userID}
 	userSlotKeyPrefix = "concurrency:user:"
+	// 格式: concurrency:subscription:{purchaseID}
+	subscriptionSlotKeyPrefix = "concurrency:subscription:"
 	// 格式: concurrency:api_key:{apiKeyID}
 	apiKeySlotKeyPrefix = "concurrency:api_key:"
 	// API-key-scoped client WebSocket ingress leases use a shorter TTL than
@@ -661,6 +663,35 @@ func (c *concurrencyCache) GetUserConcurrency(ctx context.Context, userID int64)
 		return 0, err
 	}
 	return result, nil
+}
+
+func subscriptionSlotKey(purchaseID int64) string {
+	return subscriptionSlotKeyPrefix + strconv.FormatInt(purchaseID, 10)
+}
+
+func (c *concurrencyCache) AcquireSubscriptionSlot(ctx context.Context, purchaseID int64, maxConcurrency int, requestID string) (bool, error) {
+	if purchaseID <= 0 {
+		return false, nil
+	}
+	result, _, err := runScriptInt64Pair(ctx, c.rdb, acquireScript, []string{subscriptionSlotKey(purchaseID)}, maxConcurrency, c.slotTTLSeconds, requestID)
+	if err != nil {
+		return false, err
+	}
+	return result == 1, nil
+}
+
+func (c *concurrencyCache) ReleaseSubscriptionSlot(ctx context.Context, purchaseID int64, requestID string) error {
+	if purchaseID <= 0 {
+		return nil
+	}
+	return c.rdb.ZRem(ctx, subscriptionSlotKey(purchaseID), requestID).Err()
+}
+
+func (c *concurrencyCache) GetSubscriptionConcurrency(ctx context.Context, purchaseID int64) (int, error) {
+	if purchaseID <= 0 {
+		return 0, nil
+	}
+	return getCountScript.Run(ctx, c.rdb, []string{subscriptionSlotKey(purchaseID)}, c.slotTTLSeconds).Int()
 }
 
 func (c *concurrencyCache) TrackAPIKeySlot(ctx context.Context, apiKeyID int64, requestID string) error {

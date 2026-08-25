@@ -613,7 +613,15 @@ func TestAlreadyProcessedRecoversStaleRechargingLease(t *testing.T) {
 		OrderStatusRecharging,
 		time.Now().Add(-paymentFulfillmentLeaseDuration-time.Minute),
 	)
-	_, err := client.PaymentAuditLog.Create().
+	// This test asserts the legacy SUBSCRIPTION_ASSIGNED short-circuit, which
+	// only applies to orders with no PlanID; plan-backed orders fulfill into
+	// subscription_purchases instead.
+	order, err := client.PaymentOrder.UpdateOneID(order.ID).
+		ClearPlanID().
+		SetUpdatedAt(time.Now().Add(-paymentFulfillmentLeaseDuration - time.Minute)).
+		Save(ctx)
+	require.NoError(t, err)
+	_, err = client.PaymentAuditLog.Create().
 		SetOrderID(strconv.FormatInt(order.ID, 10)).
 		SetAction("SUBSCRIPTION_ASSIGNED").
 		SetDetail(`{"groupID":7,"validityDays":30}`).
@@ -710,6 +718,13 @@ func TestExecuteSubscriptionFulfillmentRecoversCommittedAssignmentWithoutExtendi
 	ensurePaymentAuditOrderActionUniqueIndex(t, ctx, client)
 	staleAt := time.Now().Add(-paymentFulfillmentLeaseDuration - time.Minute)
 	order := createPaymentFulfillmentSubscriptionOrder(t, ctx, client, OrderStatusRecharging, staleAt)
+	// Legacy user_subscriptions recovery only applies to orders with no PlanID.
+	// Plan-backed orders now always fulfill into subscription_purchases.
+	order, err := client.PaymentOrder.UpdateOneID(order.ID).
+		ClearPlanID().
+		SetUpdatedAt(staleAt).
+		Save(ctx)
+	require.NoError(t, err)
 
 	expiresAt := time.Now().Add(30 * 24 * time.Hour).Truncate(time.Second)
 	subRepo := newSubscriptionUserSubRepoStub()
@@ -843,7 +858,6 @@ func TestExecuteSubscriptionFulfillmentAppliesAffiliateRebate(t *testing.T) {
 		SetPaymentType(payment.TypeAlipay).
 		SetPaymentTradeNo("trade-sub-affiliate").
 		SetOrderType(payment.OrderTypeSubscription).
-		SetPlanID(99).
 		SetSubscriptionGroupID(7).
 		SetSubscriptionDays(30).
 		SetStatus(OrderStatusPaid).
@@ -929,7 +943,6 @@ func TestExecuteSubscriptionFulfillmentDoesNotDuplicateWorkAfterLegacySuccessAud
 		SetPaymentType(payment.TypeAlipay).
 		SetPaymentTradeNo("trade-sub-affiliate-idempotent").
 		SetOrderType(payment.OrderTypeSubscription).
-		SetPlanID(100).
 		SetSubscriptionGroupID(7).
 		SetSubscriptionDays(30).
 		SetStatus(OrderStatusPaid).

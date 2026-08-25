@@ -12,6 +12,7 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/Wei-Shaw/sub2api/ent/subscriptionplan"
+	"github.com/Wei-Shaw/sub2api/ent/subscriptionplangroup"
 )
 
 // SubscriptionPlanCreate is the builder for creating a SubscriptionPlan entity.
@@ -25,6 +26,20 @@ type SubscriptionPlanCreate struct {
 // SetGroupID sets the "group_id" field.
 func (_c *SubscriptionPlanCreate) SetGroupID(v int64) *SubscriptionPlanCreate {
 	_c.mutation.SetGroupID(v)
+	return _c
+}
+
+// SetTierCode sets the "tier_code" field.
+func (_c *SubscriptionPlanCreate) SetTierCode(v string) *SubscriptionPlanCreate {
+	_c.mutation.SetTierCode(v)
+	return _c
+}
+
+// SetNillableTierCode sets the "tier_code" field if the given value is not nil.
+func (_c *SubscriptionPlanCreate) SetNillableTierCode(v *string) *SubscriptionPlanCreate {
+	if v != nil {
+		_c.SetTierCode(*v)
+	}
 	return _c
 }
 
@@ -166,6 +181,76 @@ func (_c *SubscriptionPlanCreate) SetNillableSortOrder(v *int) *SubscriptionPlan
 	return _c
 }
 
+// SetConcurrencyEntitlement sets the "concurrency_entitlement" field.
+func (_c *SubscriptionPlanCreate) SetConcurrencyEntitlement(v int) *SubscriptionPlanCreate {
+	_c.mutation.SetConcurrencyEntitlement(v)
+	return _c
+}
+
+// SetNillableConcurrencyEntitlement sets the "concurrency_entitlement" field if the given value is not nil.
+func (_c *SubscriptionPlanCreate) SetNillableConcurrencyEntitlement(v *int) *SubscriptionPlanCreate {
+	if v != nil {
+		_c.SetConcurrencyEntitlement(*v)
+	}
+	return _c
+}
+
+// SetLifetimeQuotaUsd sets the "lifetime_quota_usd" field.
+func (_c *SubscriptionPlanCreate) SetLifetimeQuotaUsd(v float64) *SubscriptionPlanCreate {
+	_c.mutation.SetLifetimeQuotaUsd(v)
+	return _c
+}
+
+// SetNillableLifetimeQuotaUsd sets the "lifetime_quota_usd" field if the given value is not nil.
+func (_c *SubscriptionPlanCreate) SetNillableLifetimeQuotaUsd(v *float64) *SubscriptionPlanCreate {
+	if v != nil {
+		_c.SetLifetimeQuotaUsd(*v)
+	}
+	return _c
+}
+
+// SetDailyQuotaUsd sets the "daily_quota_usd" field.
+func (_c *SubscriptionPlanCreate) SetDailyQuotaUsd(v float64) *SubscriptionPlanCreate {
+	_c.mutation.SetDailyQuotaUsd(v)
+	return _c
+}
+
+// SetNillableDailyQuotaUsd sets the "daily_quota_usd" field if the given value is not nil.
+func (_c *SubscriptionPlanCreate) SetNillableDailyQuotaUsd(v *float64) *SubscriptionPlanCreate {
+	if v != nil {
+		_c.SetDailyQuotaUsd(*v)
+	}
+	return _c
+}
+
+// SetWeeklyQuotaUsd sets the "weekly_quota_usd" field.
+func (_c *SubscriptionPlanCreate) SetWeeklyQuotaUsd(v float64) *SubscriptionPlanCreate {
+	_c.mutation.SetWeeklyQuotaUsd(v)
+	return _c
+}
+
+// SetNillableWeeklyQuotaUsd sets the "weekly_quota_usd" field if the given value is not nil.
+func (_c *SubscriptionPlanCreate) SetNillableWeeklyQuotaUsd(v *float64) *SubscriptionPlanCreate {
+	if v != nil {
+		_c.SetWeeklyQuotaUsd(*v)
+	}
+	return _c
+}
+
+// SetMonthlyQuotaUsd sets the "monthly_quota_usd" field.
+func (_c *SubscriptionPlanCreate) SetMonthlyQuotaUsd(v float64) *SubscriptionPlanCreate {
+	_c.mutation.SetMonthlyQuotaUsd(v)
+	return _c
+}
+
+// SetNillableMonthlyQuotaUsd sets the "monthly_quota_usd" field if the given value is not nil.
+func (_c *SubscriptionPlanCreate) SetNillableMonthlyQuotaUsd(v *float64) *SubscriptionPlanCreate {
+	if v != nil {
+		_c.SetMonthlyQuotaUsd(*v)
+	}
+	return _c
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (_c *SubscriptionPlanCreate) SetCreatedAt(v time.Time) *SubscriptionPlanCreate {
 	_c.mutation.SetCreatedAt(v)
@@ -192,6 +277,21 @@ func (_c *SubscriptionPlanCreate) SetNillableUpdatedAt(v *time.Time) *Subscripti
 		_c.SetUpdatedAt(*v)
 	}
 	return _c
+}
+
+// AddGroupIDs adds the "groups" edge to the SubscriptionPlanGroup entity by IDs.
+func (_c *SubscriptionPlanCreate) AddGroupIDs(ids ...int64) *SubscriptionPlanCreate {
+	_c.mutation.AddGroupIDs(ids...)
+	return _c
+}
+
+// AddGroups adds the "groups" edges to the SubscriptionPlanGroup entity.
+func (_c *SubscriptionPlanCreate) AddGroups(v ...*SubscriptionPlanGroup) *SubscriptionPlanCreate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _c.AddGroupIDs(ids...)
 }
 
 // Mutation returns the SubscriptionPlanMutation object of the builder.
@@ -229,6 +329,10 @@ func (_c *SubscriptionPlanCreate) ExecX(ctx context.Context) {
 
 // defaults sets the default values of the builder before save.
 func (_c *SubscriptionPlanCreate) defaults() {
+	if _, ok := _c.mutation.TierCode(); !ok {
+		v := subscriptionplan.DefaultTierCode
+		_c.mutation.SetTierCode(v)
+	}
 	if _, ok := _c.mutation.Description(); !ok {
 		v := subscriptionplan.DefaultDescription
 		_c.mutation.SetDescription(v)
@@ -261,6 +365,26 @@ func (_c *SubscriptionPlanCreate) defaults() {
 		v := subscriptionplan.DefaultSortOrder
 		_c.mutation.SetSortOrder(v)
 	}
+	if _, ok := _c.mutation.ConcurrencyEntitlement(); !ok {
+		v := subscriptionplan.DefaultConcurrencyEntitlement
+		_c.mutation.SetConcurrencyEntitlement(v)
+	}
+	if _, ok := _c.mutation.LifetimeQuotaUsd(); !ok {
+		v := subscriptionplan.DefaultLifetimeQuotaUsd
+		_c.mutation.SetLifetimeQuotaUsd(v)
+	}
+	if _, ok := _c.mutation.DailyQuotaUsd(); !ok {
+		v := subscriptionplan.DefaultDailyQuotaUsd
+		_c.mutation.SetDailyQuotaUsd(v)
+	}
+	if _, ok := _c.mutation.WeeklyQuotaUsd(); !ok {
+		v := subscriptionplan.DefaultWeeklyQuotaUsd
+		_c.mutation.SetWeeklyQuotaUsd(v)
+	}
+	if _, ok := _c.mutation.MonthlyQuotaUsd(); !ok {
+		v := subscriptionplan.DefaultMonthlyQuotaUsd
+		_c.mutation.SetMonthlyQuotaUsd(v)
+	}
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		v := subscriptionplan.DefaultCreatedAt()
 		_c.mutation.SetCreatedAt(v)
@@ -275,6 +399,14 @@ func (_c *SubscriptionPlanCreate) defaults() {
 func (_c *SubscriptionPlanCreate) check() error {
 	if _, ok := _c.mutation.GroupID(); !ok {
 		return &ValidationError{Name: "group_id", err: errors.New(`ent: missing required field "SubscriptionPlan.group_id"`)}
+	}
+	if _, ok := _c.mutation.TierCode(); !ok {
+		return &ValidationError{Name: "tier_code", err: errors.New(`ent: missing required field "SubscriptionPlan.tier_code"`)}
+	}
+	if v, ok := _c.mutation.TierCode(); ok {
+		if err := subscriptionplan.TierCodeValidator(v); err != nil {
+			return &ValidationError{Name: "tier_code", err: fmt.Errorf(`ent: validator failed for field "SubscriptionPlan.tier_code": %w`, err)}
+		}
 	}
 	if _, ok := _c.mutation.Name(); !ok {
 		return &ValidationError{Name: "name", err: errors.New(`ent: missing required field "SubscriptionPlan.name"`)}
@@ -326,6 +458,21 @@ func (_c *SubscriptionPlanCreate) check() error {
 	if _, ok := _c.mutation.SortOrder(); !ok {
 		return &ValidationError{Name: "sort_order", err: errors.New(`ent: missing required field "SubscriptionPlan.sort_order"`)}
 	}
+	if _, ok := _c.mutation.ConcurrencyEntitlement(); !ok {
+		return &ValidationError{Name: "concurrency_entitlement", err: errors.New(`ent: missing required field "SubscriptionPlan.concurrency_entitlement"`)}
+	}
+	if _, ok := _c.mutation.LifetimeQuotaUsd(); !ok {
+		return &ValidationError{Name: "lifetime_quota_usd", err: errors.New(`ent: missing required field "SubscriptionPlan.lifetime_quota_usd"`)}
+	}
+	if _, ok := _c.mutation.DailyQuotaUsd(); !ok {
+		return &ValidationError{Name: "daily_quota_usd", err: errors.New(`ent: missing required field "SubscriptionPlan.daily_quota_usd"`)}
+	}
+	if _, ok := _c.mutation.WeeklyQuotaUsd(); !ok {
+		return &ValidationError{Name: "weekly_quota_usd", err: errors.New(`ent: missing required field "SubscriptionPlan.weekly_quota_usd"`)}
+	}
+	if _, ok := _c.mutation.MonthlyQuotaUsd(); !ok {
+		return &ValidationError{Name: "monthly_quota_usd", err: errors.New(`ent: missing required field "SubscriptionPlan.monthly_quota_usd"`)}
+	}
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "SubscriptionPlan.created_at"`)}
 	}
@@ -362,6 +509,10 @@ func (_c *SubscriptionPlanCreate) createSpec() (*SubscriptionPlan, *sqlgraph.Cre
 	if value, ok := _c.mutation.GroupID(); ok {
 		_spec.SetField(subscriptionplan.FieldGroupID, field.TypeInt64, value)
 		_node.GroupID = value
+	}
+	if value, ok := _c.mutation.TierCode(); ok {
+		_spec.SetField(subscriptionplan.FieldTierCode, field.TypeString, value)
+		_node.TierCode = value
 	}
 	if value, ok := _c.mutation.Name(); ok {
 		_spec.SetField(subscriptionplan.FieldName, field.TypeString, value)
@@ -407,6 +558,26 @@ func (_c *SubscriptionPlanCreate) createSpec() (*SubscriptionPlan, *sqlgraph.Cre
 		_spec.SetField(subscriptionplan.FieldSortOrder, field.TypeInt, value)
 		_node.SortOrder = value
 	}
+	if value, ok := _c.mutation.ConcurrencyEntitlement(); ok {
+		_spec.SetField(subscriptionplan.FieldConcurrencyEntitlement, field.TypeInt, value)
+		_node.ConcurrencyEntitlement = value
+	}
+	if value, ok := _c.mutation.LifetimeQuotaUsd(); ok {
+		_spec.SetField(subscriptionplan.FieldLifetimeQuotaUsd, field.TypeFloat64, value)
+		_node.LifetimeQuotaUsd = value
+	}
+	if value, ok := _c.mutation.DailyQuotaUsd(); ok {
+		_spec.SetField(subscriptionplan.FieldDailyQuotaUsd, field.TypeFloat64, value)
+		_node.DailyQuotaUsd = value
+	}
+	if value, ok := _c.mutation.WeeklyQuotaUsd(); ok {
+		_spec.SetField(subscriptionplan.FieldWeeklyQuotaUsd, field.TypeFloat64, value)
+		_node.WeeklyQuotaUsd = value
+	}
+	if value, ok := _c.mutation.MonthlyQuotaUsd(); ok {
+		_spec.SetField(subscriptionplan.FieldMonthlyQuotaUsd, field.TypeFloat64, value)
+		_node.MonthlyQuotaUsd = value
+	}
 	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(subscriptionplan.FieldCreatedAt, field.TypeTime, value)
 		_node.CreatedAt = value
@@ -414,6 +585,22 @@ func (_c *SubscriptionPlanCreate) createSpec() (*SubscriptionPlan, *sqlgraph.Cre
 	if value, ok := _c.mutation.UpdatedAt(); ok {
 		_spec.SetField(subscriptionplan.FieldUpdatedAt, field.TypeTime, value)
 		_node.UpdatedAt = value
+	}
+	if nodes := _c.mutation.GroupsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   subscriptionplan.GroupsTable,
+			Columns: []string{subscriptionplan.GroupsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(subscriptionplangroup.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
 	}
 	return _node, _spec
 }
@@ -482,6 +669,18 @@ func (u *SubscriptionPlanUpsert) UpdateGroupID() *SubscriptionPlanUpsert {
 // AddGroupID adds v to the "group_id" field.
 func (u *SubscriptionPlanUpsert) AddGroupID(v int64) *SubscriptionPlanUpsert {
 	u.Add(subscriptionplan.FieldGroupID, v)
+	return u
+}
+
+// SetTierCode sets the "tier_code" field.
+func (u *SubscriptionPlanUpsert) SetTierCode(v string) *SubscriptionPlanUpsert {
+	u.Set(subscriptionplan.FieldTierCode, v)
+	return u
+}
+
+// UpdateTierCode sets the "tier_code" field to the value that was provided on create.
+func (u *SubscriptionPlanUpsert) UpdateTierCode() *SubscriptionPlanUpsert {
+	u.SetExcluded(subscriptionplan.FieldTierCode)
 	return u
 }
 
@@ -647,6 +846,96 @@ func (u *SubscriptionPlanUpsert) AddSortOrder(v int) *SubscriptionPlanUpsert {
 	return u
 }
 
+// SetConcurrencyEntitlement sets the "concurrency_entitlement" field.
+func (u *SubscriptionPlanUpsert) SetConcurrencyEntitlement(v int) *SubscriptionPlanUpsert {
+	u.Set(subscriptionplan.FieldConcurrencyEntitlement, v)
+	return u
+}
+
+// UpdateConcurrencyEntitlement sets the "concurrency_entitlement" field to the value that was provided on create.
+func (u *SubscriptionPlanUpsert) UpdateConcurrencyEntitlement() *SubscriptionPlanUpsert {
+	u.SetExcluded(subscriptionplan.FieldConcurrencyEntitlement)
+	return u
+}
+
+// AddConcurrencyEntitlement adds v to the "concurrency_entitlement" field.
+func (u *SubscriptionPlanUpsert) AddConcurrencyEntitlement(v int) *SubscriptionPlanUpsert {
+	u.Add(subscriptionplan.FieldConcurrencyEntitlement, v)
+	return u
+}
+
+// SetLifetimeQuotaUsd sets the "lifetime_quota_usd" field.
+func (u *SubscriptionPlanUpsert) SetLifetimeQuotaUsd(v float64) *SubscriptionPlanUpsert {
+	u.Set(subscriptionplan.FieldLifetimeQuotaUsd, v)
+	return u
+}
+
+// UpdateLifetimeQuotaUsd sets the "lifetime_quota_usd" field to the value that was provided on create.
+func (u *SubscriptionPlanUpsert) UpdateLifetimeQuotaUsd() *SubscriptionPlanUpsert {
+	u.SetExcluded(subscriptionplan.FieldLifetimeQuotaUsd)
+	return u
+}
+
+// AddLifetimeQuotaUsd adds v to the "lifetime_quota_usd" field.
+func (u *SubscriptionPlanUpsert) AddLifetimeQuotaUsd(v float64) *SubscriptionPlanUpsert {
+	u.Add(subscriptionplan.FieldLifetimeQuotaUsd, v)
+	return u
+}
+
+// SetDailyQuotaUsd sets the "daily_quota_usd" field.
+func (u *SubscriptionPlanUpsert) SetDailyQuotaUsd(v float64) *SubscriptionPlanUpsert {
+	u.Set(subscriptionplan.FieldDailyQuotaUsd, v)
+	return u
+}
+
+// UpdateDailyQuotaUsd sets the "daily_quota_usd" field to the value that was provided on create.
+func (u *SubscriptionPlanUpsert) UpdateDailyQuotaUsd() *SubscriptionPlanUpsert {
+	u.SetExcluded(subscriptionplan.FieldDailyQuotaUsd)
+	return u
+}
+
+// AddDailyQuotaUsd adds v to the "daily_quota_usd" field.
+func (u *SubscriptionPlanUpsert) AddDailyQuotaUsd(v float64) *SubscriptionPlanUpsert {
+	u.Add(subscriptionplan.FieldDailyQuotaUsd, v)
+	return u
+}
+
+// SetWeeklyQuotaUsd sets the "weekly_quota_usd" field.
+func (u *SubscriptionPlanUpsert) SetWeeklyQuotaUsd(v float64) *SubscriptionPlanUpsert {
+	u.Set(subscriptionplan.FieldWeeklyQuotaUsd, v)
+	return u
+}
+
+// UpdateWeeklyQuotaUsd sets the "weekly_quota_usd" field to the value that was provided on create.
+func (u *SubscriptionPlanUpsert) UpdateWeeklyQuotaUsd() *SubscriptionPlanUpsert {
+	u.SetExcluded(subscriptionplan.FieldWeeklyQuotaUsd)
+	return u
+}
+
+// AddWeeklyQuotaUsd adds v to the "weekly_quota_usd" field.
+func (u *SubscriptionPlanUpsert) AddWeeklyQuotaUsd(v float64) *SubscriptionPlanUpsert {
+	u.Add(subscriptionplan.FieldWeeklyQuotaUsd, v)
+	return u
+}
+
+// SetMonthlyQuotaUsd sets the "monthly_quota_usd" field.
+func (u *SubscriptionPlanUpsert) SetMonthlyQuotaUsd(v float64) *SubscriptionPlanUpsert {
+	u.Set(subscriptionplan.FieldMonthlyQuotaUsd, v)
+	return u
+}
+
+// UpdateMonthlyQuotaUsd sets the "monthly_quota_usd" field to the value that was provided on create.
+func (u *SubscriptionPlanUpsert) UpdateMonthlyQuotaUsd() *SubscriptionPlanUpsert {
+	u.SetExcluded(subscriptionplan.FieldMonthlyQuotaUsd)
+	return u
+}
+
+// AddMonthlyQuotaUsd adds v to the "monthly_quota_usd" field.
+func (u *SubscriptionPlanUpsert) AddMonthlyQuotaUsd(v float64) *SubscriptionPlanUpsert {
+	u.Add(subscriptionplan.FieldMonthlyQuotaUsd, v)
+	return u
+}
+
 // SetUpdatedAt sets the "updated_at" field.
 func (u *SubscriptionPlanUpsert) SetUpdatedAt(v time.Time) *SubscriptionPlanUpsert {
 	u.Set(subscriptionplan.FieldUpdatedAt, v)
@@ -722,6 +1011,20 @@ func (u *SubscriptionPlanUpsertOne) AddGroupID(v int64) *SubscriptionPlanUpsertO
 func (u *SubscriptionPlanUpsertOne) UpdateGroupID() *SubscriptionPlanUpsertOne {
 	return u.Update(func(s *SubscriptionPlanUpsert) {
 		s.UpdateGroupID()
+	})
+}
+
+// SetTierCode sets the "tier_code" field.
+func (u *SubscriptionPlanUpsertOne) SetTierCode(v string) *SubscriptionPlanUpsertOne {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.SetTierCode(v)
+	})
+}
+
+// UpdateTierCode sets the "tier_code" field to the value that was provided on create.
+func (u *SubscriptionPlanUpsertOne) UpdateTierCode() *SubscriptionPlanUpsertOne {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.UpdateTierCode()
 	})
 }
 
@@ -911,6 +1214,111 @@ func (u *SubscriptionPlanUpsertOne) AddSortOrder(v int) *SubscriptionPlanUpsertO
 func (u *SubscriptionPlanUpsertOne) UpdateSortOrder() *SubscriptionPlanUpsertOne {
 	return u.Update(func(s *SubscriptionPlanUpsert) {
 		s.UpdateSortOrder()
+	})
+}
+
+// SetConcurrencyEntitlement sets the "concurrency_entitlement" field.
+func (u *SubscriptionPlanUpsertOne) SetConcurrencyEntitlement(v int) *SubscriptionPlanUpsertOne {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.SetConcurrencyEntitlement(v)
+	})
+}
+
+// AddConcurrencyEntitlement adds v to the "concurrency_entitlement" field.
+func (u *SubscriptionPlanUpsertOne) AddConcurrencyEntitlement(v int) *SubscriptionPlanUpsertOne {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.AddConcurrencyEntitlement(v)
+	})
+}
+
+// UpdateConcurrencyEntitlement sets the "concurrency_entitlement" field to the value that was provided on create.
+func (u *SubscriptionPlanUpsertOne) UpdateConcurrencyEntitlement() *SubscriptionPlanUpsertOne {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.UpdateConcurrencyEntitlement()
+	})
+}
+
+// SetLifetimeQuotaUsd sets the "lifetime_quota_usd" field.
+func (u *SubscriptionPlanUpsertOne) SetLifetimeQuotaUsd(v float64) *SubscriptionPlanUpsertOne {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.SetLifetimeQuotaUsd(v)
+	})
+}
+
+// AddLifetimeQuotaUsd adds v to the "lifetime_quota_usd" field.
+func (u *SubscriptionPlanUpsertOne) AddLifetimeQuotaUsd(v float64) *SubscriptionPlanUpsertOne {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.AddLifetimeQuotaUsd(v)
+	})
+}
+
+// UpdateLifetimeQuotaUsd sets the "lifetime_quota_usd" field to the value that was provided on create.
+func (u *SubscriptionPlanUpsertOne) UpdateLifetimeQuotaUsd() *SubscriptionPlanUpsertOne {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.UpdateLifetimeQuotaUsd()
+	})
+}
+
+// SetDailyQuotaUsd sets the "daily_quota_usd" field.
+func (u *SubscriptionPlanUpsertOne) SetDailyQuotaUsd(v float64) *SubscriptionPlanUpsertOne {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.SetDailyQuotaUsd(v)
+	})
+}
+
+// AddDailyQuotaUsd adds v to the "daily_quota_usd" field.
+func (u *SubscriptionPlanUpsertOne) AddDailyQuotaUsd(v float64) *SubscriptionPlanUpsertOne {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.AddDailyQuotaUsd(v)
+	})
+}
+
+// UpdateDailyQuotaUsd sets the "daily_quota_usd" field to the value that was provided on create.
+func (u *SubscriptionPlanUpsertOne) UpdateDailyQuotaUsd() *SubscriptionPlanUpsertOne {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.UpdateDailyQuotaUsd()
+	})
+}
+
+// SetWeeklyQuotaUsd sets the "weekly_quota_usd" field.
+func (u *SubscriptionPlanUpsertOne) SetWeeklyQuotaUsd(v float64) *SubscriptionPlanUpsertOne {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.SetWeeklyQuotaUsd(v)
+	})
+}
+
+// AddWeeklyQuotaUsd adds v to the "weekly_quota_usd" field.
+func (u *SubscriptionPlanUpsertOne) AddWeeklyQuotaUsd(v float64) *SubscriptionPlanUpsertOne {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.AddWeeklyQuotaUsd(v)
+	})
+}
+
+// UpdateWeeklyQuotaUsd sets the "weekly_quota_usd" field to the value that was provided on create.
+func (u *SubscriptionPlanUpsertOne) UpdateWeeklyQuotaUsd() *SubscriptionPlanUpsertOne {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.UpdateWeeklyQuotaUsd()
+	})
+}
+
+// SetMonthlyQuotaUsd sets the "monthly_quota_usd" field.
+func (u *SubscriptionPlanUpsertOne) SetMonthlyQuotaUsd(v float64) *SubscriptionPlanUpsertOne {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.SetMonthlyQuotaUsd(v)
+	})
+}
+
+// AddMonthlyQuotaUsd adds v to the "monthly_quota_usd" field.
+func (u *SubscriptionPlanUpsertOne) AddMonthlyQuotaUsd(v float64) *SubscriptionPlanUpsertOne {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.AddMonthlyQuotaUsd(v)
+	})
+}
+
+// UpdateMonthlyQuotaUsd sets the "monthly_quota_usd" field to the value that was provided on create.
+func (u *SubscriptionPlanUpsertOne) UpdateMonthlyQuotaUsd() *SubscriptionPlanUpsertOne {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.UpdateMonthlyQuotaUsd()
 	})
 }
 
@@ -1160,6 +1568,20 @@ func (u *SubscriptionPlanUpsertBulk) UpdateGroupID() *SubscriptionPlanUpsertBulk
 	})
 }
 
+// SetTierCode sets the "tier_code" field.
+func (u *SubscriptionPlanUpsertBulk) SetTierCode(v string) *SubscriptionPlanUpsertBulk {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.SetTierCode(v)
+	})
+}
+
+// UpdateTierCode sets the "tier_code" field to the value that was provided on create.
+func (u *SubscriptionPlanUpsertBulk) UpdateTierCode() *SubscriptionPlanUpsertBulk {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.UpdateTierCode()
+	})
+}
+
 // SetName sets the "name" field.
 func (u *SubscriptionPlanUpsertBulk) SetName(v string) *SubscriptionPlanUpsertBulk {
 	return u.Update(func(s *SubscriptionPlanUpsert) {
@@ -1346,6 +1768,111 @@ func (u *SubscriptionPlanUpsertBulk) AddSortOrder(v int) *SubscriptionPlanUpsert
 func (u *SubscriptionPlanUpsertBulk) UpdateSortOrder() *SubscriptionPlanUpsertBulk {
 	return u.Update(func(s *SubscriptionPlanUpsert) {
 		s.UpdateSortOrder()
+	})
+}
+
+// SetConcurrencyEntitlement sets the "concurrency_entitlement" field.
+func (u *SubscriptionPlanUpsertBulk) SetConcurrencyEntitlement(v int) *SubscriptionPlanUpsertBulk {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.SetConcurrencyEntitlement(v)
+	})
+}
+
+// AddConcurrencyEntitlement adds v to the "concurrency_entitlement" field.
+func (u *SubscriptionPlanUpsertBulk) AddConcurrencyEntitlement(v int) *SubscriptionPlanUpsertBulk {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.AddConcurrencyEntitlement(v)
+	})
+}
+
+// UpdateConcurrencyEntitlement sets the "concurrency_entitlement" field to the value that was provided on create.
+func (u *SubscriptionPlanUpsertBulk) UpdateConcurrencyEntitlement() *SubscriptionPlanUpsertBulk {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.UpdateConcurrencyEntitlement()
+	})
+}
+
+// SetLifetimeQuotaUsd sets the "lifetime_quota_usd" field.
+func (u *SubscriptionPlanUpsertBulk) SetLifetimeQuotaUsd(v float64) *SubscriptionPlanUpsertBulk {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.SetLifetimeQuotaUsd(v)
+	})
+}
+
+// AddLifetimeQuotaUsd adds v to the "lifetime_quota_usd" field.
+func (u *SubscriptionPlanUpsertBulk) AddLifetimeQuotaUsd(v float64) *SubscriptionPlanUpsertBulk {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.AddLifetimeQuotaUsd(v)
+	})
+}
+
+// UpdateLifetimeQuotaUsd sets the "lifetime_quota_usd" field to the value that was provided on create.
+func (u *SubscriptionPlanUpsertBulk) UpdateLifetimeQuotaUsd() *SubscriptionPlanUpsertBulk {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.UpdateLifetimeQuotaUsd()
+	})
+}
+
+// SetDailyQuotaUsd sets the "daily_quota_usd" field.
+func (u *SubscriptionPlanUpsertBulk) SetDailyQuotaUsd(v float64) *SubscriptionPlanUpsertBulk {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.SetDailyQuotaUsd(v)
+	})
+}
+
+// AddDailyQuotaUsd adds v to the "daily_quota_usd" field.
+func (u *SubscriptionPlanUpsertBulk) AddDailyQuotaUsd(v float64) *SubscriptionPlanUpsertBulk {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.AddDailyQuotaUsd(v)
+	})
+}
+
+// UpdateDailyQuotaUsd sets the "daily_quota_usd" field to the value that was provided on create.
+func (u *SubscriptionPlanUpsertBulk) UpdateDailyQuotaUsd() *SubscriptionPlanUpsertBulk {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.UpdateDailyQuotaUsd()
+	})
+}
+
+// SetWeeklyQuotaUsd sets the "weekly_quota_usd" field.
+func (u *SubscriptionPlanUpsertBulk) SetWeeklyQuotaUsd(v float64) *SubscriptionPlanUpsertBulk {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.SetWeeklyQuotaUsd(v)
+	})
+}
+
+// AddWeeklyQuotaUsd adds v to the "weekly_quota_usd" field.
+func (u *SubscriptionPlanUpsertBulk) AddWeeklyQuotaUsd(v float64) *SubscriptionPlanUpsertBulk {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.AddWeeklyQuotaUsd(v)
+	})
+}
+
+// UpdateWeeklyQuotaUsd sets the "weekly_quota_usd" field to the value that was provided on create.
+func (u *SubscriptionPlanUpsertBulk) UpdateWeeklyQuotaUsd() *SubscriptionPlanUpsertBulk {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.UpdateWeeklyQuotaUsd()
+	})
+}
+
+// SetMonthlyQuotaUsd sets the "monthly_quota_usd" field.
+func (u *SubscriptionPlanUpsertBulk) SetMonthlyQuotaUsd(v float64) *SubscriptionPlanUpsertBulk {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.SetMonthlyQuotaUsd(v)
+	})
+}
+
+// AddMonthlyQuotaUsd adds v to the "monthly_quota_usd" field.
+func (u *SubscriptionPlanUpsertBulk) AddMonthlyQuotaUsd(v float64) *SubscriptionPlanUpsertBulk {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.AddMonthlyQuotaUsd(v)
+	})
+}
+
+// UpdateMonthlyQuotaUsd sets the "monthly_quota_usd" field to the value that was provided on create.
+func (u *SubscriptionPlanUpsertBulk) UpdateMonthlyQuotaUsd() *SubscriptionPlanUpsertBulk {
+	return u.Update(func(s *SubscriptionPlanUpsert) {
+		s.UpdateMonthlyQuotaUsd()
 	})
 }
 

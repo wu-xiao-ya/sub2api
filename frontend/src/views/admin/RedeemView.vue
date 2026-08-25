@@ -314,11 +314,23 @@
             <!-- 订阅类型：显示分组选择和有效天数 -->
             <template v-if="generateForm.type === 'subscription'">
               <div>
+                <label class="input-label">{{ t('admin.redeem.selectPlan') }}</label>
+                <Select
+                  v-model="generateForm.plan_id"
+                  :options="subscriptionPlanOptions"
+                  :placeholder="t('admin.redeem.selectPlanPlaceholder')"
+                />
+                <p class="mt-1 text-xs text-gray-500 dark:text-dark-400">
+                  {{ t('admin.redeem.planHint') }}
+                </p>
+              </div>
+              <div>
                 <label class="input-label">{{ t('admin.redeem.selectGroup') }}</label>
                 <Select
                   v-model="generateForm.group_id"
                   :options="subscriptionGroupOptions"
                   :placeholder="t('admin.redeem.selectGroupPlaceholder')"
+                  :disabled="Boolean(generateForm.plan_id)"
                 >
                   <template #selected="{ option }">
                     <GroupBadge
@@ -353,6 +365,7 @@
                   max="365"
                   required
                   class="input"
+                  :disabled="Boolean(generateForm.plan_id)"
                 />
               </div>
             </template>
@@ -624,6 +637,7 @@ import type {
   SubscriptionType,
   BatchUpdateRedeemCodeFields
 } from '@/types'
+import type { SubscriptionPlan } from '@/types/payment'
 import type { Column } from '@/components/common/types'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import TablePageLayout from '@/components/layout/TablePageLayout.vue'
@@ -652,6 +666,7 @@ const showGenerateDialog = ref(false)
 const showResultDialog = ref(false)
 const generatedCodes = ref<RedeemCode[]>([])
 const subscriptionGroups = ref<Group[]>([])
+const subscriptionPlans = ref<SubscriptionPlan[]>([])
 
 // 订阅类型分组选项
 const subscriptionGroupOptions = computed(() => {
@@ -666,6 +681,15 @@ const subscriptionGroupOptions = computed(() => {
       rate: g.rate_multiplier
     }))
 })
+
+const subscriptionPlanOptions = computed(() =>
+  subscriptionPlans.value
+    .filter((plan) => plan.for_sale !== false)
+    .map((plan) => ({
+      value: plan.id,
+      label: `${plan.name} (${plan.tier_code || 'standard'})`
+    }))
+)
 
 const batchGroupOptions = computed(() => [
   { value: null, label: t('admin.redeem.clearGroup') },
@@ -832,6 +856,7 @@ const generateForm = reactive({
   value: 10,
   count: 1,
   group_id: null as number | null,
+  plan_id: null as number | null,
   validity_days: 30,
   expiry_option: 'never' as RedeemCodeExpiryOption,
   custom_expiry_days: 7
@@ -1019,8 +1044,8 @@ const buildBatchUpdateFields = (): BatchUpdateRedeemCodeFields | null => {
 
 const handleGenerateCodes = async () => {
   // 订阅类型必须选择分组
-  if (generateForm.type === 'subscription' && !generateForm.group_id) {
-    appStore.showError(t('admin.redeem.groupRequired'))
+  if (generateForm.type === 'subscription' && !generateForm.plan_id && !generateForm.group_id) {
+    appStore.showError(t('admin.redeem.groupOrPlanRequired'))
     return
   }
 
@@ -1038,13 +1063,15 @@ const handleGenerateCodes = async () => {
       generateForm.value,
       generateForm.type === 'subscription' ? generateForm.group_id : undefined,
       generateForm.type === 'subscription' ? generateForm.validity_days : undefined,
-      expiresInDays
+      expiresInDays,
+      generateForm.type === 'subscription' ? generateForm.plan_id : undefined
     )
     showGenerateDialog.value = false
     generatedCodes.value = result
     showResultDialog.value = true
     // 重置表单
     generateForm.group_id = null
+    generateForm.plan_id = null
     generateForm.validity_days = 30
     generateForm.expiry_option = 'never'
     generateForm.custom_expiry_days = 7
@@ -1177,9 +1204,19 @@ const loadSubscriptionGroups = async () => {
   }
 }
 
+const loadSubscriptionPlans = async () => {
+  try {
+    const response = await adminAPI.payment.getPlans()
+    subscriptionPlans.value = (response.data || []) as SubscriptionPlan[]
+  } catch (error) {
+    console.error('Error loading subscription plans:', error)
+  }
+}
+
 onMounted(() => {
   loadCodes()
   loadSubscriptionGroups()
+  loadSubscriptionPlans()
 })
 
 onUnmounted(() => {

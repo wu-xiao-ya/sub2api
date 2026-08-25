@@ -123,15 +123,25 @@ func (s *ChannelService) fillGlobalPricingFallback(models []SupportedModel) {
 		return
 	}
 	for i := range models {
-		if !pricingNeedsFallback(models[i].Pricing) {
-			continue
-		}
 		lp := s.pricingService.GetModelPricing(models[i].Name)
 		if lp == nil {
 			continue
 		}
+		if !pricingNeedsFallback(models[i].Pricing) && !liteLLMHasLongContextPricing(lp) {
+			continue
+		}
+		// Merge global metadata even when the channel has custom base prices.
+		// Channel prices remain authoritative; the long-context rule is only
+		// additional display information.
 		models[i].Pricing = synthesizePricingFromLiteLLM(lp, models[i].Pricing)
 	}
+}
+
+func liteLLMHasLongContextPricing(lp *LiteLLMModelPricing) bool {
+	return lp != nil &&
+		(lp.LongContextInputTokenThreshold > 0 ||
+			lp.LongContextInputCostMultiplier > 0 ||
+			lp.LongContextOutputCostMultiplier > 0)
 }
 
 // pricingNeedsFallback 判定一个 ChannelModelPricing 是否需要走全局回落。
@@ -169,31 +179,74 @@ func synthesizePricingFromLiteLLM(lp *LiteLLMModelPricing, existing *ChannelMode
 	if lp == nil {
 		return existing
 	}
+	if existing != nil && !pricingNeedsFallback(existing) && !liteLLMHasLongContextPricing(lp) {
+		return existing
+	}
+
+	var result ChannelModelPricing
+	if existing != nil {
+		result = existing.Clone()
+	}
 
 	mode := BillingModeToken
-	switch {
-	case existing != nil && existing.BillingMode != "":
-		mode = existing.BillingMode
-	case lp.Mode == "image_generation":
+	if result.BillingMode != "" {
+		mode = result.BillingMode
+	} else if lp.Mode == "image_generation" {
 		mode = BillingModeImage
 	}
+	result.BillingMode = mode
 
 	if mode == BillingModeImage || mode == BillingModePerRequest {
-		return &ChannelModelPricing{
-			BillingMode:      mode,
-			PerRequestPrice:  nonZeroPtr(lp.OutputCostPerImage),
-			ImageOutputPrice: nonZeroPtr(lp.OutputCostPerImageToken),
-			InputPrice:       nonZeroPtr(lp.InputCostPerToken),
-			OutputPrice:      nonZeroPtr(lp.OutputCostPerToken),
+		if result.PerRequestPrice == nil {
+			result.PerRequestPrice = nonZeroPtr(lp.OutputCostPerImage)
 		}
+		if result.ImageOutputPrice == nil {
+			result.ImageOutputPrice = nonZeroPtr(lp.OutputCostPerImageToken)
+		}
+		if result.InputPrice == nil {
+			result.InputPrice = nonZeroPtr(lp.InputCostPerToken)
+		}
+		if result.OutputPrice == nil {
+			result.OutputPrice = nonZeroPtr(lp.OutputCostPerToken)
+		}
+		mergeLongContextPricing(&result, lp)
+		return &result
 	}
-	return &ChannelModelPricing{
-		BillingMode:      mode,
-		InputPrice:       nonZeroPtr(lp.InputCostPerToken),
-		OutputPrice:      nonZeroPtr(lp.OutputCostPerToken),
-		CacheWritePrice:  nonZeroPtr(lp.CacheCreationInputTokenCost),
-		CacheReadPrice:   nonZeroPtr(lp.CacheReadInputTokenCost),
-		ImageOutputPrice: nonZeroPtr(lp.OutputCostPerImageToken),
+
+	if result.InputPrice == nil {
+		result.InputPrice = nonZeroPtr(lp.InputCostPerToken)
+	}
+	if result.OutputPrice == nil {
+		result.OutputPrice = nonZeroPtr(lp.OutputCostPerToken)
+	}
+	if result.CacheWritePrice == nil {
+		result.CacheWritePrice = nonZeroPtr(lp.CacheCreationInputTokenCost)
+	}
+	if result.CacheReadPrice == nil {
+		result.CacheReadPrice = nonZeroPtr(lp.CacheReadInputTokenCost)
+	}
+	if result.ImageOutputPrice == nil {
+		result.ImageOutputPrice = nonZeroPtr(lp.OutputCostPerImageToken)
+	}
+	mergeLongContextPricing(&result, lp)
+	return &result
+}
+
+func mergeLongContextPricing(dst *ChannelModelPricing, lp *LiteLLMModelPricing) {
+	if dst == nil || lp == nil {
+		return
+	}
+	if dst.LongContextInputTokenThreshold == nil && lp.LongContextInputTokenThreshold > 0 {
+		value := lp.LongContextInputTokenThreshold
+		dst.LongContextInputTokenThreshold = &value
+	}
+	if dst.LongContextInputCostMultiplier == nil && lp.LongContextInputCostMultiplier > 0 {
+		value := lp.LongContextInputCostMultiplier
+		dst.LongContextInputCostMultiplier = &value
+	}
+	if dst.LongContextOutputCostMultiplier == nil && lp.LongContextOutputCostMultiplier > 0 {
+		value := lp.LongContextOutputCostMultiplier
+		dst.LongContextOutputCostMultiplier = &value
 	}
 }
 

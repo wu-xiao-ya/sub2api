@@ -409,6 +409,7 @@ type RedeemCode struct {
 
 	GroupID      *int64 `json:"group_id"`
 	ValidityDays int    `json:"validity_days"`
+	PlanID       *int64 `json:"plan_id,omitempty"`
 
 	// Notes is only populated for admin_balance/admin_concurrency types
 	// so users can see why they were charged or credited
@@ -499,8 +500,9 @@ type UsageLog struct {
 	// UsageSource marks internal request origins such as channel_monitor.
 	UsageSource *string `json:"usage_source,omitempty"`
 
-	GroupID        *int64 `json:"group_id"`
-	SubscriptionID *int64 `json:"subscription_id"`
+	GroupID                *int64 `json:"group_id"`
+	SubscriptionID         *int64 `json:"subscription_id"`
+	SubscriptionPurchaseID *int64 `json:"subscription_purchase_id"`
 
 	InputTokens         int `json:"input_tokens"`
 	OutputTokens        int `json:"output_tokens"`

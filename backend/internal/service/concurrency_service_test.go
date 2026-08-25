@@ -60,6 +60,40 @@ type ingressLeaseCacheForTest struct {
 	releaseIngressCalls  int
 }
 
+type subscriptionConcurrencyCacheForTest struct {
+	stubConcurrencyCacheForTest
+	subscriptionResults      map[int64][]bool
+	subscriptionAcquireOrder []int64
+	subscriptionReleaseIDs   []int64
+	userAcquireCalls         int
+	userAcquireResult        bool
+}
+
+func (c *subscriptionConcurrencyCacheForTest) AcquireSubscriptionSlot(_ context.Context, purchaseID int64, _ int, _ string) (bool, error) {
+	c.subscriptionAcquireOrder = append(c.subscriptionAcquireOrder, purchaseID)
+	results := c.subscriptionResults[purchaseID]
+	if len(results) == 0 {
+		return false, nil
+	}
+	result := results[0]
+	c.subscriptionResults[purchaseID] = results[1:]
+	return result, nil
+}
+
+func (c *subscriptionConcurrencyCacheForTest) ReleaseSubscriptionSlot(_ context.Context, purchaseID int64, _ string) error {
+	c.subscriptionReleaseIDs = append(c.subscriptionReleaseIDs, purchaseID)
+	return nil
+}
+
+func (c *subscriptionConcurrencyCacheForTest) GetSubscriptionConcurrency(_ context.Context, _ int64) (int, error) {
+	return 0, nil
+}
+
+func (c *subscriptionConcurrencyCacheForTest) AcquireUserSlot(_ context.Context, _ int64, _ int, _ string) (bool, error) {
+	c.userAcquireCalls++
+	return c.userAcquireResult, nil
+}
+
 func (c *ingressLeaseCacheForTest) AcquireOpenAIWSIngressLease(ctx context.Context, apiKeyID int64, maxConnections int, leaseID string) (bool, error) {
 	c.acquireIngressCalls++
 	if c.acquireIngressFn != nil {
@@ -267,6 +301,138 @@ func TestAcquireUserSlot_UnlimitedConcurrency(t *testing.T) {
 	result, err := svc.AcquireUserSlot(context.Background(), 1, 0)
 	require.NoError(t, err)
 	require.True(t, result.Acquired)
+}
+
+func TestAcquirePlannedUserSlotUsesEarliestAvailableSubscription(t *testing.T) {
+	cache := &subscriptionConcurrencyCacheForTest{
+		subscriptionResults: map[int64][]bool{
+			11: {false},
+			22: {true},
+		},
+	}
+	svc := NewConcurrencyService(cache)
+	plan := &SubscriptionConcurrencyPlan{
+		UserID:                7,
+		UserLimit:             10,
+		HasSharedSubscription: true,
+		Entitlements: []SubscriptionConcurrencyEntitlement{
+			{PurchaseID: 11, Concurrency: 5},
+			{PurchaseID: 22, Concurrency: 10},
+		},
+	}
+
+	result, err := svc.AcquirePlannedUserSlot(context.Background(), plan)
+	require.NoError(t, err)
+	require.True(t, result.Acquired)
+	require.Equal(t, int64(22), result.SubscriptionPurchaseID)
+	require.False(t, result.UsedBalance)
+	require.Equal(t, []int64{11, 22}, cache.subscriptionAcquireOrder)
+	require.Zero(t, cache.userAcquireCalls)
+
+	result.ReleaseFunc()
+	require.Equal(t, []int64{22}, cache.subscriptionReleaseIDs)
+}
+
+func TestAcquirePlannedUserSlotZeroEntitlementsShareUserPool(t *testing.T) {
+	cache := &subscriptionConcurrencyCacheForTest{userAcquireResult: false}
+	svc := NewConcurrencyService(cache)
+	plan := &SubscriptionConcurrencyPlan{
+		UserID:                7,
+		UserLimit:             3,
+		HasSharedSubscription: true,
+		Entitlements: []SubscriptionConcurrencyEntitlement{
+			{PurchaseID: 11, Concurrency: 0},
+			{PurchaseID: 22, Concurrency: 0},
+		},
+	}
+
+	result, err := svc.AcquirePlannedUserSlot(context.Background(), plan)
+	require.NoError(t, err)
+	require.False(t, result.Acquired)
+	require.Equal(t, 1, cache.userAcquireCalls)
+	require.Empty(t, cache.subscriptionAcquireOrder)
+}
+
+func TestAcquirePlannedUserSlotZeroEntitlementInheritsUserLimit(t *testing.T) {
+	cache := &subscriptionConcurrencyCacheForTest{userAcquireResult: true}
+	svc := NewConcurrencyService(cache)
+	plan := &SubscriptionConcurrencyPlan{
+		UserID:                7,
+		UserLimit:             3,
+		HasSharedSubscription: true,
+		Entitlements: []SubscriptionConcurrencyEntitlement{
+			{PurchaseID: 11, Concurrency: 0},
+		},
+	}
+
+	result, err := svc.AcquirePlannedUserSlot(context.Background(), plan)
+	require.NoError(t, err)
+	require.True(t, result.Acquired)
+	require.False(t, result.UsedBalance)
+	require.Equal(t, int64(11), result.SubscriptionPurchaseID)
+	require.Equal(t, 1, cache.userAcquireCalls)
+	require.Empty(t, cache.subscriptionAcquireOrder)
+}
+
+func TestAcquirePlannedUserSlotDoesNotUseBalanceWithoutTopup(t *testing.T) {
+	cache := &subscriptionConcurrencyCacheForTest{
+		subscriptionResults: map[int64][]bool{11: {false}},
+		userAcquireResult:   true,
+	}
+	svc := NewConcurrencyService(cache)
+	plan := &SubscriptionConcurrencyPlan{
+		UserID:                7,
+		UserLimit:             10,
+		HasSharedSubscription: true,
+		Entitlements: []SubscriptionConcurrencyEntitlement{
+			{PurchaseID: 11, Concurrency: 5},
+		},
+	}
+
+	result, err := svc.AcquirePlannedUserSlot(context.Background(), plan)
+	require.NoError(t, err)
+	require.False(t, result.Acquired)
+	require.Zero(t, cache.userAcquireCalls)
+}
+
+func TestAcquirePlannedUserSlotUsesIndependentBalancePoolWhenEnabled(t *testing.T) {
+	cache := &subscriptionConcurrencyCacheForTest{
+		subscriptionResults: map[int64][]bool{11: {false}},
+		userAcquireResult:   true,
+	}
+	svc := NewConcurrencyService(cache)
+	plan := &SubscriptionConcurrencyPlan{
+		UserID:                 7,
+		UserLimit:              10,
+		HasSharedSubscription:  true,
+		AllowBalanceTopup:      true,
+		BalanceTopupPurchaseID: 11,
+		Entitlements: []SubscriptionConcurrencyEntitlement{
+			{PurchaseID: 11, Concurrency: 5, BalanceTopupEnabled: true},
+		},
+	}
+
+	result, err := svc.AcquirePlannedUserSlot(context.Background(), plan)
+	require.NoError(t, err)
+	require.True(t, result.Acquired)
+	require.True(t, result.UsedBalance)
+	require.Equal(t, int64(11), result.SubscriptionPurchaseID)
+	require.Equal(t, 1, cache.userAcquireCalls)
+}
+
+func TestAcquirePlannedUserSlotWithNoUsablePoolDoesNotFallBackImplicitly(t *testing.T) {
+	cache := &subscriptionConcurrencyCacheForTest{userAcquireResult: true}
+	svc := NewConcurrencyService(cache)
+	plan := &SubscriptionConcurrencyPlan{
+		UserID:                7,
+		UserLimit:             10,
+		HasSharedSubscription: true,
+	}
+
+	result, err := svc.AcquirePlannedUserSlot(context.Background(), plan)
+	require.NoError(t, err)
+	require.False(t, result.Acquired)
+	require.Zero(t, cache.userAcquireCalls)
 }
 
 func TestTrackAPIKeySlot_ReleaseDecrements(t *testing.T) {

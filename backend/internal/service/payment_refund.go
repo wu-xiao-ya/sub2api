@@ -257,16 +257,7 @@ func (s *PaymentService) PrepareRefund(ctx context.Context, oid int64, amt float
 func (s *PaymentService) prepDeduct(ctx context.Context, o *dbent.PaymentOrder, p *RefundPlan, force bool) *RefundResult {
 	if o.OrderType == payment.OrderTypeSubscription {
 		p.DeductionType = payment.DeductionTypeSubscription
-		if o.SubscriptionGroupID != nil && o.SubscriptionDays != nil {
-			p.SubDaysToDeduct = *o.SubscriptionDays
-			sub, err := s.subscriptionSvc.GetActiveSubscription(ctx, o.UserID, *o.SubscriptionGroupID)
-			if err == nil && sub != nil {
-				p.SubscriptionID = sub.ID
-			} else if !force {
-				return &RefundResult{Success: false, Warning: "cannot find active subscription for deduction, use force", RequireForce: true}
-			}
-		}
-		return nil
+		return s.prepSubscriptionDeduct(ctx, o, p, force)
 	}
 	u, err := s.userRepo.GetByID(ctx, o.UserID)
 	if err != nil {
@@ -278,6 +269,90 @@ func (s *PaymentService) prepDeduct(ctx context.Context, o *dbent.PaymentOrder, 
 	p.DeductionType = payment.DeductionTypeBalance
 	p.BalanceToDeduct = math.Min(p.RefundAmount, u.Balance)
 	return nil
+}
+
+// prepSubscriptionDeduct resolves what a subscription refund must withdraw.
+//
+// Two purchase targets exist, resolved in priority order:
+//
+//  1. The purchase this order created — keyed by (source='payment_order',
+//     source_id=order.id) — is the authoritative target for plan orders: it
+//     identifies the exact entitlement this payment granted, and full refunds
+//     revoke it entirely.
+//
+//  2. Historical orders completed before the purchase model have no such row.
+//     user_subscriptions is frozen by migration 233 and must never be written,
+//     so the migrated purchase is resolved instead: source=
+//     'legacy_user_subscription' pinned to the order's user/group through
+//     subscription_purchase_groups, preferring the legacy "payment order *id*"
+//     note when several candidates exist. The old day-deduction semantics
+//     (reduce expiry by SubscriptionDays, revoke on would-expire) are applied to
+//     that migrated purchase. Ambiguous attribution fails closed and requires
+//     force — never revokes an unrelated entitlement.
+func (s *PaymentService) prepSubscriptionDeduct(ctx context.Context, o *dbent.PaymentOrder, p *RefundPlan, force bool) *RefundResult {
+	if s.subscriptionSvc == nil {
+		if !force {
+			return &RefundResult{Success: false, Warning: "subscription service is unavailable for deduction, use force", RequireForce: true}
+		}
+		return nil
+	}
+
+	purchase, err := s.subscriptionSvc.FindPurchaseByPaymentOrder(ctx, o.ID)
+	switch {
+	case err == nil && purchase != nil:
+		p.PurchaseID = purchase.ID
+		p.PurchasePrior = purchase
+		p.PurchaseLegacyDeduct = false
+		// Day-deduction is not applicable to payment_order purchases:
+		// entitlement is withdrawn by a full status transition instead.
+		p.SubDaysToDeduct = 0
+		p.SubscriptionID = 0
+		return nil
+	case err != nil && !errors.Is(err, ErrSharedPurchaseNotFound):
+		if !force {
+			return &RefundResult{Success: false, Warning: "cannot resolve subscription purchase for refund: " + psErrMsg(err) + ", use force", RequireForce: true}
+		}
+		return nil
+	}
+
+	// No payment_order purchase: a historical order. Legacy fields are the
+	// signature of one fulfilled before the purchase model.
+	if o.SubscriptionGroupID == nil || o.SubscriptionDays == nil {
+		if !force {
+			return &RefundResult{Success: false, Warning: "subscription order has no purchase and no legacy subscription fields, use force", RequireForce: true}
+		}
+		return nil
+	}
+
+	legacy, lerr := s.subscriptionSvc.ResolveLegacyPurchaseForPaymentOrder(ctx, o.UserID, *o.SubscriptionGroupID, o.ID)
+	switch {
+	case lerr == nil && legacy != nil:
+		p.PurchaseID = legacy.ID
+		p.PurchasePrior = legacy
+		p.PurchaseLegacyDeduct = true
+		p.SubDaysToDeduct = *o.SubscriptionDays
+		p.SubscriptionID = 0
+		return nil
+	case errors.Is(lerr, ErrSharedPurchaseAmbiguous):
+		// Fail closed: attributing the wrong purchase would revoke an unrelated
+		// entitlement. Force deliberately proceeds WITHOUT touching a purchase,
+		// so even the operator escape hatch never mutates unverified rows.
+		if !force {
+			return &RefundResult{Success: false, Warning: "cannot attribute historical order to a migrated legacy purchase: " + psErrMsg(lerr) + "; resolution requires force and will skip entitlement withdrawal", RequireForce: true}
+		}
+		return nil
+	case lerr != nil && !errors.Is(lerr, ErrSharedPurchaseNotFound):
+		if !force {
+			return &RefundResult{Success: false, Warning: "cannot resolve migrated legacy purchase for refund: " + psErrMsg(lerr) + ", use force", RequireForce: true}
+		}
+		return nil
+	default:
+		// No migrated purchase covers this user/group: nothing can be attributed.
+		if !force {
+			return &RefundResult{Success: false, Warning: "no migrated legacy purchase found for historical subscription order (user=" + strconv.FormatInt(o.UserID, 10) + ", group=" + strconv.FormatInt(*o.SubscriptionGroupID, 10) + "); resolution requires force and will skip entitlement withdrawal", RequireForce: true}
+		}
+		return nil
+	}
 }
 
 func (s *PaymentService) ExecuteRefund(ctx context.Context, p *RefundPlan) (*RefundResult, error) {
@@ -301,26 +376,20 @@ func (s *PaymentService) ExecuteRefund(ctx context.Context, p *RefundPlan) (*Ref
 			p.BalanceToDeduct = 0
 		}
 	}
-	if p.DeductionType == payment.DeductionTypeSubscription && p.SubDaysToDeduct > 0 && p.SubscriptionID > 0 {
+	if p.DeductionType == payment.DeductionTypeSubscription && p.PurchaseID > 0 {
+		// withdrawPurchaseForRefund handles both target kinds: full revocation of
+		// a payment_order purchase and legacy day-deduction of a migrated
+		// legacy_user_subscription purchase. user_subscriptions is never written.
 		if !s.hasAuditLog(ctx, p.OrderID, "REFUND_ROLLBACK_FAILED") {
-			_, err := s.subscriptionSvc.ExtendSubscription(ctx, p.SubscriptionID, -p.SubDaysToDeduct)
-			if err != nil {
-				if errors.Is(err, ErrAdjustWouldExpire) {
-					// Deduction would expire the subscription — revoke it entirely
-					slog.Info("subscription deduction would expire, revoking", "orderID", p.OrderID, "subID", p.SubscriptionID, "days", p.SubDaysToDeduct)
-					if revokeErr := s.subscriptionSvc.RevokeSubscription(ctx, p.SubscriptionID); revokeErr != nil {
-						s.restoreStatus(ctx, p)
-						return nil, fmt.Errorf("revoke subscription: %w", revokeErr)
-					}
-				} else {
-					// Other errors (DB failure, not found) — abort refund
-					s.restoreStatus(ctx, p)
-					return nil, fmt.Errorf("deduct subscription days: %w", err)
-				}
+			if res, err := s.withdrawPurchaseForRefund(ctx, p); err != nil {
+				s.restoreStatus(ctx, p)
+				return nil, err
+			} else if res != nil {
+				s.restoreStatus(ctx, p)
+				return res, nil
 			}
 		} else {
-			slog.Warn("skipping subscription deduction on retry (previous rollback failed)", "orderID", p.OrderID)
-			p.SubDaysToDeduct = 0
+			slog.Warn("skipping purchase withdrawal on retry (previous rollback failed)", "orderID", p.OrderID, "purchaseID", p.PurchaseID)
 		}
 	}
 	resp, err := s.gwRefund(ctx, p)
@@ -472,7 +541,16 @@ func (s *PaymentService) refundFinalizePlan(o *dbent.PaymentOrder) *RefundPlan {
 		Reason:        reason,
 		Force:         o.ForceRefund,
 		DeductBalance: true,
-		DeductionType: payment.DeductionTypeBalance,
+		DeductionType: func() string {
+			// Subscription orders must finalize through the subscription path so
+			// the purchase is resolved and withdrawn; defaulting to the balance
+			// type would silently skip entitlement withdrawal on the pending
+			// refund confirmation path.
+			if o.OrderType == payment.OrderTypeSubscription {
+				return payment.DeductionTypeSubscription
+			}
+			return payment.DeductionTypeBalance
+		}(),
 		BalanceToDeduct: func() float64 {
 			if o.OrderType == payment.OrderTypeBalance {
 				return refundAmount
@@ -486,24 +564,23 @@ func (s *PaymentService) applyRefundFinalDeduction(ctx context.Context, p *Refun
 	if s.hasAuditLog(ctx, p.OrderID, "REFUND_SUCCESS") {
 		p.BalanceToDeduct = 0
 		p.SubDaysToDeduct = 0
+		p.PurchaseID = 0
 		return nil
+	}
+	if p.DeductionType == payment.DeductionTypeSubscription && p.PurchaseID > 0 {
+		if res, err := s.withdrawPurchaseForRefund(ctx, p); err != nil {
+			return err
+		} else if res != nil {
+			return errors.New(res.Warning)
+		}
 	}
 	if p.DeductionType == payment.DeductionTypeBalance && p.BalanceToDeduct > 0 {
 		if err := s.userRepo.DeductBalance(ctx, p.Order.UserID, p.BalanceToDeduct); err != nil {
 			return fmt.Errorf("deduction: %w", err)
 		}
 	}
-	if p.DeductionType == payment.DeductionTypeSubscription && p.SubDaysToDeduct > 0 && p.SubscriptionID > 0 {
-		if _, err := s.subscriptionSvc.ExtendSubscription(ctx, p.SubscriptionID, -p.SubDaysToDeduct); err != nil {
-			if errors.Is(err, ErrAdjustWouldExpire) {
-				if revokeErr := s.subscriptionSvc.RevokeSubscription(ctx, p.SubscriptionID); revokeErr != nil {
-					return fmt.Errorf("revoke subscription: %w", revokeErr)
-				}
-			} else {
-				return fmt.Errorf("deduct subscription days: %w", err)
-			}
-		}
-	}
+	// The subscription withdrawal already ran through withdrawPurchaseForRefund
+	// above; there is no legacy user_subscriptions path left on this route.
 	return nil
 }
 
@@ -629,14 +706,122 @@ func (s *PaymentService) RollbackRefund(ctx context.Context, p *RefundPlan, gErr
 			return false
 		}
 	}
-	if p.DeductionType == payment.DeductionTypeSubscription && p.SubDaysToDeduct > 0 && p.SubscriptionID > 0 {
-		if _, err := s.subscriptionSvc.ExtendSubscription(ctx, p.SubscriptionID, p.SubDaysToDeduct); err != nil {
-			slog.Error("[CRITICAL] subscription rollback failed", "orderID", p.OrderID, "subID", p.SubscriptionID, "days", p.SubDaysToDeduct, "error", err)
-			s.writeAuditLog(ctx, p.OrderID, "REFUND_ROLLBACK_FAILED", "admin", map[string]any{"gatewayError": psErrMsg(gErr), "rollbackError": psErrMsg(err), "subDaysDeducted": p.SubDaysToDeduct})
+	// Subscription withdrawal lives entirely on subscription_purchases: a
+	// migrated legacy purchase deducted by day is restored through
+	// RestorePurchaseState below, exactly like a revoked payment_order purchase.
+	// user_subscriptions has no rollback path here.
+	//
+	// Restore the purchase only when this attempt withdrew it. An
+	// already-revoked purchase was withdrawn by an earlier settled refund and
+	// must not be resurrected by this rollback.
+	if p.PurchaseWithdrawn && p.PurchasePrior != nil && s.subscriptionSvc != nil {
+		if _, err := s.subscriptionSvc.RestorePurchaseState(ctx, p.PurchasePrior); err != nil {
+			slog.Error("[CRITICAL] purchase rollback failed", "orderID", p.OrderID, "purchaseID", p.PurchaseID, "error", err)
+			s.writeAuditLog(ctx, p.OrderID, "REFUND_ROLLBACK_FAILED", "admin", map[string]any{
+				"gatewayError":  psErrMsg(gErr),
+				"rollbackError": psErrMsg(err),
+				"purchaseID":    p.PurchaseID,
+			})
 			return false
 		}
+		p.PurchaseWithdrawn = false
+		s.writeAuditLog(ctx, p.OrderID, "REFUND_PURCHASE_RESTORED", "admin", map[string]any{
+			"purchaseID":     p.PurchaseID,
+			"restoredStatus": p.PurchasePrior.Status,
+			"restoredExpiry": p.PurchasePrior.ExpiresAt,
+		})
 	}
 	return true
+}
+
+// refundIsFullOrderAmount reports whether the refund covers the whole order.
+// Currency tolerance is reused so float representation does not misclassify an
+// exact full refund as partial.
+func refundIsFullOrderAmount(p *RefundPlan) bool {
+	if p == nil || p.Order == nil {
+		return false
+	}
+	return p.RefundAmount >= p.Order.Amount-paymentAmountToleranceForCurrency(PaymentOrderCurrency(p.Order))
+}
+
+// withdrawPurchaseForRefund withdraws entitlement behind a successful full
+// subscription refund. Two withdrawal kinds exist, both idempotent:
+//
+//   - Payment-order purchases (PurchaseLegacyDeduct=false) are revoked entirely:
+//     status flips to 'revoked' and expiry is pulled back so the value shown to
+//     the user matches the refund.
+//
+//   - Migrated legacy_user_subscription purchases (PurchaseLegacyDeduct=true)
+//     keep the historical day-deduction semantics: expires_at shortens by
+//     SubDaysToDeduct and, if that would expire the purchase, it is revoked.
+//
+// Both capture exact prior status/expiry on the plan so a gateway failure or
+// pending-refund reversal restores precisely that state.
+//
+// Partial refunds deliberately do not touch the purchase either way. A purchase
+// is an all-or-nothing entitlement snapshot with no partial representation, so
+// withdrawing it for a partial refund would withdraw more than was refunded, and
+// silently prorating quotas or expiry would invent policy. The refund proceeds
+// and an audit row flags it for manual handling.
+func (s *PaymentService) withdrawPurchaseForRefund(ctx context.Context, p *RefundPlan) (*RefundResult, error) {
+	if s.subscriptionSvc == nil || p.PurchaseID <= 0 {
+		return nil, nil
+	}
+	if !refundIsFullOrderAmount(p) {
+		s.writeAuditLog(ctx, p.OrderID, "REFUND_PURCHASE_PARTIAL_SKIPPED", "admin", map[string]any{
+			"purchaseID":   p.PurchaseID,
+			"refundAmount": p.RefundAmount,
+			"orderAmount":  p.Order.Amount,
+			"refundDays":   p.SubDaysToDeduct,
+			"detail":       "partial subscription refund does not withdraw the purchase; adjust entitlement manually",
+		})
+		p.SubDaysToDeduct = 0
+		return nil, nil
+	}
+
+	var (
+		changed  bool
+		prior    *SharedPurchaseRecord
+		err      error
+		auditKey string
+		auditAt  map[string]any
+	)
+	if p.PurchaseLegacyDeduct {
+		changed, prior, err = s.subscriptionSvc.DeductLegacyPurchaseDays(ctx, p.PurchaseID, p.SubDaysToDeduct)
+		auditKey = "REFUND_PURCHASE_LEGACY_DAYS_DEDUCTED"
+		auditAt = map[string]any{
+			"purchaseID":    p.PurchaseID,
+			"refundDays":    p.SubDaysToDeduct,
+			"refundAmount":  p.RefundAmount,
+			"deductionType": p.DeductionType,
+		}
+		if err != nil {
+			return nil, fmt.Errorf("deduct legacy subscription purchase: %w", err)
+		}
+	} else {
+		changed, prior, err = s.subscriptionSvc.RevokePurchase(ctx, p.PurchaseID)
+		auditKey = "REFUND_PURCHASE_REVOKED"
+		auditAt = map[string]any{
+			"purchaseID":    p.PurchaseID,
+			"refundAmount":  p.RefundAmount,
+			"deductionType": p.DeductionType,
+		}
+		if err != nil {
+			return nil, fmt.Errorf("revoke subscription purchase: %w", err)
+		}
+	}
+	if prior != nil {
+		p.PurchasePrior = prior
+		auditAt["priorStatus"] = prior.Status
+		auditAt["priorExpiry"] = prior.ExpiresAt
+	}
+	p.PurchaseWithdrawn = changed
+	if changed {
+		s.writeAuditLog(ctx, p.OrderID, auditKey, "admin", auditAt)
+	} else {
+		slog.Info("subscription purchase already without entitlement, refund is idempotent", "orderID", p.OrderID, "purchaseID", p.PurchaseID, "legacyDeduct", p.PurchaseLegacyDeduct)
+	}
+	return nil, nil
 }
 
 func (s *PaymentService) restoreStatus(ctx context.Context, p *RefundPlan) {

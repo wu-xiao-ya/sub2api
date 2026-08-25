@@ -143,6 +143,23 @@ func (s *PaymentService) validateSubOrder(ctx context.Context, req CreateOrderRe
 	if err != nil || group.Status != payment.EntityStatusActive {
 		return nil, infraerrors.NotFound("GROUP_NOT_FOUND", "subscription group is no longer available")
 	}
+	groupIDs, _ := s.configService.ListPlanGroupIDs(ctx, plan)
+	explicitGroups := s.configService.HasExplicitPlanGroups(ctx, int64(plan.ID))
+	if explicitGroups {
+		if !strings.EqualFold(group.Platform, PlatformOpenAI) {
+			return nil, infraerrors.BadRequest("GROUP_PLATFORM_MISMATCH", "subscription plans only support openai groups")
+		}
+		for _, groupID := range groupIDs {
+			candidate, groupErr := s.groupRepo.GetByID(ctx, groupID)
+			if groupErr != nil || candidate == nil || candidate.Status != payment.EntityStatusActive {
+				return nil, infraerrors.NotFound("GROUP_NOT_FOUND", "a subscription group is no longer available")
+			}
+			if !strings.EqualFold(candidate.Platform, PlatformOpenAI) {
+				return nil, infraerrors.BadRequest("GROUP_PLATFORM_MISMATCH", "subscription plans only support openai groups")
+			}
+		}
+		return plan, nil
+	}
 	if !group.IsSubscriptionType() {
 		return nil, infraerrors.BadRequest("GROUP_TYPE_MISMATCH", "group is not a subscription type")
 	}

@@ -142,13 +142,16 @@ type PricingRemoteClient interface {
 // LiteLLMRawEntry 用于解析原始JSON数据
 type LiteLLMRawEntry struct {
 	InputCostPerToken                   *float64 `json:"input_cost_per_token"`
+	InputCostPerTokenAbove272K          *float64 `json:"input_cost_per_token_above_272k_tokens"`
 	InputCostPerTokenPriority           *float64 `json:"input_cost_per_token_priority"`
 	OutputCostPerToken                  *float64 `json:"output_cost_per_token"`
+	OutputCostPerTokenAbove272K         *float64 `json:"output_cost_per_token_above_272k_tokens"`
 	OutputCostPerTokenPriority          *float64 `json:"output_cost_per_token_priority"`
 	CacheCreationInputTokenCost         *float64 `json:"cache_creation_input_token_cost"`
 	CacheCreationInputTokenCostPriority *float64 `json:"cache_creation_input_token_cost_priority"`
 	CacheCreationInputTokenCostAbove1hr *float64 `json:"cache_creation_input_token_cost_above_1hr"`
 	CacheReadInputTokenCost             *float64 `json:"cache_read_input_token_cost"`
+	CacheReadInputTokenCostAbove272K    *float64 `json:"cache_read_input_token_cost_above_272k_tokens"`
 	CacheReadInputTokenCostPriority     *float64 `json:"cache_read_input_token_cost_priority"`
 	LongContextInputTokenThreshold      *int     `json:"long_context_input_token_threshold"`
 	LongContextInputCostMultiplier      *float64 `json:"long_context_input_cost_multiplier"`
@@ -485,6 +488,11 @@ func (s *PricingService) parsePricingData(body []byte) (map[string]*LiteLLMModel
 		if entry.LongContextOutputCostMultiplier != nil {
 			pricing.LongContextOutputCostMultiplier = *entry.LongContextOutputCostMultiplier
 		}
+		// LiteLLM has used two equivalent long-context schemas over time:
+		// newer entries expose explicit multipliers, while older OpenAI entries
+		// expose absolute prices above 272K tokens. Normalize the latter so
+		// downstream billing and available-channel display see one shape.
+		applyAbove272KLongContextPricing(pricing, &entry)
 		if entry.OutputCostPerImage != nil {
 			pricing.OutputCostPerImage = *entry.OutputCostPerImage
 		}
@@ -507,6 +515,37 @@ func (s *PricingService) parsePricingData(body []byte) (map[string]*LiteLLMModel
 	}
 
 	return result, nil
+}
+
+func applyAbove272KLongContextPricing(pricing *LiteLLMModelPricing, entry *LiteLLMRawEntry) {
+	if pricing == nil || entry == nil {
+		return
+	}
+	const threshold = 272000
+	if pricing.LongContextInputTokenThreshold == 0 &&
+		(entry.InputCostPerTokenAbove272K != nil ||
+			entry.OutputCostPerTokenAbove272K != nil ||
+			entry.CacheReadInputTokenCostAbove272K != nil) {
+		pricing.LongContextInputTokenThreshold = threshold
+	}
+	if pricing.LongContextInputCostMultiplier == 0 &&
+		entry.InputCostPerToken != nil && entry.InputCostPerTokenAbove272K != nil &&
+		*entry.InputCostPerToken > 0 {
+		pricing.LongContextInputCostMultiplier =
+			*entry.InputCostPerTokenAbove272K / *entry.InputCostPerToken
+	}
+	if pricing.LongContextInputCostMultiplier == 0 &&
+		entry.CacheReadInputTokenCost != nil && entry.CacheReadInputTokenCostAbove272K != nil &&
+		*entry.CacheReadInputTokenCost > 0 {
+		pricing.LongContextInputCostMultiplier =
+			*entry.CacheReadInputTokenCostAbove272K / *entry.CacheReadInputTokenCost
+	}
+	if pricing.LongContextOutputCostMultiplier == 0 &&
+		entry.OutputCostPerToken != nil && entry.OutputCostPerTokenAbove272K != nil &&
+		*entry.OutputCostPerToken > 0 {
+		pricing.LongContextOutputCostMultiplier =
+			*entry.OutputCostPerTokenAbove272K / *entry.OutputCostPerToken
+	}
 }
 
 // loadPricingData 从本地文件加载价格数据
@@ -571,7 +610,57 @@ func (s *PricingService) mergeFallbackPricingData(data map[string]*LiteLLMModelP
 	if merged > 0 {
 		logger.LegacyPrintf("service.pricing", "[Pricing] Merged %d fallback-only models", merged)
 	}
+	applyOfficialDeepSeekPricingOverrides(data)
 	return data
+}
+
+// applyOfficialDeepSeekPricingOverrides keeps DeepSeek's current official V4
+// card authoritative when the remote model-price repository lags behind the
+// provider's pricing page. The standard card uses the official off-peak rate;
+// peak-hour billing is a separate policy and must not be silently applied to
+// every request.
+func applyOfficialDeepSeekPricingOverrides(data map[string]*LiteLLMModelPricing) {
+	if data == nil {
+		return
+	}
+
+	const (
+		flashInput  = 0.22e-6
+		flashCached = 0.007e-6
+		flashOutput = 0.66e-6
+		proInput    = 0.66e-6
+		proCached   = 0.022e-6
+		proOutput   = 1.98e-6
+	)
+
+	apply := func(model string, input, cached, output float64) {
+		pricing := data[model]
+		if pricing == nil {
+			pricing = &LiteLLMModelPricing{
+				LiteLLMProvider:       "deepseek",
+				Mode:                  "chat",
+				SupportsPromptCaching: true,
+			}
+			data[model] = pricing
+		}
+		// Preserve metadata from the remote price catalog and override only the
+		// three token prices that are authoritative on DeepSeek's price card.
+		pricing.InputCostPerToken = input
+		pricing.OutputCostPerToken = output
+		pricing.CacheReadInputTokenCost = cached
+		if pricing.LiteLLMProvider == "" {
+			pricing.LiteLLMProvider = "deepseek"
+		}
+		if pricing.Mode == "" {
+			pricing.Mode = "chat"
+		}
+	}
+
+	apply("deepseek-v4-flash", flashInput, flashCached, flashOutput)
+	apply("deepseek-v4-pro", proInput, proCached, proOutput)
+	// Keep legacy aliases usable while applying the current compatible V4 card.
+	apply("deepseek-chat", flashInput, flashCached, flashOutput)
+	apply("deepseek-reasoner", flashInput, flashCached, flashOutput)
 }
 
 // useFallbackPricing 使用回退价格文件

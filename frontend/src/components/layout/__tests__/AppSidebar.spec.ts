@@ -52,6 +52,18 @@ describe('AppSidebar server monitor entry', () => {
   })
 })
 
+describe('AppSidebar legacy subscription cleanup', () => {
+  it('does not expose the removed admin subscriptions entry', () => {
+    expect(componentSource).not.toContain("path: '/admin/subscriptions'")
+  })
+
+  it('filters the migrated purchase custom menu id without hardcoding a base path', () => {
+    expect(componentSource).toContain("const OBSOLETE_CUSTOM_MENU_IDS = new Set(['migrated_purchase_subscription'])")
+    expect(componentSource).toContain('!OBSOLETE_CUSTOM_MENU_IDS.has(item.id)')
+    expect(componentSource).not.toContain('/starlightai/custom/')
+  })
+})
+
 describe('AppSidebar header styles', () => {
   it('does not clip the version badge dropdown', () => {
     const sidebarHeaderBlockMatch = styleSource.match(/\.sidebar-header\s*\{[\s\S]*?\n {2}\}/)

@@ -62,17 +62,15 @@ func (r *announcementReadRepoCapture) GetReadMapByUsers(ctx context.Context, ann
 	return map[int64]time.Time{}, nil
 }
 
-type announcementUserSubRepoCapture struct {
-	service.UserSubscriptionRepository
-}
-
 func newAnnouncementSortTestRouter(announcementRepo *announcementRepoCapture, userRepo *announcementUserRepoCapture) *gin.Engine {
 	gin.SetMode(gin.TestMode)
+	// The read-status handler path never resolves active groups with empty users,
+	// so a nil subscription service (no purchase-backed groups) is safe here.
 	svc := service.NewAnnouncementService(
 		announcementRepo,
 		&announcementReadRepoCapture{},
 		userRepo,
-		&announcementUserSubRepoCapture{},
+		nil,
 	)
 	handler := NewAnnouncementHandler(svc)
 	router := gin.New()

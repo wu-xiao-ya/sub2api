@@ -2,22 +2,44 @@ package handler
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )
 
 type concurrencyCacheMock struct {
-	acquireUserSlotFn     func(ctx context.Context, userID int64, maxConcurrency int, requestID string) (bool, error)
-	acquireAccountSlotFn  func(ctx context.Context, accountID int64, maxConcurrency int, requestID string) (bool, error)
-	acquireIngressLeaseFn func(ctx context.Context, apiKeyID int64, maxConnections int, leaseID string) (bool, error)
-	releaseIngressLeaseFn func(ctx context.Context, apiKeyID int64, leaseID string) error
-	releaseUserCalled     int32
-	releaseAccountCalled  int32
-	releaseIngressCalled  int32
+	acquireUserSlotFn         func(ctx context.Context, userID int64, maxConcurrency int, requestID string) (bool, error)
+	acquireAccountSlotFn      func(ctx context.Context, accountID int64, maxConcurrency int, requestID string) (bool, error)
+	acquireSubscriptionFn     func(ctx context.Context, purchaseID int64, maxConcurrency int, requestID string) (bool, error)
+	acquireIngressLeaseFn     func(ctx context.Context, apiKeyID int64, maxConnections int, leaseID string) (bool, error)
+	releaseIngressLeaseFn     func(ctx context.Context, apiKeyID int64, leaseID string) error
+	releaseUserCalled         int32
+	releaseAccountCalled      int32
+	releaseSubscriptionCalled int32
+	releaseIngressCalled      int32
+}
+
+func (m *concurrencyCacheMock) AcquireSubscriptionSlot(ctx context.Context, purchaseID int64, maxConcurrency int, requestID string) (bool, error) {
+	if m.acquireSubscriptionFn != nil {
+		return m.acquireSubscriptionFn(ctx, purchaseID, maxConcurrency, requestID)
+	}
+	return false, nil
+}
+
+func (m *concurrencyCacheMock) ReleaseSubscriptionSlot(context.Context, int64, string) error {
+	atomic.AddInt32(&m.releaseSubscriptionCalled, 1)
+	return nil
+}
+
+func (m *concurrencyCacheMock) GetSubscriptionConcurrency(context.Context, int64) (int, error) {
+	return 0, nil
 }
 
 func (m *concurrencyCacheMock) AcquireAccountSlot(ctx context.Context, accountID int64, maxConcurrency int, requestID string) (bool, error) {
@@ -149,4 +171,85 @@ func TestConcurrencyHelper_TryAcquireAccountSlot_NotAcquired(t *testing.T) {
 	require.False(t, acquired)
 	require.Nil(t, release)
 	require.Equal(t, int32(0), atomic.LoadInt32(&cache.releaseAccountCalled))
+}
+
+func TestConcurrencyHelper_PlannedSubscriptionSlotUpdatesBillingSource(t *testing.T) {
+	cache := &concurrencyCacheMock{
+		acquireSubscriptionFn: func(context.Context, int64, int, string) (bool, error) {
+			return true, nil
+		},
+		acquireUserSlotFn: func(context.Context, int64, int, string) (bool, error) {
+			t.Fatal("subscription request must not acquire a balance user slot")
+			return false, nil
+		},
+	}
+	helper := NewConcurrencyHelper(service.NewConcurrencyService(cache), SSEPingFormatNone, time.Second)
+	shared := &service.SharedSubscriptionEntitlement{ID: 22, UserID: 7}
+	legacy := shared.AsLegacySubscription(nil)
+	plan := &service.SubscriptionConcurrencyPlan{
+		UserID:                7,
+		UserLimit:             10,
+		HasSharedSubscription: true,
+		Entitlements: []service.SubscriptionConcurrencyEntitlement{
+			{PurchaseID: 22, Concurrency: 5, Subscription: legacy, SharedSubscription: shared},
+		},
+	}
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", nil)
+	c.Request = c.Request.WithContext(service.WithSubscriptionConcurrencyPlan(c.Request.Context(), plan))
+
+	release, acquired, err := helper.TryAcquireUserSlotForAPIKeyFromGin(c, 7, 10, 99)
+	require.NoError(t, err)
+	require.True(t, acquired)
+	require.NotNil(t, release)
+	got, ok := middleware2.GetSubscriptionFromContext(c)
+	require.True(t, ok)
+	require.Equal(t, int64(-22), got.ID)
+	source, ok := service.SubscriptionConcurrencySourceFromContext(c.Request.Context())
+	require.True(t, ok)
+	require.Equal(t, int64(22), source.PurchaseID)
+	require.False(t, source.UseBalance)
+
+	release()
+	require.Equal(t, int32(1), atomic.LoadInt32(&cache.releaseSubscriptionCalled))
+}
+
+func TestConcurrencyHelper_PlannedBalanceTopupClearsSubscriptionBilling(t *testing.T) {
+	cache := &concurrencyCacheMock{
+		acquireSubscriptionFn: func(context.Context, int64, int, string) (bool, error) {
+			return false, nil
+		},
+		acquireUserSlotFn: func(context.Context, int64, int, string) (bool, error) {
+			return true, nil
+		},
+	}
+	helper := NewConcurrencyHelper(service.NewConcurrencyService(cache), SSEPingFormatNone, time.Second)
+	shared := &service.SharedSubscriptionEntitlement{ID: 22, UserID: 7}
+	plan := &service.SubscriptionConcurrencyPlan{
+		UserID:                 7,
+		UserLimit:              10,
+		HasSharedSubscription:  true,
+		AllowBalanceTopup:      true,
+		BalanceTopupPurchaseID: 22,
+		Entitlements: []service.SubscriptionConcurrencyEntitlement{
+			{PurchaseID: 22, Concurrency: 5, BalanceTopupEnabled: true, Subscription: shared.AsLegacySubscription(nil), SharedSubscription: shared},
+		},
+	}
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", nil)
+	c.Request = c.Request.WithContext(service.WithSubscriptionConcurrencyPlan(c.Request.Context(), plan))
+	c.Set(string(middleware2.ContextKeySubscription), shared.AsLegacySubscription(nil))
+
+	release, acquired, err := helper.TryAcquireUserSlotForAPIKeyFromGin(c, 7, 10, 99)
+	require.NoError(t, err)
+	require.True(t, acquired)
+	require.NotNil(t, release)
+	_, ok := middleware2.GetSubscriptionFromContext(c)
+	require.False(t, ok)
+	source, ok := service.SubscriptionConcurrencySourceFromContext(c.Request.Context())
+	require.True(t, ok)
+	require.True(t, source.UseBalance)
+
+	release()
+	require.Equal(t, int32(1), atomic.LoadInt32(&cache.releaseUserCalled))
 }

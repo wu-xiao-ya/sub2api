@@ -1,73 +1,48 @@
 /**
  * Subscription Store
- * Global state management for user subscriptions with caching and deduplication
+ * Global state for shared subscription purchase snapshots with caching and deduplication.
  */
 
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import subscriptionsAPI from '@/api/subscriptions'
-import type { UserSubscription } from '@/types'
+import subscriptionsAPI, { type SharedSubscription } from '@/api/subscriptions'
 
-// Cache TTL: 60 seconds
 const CACHE_TTL_MS = 60_000
-
-// Request generation counter to invalidate stale in-flight responses
 let requestGeneration = 0
 
 export const useSubscriptionStore = defineStore('subscriptions', () => {
-  // State
-  const activeSubscriptions = ref<UserSubscription[]>([])
+  const sharedSubscriptions = ref<SharedSubscription[]>([])
+  // Compatibility alias for existing callers. Values are shared purchase snapshots.
+  const activeSubscriptions = computed((): SharedSubscription[] => sharedSubscriptions.value)
   const loading = ref(false)
   const loaded = ref(false)
   const lastFetchedAt = ref<number | null>(null)
-
-  // In-flight request deduplication
-  let activePromise: Promise<UserSubscription[]> | null = null
-
-  // Auto-refresh interval
+  let activePromise: Promise<SharedSubscription[]> | null = null
   let pollerInterval: ReturnType<typeof setInterval> | null = null
 
-  // Computed
-  const hasActiveSubscriptions = computed(() => activeSubscriptions.value.length > 0)
+  const hasSharedSubscriptions = computed(() => sharedSubscriptions.value.length > 0)
+  const hasActiveSubscriptions = hasSharedSubscriptions
 
-  /**
-   * Fetch active subscriptions with caching and deduplication
-   * @param force - Force refresh even if cache is valid
-   */
-  async function fetchActiveSubscriptions(force = false): Promise<UserSubscription[]> {
+  async function fetchSharedSubscriptions(force = false): Promise<SharedSubscription[]> {
     const now = Date.now()
-
-    // Return cached data if valid
-    if (
-      !force &&
-      loaded.value &&
-      lastFetchedAt.value &&
-      now - lastFetchedAt.value < CACHE_TTL_MS
-    ) {
-      return activeSubscriptions.value
+    if (!force && loaded.value && lastFetchedAt.value !== null && now - lastFetchedAt.value < CACHE_TTL_MS) {
+      return sharedSubscriptions.value
     }
-
-    // Return in-flight request if exists (deduplication)
-    if (activePromise && !force) {
-      return activePromise
-    }
+    if (activePromise && !force) return activePromise
 
     const currentGeneration = ++requestGeneration
-
-    // Start new request
     loading.value = true
-    const requestPromise = subscriptionsAPI
-      .getActiveSubscriptions()
-      .then((data) => {
+    const requestPromise = subscriptionsAPI.getMySharedSubscriptions()
+      .then((purchases) => {
         if (currentGeneration === requestGeneration) {
-          activeSubscriptions.value = data
+          sharedSubscriptions.value = purchases
           loaded.value = true
           lastFetchedAt.value = Date.now()
         }
-        return data
+        return purchases
       })
       .catch((error) => {
-        console.error('Failed to fetch active subscriptions:', error)
+        console.error('Failed to fetch shared subscriptions:', error)
         throw error
       })
       .finally(() => {
@@ -78,26 +53,19 @@ export const useSubscriptionStore = defineStore('subscriptions', () => {
       })
 
     activePromise = requestPromise
-
     return activePromise
   }
 
-  /**
-   * Start auto-refresh polling 
-   */
+  // Compatibility alias; this invokes the shared purchase fetch above.
+  const fetchActiveSubscriptions = fetchSharedSubscriptions
+
   function startPolling() {
     if (pollerInterval) return
-
     pollerInterval = setInterval(() => {
-      fetchActiveSubscriptions(true).catch((error) => {
-        console.error('Subscription polling failed:', error)
-      })
+      fetchSharedSubscriptions(true).catch((error) => console.error('Subscription polling failed:', error))
     }, 5 * 60 * 1000)
   }
 
-  /**
-   * Stop auto-refresh polling
-   */
   function stopPolling() {
     if (pollerInterval) {
       clearInterval(pollerInterval)
@@ -105,36 +73,30 @@ export const useSubscriptionStore = defineStore('subscriptions', () => {
     }
   }
 
-  /**
-   * Clear all subscription data and stop polling
-   */
   function clear() {
     requestGeneration++
     activePromise = null
-    activeSubscriptions.value = []
+    sharedSubscriptions.value = []
     loaded.value = false
     lastFetchedAt.value = null
     stopPolling()
   }
 
-  /**
-   * Invalidate cache (force next fetch to reload)
-   */
   function invalidateCache() {
     lastFetchedAt.value = null
   }
 
   return {
-    // State
+    sharedSubscriptions,
     activeSubscriptions,
     loading,
+    hasSharedSubscriptions,
     hasActiveSubscriptions,
-
-    // Actions
+    fetchSharedSubscriptions,
     fetchActiveSubscriptions,
     startPolling,
     stopPolling,
     clear,
-    invalidateCache
+    invalidateCache,
   }
 })

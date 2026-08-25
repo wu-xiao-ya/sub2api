@@ -313,6 +313,9 @@ export default {
       failedToCopy: '复制失败',
       selectGroup: '选择分组',
       selectGroupPlaceholder: '选择订阅分组',
+      selectPlan: '选择套餐',
+      selectPlanPlaceholder: '选择共享订阅套餐',
+      planHint: '选择套餐后将使用套餐保存的分组清单和额度快照。',
       validityDays: '有效天数',
       codeExpiry: '兑换码过期',
       neverExpires: '永不过期',
@@ -321,6 +324,7 @@ export default {
       customExpiryDays: '自定义天数',
       expiryDaysRequired: '请输入有效的过期天数',
       groupRequired: '请选择订阅分组',
+      groupOrPlanRequired: '请选择订阅分组或套餐',
       days: '天',
       status: {
         unused: '未使用',
@@ -631,6 +635,44 @@ export default {
           canceled: '已取消'
         }
       }
+    },
+
+    subscriptionPurchases: {
+      title: '订阅购买记录',
+      description: '统一管理购买快照，旧原生订阅仅保留历史审计。',
+      grantTitle: '按套餐发放',
+      grantHint: '输入一个或多个用户 ID，套餐授权分组会完整写入快照。',
+      userIds: '用户 ID',
+      userIdsPlaceholder: '例如 1001,1002',
+      plan: '套餐',
+      selectPlan: '请选择套餐',
+      notes: '备注',
+      grant: '发放',
+      bulkGrant: '批量发放',
+      keyword: '邮箱、用户名或购买 ID',
+      userId: '用户 ID',
+      platform: '平台',
+      allStatuses: '全部状态',
+      id: '购买 ID',
+      user: '用户',
+      groups: '授权分组',
+      statusLabel: '状态',
+      usage: '额度 / 并发',
+      concurrency: '并发',
+      unlimited: '不限',
+      empty: '暂无购买记录',
+      total: '共 {count} 条',
+      loadFailed: '加载购买记录失败',
+      grantSuccess: '订阅已发放',
+      grantFailed: '订阅发放失败',
+      actionFailed: '操作失败',
+      extend: '延期',
+      extendPrompt: '请输入延期天数，可输入负数缩短：',
+      revoke: '撤销',
+      restore: '恢复',
+      resetQuota: '重置额度',
+      status: { active: '有效', revoked: '已撤销', suspended: '已暂停' },
+      confirm: { revoke: '确定撤销这条购买记录吗？', restore: '确定恢复这条购买记录吗？', resetQuota: '确定重置日、周、月额度吗？' }
     },
 
     // Ops Monitoring

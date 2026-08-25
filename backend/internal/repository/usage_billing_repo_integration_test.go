@@ -91,7 +91,7 @@ func TestUsageBillingRepositoryApply_DeduplicatesSubscriptionBilling(t *testing.
 	})
 	group := mustCreateGroup(t, client, &service.Group{
 		Name:             "usage-billing-group-" + uuid.NewString(),
-		Platform:         service.PlatformAnthropic,
+		Platform:         service.PlatformOpenAI,
 		SubscriptionType: service.SubscriptionTypeSubscription,
 	})
 	apiKey := mustCreateApiKey(t, client, &service.APIKey{
@@ -100,32 +100,59 @@ func TestUsageBillingRepositoryApply_DeduplicatesSubscriptionBilling(t *testing.
 		Key:     "sk-usage-billing-sub-" + uuid.NewString(),
 		Name:    "billing-sub",
 	})
-	subscription := mustCreateSubscription(t, client, &service.UserSubscription{
-		UserID:  user.ID,
-		GroupID: group.ID,
-	})
+
+	// 创建有效的订阅购买记录
+	now := time.Now().UTC()
+	purchase, err := client.SubscriptionPurchase.Create().
+		SetUserID(user.ID).
+		SetName("Integration Test Package").
+		SetTierCode("standard").
+		SetStartsAt(now.Add(-time.Hour)).
+		SetExpiresAt(now.AddDate(0, 1, 0)).
+		SetStatus(service.SubscriptionStatusActive).
+		SetSource("test").
+		Save(ctx)
+	require.NoError(t, err)
+	purchaseID := purchase.ID
+
+	// 创建授权分组记录
+	_, err = client.SubscriptionPurchaseGroup.Create().
+		SetPurchaseID(purchaseID).
+		SetGroupID(group.ID).
+		SetGroupName(group.Name).
+		SetPlatform(string(service.PlatformOpenAI)).
+		Save(ctx)
+	require.NoError(t, err)
 
 	requestID := uuid.NewString()
 	cmd := &service.UsageBillingCommand{
-		RequestID:        requestID,
-		APIKeyID:         apiKey.ID,
-		UserID:           user.ID,
-		AccountID:        0,
-		SubscriptionID:   &subscription.ID,
-		SubscriptionCost: 2.5,
+		RequestID:              requestID,
+		APIKeyID:               apiKey.ID,
+		UserID:                 user.ID,
+		AccountID:              0,
+		SubscriptionPurchaseID: &purchaseID,
+		SubscriptionCost:       2.5,
 	}
 
 	result1, err := repo.Apply(ctx, cmd)
 	require.NoError(t, err)
-	require.True(t, result1.Applied)
+	require.True(t, result1.Applied, "First apply should succeed")
 
 	result2, err := repo.Apply(ctx, cmd)
 	require.NoError(t, err)
-	require.False(t, result2.Applied)
+	require.False(t, result2.Applied, "Second apply should be deduplicated")
 
-	var dailyUsage float64
-	require.NoError(t, integrationDB.QueryRowContext(ctx, "SELECT daily_usage_usd FROM user_subscriptions WHERE id = $1", subscription.ID).Scan(&dailyUsage))
-	require.InDelta(t, 2.5, dailyUsage, 0.000001)
+	// 验证订阅购买记录的用量增加
+	var lifetimeUsage, dailyUsage, weeklyUsage, monthlyUsage float64
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `
+		SELECT lifetime_usage_usd, daily_usage_usd, weekly_usage_usd, monthly_usage_usd
+		FROM subscription_purchases WHERE id = $1
+	`, purchaseID).Scan(&lifetimeUsage, &dailyUsage, &weeklyUsage, &monthlyUsage))
+
+	require.InDelta(t, 2.5, lifetimeUsage, 0.000001, "Lifetime usage should be incremented")
+	require.InDelta(t, 2.5, dailyUsage, 0.000001, "Daily usage should be incremented")
+	require.InDelta(t, 2.5, weeklyUsage, 0.000001, "Weekly usage should be incremented")
+	require.InDelta(t, 2.5, monthlyUsage, 0.000001, "Monthly usage should be incremented")
 }
 
 func TestUsageBillingRepositoryApply_RequestFingerprintConflict(t *testing.T) {

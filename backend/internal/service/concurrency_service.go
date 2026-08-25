@@ -55,6 +55,16 @@ type ConcurrencyCache interface {
 	CleanupStaleProcessSlots(ctx context.Context, activeRequestPrefix string) error
 }
 
+// SubscriptionConcurrencyCache is intentionally optional so older test
+// doubles and non-production cache implementations keep the legacy user-slot
+// behavior. Production Redis supports this interface with an independent key
+// namespace.
+type SubscriptionConcurrencyCache interface {
+	AcquireSubscriptionSlot(ctx context.Context, purchaseID int64, maxConcurrency int, requestID string) (bool, error)
+	ReleaseSubscriptionSlot(ctx context.Context, purchaseID int64, requestID string) error
+	GetSubscriptionConcurrency(ctx context.Context, purchaseID int64) (int, error)
+}
+
 type APIKeyConcurrencyCache interface {
 	TrackAPIKeySlot(ctx context.Context, apiKeyID int64, requestID string) error
 	ReleaseAPIKeySlot(ctx context.Context, apiKeyID int64, requestID string) error
@@ -308,8 +318,12 @@ func (s *ConcurrencyService) SetAccountLoadBatchCacheTTL(ttl time.Duration) {
 
 // AcquireResult represents the result of acquiring a concurrency slot
 type AcquireResult struct {
-	Acquired    bool
-	ReleaseFunc func() // Must be called when done (typically via defer)
+	Acquired               bool
+	ReleaseFunc            func() // Must be called when done (typically via defer)
+	SubscriptionPurchaseID int64
+	UsedBalance            bool
+	Subscription           *UserSubscription
+	SharedSubscription     *SharedSubscriptionEntitlement
 }
 
 type AccountWithConcurrency struct {
@@ -334,6 +348,124 @@ type UserLoadInfo struct {
 	CurrentConcurrency int
 	WaitingCount       int
 	LoadRate           int // 0-100+ (percent)
+}
+
+// SubscriptionConcurrencyEntitlement is the request-time concurrency snapshot
+// for one purchased subscription. The slice is ordered by expiry and purchase
+// ID so allocation is deterministic.
+type SubscriptionConcurrencyEntitlement struct {
+	PurchaseID          int64
+	Concurrency         int
+	BalanceTopupEnabled bool
+	ExpiresAt           time.Time
+	Subscription        *UserSubscription
+	SharedSubscription  *SharedSubscriptionEntitlement
+}
+
+type SubscriptionConcurrencyPlan struct {
+	UserID                 int64
+	GroupID                int64
+	UserLimit              int
+	HasSharedSubscription  bool
+	AllowBalanceTopup      bool
+	BalanceTopupPurchaseID int64
+	Entitlements           []SubscriptionConcurrencyEntitlement
+}
+
+type subscriptionConcurrencyContextKey struct{}
+type subscriptionConcurrencySourceContextKey struct{}
+
+type SubscriptionConcurrencySource struct {
+	PurchaseID int64
+	UseBalance bool
+}
+
+func WithSubscriptionConcurrencyPlan(ctx context.Context, plan *SubscriptionConcurrencyPlan) context.Context {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if plan == nil {
+		return context.WithValue(ctx, subscriptionConcurrencyContextKey{}, (*SubscriptionConcurrencyPlan)(nil))
+	}
+	copyPlan := *plan
+	copyPlan.Entitlements = append([]SubscriptionConcurrencyEntitlement(nil), plan.Entitlements...)
+	return context.WithValue(ctx, subscriptionConcurrencyContextKey{}, &copyPlan)
+}
+
+func SubscriptionConcurrencyPlanFromContext(ctx context.Context) (*SubscriptionConcurrencyPlan, bool) {
+	if ctx == nil {
+		return nil, false
+	}
+	plan, ok := ctx.Value(subscriptionConcurrencyContextKey{}).(*SubscriptionConcurrencyPlan)
+	return plan, ok && plan != nil && plan.HasSharedSubscription
+}
+
+func WithSubscriptionConcurrencySource(ctx context.Context, source SubscriptionConcurrencySource) context.Context {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return context.WithValue(ctx, subscriptionConcurrencySourceContextKey{}, source)
+}
+
+func SubscriptionConcurrencySourceFromContext(ctx context.Context) (SubscriptionConcurrencySource, bool) {
+	if ctx == nil {
+		return SubscriptionConcurrencySource{}, false
+	}
+	source, ok := ctx.Value(subscriptionConcurrencySourceContextKey{}).(SubscriptionConcurrencySource)
+	return source, ok && source.PurchaseID > 0
+}
+
+// AcquirePlannedUserSlot tries subscription pools in plan order, then the
+// user's independent balance pool only when at least one authorized purchase
+// explicitly enables balance top-up.
+func (s *ConcurrencyService) AcquirePlannedUserSlot(ctx context.Context, plan *SubscriptionConcurrencyPlan) (*AcquireResult, error) {
+	if plan == nil {
+		return nil, errors.New("subscription concurrency plan is unavailable")
+	}
+	inheritedPoolTried := false
+	for _, entitlement := range plan.Entitlements {
+		var (
+			result *AcquireResult
+			err    error
+		)
+		if entitlement.Concurrency > 0 {
+			result, err = s.AcquireSubscriptionSlot(ctx, entitlement.PurchaseID, entitlement.Concurrency)
+		} else {
+			// A zero purchase entitlement inherits the user's concurrency ceiling.
+			// Treating zero as an unlimited purchase pool would silently expand
+			// legacy entitlements during the user_subscriptions migration. Multiple
+			// inherited entitlements share one user pool, so only try it once.
+			if inheritedPoolTried {
+				continue
+			}
+			inheritedPoolTried = true
+			result, err = s.AcquireUserSlot(ctx, plan.UserID, plan.UserLimit)
+		}
+		if err != nil {
+			return nil, err
+		}
+		if result.Acquired {
+			result.SubscriptionPurchaseID = entitlement.PurchaseID
+			result.Subscription = entitlement.Subscription
+			result.SharedSubscription = entitlement.SharedSubscription
+			return result, nil
+		}
+	}
+	if plan.AllowBalanceTopup {
+		result, err := s.AcquireUserSlot(ctx, plan.UserID, plan.UserLimit)
+		if err != nil {
+			return nil, err
+		}
+		if result.Acquired {
+			result.SubscriptionPurchaseID = plan.BalanceTopupPurchaseID
+			if result.SubscriptionPurchaseID == 0 && len(plan.Entitlements) > 0 {
+				result.SubscriptionPurchaseID = plan.Entitlements[0].PurchaseID
+			}
+			result.UsedBalance = true
+			return result, nil
+		}
+	}
+	return &AcquireResult{Acquired: false}, nil
 }
 
 // AcquireAccountSlot attempts to acquire a concurrency slot for an account.
@@ -411,6 +543,39 @@ func (s *ConcurrencyService) AcquireUserSlot(ctx context.Context, userID int64, 
 	return &AcquireResult{
 		Acquired:    false,
 		ReleaseFunc: nil,
+	}, nil
+}
+
+// AcquireSubscriptionSlot acquires a slot from a purchase-specific pool. It
+// never touches concurrency:user:{userID}.
+func (s *ConcurrencyService) AcquireSubscriptionSlot(ctx context.Context, purchaseID int64, maxConcurrency int) (*AcquireResult, error) {
+	if maxConcurrency <= 0 {
+		return &AcquireResult{Acquired: true, ReleaseFunc: func() {}}, nil
+	}
+	if s == nil || s.cache == nil {
+		return nil, errors.New("subscription concurrency cache is unavailable")
+	}
+	cache, ok := s.cache.(SubscriptionConcurrencyCache)
+	if !ok {
+		return nil, errors.New("subscription concurrency cache is unsupported")
+	}
+	requestID := generateRequestID()
+	acquired, err := cache.AcquireSubscriptionSlot(ctx, purchaseID, maxConcurrency, requestID)
+	if err != nil {
+		return nil, err
+	}
+	if !acquired {
+		return &AcquireResult{Acquired: false}, nil
+	}
+	return &AcquireResult{
+		Acquired: true,
+		ReleaseFunc: func() {
+			bgCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			if err := cache.ReleaseSubscriptionSlot(bgCtx, purchaseID, requestID); err != nil {
+				logger.LegacyPrintf("service.concurrency", "Warning: failed to release subscription slot for %d (req=%s): %v", purchaseID, requestID, err)
+			}
+		},
 	}, nil
 }
 

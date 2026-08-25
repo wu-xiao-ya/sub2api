@@ -19,6 +19,8 @@ type SubscriptionPlan struct {
 	ID int64 `json:"id,omitempty"`
 	// GroupID holds the value of the "group_id" field.
 	GroupID int64 `json:"group_id,omitempty"`
+	// TierCode holds the value of the "tier_code" field.
+	TierCode string `json:"tier_code,omitempty"`
 	// Name holds the value of the "name" field.
 	Name string `json:"name,omitempty"`
 	// Description holds the value of the "description" field.
@@ -41,11 +43,42 @@ type SubscriptionPlan struct {
 	ForSale bool `json:"for_sale,omitempty"`
 	// SortOrder holds the value of the "sort_order" field.
 	SortOrder int `json:"sort_order,omitempty"`
+	// ConcurrencyEntitlement holds the value of the "concurrency_entitlement" field.
+	ConcurrencyEntitlement int `json:"concurrency_entitlement,omitempty"`
+	// LifetimeQuotaUsd holds the value of the "lifetime_quota_usd" field.
+	LifetimeQuotaUsd float64 `json:"lifetime_quota_usd,omitempty"`
+	// DailyQuotaUsd holds the value of the "daily_quota_usd" field.
+	DailyQuotaUsd float64 `json:"daily_quota_usd,omitempty"`
+	// WeeklyQuotaUsd holds the value of the "weekly_quota_usd" field.
+	WeeklyQuotaUsd float64 `json:"weekly_quota_usd,omitempty"`
+	// MonthlyQuotaUsd holds the value of the "monthly_quota_usd" field.
+	MonthlyQuotaUsd float64 `json:"monthly_quota_usd,omitempty"`
 	// CreatedAt holds the value of the "created_at" field.
 	CreatedAt time.Time `json:"created_at,omitempty"`
 	// UpdatedAt holds the value of the "updated_at" field.
-	UpdatedAt    time.Time `json:"updated_at,omitempty"`
+	UpdatedAt time.Time `json:"updated_at,omitempty"`
+	// Edges holds the relations/edges for other nodes in the graph.
+	// The values are being populated by the SubscriptionPlanQuery when eager-loading is set.
+	Edges        SubscriptionPlanEdges `json:"edges"`
 	selectValues sql.SelectValues
+}
+
+// SubscriptionPlanEdges holds the relations/edges for other nodes in the graph.
+type SubscriptionPlanEdges struct {
+	// Groups holds the value of the groups edge.
+	Groups []*SubscriptionPlanGroup `json:"groups,omitempty"`
+	// loadedTypes holds the information for reporting if a
+	// type was loaded (or requested) in eager-loading or not.
+	loadedTypes [1]bool
+}
+
+// GroupsOrErr returns the Groups value or an error if the edge
+// was not loaded in eager-loading.
+func (e SubscriptionPlanEdges) GroupsOrErr() ([]*SubscriptionPlanGroup, error) {
+	if e.loadedTypes[0] {
+		return e.Groups, nil
+	}
+	return nil, &NotLoadedError{edge: "groups"}
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -55,11 +88,11 @@ func (*SubscriptionPlan) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case subscriptionplan.FieldForSale:
 			values[i] = new(sql.NullBool)
-		case subscriptionplan.FieldPrice, subscriptionplan.FieldOriginalPrice:
+		case subscriptionplan.FieldPrice, subscriptionplan.FieldOriginalPrice, subscriptionplan.FieldLifetimeQuotaUsd, subscriptionplan.FieldDailyQuotaUsd, subscriptionplan.FieldWeeklyQuotaUsd, subscriptionplan.FieldMonthlyQuotaUsd:
 			values[i] = new(sql.NullFloat64)
-		case subscriptionplan.FieldID, subscriptionplan.FieldGroupID, subscriptionplan.FieldValidityDays, subscriptionplan.FieldSortOrder:
+		case subscriptionplan.FieldID, subscriptionplan.FieldGroupID, subscriptionplan.FieldValidityDays, subscriptionplan.FieldSortOrder, subscriptionplan.FieldConcurrencyEntitlement:
 			values[i] = new(sql.NullInt64)
-		case subscriptionplan.FieldName, subscriptionplan.FieldDescription, subscriptionplan.FieldCurrency, subscriptionplan.FieldValidityUnit, subscriptionplan.FieldFeatures, subscriptionplan.FieldProductName:
+		case subscriptionplan.FieldTierCode, subscriptionplan.FieldName, subscriptionplan.FieldDescription, subscriptionplan.FieldCurrency, subscriptionplan.FieldValidityUnit, subscriptionplan.FieldFeatures, subscriptionplan.FieldProductName:
 			values[i] = new(sql.NullString)
 		case subscriptionplan.FieldCreatedAt, subscriptionplan.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -89,6 +122,12 @@ func (_m *SubscriptionPlan) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field group_id", values[i])
 			} else if value.Valid {
 				_m.GroupID = value.Int64
+			}
+		case subscriptionplan.FieldTierCode:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field tier_code", values[i])
+			} else if value.Valid {
+				_m.TierCode = value.String
 			}
 		case subscriptionplan.FieldName:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -157,6 +196,36 @@ func (_m *SubscriptionPlan) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.SortOrder = int(value.Int64)
 			}
+		case subscriptionplan.FieldConcurrencyEntitlement:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field concurrency_entitlement", values[i])
+			} else if value.Valid {
+				_m.ConcurrencyEntitlement = int(value.Int64)
+			}
+		case subscriptionplan.FieldLifetimeQuotaUsd:
+			if value, ok := values[i].(*sql.NullFloat64); !ok {
+				return fmt.Errorf("unexpected type %T for field lifetime_quota_usd", values[i])
+			} else if value.Valid {
+				_m.LifetimeQuotaUsd = value.Float64
+			}
+		case subscriptionplan.FieldDailyQuotaUsd:
+			if value, ok := values[i].(*sql.NullFloat64); !ok {
+				return fmt.Errorf("unexpected type %T for field daily_quota_usd", values[i])
+			} else if value.Valid {
+				_m.DailyQuotaUsd = value.Float64
+			}
+		case subscriptionplan.FieldWeeklyQuotaUsd:
+			if value, ok := values[i].(*sql.NullFloat64); !ok {
+				return fmt.Errorf("unexpected type %T for field weekly_quota_usd", values[i])
+			} else if value.Valid {
+				_m.WeeklyQuotaUsd = value.Float64
+			}
+		case subscriptionplan.FieldMonthlyQuotaUsd:
+			if value, ok := values[i].(*sql.NullFloat64); !ok {
+				return fmt.Errorf("unexpected type %T for field monthly_quota_usd", values[i])
+			} else if value.Valid {
+				_m.MonthlyQuotaUsd = value.Float64
+			}
 		case subscriptionplan.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field created_at", values[i])
@@ -180,6 +249,11 @@ func (_m *SubscriptionPlan) assignValues(columns []string, values []any) error {
 // This includes values selected through modifiers, order, etc.
 func (_m *SubscriptionPlan) Value(name string) (ent.Value, error) {
 	return _m.selectValues.Get(name)
+}
+
+// QueryGroups queries the "groups" edge of the SubscriptionPlan entity.
+func (_m *SubscriptionPlan) QueryGroups() *SubscriptionPlanGroupQuery {
+	return NewSubscriptionPlanClient(_m.config).QueryGroups(_m)
 }
 
 // Update returns a builder for updating this SubscriptionPlan.
@@ -207,6 +281,9 @@ func (_m *SubscriptionPlan) String() string {
 	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
 	builder.WriteString("group_id=")
 	builder.WriteString(fmt.Sprintf("%v", _m.GroupID))
+	builder.WriteString(", ")
+	builder.WriteString("tier_code=")
+	builder.WriteString(_m.TierCode)
 	builder.WriteString(", ")
 	builder.WriteString("name=")
 	builder.WriteString(_m.Name)
@@ -242,6 +319,21 @@ func (_m *SubscriptionPlan) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("sort_order=")
 	builder.WriteString(fmt.Sprintf("%v", _m.SortOrder))
+	builder.WriteString(", ")
+	builder.WriteString("concurrency_entitlement=")
+	builder.WriteString(fmt.Sprintf("%v", _m.ConcurrencyEntitlement))
+	builder.WriteString(", ")
+	builder.WriteString("lifetime_quota_usd=")
+	builder.WriteString(fmt.Sprintf("%v", _m.LifetimeQuotaUsd))
+	builder.WriteString(", ")
+	builder.WriteString("daily_quota_usd=")
+	builder.WriteString(fmt.Sprintf("%v", _m.DailyQuotaUsd))
+	builder.WriteString(", ")
+	builder.WriteString("weekly_quota_usd=")
+	builder.WriteString(fmt.Sprintf("%v", _m.WeeklyQuotaUsd))
+	builder.WriteString(", ")
+	builder.WriteString("monthly_quota_usd=")
+	builder.WriteString(fmt.Sprintf("%v", _m.MonthlyQuotaUsd))
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")
 	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))

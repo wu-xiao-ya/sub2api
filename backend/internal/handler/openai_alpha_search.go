@@ -95,6 +95,7 @@ func (h *OpenAIGatewayHandler) AlphaSearch(c *gin.Context) {
 	if userRelease != nil {
 		defer userRelease()
 	}
+	subscription, _ = middleware2.GetSubscriptionFromContext(c)
 
 	if err := h.billingCacheService.CheckBillingEligibility(c.Request.Context(), apiKey.User, apiKey, apiKey.Group, subscription, service.QuotaPlatform(c.Request.Context(), apiKey)); err != nil {
 		status, code, message, retryAfter := billingErrorDetails(err)

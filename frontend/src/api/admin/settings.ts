@@ -306,8 +306,8 @@ export function appendAuthSourceDefaultsToUpdateRequest(
         Number(current.concurrency) || AUTH_SOURCE_DEFAULT_CONCURRENCY,
       ),
     );
-    target[`auth_source_default_${source}_subscriptions`] =
-      normalizeDefaultSubscriptionSettings(current.subscriptions);
+    // 原生默认订阅授予（default_subscriptions / auth_source_default_*_subscriptions）已退休：
+    // 只做向后兼容的反序列化读取，不再写入 update payload，避免覆盖服务器现有值。
     target[`auth_source_default_${source}_grant_on_signup`] =
       current.grant_on_signup;
     target[`auth_source_default_${source}_grant_on_first_bind`] =
@@ -747,40 +747,34 @@ export interface UpdateSettingsRequest {
   affiliate_admin_recharge_enabled?: boolean;
   default_concurrency?: number;
   default_user_rpm_limit?: number;
-  default_subscriptions?: DefaultSubscriptionSetting[];
+  // 原生默认订阅授予已退休：default_subscriptions / auth_source_default_*_subscriptions
+  // 不在 update payload 中发送；仅 SystemSettings（响应反序列化）保留这些字段。
   auth_source_default_email_balance?: number;
   auth_source_default_email_concurrency?: number;
-  auth_source_default_email_subscriptions?: DefaultSubscriptionSetting[];
   auth_source_default_email_grant_on_signup?: boolean;
   auth_source_default_email_grant_on_first_bind?: boolean;
   auth_source_default_linuxdo_balance?: number;
   auth_source_default_linuxdo_concurrency?: number;
-  auth_source_default_linuxdo_subscriptions?: DefaultSubscriptionSetting[];
   auth_source_default_linuxdo_grant_on_signup?: boolean;
   auth_source_default_linuxdo_grant_on_first_bind?: boolean;
   auth_source_default_oidc_balance?: number;
   auth_source_default_oidc_concurrency?: number;
-  auth_source_default_oidc_subscriptions?: DefaultSubscriptionSetting[];
   auth_source_default_oidc_grant_on_signup?: boolean;
   auth_source_default_oidc_grant_on_first_bind?: boolean;
   auth_source_default_wechat_balance?: number;
   auth_source_default_wechat_concurrency?: number;
-  auth_source_default_wechat_subscriptions?: DefaultSubscriptionSetting[];
   auth_source_default_wechat_grant_on_signup?: boolean;
   auth_source_default_wechat_grant_on_first_bind?: boolean;
   auth_source_default_dingtalk_balance?: number;
   auth_source_default_dingtalk_concurrency?: number;
-  auth_source_default_dingtalk_subscriptions?: DefaultSubscriptionSetting[];
   auth_source_default_dingtalk_grant_on_signup?: boolean;
   auth_source_default_dingtalk_grant_on_first_bind?: boolean;
   auth_source_default_github_balance?: number;
   auth_source_default_github_concurrency?: number;
-  auth_source_default_github_subscriptions?: DefaultSubscriptionSetting[];
   auth_source_default_github_grant_on_signup?: boolean;
   auth_source_default_github_grant_on_first_bind?: boolean;
   auth_source_default_google_balance?: number;
   auth_source_default_google_concurrency?: number;
-  auth_source_default_google_subscriptions?: DefaultSubscriptionSetting[];
   auth_source_default_google_grant_on_signup?: boolean;
   auth_source_default_google_grant_on_first_bind?: boolean;
   force_email_on_third_party_signup?: boolean;

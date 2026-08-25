@@ -38,6 +38,7 @@ type GenerateRedeemCodesRequest struct {
 	Type          string     `json:"type" binding:"required,oneof=balance concurrency subscription invitation"`
 	Value         float64    `json:"value"`
 	GroupID       *int64     `json:"group_id"`      // 订阅类型必填
+	PlanID        *int64     `json:"plan_id"`       // 新版共享订阅套餐
 	ValidityDays  int        `json:"validity_days"` // 订阅类型使用，正数增加/负数退款扣减
 	ExpiresAt     *time.Time `json:"expires_at"`
 	ExpiresInDays *int       `json:"expires_in_days" binding:"omitempty,min=1,max=3650"`
@@ -51,6 +52,7 @@ type CreateAndRedeemCodeRequest struct {
 	Value         float64    `json:"value" binding:"required"`
 	UserID        int64      `json:"user_id" binding:"required,gt=0"`
 	GroupID       *int64     `json:"group_id"`      // subscription 类型必填
+	PlanID        *int64     `json:"plan_id"`       // 新版共享订阅套餐
 	ValidityDays  int        `json:"validity_days"` // subscription 类型：正数增加，负数退款扣减
 	Notes         string     `json:"notes"`
 	ExpiresAt     *time.Time `json:"expires_at"`
@@ -148,6 +150,7 @@ func (h *RedeemHandler) Generate(c *gin.Context) {
 			Type:         req.Type,
 			Value:        req.Value,
 			GroupID:      req.GroupID,
+			PlanID:       req.PlanID,
 			ValidityDays: req.ValidityDays,
 			ExpiresAt:    expiresAt,
 		})
@@ -184,11 +187,15 @@ func (h *RedeemHandler) CreateAndRedeem(c *gin.Context) {
 	}
 
 	if req.Type == "subscription" {
-		if req.GroupID == nil {
-			response.BadRequest(c, "group_id is required for subscription type")
+		if (req.PlanID == nil || *req.PlanID <= 0) && req.GroupID == nil {
+			response.BadRequest(c, "group_id or plan_id is required for subscription type")
 			return
 		}
-		if req.ValidityDays == 0 {
+		if req.PlanID != nil && *req.PlanID > 0 && req.ValidityDays < 0 {
+			response.BadRequest(c, "validity_days cannot be negative for shared subscription plan")
+			return
+		}
+		if (req.PlanID == nil || *req.PlanID <= 0) && req.ValidityDays == 0 {
 			response.BadRequest(c, "validity_days must not be zero for subscription type")
 			return
 		}
@@ -216,6 +223,7 @@ func (h *RedeemHandler) CreateAndRedeem(c *gin.Context) {
 			Status:       service.StatusUnused,
 			Notes:        req.Notes,
 			GroupID:      req.GroupID,
+			PlanID:       req.PlanID,
 			ValidityDays: req.ValidityDays,
 			ExpiresAt:    expiresAt,
 		})

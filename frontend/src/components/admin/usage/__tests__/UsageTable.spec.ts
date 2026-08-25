@@ -51,6 +51,19 @@ const messages: Record<string, string> = {
   'admin.usage.billingModeToken': 'Token',
   'admin.usage.billingModePerRequest': 'Per request',
   'admin.usage.billingModeImage': 'Image',
+  'usage.latencyFirstToken': 'First response',
+  'usage.latencyDuration': 'Total',
+  'usage.latencyGeneration': 'Generation',
+  'usage.latencyOutputSpeed': 'Output speed',
+  'usage.latencyAnalysis': 'Latency analysis',
+  'usage.latencyStatus': 'Status',
+  'usage.latencyWaitingFirstToken': 'Waiting for first token',
+  'usage.latencyGenerationRatio': 'Generation ratio',
+  'usage.latencySmooth': 'Smooth',
+  'usage.latencyWarn': 'Slow',
+  'usage.latencySlow': 'Very slow',
+  'usage.latencyCritical': 'Critical',
+  'usage.latencyUnavailable': 'Unavailable',
 }
 
 vi.mock('vue-i18n', async () => {
@@ -72,6 +85,7 @@ const DataTableStub = {
         <slot name="cell-billing_mode" :row="row" />
         <slot name="cell-tokens" :row="row" />
         <slot name="cell-cost" :row="row" />
+        <slot name="cell-latency" :row="row" />
       </div>
     </div>
   `,
@@ -118,6 +132,40 @@ describe('admin UsageTable tooltip', () => {
       height: 20,
       toJSON: () => ({}),
     } as DOMRect)
+  })
+
+  it('shows latency metrics and supports keyboard detail toggling', async () => {
+    const row = {
+      ...baseImageRow,
+      request_id: 'req-admin-latency',
+      billing_mode: 'token',
+      image_count: 0,
+      duration_ms: 1800,
+      first_token_ms: 1600,
+      output_tokens: 31,
+    }
+    const wrapper = mount(UsageTable, {
+      props: { data: [row], loading: false, columns: [] },
+      global: {
+        stubs: {
+          DataTable: DataTableStub,
+          EmptyState: true,
+          Icon: true,
+          Teleport: true,
+        },
+      },
+    })
+
+    expect(wrapper.text()).toContain('First response')
+    expect(wrapper.text()).toContain('1.60s')
+    expect(wrapper.text()).toContain('200ms')
+    expect(wrapper.text()).toContain('155 Token/s')
+
+    const trigger = wrapper.find('[role="button"]')
+    expect(trigger.attributes('tabindex')).toBe('0')
+    await trigger.trigger('keydown', { key: 'Enter' })
+    expect(wrapper.text()).toContain('Latency analysis')
+    expect(wrapper.text()).toContain('Generation ratio')
   })
 
   it('marks only usage rows that actually applied long-context billing', () => {

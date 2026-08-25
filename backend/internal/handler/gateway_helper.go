@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/rand/v2"
 	"net/http"
@@ -197,7 +198,7 @@ func (h *ConcurrencyHelper) DecrementAccountWaitCount(ctx context.Context, accou
 // TryAcquireUserSlot 尝试立即获取用户并发槽位。
 // 返回值: (releaseFunc, acquired, error)
 func (h *ConcurrencyHelper) TryAcquireUserSlot(ctx context.Context, userID int64, maxConcurrency int) (func(), bool, error) {
-	result, err := h.concurrencyService.AcquireUserSlot(ctx, userID, maxConcurrency)
+	result, err := h.acquireUserSlotResult(ctx, userID, maxConcurrency)
 	if err != nil {
 		return nil, false, err
 	}
@@ -207,12 +208,34 @@ func (h *ConcurrencyHelper) TryAcquireUserSlot(ctx context.Context, userID int64
 	return result.ReleaseFunc, true, nil
 }
 
+func (h *ConcurrencyHelper) acquireUserSlotResult(ctx context.Context, userID int64, maxConcurrency int) (*service.AcquireResult, error) {
+	if plan, ok := service.SubscriptionConcurrencyPlanFromContext(ctx); ok && plan.UserID == userID {
+		return h.concurrencyService.AcquirePlannedUserSlot(ctx, plan)
+	}
+	return h.concurrencyService.AcquireUserSlot(ctx, userID, maxConcurrency)
+}
+
 func (h *ConcurrencyHelper) TryAcquireUserSlotForAPIKey(ctx context.Context, userID int64, maxConcurrency int, apiKeyID int64) (func(), bool, error) {
 	releaseFunc, acquired, err := h.TryAcquireUserSlot(ctx, userID, maxConcurrency)
 	if err != nil || !acquired {
 		return releaseFunc, acquired, err
 	}
 	return h.withAPIKeySlot(ctx, apiKeyID, releaseFunc), true, nil
+}
+
+func (h *ConcurrencyHelper) TryAcquireUserSlotForAPIKeyFromGin(c *gin.Context, userID int64, maxConcurrency int, apiKeyID int64) (func(), bool, error) {
+	if c == nil || c.Request == nil {
+		return nil, false, errors.New("request context is unavailable")
+	}
+	result, err := h.acquireUserSlotResult(c.Request.Context(), userID, maxConcurrency)
+	if err != nil {
+		return nil, false, err
+	}
+	if !result.Acquired {
+		return nil, false, nil
+	}
+	h.applySubscriptionAcquisition(c, result)
+	return h.withAPIKeySlot(c.Request.Context(), apiKeyID, result.ReleaseFunc), true, nil
 }
 
 // AcquireOpenAIWSIngressLease bounds the whole client WebSocket lifecycle,
@@ -248,13 +271,14 @@ func (h *ConcurrencyHelper) acquireUserSlotWithWaitTimeout(c *gin.Context, userI
 	ctx := c.Request.Context()
 
 	// Try to acquire immediately
-	releaseFunc, acquired, err := h.TryAcquireUserSlot(ctx, userID, maxConcurrency)
+	result, err := h.acquireUserSlotResult(ctx, userID, maxConcurrency)
 	if err != nil {
 		return nil, err
 	}
 
-	if acquired {
-		return h.withAPIKeySlotFromGin(c, releaseFunc), nil
+	if result.Acquired {
+		h.applySubscriptionAcquisition(c, result)
+		return h.withAPIKeySlotFromGin(c, result.ReleaseFunc), nil
 	}
 
 	queueLimit := service.CalculateMaxWait(maxConcurrency) - maxConcurrency
@@ -271,11 +295,36 @@ func (h *ConcurrencyHelper) acquireUserSlotWithWaitTimeout(c *gin.Context, userI
 	defer h.DecrementWaitCount(ctx, userID)
 
 	// Need to wait - handle streaming ping if needed
-	releaseFunc, err = h.waitForSlotWithPingTimeout(c, "user", userID, maxConcurrency, timeout, isStream, streamStarted, false)
+	result, err = h.waitForSlotWithPingTimeoutResult(c, "user", userID, maxConcurrency, timeout, isStream, streamStarted, false, func(waitCtx context.Context) (*service.AcquireResult, error) {
+		return h.acquireUserSlotResult(waitCtx, userID, maxConcurrency)
+	})
 	if err != nil {
 		return nil, err
 	}
-	return h.withAPIKeySlotFromGin(c, releaseFunc), nil
+	h.applySubscriptionAcquisition(c, result)
+	return h.withAPIKeySlotFromGin(c, result.ReleaseFunc), nil
+}
+
+func (h *ConcurrencyHelper) applySubscriptionAcquisition(c *gin.Context, result *service.AcquireResult) {
+	if c == nil || result == nil || result.SubscriptionPurchaseID <= 0 {
+		return
+	}
+	ctx := service.WithSubscriptionConcurrencySource(c.Request.Context(), service.SubscriptionConcurrencySource{
+		PurchaseID: result.SubscriptionPurchaseID,
+		UseBalance: result.UsedBalance,
+	})
+	c.Request = c.Request.WithContext(ctx)
+	if result.UsedBalance {
+		c.Set(string(middleware2.ContextKeySubscription), nil)
+		c.Set(string(middleware2.ContextKeySharedSubscription), nil)
+		return
+	}
+	if result.Subscription != nil {
+		c.Set(string(middleware2.ContextKeySubscription), result.Subscription)
+	}
+	if result.SharedSubscription != nil {
+		c.Set(string(middleware2.ContextKeySharedSubscription), result.SharedSubscription)
+	}
 }
 
 func (h *ConcurrencyHelper) withAPIKeySlotFromGin(c *gin.Context, releaseFunc func()) func() {
@@ -332,23 +381,29 @@ func (h *ConcurrencyHelper) waitForSlotWithPing(c *gin.Context, slotType string,
 
 // waitForSlotWithPingTimeout waits for a concurrency slot with a custom timeout.
 func (h *ConcurrencyHelper) waitForSlotWithPingTimeout(c *gin.Context, slotType string, id int64, maxConcurrency int, timeout time.Duration, isStream bool, streamStarted *bool, tryImmediate bool) (func(), error) {
-	ctx, cancel := context.WithTimeout(c.Request.Context(), timeout)
-	defer cancel()
-
-	acquireSlot := func() (*service.AcquireResult, error) {
+	result, err := h.waitForSlotWithPingTimeoutResult(c, slotType, id, maxConcurrency, timeout, isStream, streamStarted, tryImmediate, func(ctx context.Context) (*service.AcquireResult, error) {
 		if slotType == "user" {
 			return h.concurrencyService.AcquireUserSlot(ctx, id, maxConcurrency)
 		}
 		return h.concurrencyService.AcquireAccountSlot(ctx, id, maxConcurrency)
+	})
+	if err != nil {
+		return nil, err
 	}
+	return result.ReleaseFunc, nil
+}
+
+func (h *ConcurrencyHelper) waitForSlotWithPingTimeoutResult(c *gin.Context, slotType string, id int64, maxConcurrency int, timeout time.Duration, isStream bool, streamStarted *bool, tryImmediate bool, acquireSlot func(context.Context) (*service.AcquireResult, error)) (*service.AcquireResult, error) {
+	ctx, cancel := context.WithTimeout(c.Request.Context(), timeout)
+	defer cancel()
 
 	if tryImmediate {
-		result, err := acquireSlot()
+		result, err := acquireSlot(ctx)
 		if err != nil {
 			return nil, err
 		}
 		if result.Acquired {
-			return result.ReleaseFunc, nil
+			return result, nil
 		}
 	}
 
@@ -403,13 +458,13 @@ func (h *ConcurrencyHelper) waitForSlotWithPingTimeout(c *gin.Context, slotType 
 
 		case <-timer.C:
 			// Try to acquire slot
-			result, err := acquireSlot()
+			result, err := acquireSlot(ctx)
 			if err != nil {
 				return nil, err
 			}
 
 			if result.Acquired {
-				return result.ReleaseFunc, nil
+				return result, nil
 			}
 			backoff = nextBackoff(backoff)
 			timer.Reset(backoff)

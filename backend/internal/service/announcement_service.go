@@ -15,21 +15,45 @@ type AnnouncementService struct {
 	announcementRepo AnnouncementRepository
 	readRepo         AnnouncementReadRepository
 	userRepo         UserRepository
-	userSubRepo      UserSubscriptionRepository
+	// subscriptionService resolves active subscription groups from
+	// subscription_purchases joined to subscription_purchase_groups.
+	// The legacy user_subscriptions table is frozen read-only and is never
+	// queried for announcement targeting.
+	subscriptionService *SubscriptionService
 }
 
 func NewAnnouncementService(
 	announcementRepo AnnouncementRepository,
 	readRepo AnnouncementReadRepository,
 	userRepo UserRepository,
-	userSubRepo UserSubscriptionRepository,
+	subscriptionService *SubscriptionService,
 ) *AnnouncementService {
 	return &AnnouncementService{
-		announcementRepo: announcementRepo,
-		readRepo:         readRepo,
-		userRepo:         userRepo,
-		userSubRepo:      userSubRepo,
+		announcementRepo:    announcementRepo,
+		readRepo:            readRepo,
+		userRepo:            userRepo,
+		subscriptionService: subscriptionService,
 	}
+}
+
+// activeGroupIDs returns the subscription group this user is currently
+// entitled to. It is backed by active subscription_purchases joined to
+// subscription_purchase_groups, never the read-only user_subscriptions table.
+// A nil subscription service resolves to no groups, which effectively disables
+// subscription-targeted announcement filters.
+func (s *AnnouncementService) activeGroupIDs(ctx context.Context, userID int64) (map[int64]struct{}, error) {
+	if s == nil || s.subscriptionService == nil || userID <= 0 {
+		return map[int64]struct{}{}, nil
+	}
+	groupIDs, err := s.subscriptionService.ListActiveSharedGroupIDs(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("list active purchase groups: %w", err)
+	}
+	active := make(map[int64]struct{}, len(groupIDs))
+	for _, id := range groupIDs {
+		active[id] = struct{}{}
+	}
+	return active, nil
 }
 
 type CreateAnnouncementInput struct {
@@ -221,13 +245,9 @@ func (s *AnnouncementService) ListForUser(ctx context.Context, userID int64, unr
 		return nil, fmt.Errorf("get user: %w", err)
 	}
 
-	activeSubs, err := s.userSubRepo.ListActiveByUserID(ctx, userID)
+	activeGroupIDs, err := s.activeGroupIDs(ctx, userID)
 	if err != nil {
-		return nil, fmt.Errorf("list active subscriptions: %w", err)
-	}
-	activeGroupIDs := make(map[int64]struct{}, len(activeSubs))
-	for i := range activeSubs {
-		activeGroupIDs[activeSubs[i].GroupID] = struct{}{}
+		return nil, fmt.Errorf("resolve active subscription groups: %w", err)
 	}
 
 	now := time.Now()
@@ -306,13 +326,9 @@ func (s *AnnouncementService) MarkRead(ctx context.Context, userID, announcement
 		return ErrAnnouncementNotFound
 	}
 
-	activeSubs, err := s.userSubRepo.ListActiveByUserID(ctx, userID)
+	activeGroupIDs, err := s.activeGroupIDs(ctx, userID)
 	if err != nil {
-		return fmt.Errorf("list active subscriptions: %w", err)
-	}
-	activeGroupIDs := make(map[int64]struct{}, len(activeSubs))
-	for i := range activeSubs {
-		activeGroupIDs[activeSubs[i].GroupID] = struct{}{}
+		return fmt.Errorf("resolve active subscription groups: %w", err)
 	}
 
 	if !a.Targeting.Matches(user.Balance, activeGroupIDs) {
@@ -358,13 +374,9 @@ func (s *AnnouncementService) ListUserReadStatus(
 	out := make([]AnnouncementUserReadStatus, 0, len(users))
 	for i := range users {
 		u := users[i]
-		subs, err := s.userSubRepo.ListActiveByUserID(ctx, u.ID)
+		activeGroupIDs, err := s.activeGroupIDs(ctx, u.ID)
 		if err != nil {
-			return nil, nil, fmt.Errorf("list active subscriptions: %w", err)
-		}
-		activeGroupIDs := make(map[int64]struct{}, len(subs))
-		for j := range subs {
-			activeGroupIDs[subs[j].GroupID] = struct{}{}
+			return nil, nil, fmt.Errorf("resolve active subscription groups: %w", err)
 		}
 
 		readAt, ok := readMap[u.ID]

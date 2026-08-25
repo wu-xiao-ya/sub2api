@@ -121,6 +121,10 @@ func (p *postUsageBillingParams) shouldUpdateAccountQuota() bool {
 // postUsageBilling is the legacy fallback billing path used when the unified
 // billing repo is unavailable (nil). Production uses applyUsageBilling → repo.Apply
 // for atomic billing. This path only runs in tests or degraded mode.
+type subscriptionPurchaseUsageIncrementer interface {
+	IncrementPurchaseUsage(ctx context.Context, purchaseID int64, costUSD float64) error
+}
+
 func postUsageBilling(ctx context.Context, p *postUsageBillingParams, deps *billingDeps) {
 	billingCtx, cancel := detachedBillingContext(ctx)
 	defer cancel()
@@ -128,11 +132,18 @@ func postUsageBilling(ctx context.Context, p *postUsageBillingParams, deps *bill
 	cost := p.Cost
 
 	if p.IsSubscriptionBill {
-		// Subscription usage tracked by ActualCost so group rate multiplier
-		// consumes the quota at the expected speed.
-		if cost.ActualCost > 0 {
-			if err := deps.userSubRepo.IncrementUsage(billingCtx, p.Subscription.ID, cost.ActualCost); err != nil {
-				slog.Error("increment subscription usage failed", "subscription_id", p.Subscription.ID, "error", err)
+		// Degraded billing must use the same explicit purchase identity as the
+		// atomic repository. Native user_subscriptions is read-only after the
+		// retirement migration and must never receive request-time usage writes.
+		if cost.ActualCost > 0 && p.Subscription != nil {
+			purchaseID := p.Subscription.SubscriptionPurchaseID
+			incrementer, ok := deps.userSubRepo.(subscriptionPurchaseUsageIncrementer)
+			if purchaseID == nil || *purchaseID <= 0 {
+				slog.Error("legacy subscription billing is disabled", "user_id", p.Subscription.UserID, "group_id", p.Subscription.GroupID)
+			} else if !ok {
+				slog.Error("purchase usage fallback is unavailable", "subscription_purchase_id", *purchaseID)
+			} else if err := incrementer.IncrementPurchaseUsage(billingCtx, *purchaseID, cost.ActualCost); err != nil {
+				slog.Error("increment purchase usage failed", "subscription_purchase_id", *purchaseID, "error", err)
 			}
 		}
 	} else {
@@ -290,8 +301,8 @@ func buildUsageBillingCommand(requestID string, usageLog *UsageLog, p *postUsage
 		if usageLog.ReasoningEffort != nil {
 			cmd.ReasoningEffort = *usageLog.ReasoningEffort
 		}
-		if usageLog.SubscriptionID != nil {
-			cmd.SubscriptionID = usageLog.SubscriptionID
+		if usageLog.SubscriptionPurchaseID != nil {
+			cmd.SubscriptionPurchaseID = usageLog.SubscriptionPurchaseID
 		}
 	}
 
@@ -300,7 +311,10 @@ func buildUsageBillingCommand(requestID string, usageLog *UsageLog, p *postUsage
 	// speed. TotalCost remains the raw (pre-multiplier) value; downstream guards
 	// on "> 0" still correctly skip free subscriptions (RateMultiplier == 0).
 	if p.IsSubscriptionBill && p.Subscription != nil && p.Cost.TotalCost > 0 {
-		cmd.SubscriptionID = &p.Subscription.ID
+		if p.Subscription.SubscriptionPurchaseID != nil {
+			cmd.SubscriptionPurchaseID = p.Subscription.SubscriptionPurchaseID
+			cmd.SubscriptionID = nil
+		}
 		cmd.SubscriptionCost = p.Cost.ActualCost
 	} else if p.Cost.ActualCost > 0 {
 		cmd.BalanceCost = p.Cost.ActualCost
@@ -779,7 +793,7 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 	cost := s.calculateRecordUsageCost(ctx, result, apiKey, billingModel, multiplier, imageMultiplier, opts)
 
 	// 判断计费方式：订阅模式 vs 余额模式
-	isSubscriptionBilling := subscription != nil && apiKey.Group != nil && apiKey.Group.IsSubscriptionType()
+	isSubscriptionBilling := subscription != nil
 	billingType := BillingTypeBalance
 	if isSubscriptionBilling {
 		billingType = BillingTypeSubscription
@@ -1014,45 +1028,45 @@ func (s *GatewayService) buildRecordUsageLog(
 	durationMs := int(result.Duration.Milliseconds())
 	requestID := resolveUsageBillingRequestID(ctx, result.RequestID)
 	usageLog := &UsageLog{
-		UserID:                user.ID,
-		APIKeyID:              apiKey.ID,
-		AccountID:             account.ID,
-		RequestID:             requestID,
-		Model:                 result.Model,
-		RequestedModel:        requestedModel,
-		UpstreamModel:         optionalNonEqualStringPtr(result.UpstreamModel, requestedModel),
-		ReasoningEffort:       result.ReasoningEffort,
-		InboundEndpoint:       optionalTrimmedStringPtr(input.InboundEndpoint),
-		UpstreamEndpoint:      optionalTrimmedStringPtr(input.UpstreamEndpoint),
-		UsageSource:           usageSourceFromContext(ctx),
-		InputTokens:           result.Usage.InputTokens,
-		OutputTokens:          result.Usage.OutputTokens,
-		CacheCreationTokens:   result.Usage.CacheCreationInputTokens,
-		CacheReadTokens:       result.Usage.CacheReadInputTokens,
-		CacheCreation5mTokens: result.Usage.CacheCreation5mTokens,
-		CacheCreation1hTokens: result.Usage.CacheCreation1hTokens,
-		ImageOutputTokens:     result.Usage.ImageOutputTokens,
-		RateMultiplier:        multiplier,
-		AccountRateMultiplier: &accountRateMultiplier,
-		BillingType:           billingType,
-		BillingMode:           resolveBillingMode(result, cost),
-		Stream:                result.Stream,
-		DurationMs:            &durationMs,
-		FirstTokenMs:          result.FirstTokenMs,
-		ImageCount:            result.ImageCount,
-		ImageSize:             optionalTrimmedStringPtr(result.ImageSize),
-		ImageInputSize:        optionalTrimmedStringPtr(result.ImageInputSize),
-		ImageOutputSize:       optionalTrimmedStringPtr(result.ImageOutputSize),
-		ImageSizeSource:       optionalTrimmedStringPtr(result.ImageSizeSource),
-		ImageSizeBreakdown:    result.ImageSizeBreakdown,
-		CacheTTLOverridden:    cacheTTLOverridden,
-		ChannelID:             optionalInt64Ptr(input.ChannelID),
-		ModelMappingChain:     optionalTrimmedStringPtr(input.ModelMappingChain),
-		UserAgent:             optionalTrimmedStringPtr(input.UserAgent),
-		IPAddress:             optionalTrimmedStringPtr(input.IPAddress),
-		GroupID:               apiKey.GroupID,
-		SubscriptionID:        optionalSubscriptionID(subscription),
-		CreatedAt:             time.Now(),
+		UserID:                 user.ID,
+		APIKeyID:               apiKey.ID,
+		AccountID:              account.ID,
+		RequestID:              requestID,
+		Model:                  result.Model,
+		RequestedModel:         requestedModel,
+		UpstreamModel:          optionalNonEqualStringPtr(result.UpstreamModel, requestedModel),
+		ReasoningEffort:        result.ReasoningEffort,
+		InboundEndpoint:        optionalTrimmedStringPtr(input.InboundEndpoint),
+		UpstreamEndpoint:       optionalTrimmedStringPtr(input.UpstreamEndpoint),
+		UsageSource:            usageSourceFromContext(ctx),
+		InputTokens:            result.Usage.InputTokens,
+		OutputTokens:           result.Usage.OutputTokens,
+		CacheCreationTokens:    result.Usage.CacheCreationInputTokens,
+		CacheReadTokens:        result.Usage.CacheReadInputTokens,
+		CacheCreation5mTokens:  result.Usage.CacheCreation5mTokens,
+		CacheCreation1hTokens:  result.Usage.CacheCreation1hTokens,
+		ImageOutputTokens:      result.Usage.ImageOutputTokens,
+		RateMultiplier:         multiplier,
+		AccountRateMultiplier:  &accountRateMultiplier,
+		BillingType:            billingType,
+		BillingMode:            resolveBillingMode(result, cost),
+		Stream:                 result.Stream,
+		DurationMs:             &durationMs,
+		FirstTokenMs:           result.FirstTokenMs,
+		ImageCount:             result.ImageCount,
+		ImageSize:              optionalTrimmedStringPtr(result.ImageSize),
+		ImageInputSize:         optionalTrimmedStringPtr(result.ImageInputSize),
+		ImageOutputSize:        optionalTrimmedStringPtr(result.ImageOutputSize),
+		ImageSizeSource:        optionalTrimmedStringPtr(result.ImageSizeSource),
+		ImageSizeBreakdown:     result.ImageSizeBreakdown,
+		CacheTTLOverridden:     cacheTTLOverridden,
+		ChannelID:              optionalInt64Ptr(input.ChannelID),
+		ModelMappingChain:      optionalTrimmedStringPtr(input.ModelMappingChain),
+		UserAgent:              optionalTrimmedStringPtr(input.UserAgent),
+		IPAddress:              optionalTrimmedStringPtr(input.IPAddress),
+		GroupID:                apiKey.GroupID,
+		SubscriptionPurchaseID: optionalSubscriptionPurchaseID(subscription),
+		CreatedAt:              time.Now(),
 	}
 	if result.ImageCount > 0 && (cost == nil || cost.BillingMode != string(BillingModeToken)) {
 		usageLog.RateMultiplier = imageMultiplier
@@ -1088,9 +1102,16 @@ func resolveBillingMode(result *ForwardResult, cost *CostBreakdown) *string {
 	return &mode
 }
 
-func optionalSubscriptionID(subscription *UserSubscription) *int64 {
+func optionalSubscriptionPurchaseID(subscription *UserSubscription) *int64 {
 	if subscription != nil {
-		return &subscription.ID
+		return subscription.SubscriptionPurchaseID
 	}
+	return nil
+}
+
+// optionalSubscriptionID remains as a source-compatibility helper for older
+// tests and adapters. Native subscription IDs are intentionally never emitted
+// into billing commands after the retirement migration.
+func optionalSubscriptionID(subscription *UserSubscription) *int64 {
 	return nil
 }

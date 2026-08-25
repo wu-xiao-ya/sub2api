@@ -4,9 +4,14 @@ import (
 	"context"
 	"testing"
 
+	"github.com/DATA-DOG/go-sqlmock"
+	dbent "github.com/Wei-Shaw/sub2api/ent"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 	"github.com/stretchr/testify/require"
+
+	"entgo.io/ent/dialect"
+	entsql "entgo.io/ent/dialect/sql"
 )
 
 type redeemRejectRepo struct {
@@ -99,4 +104,33 @@ func TestRedeemRejectsInvitationCodeBeforeTransaction(t *testing.T) {
 	require.False(t, redeemRepo.useCalled)
 	require.Equal(t, StatusUnused, redeemRepo.code.Status)
 	require.Nil(t, redeemRepo.code.UsedBy)
+}
+
+// TestGrantRedeemCodePurchaseRejectsNegativeValidityFailsClosed verifies that a
+// subscription redeem code with negative validity is rejected before any
+// database statement runs. Entitlement is granted through the immutable
+// subscription_purchase snapshot (GrantRedeemCodePurchase) — the legacy
+// reduceOrCancelSubscription path that mutated native user_subscriptions rows
+// has been removed, and negative validity must fail closed here instead.
+func TestGrantRedeemCodePurchaseRejectsNegativeValidityFailsClosed(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+
+	drv := entsql.OpenDB(dialect.SQLite, db)
+	entClient := dbent.NewClient(dbent.Driver(drv))
+	svc := &SubscriptionService{entClient: entClient}
+
+	negative := RedeemCode{ID: 7, Code: "SUB-NEG", Type: RedeemTypeSubscription, ValidityDays: -3}
+	got, err := svc.GrantRedeemCodePurchase(context.Background(), 42, &negative)
+
+	require.Nil(t, got)
+	require.Error(t, err)
+	require.True(t, infraerrors.IsBadRequest(err))
+	require.Equal(t, "REDEEM_CODE_INVALID", infraerrors.Reason(err))
+	require.Equal(t, "subscription redeem codes cannot reduce validity", infraerrors.Message(err))
+
+	// Fail closed: no query or exec statement was issued, so neither a purchase
+	// snapshot nor a native user_subscriptions row can have been written.
+	require.NoError(t, mock.ExpectationsWereMet())
 }

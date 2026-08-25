@@ -289,6 +289,33 @@ func (_u *UsageLogUpdate) ClearSubscriptionID() *UsageLogUpdate {
 	return _u
 }
 
+// SetSubscriptionPurchaseID sets the "subscription_purchase_id" field.
+func (_u *UsageLogUpdate) SetSubscriptionPurchaseID(v int64) *UsageLogUpdate {
+	_u.mutation.ResetSubscriptionPurchaseID()
+	_u.mutation.SetSubscriptionPurchaseID(v)
+	return _u
+}
+
+// SetNillableSubscriptionPurchaseID sets the "subscription_purchase_id" field if the given value is not nil.
+func (_u *UsageLogUpdate) SetNillableSubscriptionPurchaseID(v *int64) *UsageLogUpdate {
+	if v != nil {
+		_u.SetSubscriptionPurchaseID(*v)
+	}
+	return _u
+}
+
+// AddSubscriptionPurchaseID adds value to the "subscription_purchase_id" field.
+func (_u *UsageLogUpdate) AddSubscriptionPurchaseID(v int64) *UsageLogUpdate {
+	_u.mutation.AddSubscriptionPurchaseID(v)
+	return _u
+}
+
+// ClearSubscriptionPurchaseID clears the value of the "subscription_purchase_id" field.
+func (_u *UsageLogUpdate) ClearSubscriptionPurchaseID() *UsageLogUpdate {
+	_u.mutation.ClearSubscriptionPurchaseID()
+	return _u
+}
+
 // SetInputTokens sets the "input_tokens" field.
 func (_u *UsageLogUpdate) SetInputTokens(v int) *UsageLogUpdate {
 	_u.mutation.ResetInputTokens()
@@ -1245,6 +1272,15 @@ func (_u *UsageLogUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if _u.mutation.UsageSourceCleared() {
 		_spec.ClearField(usagelog.FieldUsageSource, field.TypeString)
 	}
+	if value, ok := _u.mutation.SubscriptionPurchaseID(); ok {
+		_spec.SetField(usagelog.FieldSubscriptionPurchaseID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedSubscriptionPurchaseID(); ok {
+		_spec.AddField(usagelog.FieldSubscriptionPurchaseID, field.TypeInt64, value)
+	}
+	if _u.mutation.SubscriptionPurchaseIDCleared() {
+		_spec.ClearField(usagelog.FieldSubscriptionPurchaseID, field.TypeInt64)
+	}
 	if value, ok := _u.mutation.InputTokens(); ok {
 		_spec.SetField(usagelog.FieldInputTokens, field.TypeInt, value)
 	}
@@ -1877,6 +1913,33 @@ func (_u *UsageLogUpdateOne) SetNillableSubscriptionID(v *int64) *UsageLogUpdate
 // ClearSubscriptionID clears the value of the "subscription_id" field.
 func (_u *UsageLogUpdateOne) ClearSubscriptionID() *UsageLogUpdateOne {
 	_u.mutation.ClearSubscriptionID()
+	return _u
+}
+
+// SetSubscriptionPurchaseID sets the "subscription_purchase_id" field.
+func (_u *UsageLogUpdateOne) SetSubscriptionPurchaseID(v int64) *UsageLogUpdateOne {
+	_u.mutation.ResetSubscriptionPurchaseID()
+	_u.mutation.SetSubscriptionPurchaseID(v)
+	return _u
+}
+
+// SetNillableSubscriptionPurchaseID sets the "subscription_purchase_id" field if the given value is not nil.
+func (_u *UsageLogUpdateOne) SetNillableSubscriptionPurchaseID(v *int64) *UsageLogUpdateOne {
+	if v != nil {
+		_u.SetSubscriptionPurchaseID(*v)
+	}
+	return _u
+}
+
+// AddSubscriptionPurchaseID adds value to the "subscription_purchase_id" field.
+func (_u *UsageLogUpdateOne) AddSubscriptionPurchaseID(v int64) *UsageLogUpdateOne {
+	_u.mutation.AddSubscriptionPurchaseID(v)
+	return _u
+}
+
+// ClearSubscriptionPurchaseID clears the value of the "subscription_purchase_id" field.
+func (_u *UsageLogUpdateOne) ClearSubscriptionPurchaseID() *UsageLogUpdateOne {
+	_u.mutation.ClearSubscriptionPurchaseID()
 	return _u
 }
 
@@ -2865,6 +2928,15 @@ func (_u *UsageLogUpdateOne) sqlSave(ctx context.Context) (_node *UsageLog, err 
 	}
 	if _u.mutation.UsageSourceCleared() {
 		_spec.ClearField(usagelog.FieldUsageSource, field.TypeString)
+	}
+	if value, ok := _u.mutation.SubscriptionPurchaseID(); ok {
+		_spec.SetField(usagelog.FieldSubscriptionPurchaseID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedSubscriptionPurchaseID(); ok {
+		_spec.AddField(usagelog.FieldSubscriptionPurchaseID, field.TypeInt64, value)
+	}
+	if _u.mutation.SubscriptionPurchaseIDCleared() {
+		_spec.ClearField(usagelog.FieldSubscriptionPurchaseID, field.TypeInt64)
 	}
 	if value, ok := _u.mutation.InputTokens(); ok {
 		_spec.SetField(usagelog.FieldInputTokens, field.TypeInt, value)

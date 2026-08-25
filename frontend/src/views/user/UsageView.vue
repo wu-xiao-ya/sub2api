@@ -231,7 +231,8 @@ import Icon from '@/components/icons/Icon.vue'
 import UserErrorRequestsTable from '@/components/user/UserErrorRequestsTable.vue'
 import { getPersistedPageSize } from '@/composables/usePersistedPageSize'
 import { formatReasoningEffort } from '@/utils/format'
-import { getBillingModeLabel, getDisplayBillingMode as resolveDisplayBillingMode } from '@/utils/billingMode'
+import { getBillingModeLabel, getDisplayBillingMode as resolveDisplayBillingMode, isImageUsage } from '@/utils/billingMode'
+import { calculateLatencyMetrics, formatOutputSpeed } from '@/utils/latencyMetrics'
 import { resolveUsageRequestType, requestTypeToLegacyStream } from '@/utils/usageRequestType'
 import type {
   ApiKey,
@@ -620,6 +621,13 @@ const promotionPricePercent = (log: Pick<UsageLog, 'base_rate_multiplier' | 'rat
   return (log.rate_multiplier / baseRate * 100).toFixed(2)
 }
 
+const usageLatencyExport = (log: UsageLog) => calculateLatencyMetrics({
+  duration_ms: log.duration_ms,
+  first_token_ms: log.first_token_ms,
+  output_tokens: log.output_tokens,
+  is_image: isImageUsage(log),
+})
+
 const exportToCSV = async () => {
   if (pagination.total === 0) {
     appStore.showWarning(t('usage.noDataToExport'))
@@ -661,6 +669,8 @@ const exportToCSV = async () => {
       'Original Cost',
       'First Token (ms)',
       'Duration (ms)',
+      'Generation (ms)',
+      'Output Speed (Token/s)',
     ]
     const rows = allLogs.map((log) => [
       log.created_at,
@@ -684,6 +694,8 @@ const exportToCSV = async () => {
       log.total_cost.toFixed(8),
       log.first_token_ms ?? '',
       log.duration_ms ?? '',
+      usageLatencyExport(log).generationMs ?? '',
+      formatOutputSpeed(usageLatencyExport(log).outputSpeed).replace(/ Token\/s$/, ''),
     ].map(escapeCSVValue))
     const csvContent = [
       headers.map(escapeCSVValue).join(','),

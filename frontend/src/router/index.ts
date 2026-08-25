@@ -522,18 +522,6 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
-    path: '/admin/subscriptions',
-    name: 'AdminSubscriptions',
-    component: () => import('@/views/admin/SubscriptionsView.vue'),
-    meta: {
-      requiresAuth: true,
-      requiresAdmin: true,
-      title: 'Subscription Management',
-      titleKey: 'admin.subscriptions.title',
-      descriptionKey: 'admin.subscriptions.description'
-    }
-  },
-  {
     path: '/admin/accounts',
     name: 'AdminAccounts',
     component: () => import('@/views/admin/AccountsView.vue'),
@@ -746,6 +734,18 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/admin/subscription-purchases',
+    name: 'AdminSubscriptionPurchases',
+    component: () => import('@/views/admin/SubscriptionPurchasesView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'Subscription Purchases',
+      titleKey: 'nav.subscriptionPurchases',
+      requiresPayment: true
+    }
+  },
+  {
     path: '/admin/finance/ledger',
     name: 'AdminFinanceLedger',
     component: () => import('@/views/admin/finance/AdminFinanceLedgerView.vue'),
@@ -952,7 +952,6 @@ router.beforeEach(async (to, _from, next) => {
   if (authStore.isSimpleMode) {
     const restrictedPaths = [
       '/admin/groups',
-      '/admin/subscriptions',
       '/admin/redeem',
       '/subscriptions',
       '/redeem'

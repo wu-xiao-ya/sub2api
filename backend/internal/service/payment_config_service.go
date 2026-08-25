@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"math"
 	"strconv"
@@ -157,46 +158,65 @@ type UpdateProviderInstanceRequest struct {
 	AllowUserRefund *bool             `json:"allow_user_refund"`
 }
 type CreatePlanRequest struct {
-	GroupID       int64    `json:"group_id"`
-	Name          string   `json:"name"`
-	Description   string   `json:"description"`
-	Price         float64  `json:"price"`
-	OriginalPrice *float64 `json:"original_price"`
-	Currency      string   `json:"currency"`
-	ValidityDays  int      `json:"validity_days"`
-	ValidityUnit  string   `json:"validity_unit"`
-	Features      string   `json:"features"`
-	ProductName   string   `json:"product_name"`
-	ForSale       bool     `json:"for_sale"`
-	SortOrder     int      `json:"sort_order"`
+	GroupID                int64    `json:"group_id"`
+	GroupIDs               []int64  `json:"group_ids"`
+	TierCode               string   `json:"tier_code"`
+	Name                   string   `json:"name"`
+	Description            string   `json:"description"`
+	Price                  float64  `json:"price"`
+	OriginalPrice          *float64 `json:"original_price"`
+	Currency               string   `json:"currency"`
+	ValidityDays           int      `json:"validity_days"`
+	ValidityUnit           string   `json:"validity_unit"`
+	Features               string   `json:"features"`
+	ProductName            string   `json:"product_name"`
+	ForSale                bool     `json:"for_sale"`
+	SortOrder              int      `json:"sort_order"`
+	ConcurrencyEntitlement int      `json:"concurrency_entitlement"`
+	LifetimeQuotaUSD       float64  `json:"lifetime_quota_usd"`
+	DailyQuotaUSD          float64  `json:"daily_quota_usd"`
+	WeeklyQuotaUSD         float64  `json:"weekly_quota_usd"`
+	MonthlyQuotaUSD        float64  `json:"monthly_quota_usd"`
 }
 
 type UpdatePlanRequest struct {
-	GroupID       *int64   `json:"group_id"`
-	Name          *string  `json:"name"`
-	Description   *string  `json:"description"`
-	Price         *float64 `json:"price"`
-	OriginalPrice *float64 `json:"original_price"`
-	Currency      *string  `json:"currency"`
-	ValidityDays  *int     `json:"validity_days"`
-	ValidityUnit  *string  `json:"validity_unit"`
-	Features      *string  `json:"features"`
-	ProductName   *string  `json:"product_name"`
-	ForSale       *bool    `json:"for_sale"`
-	SortOrder     *int     `json:"sort_order"`
+	GroupID                *int64   `json:"group_id"`
+	GroupIDs               *[]int64 `json:"group_ids"`
+	TierCode               *string  `json:"tier_code"`
+	Name                   *string  `json:"name"`
+	Description            *string  `json:"description"`
+	Price                  *float64 `json:"price"`
+	OriginalPrice          *float64 `json:"original_price"`
+	Currency               *string  `json:"currency"`
+	ValidityDays           *int     `json:"validity_days"`
+	ValidityUnit           *string  `json:"validity_unit"`
+	Features               *string  `json:"features"`
+	ProductName            *string  `json:"product_name"`
+	ForSale                *bool    `json:"for_sale"`
+	SortOrder              *int     `json:"sort_order"`
+	ConcurrencyEntitlement *int     `json:"concurrency_entitlement"`
+	LifetimeQuotaUSD       *float64 `json:"lifetime_quota_usd"`
+	DailyQuotaUSD          *float64 `json:"daily_quota_usd"`
+	WeeklyQuotaUSD         *float64 `json:"weekly_quota_usd"`
+	MonthlyQuotaUSD        *float64 `json:"monthly_quota_usd"`
 }
 
 // PaymentConfigService manages payment configuration and CRUD for
 // provider instances, channels, and subscription plans.
 type PaymentConfigService struct {
 	entClient     *dbent.Client
+	sqlDB         *sql.DB
 	settingRepo   SettingRepository
 	encryptionKey []byte
 }
 
 // NewPaymentConfigService creates a new PaymentConfigService.
-func NewPaymentConfigService(entClient *dbent.Client, settingRepo SettingRepository, encryptionKey []byte) *PaymentConfigService {
-	return &PaymentConfigService{entClient: entClient, settingRepo: settingRepo, encryptionKey: encryptionKey}
+func NewPaymentConfigService(entClient *dbent.Client, settingRepo SettingRepository, encryptionKey []byte, sqlDBs ...*sql.DB) *PaymentConfigService {
+	var sqlDB *sql.DB
+	if len(sqlDBs) > 0 {
+		sqlDB = sqlDBs[0]
+	}
+	return &PaymentConfigService{entClient: entClient, sqlDB: sqlDB, settingRepo: settingRepo, encryptionKey: encryptionKey}
 }
 
 // IsPaymentEnabled returns whether the payment system is enabled.

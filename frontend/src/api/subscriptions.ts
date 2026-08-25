@@ -1,76 +1,49 @@
-/**
- * User Subscription API
- * API for regular users to view their own subscriptions and progress
- */
-
+/** User-facing Starlight shared subscription purchase API. */
 import { apiClient } from './client'
-import type { UserSubscription, SubscriptionProgress } from '@/types'
 
-/**
- * Subscription summary for user dashboard
- */
-export interface SubscriptionSummary {
-  active_count: number
-  subscriptions: Array<{
-    id: number
-    group_name: string
-    status: string
-    daily_progress: number | null
-    weekly_progress: number | null
-    monthly_progress: number | null
-    expires_at: string | null
-    days_remaining: number | null
-  }>
+export interface SharedSubscriptionGroup {
+  id: number
+  name: string
+  platform: string
 }
 
-/**
- * Get list of current user's subscriptions
- */
-export async function getMySubscriptions(): Promise<UserSubscription[]> {
-  const response = await apiClient.get<UserSubscription[]>('/subscriptions')
+export interface SharedSubscription {
+  id: number
+  name: string
+  tier_code: 'standard' | 'pro' | 'plus' | string
+  starts_at: string
+  expires_at: string
+  status: string
+  concurrency_entitlement: number
+  lifetime_quota_usd: number
+  daily_quota_usd: number
+  weekly_quota_usd: number
+  monthly_quota_usd: number
+  lifetime_usage_usd: number
+  daily_usage_usd: number
+  weekly_usage_usd: number
+  monthly_usage_usd: number
+  balance_topup_enabled: boolean
+  groups: SharedSubscriptionGroup[]
+}
+
+export async function getMySharedSubscriptions(): Promise<SharedSubscription[]> {
+  const response = await apiClient.get<SharedSubscription[]>('/subscriptions/shared')
   return response.data
 }
 
-/**
- * Get current user's active subscriptions
- */
-export async function getActiveSubscriptions(): Promise<UserSubscription[]> {
-  const response = await apiClient.get<UserSubscription[]>('/subscriptions/active')
-  return response.data
-}
-
-/**
- * Get progress for all user's active subscriptions
- */
-export async function getSubscriptionsProgress(): Promise<SubscriptionProgress[]> {
-  const response = await apiClient.get<SubscriptionProgress[]>('/subscriptions/progress')
-  return response.data
-}
-
-/**
- * Get subscription summary for dashboard display
- */
-export async function getSubscriptionSummary(): Promise<SubscriptionSummary> {
-  const response = await apiClient.get<SubscriptionSummary>('/subscriptions/summary')
-  return response.data
-}
-
-/**
- * Get progress for a specific subscription
- */
-export async function getSubscriptionProgress(
-  subscriptionId: number
-): Promise<SubscriptionProgress> {
-  const response = await apiClient.get<SubscriptionProgress>(
-    `/subscriptions/${subscriptionId}/progress`
+export async function setSharedBalanceTopup(
+  purchaseId: number,
+  enabled: boolean,
+): Promise<Pick<SharedSubscription, 'id' | 'balance_topup_enabled'>> {
+  const response = await apiClient.patch<Pick<SharedSubscription, 'id' | 'balance_topup_enabled'>>(
+    `/subscriptions/shared/${purchaseId}/balance-topup`,
+    { enabled },
   )
   return response.data
 }
 
 export default {
-  getMySubscriptions,
-  getActiveSubscriptions,
-  getSubscriptionsProgress,
-  getSubscriptionSummary,
-  getSubscriptionProgress
+  getMySharedSubscriptions,
+  setSharedBalanceTopup,
 }

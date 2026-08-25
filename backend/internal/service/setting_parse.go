@@ -1177,15 +1177,9 @@ func writeProviderDefaultGrantUpdates(updates map[string]string, keys authSource
 	updates[keys.balance] = strconv.FormatFloat(settings.Balance, 'f', 8, 64)
 	updates[keys.concurrency] = strconv.Itoa(settings.Concurrency)
 
-	subscriptions := settings.Subscriptions
-	if subscriptions == nil {
-		subscriptions = []DefaultSubscriptionSetting{}
-	}
-	raw, err := json.Marshal(subscriptions)
-	if err != nil {
-		raw = []byte("[]")
-	}
-	updates[keys.subscriptions] = string(raw)
+	// The legacy subscriptions key is intentionally omitted. Existing values
+	// remain readable for rollback, while purchase-only registration never
+	// applies or rewrites native subscription grants.
 	updates[keys.grantOnSignup] = strconv.FormatBool(settings.GrantOnSignup)
 	updates[keys.grantOnFirstBind] = strconv.FormatBool(settings.GrantOnFirstBind)
 

@@ -113,13 +113,11 @@ func RegisterUserRoutes(
 			redeem.GET("/history", h.Redeem.GetHistory)
 		}
 
-		// 用户订阅
+		// Starlight purchase entitlements
 		subscriptions := authenticated.Group("/subscriptions")
 		{
-			subscriptions.GET("", h.Subscription.List)
-			subscriptions.GET("/active", h.Subscription.GetActive)
-			subscriptions.GET("/progress", h.Subscription.GetProgress)
-			subscriptions.GET("/summary", h.Subscription.GetSummary)
+			subscriptions.GET("/shared", h.Subscription.ListShared)
+			subscriptions.PATCH("/shared/:id/balance-topup", h.Subscription.SetSharedBalanceTopup)
 		}
 
 		// 渠道监控（用户只读）

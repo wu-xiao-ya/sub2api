@@ -67,15 +67,19 @@ type userAvailableGroup struct {
 
 // userSupportedModelPricing 用户可见的定价字段白名单。
 type userSupportedModelPricing struct {
-	BillingMode      string                   `json:"billing_mode"`
-	InputPrice       *float64                 `json:"input_price"`
-	OutputPrice      *float64                 `json:"output_price"`
-	CacheWritePrice  *float64                 `json:"cache_write_price"`
-	CacheReadPrice   *float64                 `json:"cache_read_price"`
-	ImageInputPrice  *float64                 `json:"image_input_price"`
-	ImageOutputPrice *float64                 `json:"image_output_price"`
-	PerRequestPrice  *float64                 `json:"per_request_price"`
-	Intervals        []userPricingIntervalDTO `json:"intervals"`
+	BillingMode                    string                   `json:"billing_mode"`
+	InputPrice                     *float64                 `json:"input_price"`
+	OutputPrice                    *float64                 `json:"output_price"`
+	CacheWritePrice                *float64                 `json:"cache_write_price"`
+	CacheReadPrice                 *float64                 `json:"cache_read_price"`
+	ImageInputPrice                *float64                 `json:"image_input_price"`
+	ImageOutputPrice               *float64                 `json:"image_output_price"`
+	PerRequestPrice                *float64                 `json:"per_request_price"`
+	LongContextEnabled             bool                     `json:"long_context_enabled,omitempty"`
+	LongContextInputTokenThreshold *int                     `json:"long_context_input_token_threshold,omitempty"`
+	LongContextInputMultiplier     *float64                 `json:"long_context_input_multiplier,omitempty"`
+	LongContextOutputMultiplier    *float64                 `json:"long_context_output_multiplier,omitempty"`
+	Intervals                      []userPricingIntervalDTO `json:"intervals"`
 }
 
 // userPricingIntervalDTO 定价区间白名单（去掉内部 ID、SortOrder 等前端不渲染的字段）。
@@ -279,15 +283,23 @@ func toUserPricing(p *service.ChannelModelPricing) *userSupportedModelPricing {
 	if billingMode == "" {
 		billingMode = string(service.BillingModeToken)
 	}
+	longContextEnabled := p.LongContextInputTokenThreshold != nil &&
+		*p.LongContextInputTokenThreshold > 0 &&
+		((p.LongContextInputCostMultiplier != nil && *p.LongContextInputCostMultiplier > 0) ||
+			(p.LongContextOutputCostMultiplier != nil && *p.LongContextOutputCostMultiplier > 0))
 	return &userSupportedModelPricing{
-		BillingMode:      billingMode,
-		InputPrice:       p.InputPrice,
-		OutputPrice:      p.OutputPrice,
-		CacheWritePrice:  p.CacheWritePrice,
-		CacheReadPrice:   p.CacheReadPrice,
-		ImageInputPrice:  p.ImageInputPrice,
-		ImageOutputPrice: p.ImageOutputPrice,
-		PerRequestPrice:  p.PerRequestPrice,
-		Intervals:        intervals,
+		BillingMode:                    billingMode,
+		InputPrice:                     p.InputPrice,
+		OutputPrice:                    p.OutputPrice,
+		CacheWritePrice:                p.CacheWritePrice,
+		CacheReadPrice:                 p.CacheReadPrice,
+		ImageInputPrice:                p.ImageInputPrice,
+		ImageOutputPrice:               p.ImageOutputPrice,
+		PerRequestPrice:                p.PerRequestPrice,
+		LongContextEnabled:             longContextEnabled,
+		LongContextInputTokenThreshold: p.LongContextInputTokenThreshold,
+		LongContextInputMultiplier:     p.LongContextInputCostMultiplier,
+		LongContextOutputMultiplier:    p.LongContextOutputCostMultiplier,
+		Intervals:                      intervals,
 	}
 }

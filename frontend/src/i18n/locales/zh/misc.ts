@@ -132,7 +132,14 @@ export default {
     resetIn: '{time} 后重置',
     quotaEndsIn: '额度将在 {time} 后结束',
     windowNotActive: '等待首次使用',
-    usageOf: '已用 {used} / {limit}'
+    usageOf: '已用 {used} / {limit}',
+    sharedTitle: '共享订阅套餐',
+    sharedDescription: '每个套餐内的分组共享同一份额度',
+    sharedGroups: '包含分组',
+    sharedConcurrency: '订阅并发',
+    balanceTopup: '订阅并发用满后使用余额',
+    lifetime: '有效期总额',
+    failedToUpdate: '订阅设置更新失败'
   },
 
   // Onboarding Tour
@@ -585,6 +592,17 @@ export default {
       features: '功能特性',
       featuresHint: '每行一个特性',
       featuresPlaceholder: '输入套餐特性...',
+      tier: '商业档位',
+      tierStandard: '普通',
+      tierPro: 'Pro',
+      tierPlus: 'Plus',
+      includedGroups: '包含的 OpenAI 分组',
+      noOpenaiGroups: '暂无可用的 OpenAI 分组',
+      concurrency: '订阅并发',
+      lifetimeQuota: '有效期总额度（USD）',
+      dailyQuota: '每日额度（USD）',
+      weeklyQuota: '每周额度（USD）',
+      monthlyQuota: '每月额度（USD）',
       providerManagement: '服务商管理',
       providerManagementDesc: '管理支付服务商实例',
       createProvider: '创建服务商',
