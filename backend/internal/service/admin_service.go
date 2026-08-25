@@ -647,8 +647,7 @@ type adminServiceImpl struct {
 	privacyClientFactory PrivacyClientFactory
 	runtimeBlocker       AccountRuntimeBlocker
 	affiliateService     adminRechargeAffiliateAccruer
-	// defaultSubAssigner is a compile-only compatibility field for legacy tests.
-	defaultSubAssigner DefaultSubscriptionAssigner
+	defaultSubAssigner   DefaultSubscriptionAssigner
 }
 
 type adminRechargeAffiliateAccruer interface {
