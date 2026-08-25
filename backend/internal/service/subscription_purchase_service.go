@@ -337,7 +337,7 @@ func (s *SubscriptionService) CreateSharedPurchaseFromPlan(ctx context.Context, 
 	if err != nil {
 		return nil, err
 	}
-	ids, err := s.listPlanGroupIDs(ctx, plan.ID, plan.GroupID)
+	ids, err := s.listPlanGroupIDsWithClient(ctx, s.entClient, plan.ID, plan.GroupID)
 	if err != nil {
 		return nil, err
 	}
@@ -411,25 +411,9 @@ func (s *SubscriptionService) createSharedPurchaseWithClient(ctx context.Context
 	if err != nil {
 		return nil, err
 	}
-	planGroups, err := plan.QueryGroups().All(ctx)
+	ids, err := s.listPlanGroupIDsWithClient(ctx, client, plan.ID, plan.GroupID)
 	if err != nil {
 		return nil, err
-	}
-	ids := make([]int64, 0, len(planGroups)+1)
-	seen := make(map[int64]struct{}, len(planGroups)+1)
-	addID := func(id int64) {
-		if id <= 0 {
-			return
-		}
-		if _, ok := seen[id]; ok {
-			return
-		}
-		seen[id] = struct{}{}
-		ids = append(ids, id)
-	}
-	addID(plan.GroupID)
-	for _, planGroup := range planGroups {
-		addID(planGroup.GroupID)
 	}
 	if len(ids) == 0 {
 		return nil, errors.New("subscription plan has no groups")
@@ -546,30 +530,58 @@ func (s *SubscriptionService) getSharedPurchaseByID(ctx context.Context, purchas
 }
 
 func (s *SubscriptionService) listPlanGroupIDs(ctx context.Context, planID, legacyGroupID int64) ([]int64, error) {
-	if s.sqlDB == nil {
+	return s.listPlanGroupIDsWithClient(ctx, nil, planID, legacyGroupID)
+}
+
+func (s *SubscriptionService) listPlanGroupIDsWithClient(ctx context.Context, client *dbent.Client, planID, legacyGroupID int64) ([]int64, error) {
+	var (
+		rows *sql.Rows
+		err  error
+	)
+	switch {
+	case client != nil:
+		rows, err = client.QueryContext(ctx,
+			"SELECT group_id FROM subscription_plan_groups WHERE plan_id = $1 ORDER BY group_id",
+			planID,
+		)
+	case s.sqlDB != nil:
+		rows, err = s.sqlDB.QueryContext(ctx,
+			"SELECT group_id FROM subscription_plan_groups WHERE plan_id = $1 ORDER BY group_id",
+			planID,
+		)
+	default:
 		return []int64{legacyGroupID}, nil
 	}
-	rows, err := s.sqlDB.QueryContext(ctx,
-		"SELECT group_id FROM subscription_plan_groups WHERE plan_id = $1 ORDER BY group_id",
-		planID,
-	)
 	if err != nil {
-		return []int64{legacyGroupID}, nil
+		return nil, fmt.Errorf("load subscription plan groups: %w", err)
 	}
 	defer rows.Close()
-	var ids []int64
+
+	ids := make([]int64, 0, 1)
+	seen := make(map[int64]struct{}, 1)
+	add := func(id int64) {
+		if id <= 0 {
+			return
+		}
+		if _, ok := seen[id]; ok {
+			return
+		}
+		seen[id] = struct{}{}
+		ids = append(ids, id)
+	}
+	add(legacyGroupID)
 	for rows.Next() {
 		var id int64
 		if err := rows.Scan(&id); err != nil {
 			return nil, err
 		}
-		ids = append(ids, id)
+		add(id)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
 	if len(ids) == 0 {
-		return []int64{legacyGroupID}, nil
+		return nil, errors.New("subscription plan has no groups")
 	}
 	return ids, nil
 }

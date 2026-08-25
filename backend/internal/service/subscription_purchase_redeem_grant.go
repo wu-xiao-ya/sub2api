@@ -60,26 +60,9 @@ func (s *SubscriptionService) grantPlanRedeemPurchase(ctx context.Context, clien
 	if err != nil {
 		return nil, err
 	}
-	planGroups, err := plan.QueryGroups().All(ctx)
+	ids, err := s.listPlanGroupIDsWithClient(ctx, client, plan.ID, plan.GroupID)
 	if err != nil {
 		return nil, err
-	}
-
-	ids := make([]int64, 0, len(planGroups)+1)
-	seen := make(map[int64]struct{}, len(planGroups)+1)
-	addID := func(id int64) {
-		if id <= 0 {
-			return
-		}
-		if _, ok := seen[id]; ok {
-			return
-		}
-		seen[id] = struct{}{}
-		ids = append(ids, id)
-	}
-	addID(plan.GroupID)
-	for _, pg := range planGroups {
-		addID(pg.GroupID)
 	}
 	if len(ids) == 0 {
 		return nil, errors.New("subscription plan has no groups")
@@ -206,14 +189,14 @@ func (s *SubscriptionService) grantLegacyGroupRedeemPurchase(ctx context.Context
 		monthly = *g.MonthlyLimitUsd
 	}
 	snapshot := map[string]interface{}{
-		"group_id":       g.ID,
-		"group_name":     g.Name,
-		"platform":       g.Platform,
-		"validity_days":  validityDays,
-		"lifetime_quota_usd": lifetime,
-		"daily_quota_usd":   daily,
-		"weekly_quota_usd":  weekly,
-		"monthly_quota_usd": monthly,
+		"group_id":                g.ID,
+		"group_name":              g.Name,
+		"platform":                g.Platform,
+		"validity_days":           validityDays,
+		"lifetime_quota_usd":      lifetime,
+		"daily_quota_usd":         daily,
+		"weekly_quota_usd":        weekly,
+		"monthly_quota_usd":       monthly,
 		"concurrency_entitlement": 0,
 	}
 	purchase, createErr := client.SubscriptionPurchase.Create().

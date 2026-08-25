@@ -48,6 +48,7 @@ func TestSubscriptionPurchaseRetirementMigrationChain(t *testing.T) {
 		"232_usage_log_subscription_purchase_attribution.sql",
 		"233_backfill_and_freeze_native_subscriptions.sql",
 		"234_backfill_legacy_usage_purchase_attribution.sql",
+		"235_align_subscription_plan_groups_ent_schema.sql",
 	}
 	contents := make([]string, 0, len(names))
 	for _, name := range names {
@@ -71,4 +72,17 @@ func TestSubscriptionPurchaseRetirementMigrationChain(t *testing.T) {
 	require.NotContains(t, contents[2], "drop table user_subscriptions")
 	require.NotContains(t, contents[3], "delete from user_subscriptions")
 	require.NotContains(t, contents[3], "update user_subscriptions")
+	require.Contains(t, contents[4], "add column if not exists id bigint")
+	require.Contains(t, contents[4], "create unique index if not exists idx_subscription_plan_groups_id")
+	require.NotContains(t, contents[4], "drop table subscription_plan_groups")
+}
+
+func TestSubscriptionPlanGroupsEntAlignmentMigration(t *testing.T) {
+	sql := readRetirementMigration(t, "235_align_subscription_plan_groups_ent_schema.sql")
+	require.Contains(t, sql, "create sequence if not exists subscription_plan_groups_id_seq")
+	require.Contains(t, sql, "alter table subscription_plan_groups")
+	require.Contains(t, sql, "set default nextval")
+	require.Contains(t, sql, "where id is null")
+	require.Contains(t, sql, "create unique index if not exists idx_subscription_plan_groups_id")
+	require.NotContains(t, sql, "drop table")
 }

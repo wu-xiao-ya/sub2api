@@ -1209,6 +1209,59 @@ func (s *adminServiceImpl) GetRedeemCode(ctx context.Context, id int64) (*Redeem
 	return s.redeemCodeRepo.GetByID(ctx, id)
 }
 
+// listSubscriptionPlanGroupIDs reads the persisted plan-to-group mapping
+// directly. subscription_plan_groups was introduced as a composite-key
+// relation table, while the generated Ent relation model historically
+// assumed an implicit id column. Keeping this read path explicit makes
+// redeem-code generation work with both the existing table and the aligned
+// schema after migration 235.
+func (s *adminServiceImpl) listSubscriptionPlanGroupIDs(ctx context.Context, plan *dbent.SubscriptionPlan) ([]int64, error) {
+	if plan == nil {
+		return nil, errors.New("subscription plan is nil")
+	}
+
+	ids := make([]int64, 0, 1)
+	seen := make(map[int64]struct{}, 1)
+	add := func(id int64) {
+		if id <= 0 {
+			return
+		}
+		if _, ok := seen[id]; ok {
+			return
+		}
+		seen[id] = struct{}{}
+		ids = append(ids, id)
+	}
+
+	// Keep the original single-group field as a compatibility fallback for
+	// plans created before multi-group mappings were introduced.
+	add(plan.GroupID)
+	if s.entClient == nil {
+		return ids, nil
+	}
+
+	rows, err := s.entClient.QueryContext(ctx,
+		"SELECT group_id FROM subscription_plan_groups WHERE plan_id = $1 ORDER BY group_id",
+		plan.ID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("load subscription plan groups: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var groupID int64
+		if err := rows.Scan(&groupID); err != nil {
+			return nil, fmt.Errorf("read subscription plan group: %w", err)
+		}
+		add(groupID)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate subscription plan groups: %w", err)
+	}
+	return ids, nil
+}
+
 func (s *adminServiceImpl) GenerateRedeemCodes(ctx context.Context, input *GenerateRedeemCodesInput) ([]RedeemCode, error) {
 	if input.ExpiresAt != nil && !input.ExpiresAt.After(time.Now()) {
 		return nil, ErrRedeemCodeExpired
@@ -1221,14 +1274,17 @@ func (s *adminServiceImpl) GenerateRedeemCodes(ctx context.Context, input *Gener
 			if err != nil {
 				return nil, fmt.Errorf("subscription plan not found: %w", err)
 			}
-			groups, err := plan.QueryGroups().All(ctx)
-			if err != nil || len(groups) == 0 {
-				return nil, errors.New("subscription plan has no groups")
+			groupIDs, err := s.listSubscriptionPlanGroupIDs(ctx, plan)
+			if err != nil {
+				return nil, err
 			}
-			for _, planGroup := range groups {
-				group, groupErr := s.groupRepo.GetByID(ctx, planGroup.GroupID)
+			if len(groupIDs) == 0 {
+				return nil, infraerrors.BadRequest("SUBSCRIPTION_PLAN_GROUPS_REQUIRED", "subscription plan has no groups")
+			}
+			for _, groupID := range groupIDs {
+				group, groupErr := s.groupRepo.GetByID(ctx, groupID)
 				if groupErr != nil || group == nil || !strings.EqualFold(group.Platform, PlatformOpenAI) {
-					return nil, errors.New("subscription plan groups must use openai platform")
+					return nil, infraerrors.BadRequest("SUBSCRIPTION_PLAN_PLATFORM_INVALID", "subscription plan groups must use openai platform")
 				}
 			}
 		} else {
