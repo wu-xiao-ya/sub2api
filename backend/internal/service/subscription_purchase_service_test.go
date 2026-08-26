@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"database/sql"
 	"testing"
 	"time"
 
@@ -74,5 +75,32 @@ func TestListActiveSharedSubscriptionsForGroup(t *testing.T) {
 	require.Equal(t, 5, items[0].ConcurrencyEntitlement)
 	require.False(t, items[0].BalanceTopupEnabled)
 	require.Equal(t, "subscription", items[0].BillingPriority)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestUserSubscriptionBalanceTopupPreferenceDefaultsClosedAndUpserts(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+
+	mock.ExpectQuery(`SELECT balance_topup_enabled\s+FROM user_subscription_preferences`).
+		WithArgs(int64(42)).
+		WillReturnError(sql.ErrNoRows)
+	svc := &SubscriptionService{sqlDB: db}
+	enabled, err := svc.GetUserSubscriptionBalanceTopupPreference(context.Background(), 42)
+	require.NoError(t, err)
+	require.False(t, enabled)
+
+	mock.ExpectExec(`INSERT INTO user_subscription_preferences`).
+		WithArgs(int64(42), true).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	require.NoError(t, svc.SetUserSubscriptionBalanceTopupPreference(context.Background(), 42, true))
+
+	mock.ExpectQuery(`SELECT balance_topup_enabled\s+FROM user_subscription_preferences`).
+		WithArgs(int64(42)).
+		WillReturnRows(sqlmock.NewRows([]string{"balance_topup_enabled"}).AddRow(true))
+	enabled, err = svc.GetUserSubscriptionBalanceTopupPreference(context.Background(), 42)
+	require.NoError(t, err)
+	require.True(t, enabled)
 	require.NoError(t, mock.ExpectationsWereMet())
 }

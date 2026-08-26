@@ -141,6 +141,8 @@ export default {
     sharedGroups: 'Included groups',
     sharedConcurrency: 'Subscription concurrency',
     balanceTopup: 'Use balance when subscription concurrency is full',
+    subscriptionBalanceTopup: 'Use balance after subscription is exhausted',
+    subscriptionBalanceTopupHint: 'When enabled, requests after subscription quota or concurrency is exhausted are charged at the regular balance rate.',
     billingPriority: 'Billing priority',
     billingPriorityHint: 'Choose whether requests should consume subscription quota or wallet balance first.',
     subscriptionPriority: 'Subscription first',

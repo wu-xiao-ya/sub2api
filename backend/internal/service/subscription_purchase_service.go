@@ -44,6 +44,41 @@ type SharedSubscriptionGroup struct {
 	Platform string `json:"platform"`
 }
 
+// GetUserSubscriptionBalanceTopupPreference returns the user's global opt-in
+// for charging wallet balance after shared subscription capacity is exhausted.
+// Missing rows intentionally resolve to false so the feature is fail-closed.
+func (s *SubscriptionService) GetUserSubscriptionBalanceTopupPreference(ctx context.Context, userID int64) (bool, error) {
+	if s == nil || s.sqlDB == nil || userID <= 0 {
+		return false, nil
+	}
+	var enabled bool
+	err := s.sqlDB.QueryRowContext(ctx, `
+		SELECT balance_topup_enabled
+		FROM user_subscription_preferences
+		WHERE user_id = $1
+	`, userID).Scan(&enabled)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	return enabled, err
+}
+
+// SetUserSubscriptionBalanceTopupPreference updates the user's global opt-in.
+// The upsert is idempotent and creates the preference lazily.
+func (s *SubscriptionService) SetUserSubscriptionBalanceTopupPreference(ctx context.Context, userID int64, enabled bool) error {
+	if s == nil || s.sqlDB == nil || userID <= 0 {
+		return ErrSharedSubscriptionNotFound
+	}
+	_, err := s.sqlDB.ExecContext(ctx, `
+		INSERT INTO user_subscription_preferences (user_id, balance_topup_enabled)
+		VALUES ($1, $2)
+		ON CONFLICT (user_id) DO UPDATE SET
+			balance_topup_enabled = EXCLUDED.balance_topup_enabled,
+			updated_at = NOW()
+	`, userID, enabled)
+	return err
+}
+
 // AsLegacySubscription is a compatibility adapter for existing gateway handlers.
 // Purchase identity is carried explicitly and never encoded as a synthetic legacy ID.
 func (s *SharedSubscriptionEntitlement) AsLegacySubscription(group *Group) *UserSubscription {

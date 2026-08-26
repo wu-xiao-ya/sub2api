@@ -117,6 +117,8 @@ func RegisterUserRoutes(
 		subscriptions := authenticated.Group("/subscriptions")
 		{
 			subscriptions.GET("/shared", h.Subscription.ListShared)
+			subscriptions.GET("/preferences", h.Subscription.GetSubscriptionPreferences)
+			subscriptions.PATCH("/preferences/balance-topup", h.Subscription.SetSubscriptionBalanceTopupPreference)
 			subscriptions.PATCH("/shared/:id/balance-topup", h.Subscription.SetSharedBalanceTopup)
 			subscriptions.PATCH("/shared/:id/billing-priority", h.Subscription.SetSharedBillingPriority)
 		}

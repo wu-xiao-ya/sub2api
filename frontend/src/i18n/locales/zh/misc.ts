@@ -138,6 +138,8 @@ export default {
     sharedGroups: '包含分组',
     sharedConcurrency: '订阅并发',
     balanceTopup: '订阅并发用满后使用余额',
+    subscriptionBalanceTopup: '订阅耗尽后使用余额',
+    subscriptionBalanceTopupHint: '开启后，订阅额度或订阅并发用尽时，后续请求将按普通余额价格扣费。',
     billingPriority: '扣费优先级',
     billingPriorityHint: '选择请求优先消耗订阅额度或钱包余额。',
     subscriptionPriority: '订阅优先',

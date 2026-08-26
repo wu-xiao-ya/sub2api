@@ -21,13 +21,30 @@
       </div>
 
       <section v-else class="space-y-3">
-        <div>
-          <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
-            {{ t('userSubscriptions.sharedTitle') }}
-          </h2>
-          <p class="text-sm text-gray-500 dark:text-dark-400">
-            {{ t('userSubscriptions.sharedDescription') }}
-          </p>
+        <div class="flex flex-col gap-4 border-b border-gray-100 pb-3 dark:border-dark-700 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+              {{ t('userSubscriptions.sharedTitle') }}
+            </h2>
+            <p class="text-sm text-gray-500 dark:text-dark-400">
+              {{ t('userSubscriptions.sharedDescription') }}
+            </p>
+          </div>
+          <label class="flex max-w-md cursor-pointer items-start gap-3 text-sm text-gray-700 dark:text-dark-200">
+            <input
+              v-model="balanceTopupEnabled"
+              type="checkbox"
+              class="mt-0.5 h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+              :disabled="updatingPreference"
+              @change="toggleBalanceTopupPreference"
+            />
+            <span>
+              <span class="block font-medium">{{ t('userSubscriptions.subscriptionBalanceTopup') }}</span>
+              <span class="mt-0.5 block text-xs text-gray-500 dark:text-dark-400">
+                {{ t('userSubscriptions.subscriptionBalanceTopupHint') }}
+              </span>
+            </span>
+          </label>
         </div>
 
         <div class="grid gap-4 lg:grid-cols-2">
@@ -122,16 +139,6 @@
                   </button>
                 </div>
               </div>
-              <label class="flex cursor-pointer items-center gap-2 border-t border-gray-100 pt-3 text-xs text-gray-600 dark:border-dark-700 dark:text-dark-300">
-                <input
-                  type="checkbox"
-                  class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-                  :checked="purchase.balance_topup_enabled"
-                  :disabled="updatingPurchaseId === purchase.id"
-                  @change="toggleBalanceTopup(purchase)"
-                />
-                {{ t('userSubscriptions.balanceTopup') }}
-              </label>
             </div>
           </article>
         </div>
@@ -156,6 +163,8 @@ const appStore = useAppStore()
 const sharedSubscriptions = ref<SharedSubscription[]>([])
 const loading = ref(true)
 const updatingPurchaseId = ref<number | null>(null)
+const balanceTopupEnabled = ref(false)
+const updatingPreference = ref(false)
 const billingPriorities = [
   { value: 'subscription' as const, label: t('userSubscriptions.subscriptionPriority') },
   { value: 'balance' as const, label: t('userSubscriptions.balancePriority') },
@@ -164,7 +173,12 @@ const billingPriorities = [
 async function loadSubscriptions() {
   loading.value = true
   try {
-    sharedSubscriptions.value = await subscriptionsAPI.getMySharedSubscriptions()
+    const [subscriptions, preferences] = await Promise.all([
+      subscriptionsAPI.getMySharedSubscriptions(),
+      subscriptionsAPI.getSubscriptionPreferences(),
+    ])
+    sharedSubscriptions.value = subscriptions
+    balanceTopupEnabled.value = preferences.balance_topup_enabled
   } catch (error) {
     console.error('Failed to load shared subscriptions:', error)
     appStore.showError(t('userSubscriptions.failedToLoad'))
@@ -213,18 +227,19 @@ function sharedQuotaClass(used: number, limit: number): string {
   return 'bg-primary-500'
 }
 
-async function toggleBalanceTopup(purchase: SharedSubscription) {
-  if (updatingPurchaseId.value !== null) return
-  const next = !purchase.balance_topup_enabled
-  updatingPurchaseId.value = purchase.id
+async function toggleBalanceTopupPreference() {
+  if (updatingPreference.value) return
+  const previous = !balanceTopupEnabled.value
+  updatingPreference.value = true
   try {
-    const updated = await subscriptionsAPI.setSharedBalanceTopup(purchase.id, next)
-    purchase.balance_topup_enabled = updated.balance_topup_enabled
+    const updated = await subscriptionsAPI.setSubscriptionBalanceTopupPreference(balanceTopupEnabled.value)
+    balanceTopupEnabled.value = updated.balance_topup_enabled
   } catch (error) {
-    console.error('Failed to update balance top-up:', error)
+    balanceTopupEnabled.value = previous
+    console.error('Failed to update global balance top-up:', error)
     appStore.showError(t('userSubscriptions.failedToUpdate'))
   } finally {
-    updatingPurchaseId.value = null
+    updatingPreference.value = false
   }
 }
 

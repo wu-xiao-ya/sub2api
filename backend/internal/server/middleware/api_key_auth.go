@@ -266,7 +266,9 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 			// window-maintenance write is required.
 			if sharedPurchase != nil {
 				if validateErr := subscriptionService.ValidateSharedPurchase(sharedPurchase, 0); validateErr != nil {
-					if sharedPurchase.BalanceTopupEnabled && isSharedSubscriptionQuotaError(validateErr) {
+					if sharedConcurrencyPlan != nil &&
+						sharedConcurrencyPlan.AllowBalanceTopup &&
+						isSharedSubscriptionQuotaError(validateErr) {
 						// Quota drained but the purchase allows spilling over to account
 						// balance: drop the entitlement and fall through to the balance check.
 						subscription = nil

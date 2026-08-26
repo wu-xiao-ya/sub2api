@@ -78,6 +78,46 @@ func (h *SubscriptionHandler) ListShared(c *gin.Context) {
 	response.Success(c, out)
 }
 
+// GetSubscriptionPreferences returns user-level subscription preferences.
+func (h *SubscriptionHandler) GetSubscriptionPreferences(c *gin.Context) {
+	subject, ok := middleware2.GetAuthSubjectFromContext(c)
+	if !ok {
+		response.Error(c, 401, "authentication required")
+		return
+	}
+	enabled, err := h.subscriptionService.GetUserSubscriptionBalanceTopupPreference(
+		c.Request.Context(), subject.UserID,
+	)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, gin.H{"balance_topup_enabled": enabled})
+}
+
+// SetSubscriptionBalanceTopupPreference updates the user's global opt-in.
+func (h *SubscriptionHandler) SetSubscriptionBalanceTopupPreference(c *gin.Context) {
+	subject, ok := middleware2.GetAuthSubjectFromContext(c)
+	if !ok {
+		response.Error(c, 401, "authentication required")
+		return
+	}
+	var req struct {
+		Enabled *bool `json:"enabled"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil || req.Enabled == nil {
+		response.Error(c, 400, "enabled is required")
+		return
+	}
+	if err := h.subscriptionService.SetUserSubscriptionBalanceTopupPreference(
+		c.Request.Context(), subject.UserID, *req.Enabled,
+	); err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, gin.H{"balance_topup_enabled": *req.Enabled})
+}
+
 func (h *SubscriptionHandler) SetSharedBillingPriority(c *gin.Context) {
 	subject, ok := middleware2.GetAuthSubjectFromContext(c)
 	if !ok {

@@ -28,8 +28,27 @@ export interface SharedSubscription {
   groups: SharedSubscriptionGroup[]
 }
 
+export interface SubscriptionPreferences {
+  balance_topup_enabled: boolean
+}
+
 export async function getMySharedSubscriptions(): Promise<SharedSubscription[]> {
   const response = await apiClient.get<SharedSubscription[]>('/subscriptions/shared')
+  return response.data
+}
+
+export async function getSubscriptionPreferences(): Promise<SubscriptionPreferences> {
+  const response = await apiClient.get<SubscriptionPreferences>('/subscriptions/preferences')
+  return response.data
+}
+
+export async function setSubscriptionBalanceTopupPreference(
+  enabled: boolean,
+): Promise<SubscriptionPreferences> {
+  const response = await apiClient.patch<SubscriptionPreferences>(
+    '/subscriptions/preferences/balance-topup',
+    { enabled },
+  )
   return response.data
 }
 
@@ -57,6 +76,8 @@ export async function setSharedBillingPriority(
 
 export default {
   getMySharedSubscriptions,
+  getSubscriptionPreferences,
+  setSubscriptionBalanceTopupPreference,
   setSharedBalanceTopup,
   setSharedBillingPriority,
 }

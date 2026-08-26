@@ -68,6 +68,14 @@ func sharedSubscriptionConcurrencyPlan(
 		UserLimit:             userLimit,
 		HasSharedSubscription: len(items) > 0,
 	}
+	// Balance fallback is a user-level opt-in. Purchase-level flags remain in
+	// the response for compatibility, but must not independently enable billing.
+	globalTopupEnabled, prefErr := subscriptionService.GetUserSubscriptionBalanceTopupPreference(ctx, userID)
+	if prefErr != nil {
+		// Fail closed when the preference store is unavailable so a transient
+		// database issue cannot unexpectedly charge wallet balance.
+		globalTopupEnabled = false
+	}
 	for _, item := range items {
 		validateErr := subscriptionService.ValidateSharedPurchase(&item, 0)
 		if validateErr != nil {
@@ -77,7 +85,7 @@ func sharedSubscriptionConcurrencyPlan(
 					plan.BalancePriorityPurchaseID = item.ID
 				}
 			}
-			if item.BalanceTopupEnabled && isSharedSubscriptionQuotaError(validateErr) {
+			if globalTopupEnabled && isSharedSubscriptionQuotaError(validateErr) {
 				plan.AllowBalanceTopup = true
 				if plan.BalanceTopupPurchaseID == 0 {
 					plan.BalanceTopupPurchaseID = item.ID
@@ -91,7 +99,7 @@ func sharedSubscriptionConcurrencyPlan(
 				plan.BalancePriorityPurchaseID = item.ID
 			}
 		}
-		if item.BalanceTopupEnabled {
+		if globalTopupEnabled {
 			plan.AllowBalanceTopup = true
 			if plan.BalanceTopupPurchaseID == 0 {
 				plan.BalanceTopupPurchaseID = item.ID
@@ -101,7 +109,7 @@ func sharedSubscriptionConcurrencyPlan(
 		plan.Entitlements = append(plan.Entitlements, service.SubscriptionConcurrencyEntitlement{
 			PurchaseID:          item.ID,
 			Concurrency:         item.ConcurrencyEntitlement,
-			BalanceTopupEnabled: item.BalanceTopupEnabled,
+			BalanceTopupEnabled: globalTopupEnabled,
 			BillingPriority:     item.BillingPriority,
 			ExpiresAt:           item.ExpiresAt,
 			Subscription:        itemCopy.AsLegacySubscription(nil),

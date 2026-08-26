@@ -210,7 +210,7 @@ func APIKeyAuthWithSubscriptionGoogle(apiKeyService *service.APIKeyService, subs
 					return
 				}
 				if validateErr := subscriptionService.ValidateSharedPurchase(sharedPurchase, 0); validateErr != nil {
-					if sharedPurchase.BalanceTopupEnabled && isSharedSubscriptionQuotaError(validateErr) {
+					if plan != nil && plan.AllowBalanceTopup && isSharedSubscriptionQuotaError(validateErr) {
 						useBalance = true
 					} else {
 						status := 403

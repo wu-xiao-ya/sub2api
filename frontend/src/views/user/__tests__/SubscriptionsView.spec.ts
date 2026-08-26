@@ -2,8 +2,10 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createI18n } from 'vue-i18n'
 
-const { getShared, setTopup, setPriority, push, showError } = vi.hoisted(() => ({
+const { getShared, getPreferences, setTopupPreference, setTopup, setPriority, push, showError } = vi.hoisted(() => ({
   getShared: vi.fn(),
+  getPreferences: vi.fn(),
+  setTopupPreference: vi.fn(),
   setTopup: vi.fn(),
   setPriority: vi.fn(),
   push: vi.fn(),
@@ -13,6 +15,8 @@ const { getShared, setTopup, setPriority, push, showError } = vi.hoisted(() => (
 vi.mock('@/api/subscriptions', () => ({
   default: {
     getMySharedSubscriptions: getShared,
+    getSubscriptionPreferences: getPreferences,
+    setSubscriptionBalanceTopupPreference: setTopupPreference,
     setSharedBalanceTopup: setTopup,
     setSharedBillingPriority: setPriority,
   },
@@ -30,6 +34,8 @@ const messages = {
       noActiveSubscriptions: 'No subscriptions', noActiveSubscriptionsDesc: 'Choose a plan',
       sharedTitle: 'Subscriptions', sharedDescription: 'Purchase snapshots', sharedGroups: 'Groups',
       sharedConcurrency: 'Concurrency', balanceTopup: 'Use balance', lifetime: 'Lifetime', daily: 'Daily', weekly: 'Weekly', monthly: 'Monthly', unlimited: 'Unlimited',
+      subscriptionBalanceTopup: 'Use balance after subscription is exhausted',
+      subscriptionBalanceTopupHint: 'Charge regular balance after quota or concurrency is exhausted.',
       billingPriority: 'Billing priority', billingPriorityHint: 'Choose the wallet first', subscriptionPriority: 'Subscription first', balancePriority: 'Balance first',
       failedToLoad: 'Load failed', failedToUpdate: 'Update failed', daysRemaining: '{days} days remaining',
       status: { active: 'Active', expired: 'Expired' },
@@ -58,6 +64,8 @@ describe('SubscriptionsView', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     getShared.mockResolvedValue([structuredClone(purchase)])
+    getPreferences.mockResolvedValue({ balance_topup_enabled: false })
+    setTopupPreference.mockResolvedValue({ balance_topup_enabled: true })
     setTopup.mockResolvedValue({ id: 7, balance_topup_enabled: true })
     setPriority.mockResolvedValue({ id: 7, billing_priority: 'balance' })
   })
@@ -72,13 +80,17 @@ describe('SubscriptionsView', () => {
     expect(wrapper.text()).toContain('Pro')
   })
 
-  it('updates balance top-up from the shared purchase endpoint', async () => {
+  it('loads and updates the single global balance top-up preference', async () => {
     const wrapper = mountView()
     await flushPromises()
+    const checkbox = wrapper.get('input[type="checkbox"]').element as HTMLInputElement
+    checkbox.checked = true
     await wrapper.get('input[type="checkbox"]').trigger('change')
     await flushPromises()
 
-    expect(setTopup).toHaveBeenCalledWith(7, true)
+    expect(getPreferences).toHaveBeenCalledOnce()
+    expect(setTopupPreference).toHaveBeenCalledWith(true)
+    expect(setTopup).not.toHaveBeenCalled()
     expect((wrapper.get('input[type="checkbox"]').element as HTMLInputElement).checked).toBe(true)
   })
 

@@ -883,6 +883,9 @@ func TestApiKeyAuthWithSubscriptionGoogle_SubscriptionLimitExceededReturns429(t 
 			int64(601), int64(user.ID), "Gemini daily", "standard", startsAt, expiresAt, "active",
 			3, 100.0, 1.0, 10.0, 40.0, 10.0, 10.0, 10.0, 10.0, false, "subscription",
 		))
+	mock.ExpectQuery(`SELECT balance_topup_enabled\s+FROM user_subscription_preferences`).
+		WithArgs(int64(user.ID)).
+		WillReturnRows(sqlmock.NewRows([]string{"balance_topup_enabled"}).AddRow(false))
 	subscriptionService := service.NewSubscriptionService(nil, nil, nil, nil, &config.Config{RunMode: config.RunModeStandard}, db)
 	t.Cleanup(subscriptionService.Stop)
 

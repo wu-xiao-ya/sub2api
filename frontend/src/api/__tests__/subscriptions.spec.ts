@@ -26,6 +26,20 @@ describe('shared subscriptions api', () => {
     expect(get).toHaveBeenCalledWith('/subscriptions/shared')
   })
 
+  it('reads and updates the global balance top-up preference', async () => {
+    get.mockResolvedValue({ data: { balance_topup_enabled: false } })
+    await expect(subscriptionsAPI.getSubscriptionPreferences()).resolves.toEqual({
+      balance_topup_enabled: false,
+    })
+    expect(get).toHaveBeenCalledWith('/subscriptions/preferences')
+
+    patch.mockResolvedValue({ data: { balance_topup_enabled: true } })
+    await expect(subscriptionsAPI.setSubscriptionBalanceTopupPreference(true)).resolves.toEqual({
+      balance_topup_enabled: true,
+    })
+    expect(patch).toHaveBeenCalledWith('/subscriptions/preferences/balance-topup', { enabled: true })
+  })
+
   it('updates shared balance top-up by purchase id', async () => {
     patch.mockResolvedValue({ data: { id: 8, balance_topup_enabled: true } })
 
