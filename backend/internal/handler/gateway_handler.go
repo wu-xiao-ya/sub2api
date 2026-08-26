@@ -1272,7 +1272,7 @@ func defaultModelIDsForPlatform(platform string) []string {
 	case service.PlatformKimi:
 		return []string{"kimi-k3", "kimi-k2.6", "kimi-for-coding", "kimi-k2.5", "kimi-k2-thinking", "kimi-k2", "moonshot-v1-8k", "moonshot-v1-32k", "moonshot-v1-128k"}
 	case service.PlatformGLM:
-		return []string{"glm-5.2", "glm-5.1", "glm-5", "glm-5-turbo", "glm-4.7", "glm-4.7-flash", "glm-4.7-flashx", "glm-4.6", "glm-4.5"}
+		return []string{"glm-5.3", "glm-5.2", "glm-5.1", "glm-5", "glm-5-turbo", "glm-4.7", "glm-4.7-flash", "glm-4.7-flashx", "glm-4.6", "glm-4.5"}
 	default:
 		ids := make([]string, 0, len(claude.DefaultModels))
 		for _, model := range claude.DefaultModels {

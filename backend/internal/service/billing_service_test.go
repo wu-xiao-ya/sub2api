@@ -170,6 +170,18 @@ func TestGetModelPricing_GLM52UsesOwnPrice(t *testing.T) {
 	require.InDelta(t, 0.26e-6, got.CacheReadPricePerToken, 1e-12)
 }
 
+func TestGetModelPricing_GLM53UsesOwnPrice(t *testing.T) {
+	svc := newTestBillingService()
+
+	got, err := svc.GetModelPricing("glm-5.3")
+	require.NoError(t, err)
+	require.NotNil(t, got)
+
+	require.InDelta(t, 0.8e-6, got.InputPricePerToken, 1e-12)
+	require.InDelta(t, 2.56e-6, got.OutputPricePerToken, 1e-12)
+	require.InDelta(t, 0.16e-6, got.CacheReadPricePerToken, 1e-12)
+}
+
 func TestGetModelPricing_UnknownClaudeModelFallsBackToSonnet(t *testing.T) {
 	svc := newTestBillingService()
 
@@ -488,6 +500,13 @@ func TestGetFallbackPricing_FamilyMatching(t *testing.T) {
 		},
 
 		// ---- 智谱 GLM（z.ai USD 口径）----
+		{
+			name:              "glm 5.3 flagship",
+			model:             "glm-5.3",
+			expectedInput:     0.8e-6,
+			expectedOutput:    floatPtr(2.56e-6),
+			expectedCacheRead: floatPtr(0.16e-6),
+		},
 		{
 			name:              "glm 5.2 flagship",
 			model:             "glm-5.2",

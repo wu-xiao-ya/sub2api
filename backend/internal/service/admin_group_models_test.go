@@ -32,6 +32,7 @@ func TestDefaultOpenAICompatibleModelIDs(t *testing.T) {
 
 	t.Run("glm", func(t *testing.T) {
 		require.Equal(t, []string{
+			"glm-5.3",
 			"glm-5.2",
 			"glm-5.1",
 			"glm-5",
