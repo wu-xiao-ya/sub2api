@@ -172,30 +172,58 @@ func APIKeyAuthWithSubscriptionGoogle(apiKeyService *service.APIKeyService, subs
 				abortWithGoogleError(c, 403, "No active subscription found for this group")
 				return
 			}
-			sharedPurchase, _, err := sharedSubscriptionForRequest(
+			plan, planErr := sharedSubscriptionConcurrencyPlan(
 				c.Request.Context(),
 				subscriptionService,
 				apiKey.User.ID,
 				apiKey.Group.ID,
+				apiKey.User.Concurrency,
 			)
-			if err != nil {
-				abortWithGoogleError(c, 403, "No active subscription found for this group")
-				return
-			}
-			if validateErr := subscriptionService.ValidateSharedPurchase(sharedPurchase, 0); validateErr != nil {
-				if sharedPurchase.BalanceTopupEnabled && isSharedSubscriptionQuotaError(validateErr) {
-					useBalance = true
-				} else {
-					status := 403
-					if isSharedSubscriptionQuotaError(validateErr) {
-						status = 429
+			if planErr == nil {
+				c.Request = c.Request.WithContext(service.WithSubscriptionConcurrencyPlan(c.Request.Context(), plan))
+				if len(plan.Entitlements) > 0 {
+					sharedPurchase := plan.Entitlements[0].SharedSubscription
+					if sharedPurchase != nil {
+						c.Set(string(ContextKeySharedSubscription), sharedPurchase)
+						c.Set(string(ContextKeySubscription), sharedPurchase.AsLegacySubscription(apiKey.Group))
 					}
-					abortWithGoogleError(c, status, validateErr.Error())
+				}
+				// A valid subscription remains a fallback when balance is the
+				// preferred wallet. Only require balance at auth time when no
+				// usable subscription entitlement remains.
+				useBalance = len(plan.Entitlements) == 0 && (plan.AllowBalancePriority || plan.AllowBalanceTopup)
+				if len(plan.Entitlements) == 0 && !useBalance {
+					abortWithGoogleError(c, 429, "All active subscription quotas for this group are exhausted")
 					return
 				}
 			} else {
-				c.Set(string(ContextKeySharedSubscription), sharedPurchase)
-				c.Set(string(ContextKeySubscription), sharedPurchase.AsLegacySubscription(apiKey.Group))
+				// Keep legacy repository-backed subscriptions working for older
+				// installations and isolated compatibility tests.
+				sharedPurchase, _, err := sharedSubscriptionForRequest(
+					c.Request.Context(),
+					subscriptionService,
+					apiKey.User.ID,
+					apiKey.Group.ID,
+				)
+				if err != nil {
+					abortWithGoogleError(c, 403, "No active subscription found for this group")
+					return
+				}
+				if validateErr := subscriptionService.ValidateSharedPurchase(sharedPurchase, 0); validateErr != nil {
+					if sharedPurchase.BalanceTopupEnabled && isSharedSubscriptionQuotaError(validateErr) {
+						useBalance = true
+					} else {
+						status := 403
+						if isSharedSubscriptionQuotaError(validateErr) {
+							status = 429
+						}
+						abortWithGoogleError(c, status, validateErr.Error())
+						return
+					}
+				} else {
+					c.Set(string(ContextKeySharedSubscription), sharedPurchase)
+					c.Set(string(ContextKeySubscription), sharedPurchase.AsLegacySubscription(apiKey.Group))
+				}
 			}
 		}
 		if !isSubscriptionType || useBalance {

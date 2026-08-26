@@ -1630,6 +1630,7 @@ var (
 		{Name: "weekly_window_start", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"postgres": "timestamptz"}},
 		{Name: "monthly_window_start", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"postgres": "timestamptz"}},
 		{Name: "balance_topup_enabled", Type: field.TypeBool, Default: false},
+		{Name: "billing_priority", Type: field.TypeString, Size: 20, Default: "subscription"},
 		{Name: "source", Type: field.TypeString, Size: 30, Default: "payment"},
 		{Name: "source_id", Type: field.TypeInt64, Nullable: true},
 		{Name: "snapshot", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
@@ -1656,7 +1657,7 @@ var (
 			{
 				Name:    "subscriptionpurchase_source_source_id",
 				Unique:  true,
-				Columns: []*schema.Column{SubscriptionPurchasesColumns[23], SubscriptionPurchasesColumns[24]},
+				Columns: []*schema.Column{SubscriptionPurchasesColumns[24], SubscriptionPurchasesColumns[25]},
 			},
 		},
 	}

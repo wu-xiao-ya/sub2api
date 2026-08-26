@@ -141,6 +141,10 @@ export default {
     sharedGroups: 'Included groups',
     sharedConcurrency: 'Subscription concurrency',
     balanceTopup: 'Use balance when subscription concurrency is full',
+    billingPriority: 'Billing priority',
+    billingPriorityHint: 'Choose whether requests should consume subscription quota or wallet balance first.',
+    subscriptionPriority: 'Subscription first',
+    balancePriority: 'Balance first',
     lifetime: 'Lifetime',
     failedToUpdate: 'Failed to update subscription settings'
   },

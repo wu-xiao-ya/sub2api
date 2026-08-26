@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
@@ -34,6 +35,7 @@ type SharedSubscriptionEntitlement struct {
 	WeeklyUsageUSD         float64
 	MonthlyUsageUSD        float64
 	BalanceTopupEnabled    bool
+	BillingPriority        string
 }
 
 type SharedSubscriptionGroup struct {
@@ -140,7 +142,7 @@ func (s *SubscriptionService) GetActiveSharedSubscriptionForGroup(ctx context.Co
 		       p.concurrency_entitlement, p.lifetime_quota_usd,
 		       p.daily_quota_usd, p.weekly_quota_usd, p.monthly_quota_usd,
 		       p.lifetime_usage_usd, p.daily_usage_usd, p.weekly_usage_usd,
-		       p.monthly_usage_usd, p.balance_topup_enabled
+		       p.monthly_usage_usd, p.balance_topup_enabled, p.billing_priority
 		FROM subscription_purchases p
 		JOIN subscription_purchase_groups g ON g.purchase_id = p.id
 		WHERE p.user_id = $1 AND g.group_id = $2
@@ -156,7 +158,7 @@ func (s *SubscriptionService) GetActiveSharedSubscriptionForGroup(ctx context.Co
 		&out.ConcurrencyEntitlement, &out.LifetimeQuotaUSD,
 		&out.DailyQuotaUSD, &out.WeeklyQuotaUSD, &out.MonthlyQuotaUSD,
 		&out.LifetimeUsageUSD, &out.DailyUsageUSD, &out.WeeklyUsageUSD,
-		&out.MonthlyUsageUSD, &out.BalanceTopupEnabled,
+		&out.MonthlyUsageUSD, &out.BalanceTopupEnabled, &out.BillingPriority,
 	); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrSharedSubscriptionNotFound
@@ -177,7 +179,7 @@ func (s *SubscriptionService) ListActiveSharedSubscriptions(ctx context.Context,
 		       concurrency_entitlement, lifetime_quota_usd, daily_quota_usd,
 		       weekly_quota_usd, monthly_quota_usd, lifetime_usage_usd,
 		       daily_usage_usd, weekly_usage_usd, monthly_usage_usd,
-		       balance_topup_enabled
+		       balance_topup_enabled, billing_priority
 		FROM subscription_purchases
 		WHERE user_id = $1 AND status = 'active'
 		  AND starts_at <= NOW() AND expires_at > NOW()
@@ -196,7 +198,7 @@ func (s *SubscriptionService) ListActiveSharedSubscriptions(ctx context.Context,
 			&item.ConcurrencyEntitlement, &item.LifetimeQuotaUSD,
 			&item.DailyQuotaUSD, &item.WeeklyQuotaUSD, &item.MonthlyQuotaUSD,
 			&item.LifetimeUsageUSD, &item.DailyUsageUSD, &item.WeeklyUsageUSD,
-			&item.MonthlyUsageUSD, &item.BalanceTopupEnabled,
+			&item.MonthlyUsageUSD, &item.BalanceTopupEnabled, &item.BillingPriority,
 		); err != nil {
 			return nil, err
 		}
@@ -216,7 +218,7 @@ func (s *SubscriptionService) ListActiveSharedSubscriptionsForGroup(ctx context.
 		       p.concurrency_entitlement, p.lifetime_quota_usd, p.daily_quota_usd,
 		       p.weekly_quota_usd, p.monthly_quota_usd, p.lifetime_usage_usd,
 		       p.daily_usage_usd, p.weekly_usage_usd, p.monthly_usage_usd,
-		       p.balance_topup_enabled
+		       p.balance_topup_enabled, p.billing_priority
 		FROM subscription_purchases p
 		JOIN subscription_purchase_groups g ON g.purchase_id = p.id
 		WHERE p.user_id = $1 AND g.group_id = $2 AND p.status = 'active'
@@ -236,7 +238,7 @@ func (s *SubscriptionService) ListActiveSharedSubscriptionsForGroup(ctx context.
 			&item.ConcurrencyEntitlement, &item.LifetimeQuotaUSD,
 			&item.DailyQuotaUSD, &item.WeeklyQuotaUSD, &item.MonthlyQuotaUSD,
 			&item.LifetimeUsageUSD, &item.DailyUsageUSD, &item.WeeklyUsageUSD,
-			&item.MonthlyUsageUSD, &item.BalanceTopupEnabled,
+			&item.MonthlyUsageUSD, &item.BalanceTopupEnabled, &item.BillingPriority,
 		); err != nil {
 			return nil, err
 		}
@@ -321,6 +323,34 @@ func (s *SubscriptionService) SetSharedSubscriptionBalanceTopup(ctx context.Cont
 	return nil
 }
 
+// SetSharedSubscriptionBillingPriority controls which wallet is attempted
+// first for this purchase. It is independent from balance_topup_enabled:
+// that flag controls fallback eligibility, while this setting controls the
+// preferred wallet when both wallets can serve the request.
+func (s *SubscriptionService) SetSharedSubscriptionBillingPriority(ctx context.Context, userID, purchaseID int64, priority string) error {
+	if s == nil || s.sqlDB == nil {
+		return ErrSharedSubscriptionNotFound
+	}
+	priority = strings.ToLower(strings.TrimSpace(priority))
+	if priority != "subscription" && priority != "balance" {
+		return errors.New("invalid billing priority")
+	}
+	res, err := s.sqlDB.ExecContext(ctx,
+		"UPDATE subscription_purchases SET billing_priority = $1, updated_at = NOW() WHERE id = $2 AND user_id = $3 AND status = 'active'",
+		priority, purchaseID, userID)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return ErrSharedSubscriptionNotFound
+	}
+	return nil
+}
+
 // CreateSharedPurchaseFromPlan creates an immutable plan snapshot and group
 // grants. It is idempotent for a source/source_id pair.
 func (s *SubscriptionService) CreateSharedPurchaseFromPlan(ctx context.Context, userID, planID int64, source string, sourceID *int64) (*SharedSubscriptionEntitlement, error) {
@@ -353,6 +383,7 @@ func (s *SubscriptionService) CreateSharedPurchaseFromPlan(ctx context.Context, 
 		"lifetime_quota_usd": plan.LifetimeQuotaUsd, "daily_quota_usd": plan.DailyQuotaUsd,
 		"weekly_quota_usd": plan.WeeklyQuotaUsd, "monthly_quota_usd": plan.MonthlyQuotaUsd,
 		"concurrency_entitlement": plan.ConcurrencyEntitlement,
+		"billing_priority":        "subscription",
 	})
 	tx, err := s.sqlDB.BeginTx(ctx, nil)
 	if err != nil {
@@ -377,8 +408,8 @@ func (s *SubscriptionService) CreateSharedPurchaseFromPlan(ctx context.Context, 
 		INSERT INTO subscription_purchases
 		  (user_id, plan_id, name, tier_code, price, currency, starts_at, expires_at,
 		   status, concurrency_entitlement, lifetime_quota_usd, daily_quota_usd,
-		   weekly_quota_usd, monthly_quota_usd, source, source_id, snapshot)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'active',$9,$10,$11,$12,$13,$14,$15,$16)
+		   weekly_quota_usd, monthly_quota_usd, billing_priority, source, source_id, snapshot)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'active',$9,$10,$11,$12,$13,'subscription',$14,$15,$16)
 		RETURNING id
 	`, userID, plan.ID, plan.Name, plan.TierCode, plan.Price, plan.Currency, now, expires,
 		plan.ConcurrencyEntitlement, plan.LifetimeQuotaUsd, plan.DailyQuotaUsd,
@@ -454,6 +485,7 @@ func (s *SubscriptionService) createSharedPurchaseWithClient(ctx context.Context
 		"lifetime_quota_usd": plan.LifetimeQuotaUsd, "daily_quota_usd": plan.DailyQuotaUsd,
 		"weekly_quota_usd": plan.WeeklyQuotaUsd, "monthly_quota_usd": plan.MonthlyQuotaUsd,
 		"concurrency_entitlement": plan.ConcurrencyEntitlement,
+		"billing_priority":        "subscription",
 	}
 	purchase, err := client.SubscriptionPurchase.Create().
 		SetUserID(userID).
@@ -470,6 +502,7 @@ func (s *SubscriptionService) createSharedPurchaseWithClient(ctx context.Context
 		SetDailyQuotaUsd(plan.DailyQuotaUsd).
 		SetWeeklyQuotaUsd(plan.WeeklyQuotaUsd).
 		SetMonthlyQuotaUsd(plan.MonthlyQuotaUsd).
+		SetBillingPriority("subscription").
 		SetSource(source).
 		SetNillableSourceID(sourceID).
 		SetSnapshot(snapshot).
@@ -504,6 +537,7 @@ func sharedEntitlementFromEntity(purchase *dbent.SubscriptionPurchase, groupID i
 		LifetimeUsageUSD: purchase.LifetimeUsageUsd, DailyUsageUSD: purchase.DailyUsageUsd,
 		WeeklyUsageUSD: purchase.WeeklyUsageUsd, MonthlyUsageUSD: purchase.MonthlyUsageUsd,
 		BalanceTopupEnabled: purchase.BalanceTopupEnabled,
+		BillingPriority:     purchase.BillingPriority,
 	}, nil
 }
 
@@ -512,7 +546,7 @@ func (s *SubscriptionService) getSharedPurchaseByID(ctx context.Context, purchas
 		SELECT p.id, p.user_id, g.group_id, p.name, p.tier_code, p.starts_at, p.expires_at,
 		       p.status, p.concurrency_entitlement, p.lifetime_quota_usd, p.daily_quota_usd,
 		       p.weekly_quota_usd, p.monthly_quota_usd, p.lifetime_usage_usd, p.daily_usage_usd,
-		       p.weekly_usage_usd, p.monthly_usage_usd, p.balance_topup_enabled
+		       p.weekly_usage_usd, p.monthly_usage_usd, p.balance_topup_enabled, p.billing_priority
 		FROM subscription_purchases p
 		JOIN subscription_purchase_groups g ON g.purchase_id = p.id
 		WHERE p.id = $1 AND g.group_id = $2
@@ -522,7 +556,7 @@ func (s *SubscriptionService) getSharedPurchaseByID(ctx context.Context, purchas
 		&item.StartsAt, &item.ExpiresAt, &item.Status, &item.ConcurrencyEntitlement,
 		&item.LifetimeQuotaUSD, &item.DailyQuotaUSD, &item.WeeklyQuotaUSD, &item.MonthlyQuotaUSD,
 		&item.LifetimeUsageUSD, &item.DailyUsageUSD, &item.WeeklyUsageUSD, &item.MonthlyUsageUSD,
-		&item.BalanceTopupEnabled)
+		&item.BalanceTopupEnabled, &item.BillingPriority)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrSharedSubscriptionNotFound
 	}

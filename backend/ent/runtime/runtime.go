@@ -1980,22 +1980,28 @@ func init() {
 	subscriptionpurchaseDescBalanceTopupEnabled := subscriptionpurchaseFields[21].Descriptor()
 	// subscriptionpurchase.DefaultBalanceTopupEnabled holds the default value on creation for the balance_topup_enabled field.
 	subscriptionpurchase.DefaultBalanceTopupEnabled = subscriptionpurchaseDescBalanceTopupEnabled.Default.(bool)
+	// subscriptionpurchaseDescBillingPriority is the schema descriptor for billing_priority field.
+	subscriptionpurchaseDescBillingPriority := subscriptionpurchaseFields[22].Descriptor()
+	// subscriptionpurchase.DefaultBillingPriority holds the default value on creation for the billing_priority field.
+	subscriptionpurchase.DefaultBillingPriority = subscriptionpurchaseDescBillingPriority.Default.(string)
+	// subscriptionpurchase.BillingPriorityValidator is a validator for the "billing_priority" field. It is called by the builders before save.
+	subscriptionpurchase.BillingPriorityValidator = subscriptionpurchaseDescBillingPriority.Validators[0].(func(string) error)
 	// subscriptionpurchaseDescSource is the schema descriptor for source field.
-	subscriptionpurchaseDescSource := subscriptionpurchaseFields[22].Descriptor()
+	subscriptionpurchaseDescSource := subscriptionpurchaseFields[23].Descriptor()
 	// subscriptionpurchase.DefaultSource holds the default value on creation for the source field.
 	subscriptionpurchase.DefaultSource = subscriptionpurchaseDescSource.Default.(string)
 	// subscriptionpurchase.SourceValidator is a validator for the "source" field. It is called by the builders before save.
 	subscriptionpurchase.SourceValidator = subscriptionpurchaseDescSource.Validators[0].(func(string) error)
 	// subscriptionpurchaseDescNotes is the schema descriptor for notes field.
-	subscriptionpurchaseDescNotes := subscriptionpurchaseFields[25].Descriptor()
+	subscriptionpurchaseDescNotes := subscriptionpurchaseFields[26].Descriptor()
 	// subscriptionpurchase.DefaultNotes holds the default value on creation for the notes field.
 	subscriptionpurchase.DefaultNotes = subscriptionpurchaseDescNotes.Default.(string)
 	// subscriptionpurchaseDescCreatedAt is the schema descriptor for created_at field.
-	subscriptionpurchaseDescCreatedAt := subscriptionpurchaseFields[26].Descriptor()
+	subscriptionpurchaseDescCreatedAt := subscriptionpurchaseFields[27].Descriptor()
 	// subscriptionpurchase.DefaultCreatedAt holds the default value on creation for the created_at field.
 	subscriptionpurchase.DefaultCreatedAt = subscriptionpurchaseDescCreatedAt.Default.(func() time.Time)
 	// subscriptionpurchaseDescUpdatedAt is the schema descriptor for updated_at field.
-	subscriptionpurchaseDescUpdatedAt := subscriptionpurchaseFields[27].Descriptor()
+	subscriptionpurchaseDescUpdatedAt := subscriptionpurchaseFields[28].Descriptor()
 	// subscriptionpurchase.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	subscriptionpurchase.DefaultUpdatedAt = subscriptionpurchaseDescUpdatedAt.Default.(func() time.Time)
 	// subscriptionpurchase.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.

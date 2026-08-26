@@ -118,6 +118,7 @@ func RegisterUserRoutes(
 		{
 			subscriptions.GET("/shared", h.Subscription.ListShared)
 			subscriptions.PATCH("/shared/:id/balance-topup", h.Subscription.SetSharedBalanceTopup)
+			subscriptions.PATCH("/shared/:id/billing-priority", h.Subscription.SetSharedBillingPriority)
 		}
 
 		// 渠道监控（用户只读）

@@ -60,10 +60,10 @@ func TestListActiveSharedSubscriptionsForGroup(t *testing.T) {
 			"id", "user_id", "name", "tier_code", "starts_at", "expires_at", "status",
 			"concurrency_entitlement", "lifetime_quota_usd", "daily_quota_usd",
 			"weekly_quota_usd", "monthly_quota_usd", "lifetime_usage_usd",
-			"daily_usage_usd", "weekly_usage_usd", "monthly_usage_usd", "balance_topup_enabled",
+			"daily_usage_usd", "weekly_usage_usd", "monthly_usage_usd", "balance_topup_enabled", "billing_priority",
 		}).AddRow(
 			int64(101), int64(42), "Weekly", "standard", startsAt, expiresAt, "active",
-			5, 36.0, 8.0, 20.0, 36.0, 1.2, 0.4, 0.8, 1.2, false,
+			5, 36.0, 8.0, 20.0, 36.0, 1.2, 0.4, 0.8, 1.2, false, "subscription",
 		))
 
 	svc := &SubscriptionService{sqlDB: db}
@@ -73,5 +73,6 @@ func TestListActiveSharedSubscriptionsForGroup(t *testing.T) {
 	require.Equal(t, int64(101), items[0].ID)
 	require.Equal(t, 5, items[0].ConcurrencyEntitlement)
 	require.False(t, items[0].BalanceTopupEnabled)
+	require.Equal(t, "subscription", items[0].BillingPriority)
 	require.NoError(t, mock.ExpectationsWereMet())
 }

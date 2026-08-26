@@ -253,3 +253,45 @@ func TestConcurrencyHelper_PlannedBalanceTopupClearsSubscriptionBilling(t *testi
 	release()
 	require.Equal(t, int32(1), atomic.LoadInt32(&cache.releaseUserCalled))
 }
+
+func TestConcurrencyHelper_BalancePriorityUsesBalanceBeforeSubscription(t *testing.T) {
+	cache := &concurrencyCacheMock{
+		acquireSubscriptionFn: func(context.Context, int64, int, string) (bool, error) {
+			t.Fatal("balance-priority request must try the wallet pool first")
+			return false, nil
+		},
+		acquireUserSlotFn: func(context.Context, int64, int, string) (bool, error) {
+			return true, nil
+		},
+	}
+	helper := NewConcurrencyHelper(service.NewConcurrencyService(cache), SSEPingFormatNone, time.Second)
+	shared := &service.SharedSubscriptionEntitlement{ID: 23, UserID: 7}
+	plan := &service.SubscriptionConcurrencyPlan{
+		UserID:                    7,
+		UserLimit:                 10,
+		HasSharedSubscription:     true,
+		AllowBalancePriority:      true,
+		BalancePriorityPurchaseID: 23,
+		Entitlements: []service.SubscriptionConcurrencyEntitlement{
+			{PurchaseID: 23, Concurrency: 5, BillingPriority: "balance", Subscription: shared.AsLegacySubscription(nil), SharedSubscription: shared},
+		},
+	}
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", nil)
+	c.Request = c.Request.WithContext(service.WithSubscriptionConcurrencyPlan(c.Request.Context(), plan))
+	c.Set(string(middleware2.ContextKeySubscription), shared.AsLegacySubscription(nil))
+
+	release, acquired, err := helper.TryAcquireUserSlotForAPIKeyFromGin(c, 7, 10, 99)
+	require.NoError(t, err)
+	require.True(t, acquired)
+	require.NotNil(t, release)
+	_, ok := middleware2.GetSubscriptionFromContext(c)
+	require.False(t, ok)
+	source, ok := service.SubscriptionConcurrencySourceFromContext(c.Request.Context())
+	require.True(t, ok)
+	require.Equal(t, int64(23), source.PurchaseID)
+	require.True(t, source.UseBalance)
+
+	release()
+	require.Equal(t, int32(1), atomic.LoadInt32(&cache.releaseUserCalled))
+}

@@ -96,17 +96,42 @@
                   {{ t('userSubscriptions.sharedConcurrency') }}:
                   <strong class="text-gray-900 dark:text-white">{{ purchase.concurrency_entitlement }}</strong>
                 </span>
-                <label class="flex cursor-pointer items-center gap-2 text-xs text-gray-600 dark:text-dark-300">
-                  <input
-                    type="checkbox"
-                    class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-                    :checked="purchase.balance_topup_enabled"
-                    :disabled="updatingPurchaseId === purchase.id"
-                    @change="toggleBalanceTopup(purchase)"
-                  />
-                  {{ t('userSubscriptions.balanceTopup') }}
-                </label>
               </div>
+              <div class="flex flex-col gap-3 border-t border-gray-100 pt-3 text-xs dark:border-dark-700 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <div class="font-medium text-gray-700 dark:text-gray-300">
+                    {{ t('userSubscriptions.billingPriority') }}
+                  </div>
+                  <div class="mt-1 text-gray-500 dark:text-dark-400">
+                    {{ t('userSubscriptions.billingPriorityHint') }}
+                  </div>
+                </div>
+                <div class="inline-flex shrink-0 rounded-lg border border-gray-200 p-0.5 dark:border-dark-600" role="group">
+                  <button
+                    v-for="priority in billingPriorities"
+                    :key="priority.value"
+                    type="button"
+                    class="rounded-md px-3 py-1.5 font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                    :class="purchase.billing_priority === priority.value
+                      ? 'bg-primary-600 text-white shadow-sm'
+                      : 'text-gray-600 hover:bg-gray-100 dark:text-dark-300 dark:hover:bg-dark-700'"
+                    :disabled="updatingPurchaseId === purchase.id || purchase.billing_priority === priority.value"
+                    @click="setBillingPriority(purchase, priority.value)"
+                  >
+                    {{ priority.label }}
+                  </button>
+                </div>
+              </div>
+              <label class="flex cursor-pointer items-center gap-2 border-t border-gray-100 pt-3 text-xs text-gray-600 dark:border-dark-700 dark:text-dark-300">
+                <input
+                  type="checkbox"
+                  class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                  :checked="purchase.balance_topup_enabled"
+                  :disabled="updatingPurchaseId === purchase.id"
+                  @change="toggleBalanceTopup(purchase)"
+                />
+                {{ t('userSubscriptions.balanceTopup') }}
+              </label>
             </div>
           </article>
         </div>
@@ -131,6 +156,10 @@ const appStore = useAppStore()
 const sharedSubscriptions = ref<SharedSubscription[]>([])
 const loading = ref(true)
 const updatingPurchaseId = ref<number | null>(null)
+const billingPriorities = [
+  { value: 'subscription' as const, label: t('userSubscriptions.subscriptionPriority') },
+  { value: 'balance' as const, label: t('userSubscriptions.balancePriority') },
+]
 
 async function loadSubscriptions() {
   loading.value = true
@@ -193,6 +222,23 @@ async function toggleBalanceTopup(purchase: SharedSubscription) {
     purchase.balance_topup_enabled = updated.balance_topup_enabled
   } catch (error) {
     console.error('Failed to update balance top-up:', error)
+    appStore.showError(t('userSubscriptions.failedToUpdate'))
+  } finally {
+    updatingPurchaseId.value = null
+  }
+}
+
+async function setBillingPriority(purchase: SharedSubscription, priority: SharedSubscription['billing_priority']) {
+  if (updatingPurchaseId.value !== null || purchase.billing_priority === priority) return
+  const previous = purchase.billing_priority
+  updatingPurchaseId.value = purchase.id
+  purchase.billing_priority = priority
+  try {
+    const updated = await subscriptionsAPI.setSharedBillingPriority(purchase.id, priority)
+    purchase.billing_priority = updated.billing_priority
+  } catch (error) {
+    purchase.billing_priority = previous
+    console.error('Failed to update billing priority:', error)
     appStore.showError(t('userSubscriptions.failedToUpdate'))
   } finally {
     updatingPurchaseId.value = null

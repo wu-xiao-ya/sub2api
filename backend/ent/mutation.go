@@ -43820,6 +43820,7 @@ type SubscriptionPurchaseMutation struct {
 	weekly_window_start        *time.Time
 	monthly_window_start       *time.Time
 	balance_topup_enabled      *bool
+	billing_priority           *string
 	source                     *string
 	source_id                  *int64
 	addsource_id               *int64
@@ -45019,6 +45020,42 @@ func (m *SubscriptionPurchaseMutation) ResetBalanceTopupEnabled() {
 	m.balance_topup_enabled = nil
 }
 
+// SetBillingPriority sets the "billing_priority" field.
+func (m *SubscriptionPurchaseMutation) SetBillingPriority(s string) {
+	m.billing_priority = &s
+}
+
+// BillingPriority returns the value of the "billing_priority" field in the mutation.
+func (m *SubscriptionPurchaseMutation) BillingPriority() (r string, exists bool) {
+	v := m.billing_priority
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBillingPriority returns the old "billing_priority" field's value of the SubscriptionPurchase entity.
+// If the SubscriptionPurchase object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SubscriptionPurchaseMutation) OldBillingPriority(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBillingPriority is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBillingPriority requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBillingPriority: %w", err)
+	}
+	return oldValue.BillingPriority, nil
+}
+
+// ResetBillingPriority resets all changes to the "billing_priority" field.
+func (m *SubscriptionPurchaseMutation) ResetBillingPriority() {
+	m.billing_priority = nil
+}
+
 // SetSource sets the "source" field.
 func (m *SubscriptionPurchaseMutation) SetSource(s string) {
 	m.source = &s
@@ -45370,7 +45407,7 @@ func (m *SubscriptionPurchaseMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *SubscriptionPurchaseMutation) Fields() []string {
-	fields := make([]string, 0, 28)
+	fields := make([]string, 0, 29)
 	if m.user_id != nil {
 		fields = append(fields, subscriptionpurchase.FieldUserID)
 	}
@@ -45436,6 +45473,9 @@ func (m *SubscriptionPurchaseMutation) Fields() []string {
 	}
 	if m.balance_topup_enabled != nil {
 		fields = append(fields, subscriptionpurchase.FieldBalanceTopupEnabled)
+	}
+	if m.billing_priority != nil {
+		fields = append(fields, subscriptionpurchase.FieldBillingPriority)
 	}
 	if m.source != nil {
 		fields = append(fields, subscriptionpurchase.FieldSource)
@@ -45507,6 +45547,8 @@ func (m *SubscriptionPurchaseMutation) Field(name string) (ent.Value, bool) {
 		return m.MonthlyWindowStart()
 	case subscriptionpurchase.FieldBalanceTopupEnabled:
 		return m.BalanceTopupEnabled()
+	case subscriptionpurchase.FieldBillingPriority:
+		return m.BillingPriority()
 	case subscriptionpurchase.FieldSource:
 		return m.Source()
 	case subscriptionpurchase.FieldSourceID:
@@ -45572,6 +45614,8 @@ func (m *SubscriptionPurchaseMutation) OldField(ctx context.Context, name string
 		return m.OldMonthlyWindowStart(ctx)
 	case subscriptionpurchase.FieldBalanceTopupEnabled:
 		return m.OldBalanceTopupEnabled(ctx)
+	case subscriptionpurchase.FieldBillingPriority:
+		return m.OldBillingPriority(ctx)
 	case subscriptionpurchase.FieldSource:
 		return m.OldSource(ctx)
 	case subscriptionpurchase.FieldSourceID:
@@ -45746,6 +45790,13 @@ func (m *SubscriptionPurchaseMutation) SetField(name string, value ent.Value) er
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetBalanceTopupEnabled(v)
+		return nil
+	case subscriptionpurchase.FieldBillingPriority:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBillingPriority(v)
 		return nil
 	case subscriptionpurchase.FieldSource:
 		v, ok := value.(string)
@@ -46101,6 +46152,9 @@ func (m *SubscriptionPurchaseMutation) ResetField(name string) error {
 		return nil
 	case subscriptionpurchase.FieldBalanceTopupEnabled:
 		m.ResetBalanceTopupEnabled()
+		return nil
+	case subscriptionpurchase.FieldBillingPriority:
+		m.ResetBillingPriority()
 		return nil
 	case subscriptionpurchase.FieldSource:
 		m.ResetSource()

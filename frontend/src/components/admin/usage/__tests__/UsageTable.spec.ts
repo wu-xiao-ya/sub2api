@@ -51,6 +51,8 @@ const messages: Record<string, string> = {
   'admin.usage.billingModeToken': 'Token',
   'admin.usage.billingModePerRequest': 'Per request',
   'admin.usage.billingModeImage': 'Image',
+  'admin.usage.billingTypeBalance': 'Balance',
+  'admin.usage.billingTypeSubscription': 'Subscription',
   'usage.latencyFirstToken': 'First response',
   'usage.latencyDuration': 'Total',
   'usage.latencyGeneration': 'Generation',
@@ -198,6 +200,32 @@ describe('admin UsageTable tooltip', () => {
 
     expect(wrapper.findAll('[data-testid="long-context-billing-marker"]')).toHaveLength(1)
     expect(wrapper.get('[data-testid="long-context-billing-marker"]').text()).toBe('x2')
+  })
+
+  it('shows the billing source directly below the billed cost', () => {
+    const wrapper = mount(UsageTable, {
+      props: {
+        data: [
+          { ...baseImageRow, request_id: 'req-subscription', billing_type: 1 },
+          { ...baseImageRow, request_id: 'req-balance', billing_type: 0 },
+          { ...baseImageRow, request_id: 'req-unknown', billing_type: 2 },
+        ],
+        loading: false,
+        columns: [],
+      },
+      global: {
+        stubs: {
+          DataTable: DataTableStub,
+          EmptyState: true,
+          Icon: true,
+          Teleport: true,
+        },
+      },
+    })
+
+    const sources = wrapper.findAll('[data-testid="cost-billing-source"]')
+    expect(sources).toHaveLength(2)
+    expect(sources.map((source) => source.text())).toEqual(['Subscription', 'Balance'])
   })
 
   it('shows service tier and billing breakdown in cost tooltip', async () => {

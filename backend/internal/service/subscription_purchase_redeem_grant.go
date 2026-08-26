@@ -107,6 +107,7 @@ func (s *SubscriptionService) grantPlanRedeemPurchase(ctx context.Context, clien
 		"weekly_quota_usd":        plan.WeeklyQuotaUsd,
 		"monthly_quota_usd":       plan.MonthlyQuotaUsd,
 		"concurrency_entitlement": plan.ConcurrencyEntitlement,
+		"billing_priority":        "subscription",
 	}
 	purchase, createErr := client.SubscriptionPurchase.Create().
 		SetUserID(userID).
@@ -123,6 +124,7 @@ func (s *SubscriptionService) grantPlanRedeemPurchase(ctx context.Context, clien
 		SetDailyQuotaUsd(plan.DailyQuotaUsd).
 		SetWeeklyQuotaUsd(plan.WeeklyQuotaUsd).
 		SetMonthlyQuotaUsd(plan.MonthlyQuotaUsd).
+		SetBillingPriority("subscription").
 		SetSource(RedeemPurchaseSource).
 		SetNillableSourceID(&sourceID).
 		SetSnapshot(snapshot).
@@ -198,6 +200,7 @@ func (s *SubscriptionService) grantLegacyGroupRedeemPurchase(ctx context.Context
 		"weekly_quota_usd":        weekly,
 		"monthly_quota_usd":       monthly,
 		"concurrency_entitlement": 0,
+		"billing_priority":        "subscription",
 	}
 	purchase, createErr := client.SubscriptionPurchase.Create().
 		SetUserID(userID).
@@ -211,6 +214,7 @@ func (s *SubscriptionService) grantLegacyGroupRedeemPurchase(ctx context.Context
 		SetDailyQuotaUsd(daily).
 		SetWeeklyQuotaUsd(weekly).
 		SetMonthlyQuotaUsd(monthly).
+		SetBillingPriority("subscription").
 		SetSource(RedeemPurchaseSource).
 		SetNillableSourceID(&sourceID).
 		SetSnapshot(snapshot).

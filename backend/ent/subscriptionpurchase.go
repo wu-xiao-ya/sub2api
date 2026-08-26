@@ -62,6 +62,8 @@ type SubscriptionPurchase struct {
 	MonthlyWindowStart *time.Time `json:"monthly_window_start,omitempty"`
 	// BalanceTopupEnabled holds the value of the "balance_topup_enabled" field.
 	BalanceTopupEnabled bool `json:"balance_topup_enabled,omitempty"`
+	// BillingPriority holds the value of the "billing_priority" field.
+	BillingPriority string `json:"billing_priority,omitempty"`
 	// Source holds the value of the "source" field.
 	Source string `json:"source,omitempty"`
 	// SourceID holds the value of the "source_id" field.
@@ -111,7 +113,7 @@ func (*SubscriptionPurchase) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullFloat64)
 		case subscriptionpurchase.FieldID, subscriptionpurchase.FieldUserID, subscriptionpurchase.FieldPlanID, subscriptionpurchase.FieldConcurrencyEntitlement, subscriptionpurchase.FieldSourceID:
 			values[i] = new(sql.NullInt64)
-		case subscriptionpurchase.FieldName, subscriptionpurchase.FieldTierCode, subscriptionpurchase.FieldCurrency, subscriptionpurchase.FieldStatus, subscriptionpurchase.FieldSource, subscriptionpurchase.FieldNotes:
+		case subscriptionpurchase.FieldName, subscriptionpurchase.FieldTierCode, subscriptionpurchase.FieldCurrency, subscriptionpurchase.FieldStatus, subscriptionpurchase.FieldBillingPriority, subscriptionpurchase.FieldSource, subscriptionpurchase.FieldNotes:
 			values[i] = new(sql.NullString)
 		case subscriptionpurchase.FieldStartsAt, subscriptionpurchase.FieldExpiresAt, subscriptionpurchase.FieldDailyWindowStart, subscriptionpurchase.FieldWeeklyWindowStart, subscriptionpurchase.FieldMonthlyWindowStart, subscriptionpurchase.FieldCreatedAt, subscriptionpurchase.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -272,6 +274,12 @@ func (_m *SubscriptionPurchase) assignValues(columns []string, values []any) err
 			} else if value.Valid {
 				_m.BalanceTopupEnabled = value.Bool
 			}
+		case subscriptionpurchase.FieldBillingPriority:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field billing_priority", values[i])
+			} else if value.Valid {
+				_m.BillingPriority = value.String
+			}
 		case subscriptionpurchase.FieldSource:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field source", values[i])
@@ -425,6 +433,9 @@ func (_m *SubscriptionPurchase) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("balance_topup_enabled=")
 	builder.WriteString(fmt.Sprintf("%v", _m.BalanceTopupEnabled))
+	builder.WriteString(", ")
+	builder.WriteString("billing_priority=")
+	builder.WriteString(_m.BillingPriority)
 	builder.WriteString(", ")
 	builder.WriteString("source=")
 	builder.WriteString(_m.Source)

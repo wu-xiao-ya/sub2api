@@ -36,6 +36,7 @@ type AdminPurchaseRecord struct {
 	WeeklyUsageUSD         float64                   `json:"weekly_usage_usd"`
 	MonthlyUsageUSD        float64                   `json:"monthly_usage_usd"`
 	BalanceTopupEnabled    bool                      `json:"balance_topup_enabled"`
+	BillingPriority        string                    `json:"billing_priority"`
 	Source                 string                    `json:"source"`
 	SourceID               *int64                    `json:"source_id,omitempty"`
 	Notes                  string                    `json:"notes"`
@@ -91,6 +92,7 @@ func (s *SubscriptionService) ListPurchaseRecords(ctx context.Context, q AdminPu
 		       p.lifetime_quota_usd, p.daily_quota_usd, p.weekly_quota_usd,
 		       p.monthly_quota_usd, p.lifetime_usage_usd, p.daily_usage_usd,
 		       p.weekly_usage_usd, p.monthly_usage_usd, p.balance_topup_enabled,
+		       p.billing_priority,
 		       p.source, p.source_id, p.notes,
 		       COALESCE((
 		         SELECT jsonb_agg(jsonb_build_object(
@@ -120,6 +122,7 @@ func (s *SubscriptionService) ListPurchaseRecords(ctx context.Context, q AdminPu
 			&item.LifetimeQuotaUSD, &item.DailyQuotaUSD, &item.WeeklyQuotaUSD,
 			&item.MonthlyQuotaUSD, &item.LifetimeUsageUSD, &item.DailyUsageUSD,
 			&item.WeeklyUsageUSD, &item.MonthlyUsageUSD, &item.BalanceTopupEnabled,
+			&item.BillingPriority,
 			&item.Source, &item.SourceID, &item.Notes, &groupsJSON,
 		); err != nil {
 			return nil, err
@@ -230,6 +233,7 @@ func (s *SubscriptionService) GetPurchaseRecord(ctx context.Context, purchaseID 
 		       p.lifetime_quota_usd, p.daily_quota_usd, p.weekly_quota_usd,
 		       p.monthly_quota_usd, p.lifetime_usage_usd, p.daily_usage_usd,
 		       p.weekly_usage_usd, p.monthly_usage_usd, p.balance_topup_enabled,
+		       p.billing_priority,
 		       p.source, p.source_id, p.notes,
 		       COALESCE((SELECT jsonb_agg(jsonb_build_object(
 		         'id', pg.group_id, 'name', pg.group_name, 'platform', pg.platform
@@ -245,6 +249,7 @@ func (s *SubscriptionService) GetPurchaseRecord(ctx context.Context, purchaseID 
 		&item.LifetimeQuotaUSD, &item.DailyQuotaUSD, &item.WeeklyQuotaUSD,
 		&item.MonthlyQuotaUSD, &item.LifetimeUsageUSD, &item.DailyUsageUSD,
 		&item.WeeklyUsageUSD, &item.MonthlyUsageUSD, &item.BalanceTopupEnabled,
+		&item.BillingPriority,
 		&item.Source, &item.SourceID, &item.Notes, &groupsJSON,
 	)
 	if errors.Is(err, sql.ErrNoRows) {

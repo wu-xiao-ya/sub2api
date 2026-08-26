@@ -24,6 +24,7 @@ export interface SharedSubscription {
   weekly_usage_usd: number
   monthly_usage_usd: number
   balance_topup_enabled: boolean
+  billing_priority: 'subscription' | 'balance'
   groups: SharedSubscriptionGroup[]
 }
 
@@ -43,7 +44,19 @@ export async function setSharedBalanceTopup(
   return response.data
 }
 
+export async function setSharedBillingPriority(
+  purchaseId: number,
+  priority: SharedSubscription['billing_priority'],
+): Promise<Pick<SharedSubscription, 'id' | 'billing_priority'>> {
+  const response = await apiClient.patch<Pick<SharedSubscription, 'id' | 'billing_priority'>>(
+    `/subscriptions/shared/${purchaseId}/billing-priority`,
+    { priority },
+  )
+  return response.data
+}
+
 export default {
   getMySharedSubscriptions,
   setSharedBalanceTopup,
+  setSharedBillingPriority,
 }

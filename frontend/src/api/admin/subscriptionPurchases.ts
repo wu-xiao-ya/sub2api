@@ -29,6 +29,7 @@ export interface AdminPurchaseRecord {
   weekly_usage_usd: number
   monthly_usage_usd: number
   balance_topup_enabled: boolean
+  billing_priority: 'subscription' | 'balance'
   source: string
   source_id?: number
   notes: string

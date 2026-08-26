@@ -357,19 +357,22 @@ type SubscriptionConcurrencyEntitlement struct {
 	PurchaseID          int64
 	Concurrency         int
 	BalanceTopupEnabled bool
+	BillingPriority     string
 	ExpiresAt           time.Time
 	Subscription        *UserSubscription
 	SharedSubscription  *SharedSubscriptionEntitlement
 }
 
 type SubscriptionConcurrencyPlan struct {
-	UserID                 int64
-	GroupID                int64
-	UserLimit              int
-	HasSharedSubscription  bool
-	AllowBalanceTopup      bool
-	BalanceTopupPurchaseID int64
-	Entitlements           []SubscriptionConcurrencyEntitlement
+	UserID                    int64
+	GroupID                   int64
+	UserLimit                 int
+	HasSharedSubscription     bool
+	AllowBalanceTopup         bool
+	BalanceTopupPurchaseID    int64
+	AllowBalancePriority      bool
+	BalancePriorityPurchaseID int64
+	Entitlements              []SubscriptionConcurrencyEntitlement
 }
 
 type subscriptionConcurrencyContextKey struct{}
@@ -415,12 +418,33 @@ func SubscriptionConcurrencySourceFromContext(ctx context.Context) (Subscription
 	return source, ok && source.PurchaseID > 0
 }
 
+func effectiveSubscriptionForBilling(ctx context.Context, subscription *UserSubscription) *UserSubscription {
+	if source, ok := SubscriptionConcurrencySourceFromContext(ctx); ok && source.UseBalance {
+		return nil
+	}
+	return subscription
+}
+
 // AcquirePlannedUserSlot tries subscription pools in plan order, then the
 // user's independent balance pool only when at least one authorized purchase
 // explicitly enables balance top-up.
 func (s *ConcurrencyService) AcquirePlannedUserSlot(ctx context.Context, plan *SubscriptionConcurrencyPlan) (*AcquireResult, error) {
 	if plan == nil {
 		return nil, errors.New("subscription concurrency plan is unavailable")
+	}
+	if plan.AllowBalancePriority {
+		result, err := s.AcquireUserSlot(ctx, plan.UserID, plan.UserLimit)
+		if err != nil {
+			return nil, err
+		}
+		if result.Acquired {
+			result.SubscriptionPurchaseID = plan.BalancePriorityPurchaseID
+			if result.SubscriptionPurchaseID == 0 && len(plan.Entitlements) > 0 {
+				result.SubscriptionPurchaseID = plan.Entitlements[0].PurchaseID
+			}
+			result.UsedBalance = true
+			return result, nil
+		}
 	}
 	inheritedPoolTried := false
 	for _, entitlement := range plan.Entitlements {

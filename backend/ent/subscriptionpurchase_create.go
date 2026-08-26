@@ -307,6 +307,20 @@ func (_c *SubscriptionPurchaseCreate) SetNillableBalanceTopupEnabled(v *bool) *S
 	return _c
 }
 
+// SetBillingPriority sets the "billing_priority" field.
+func (_c *SubscriptionPurchaseCreate) SetBillingPriority(v string) *SubscriptionPurchaseCreate {
+	_c.mutation.SetBillingPriority(v)
+	return _c
+}
+
+// SetNillableBillingPriority sets the "billing_priority" field if the given value is not nil.
+func (_c *SubscriptionPurchaseCreate) SetNillableBillingPriority(v *string) *SubscriptionPurchaseCreate {
+	if v != nil {
+		_c.SetBillingPriority(*v)
+	}
+	return _c
+}
+
 // SetSource sets the "source" field.
 func (_c *SubscriptionPurchaseCreate) SetSource(v string) *SubscriptionPurchaseCreate {
 	_c.mutation.SetSource(v)
@@ -493,6 +507,10 @@ func (_c *SubscriptionPurchaseCreate) defaults() {
 		v := subscriptionpurchase.DefaultBalanceTopupEnabled
 		_c.mutation.SetBalanceTopupEnabled(v)
 	}
+	if _, ok := _c.mutation.BillingPriority(); !ok {
+		v := subscriptionpurchase.DefaultBillingPriority
+		_c.mutation.SetBillingPriority(v)
+	}
 	if _, ok := _c.mutation.Source(); !ok {
 		v := subscriptionpurchase.DefaultSource
 		_c.mutation.SetSource(v)
@@ -586,6 +604,14 @@ func (_c *SubscriptionPurchaseCreate) check() error {
 	}
 	if _, ok := _c.mutation.BalanceTopupEnabled(); !ok {
 		return &ValidationError{Name: "balance_topup_enabled", err: errors.New(`ent: missing required field "SubscriptionPurchase.balance_topup_enabled"`)}
+	}
+	if _, ok := _c.mutation.BillingPriority(); !ok {
+		return &ValidationError{Name: "billing_priority", err: errors.New(`ent: missing required field "SubscriptionPurchase.billing_priority"`)}
+	}
+	if v, ok := _c.mutation.BillingPriority(); ok {
+		if err := subscriptionpurchase.BillingPriorityValidator(v); err != nil {
+			return &ValidationError{Name: "billing_priority", err: fmt.Errorf(`ent: validator failed for field "SubscriptionPurchase.billing_priority": %w`, err)}
+		}
 	}
 	if _, ok := _c.mutation.Source(); !ok {
 		return &ValidationError{Name: "source", err: errors.New(`ent: missing required field "SubscriptionPurchase.source"`)}
@@ -718,6 +744,10 @@ func (_c *SubscriptionPurchaseCreate) createSpec() (*SubscriptionPurchase, *sqlg
 	if value, ok := _c.mutation.BalanceTopupEnabled(); ok {
 		_spec.SetField(subscriptionpurchase.FieldBalanceTopupEnabled, field.TypeBool, value)
 		_node.BalanceTopupEnabled = value
+	}
+	if value, ok := _c.mutation.BillingPriority(); ok {
+		_spec.SetField(subscriptionpurchase.FieldBillingPriority, field.TypeString, value)
+		_node.BillingPriority = value
 	}
 	if value, ok := _c.mutation.Source(); ok {
 		_spec.SetField(subscriptionpurchase.FieldSource, field.TypeString, value)
@@ -1168,6 +1198,18 @@ func (u *SubscriptionPurchaseUpsert) SetBalanceTopupEnabled(v bool) *Subscriptio
 // UpdateBalanceTopupEnabled sets the "balance_topup_enabled" field to the value that was provided on create.
 func (u *SubscriptionPurchaseUpsert) UpdateBalanceTopupEnabled() *SubscriptionPurchaseUpsert {
 	u.SetExcluded(subscriptionpurchase.FieldBalanceTopupEnabled)
+	return u
+}
+
+// SetBillingPriority sets the "billing_priority" field.
+func (u *SubscriptionPurchaseUpsert) SetBillingPriority(v string) *SubscriptionPurchaseUpsert {
+	u.Set(subscriptionpurchase.FieldBillingPriority, v)
+	return u
+}
+
+// UpdateBillingPriority sets the "billing_priority" field to the value that was provided on create.
+func (u *SubscriptionPurchaseUpsert) UpdateBillingPriority() *SubscriptionPurchaseUpsert {
+	u.SetExcluded(subscriptionpurchase.FieldBillingPriority)
 	return u
 }
 
@@ -1711,6 +1753,20 @@ func (u *SubscriptionPurchaseUpsertOne) SetBalanceTopupEnabled(v bool) *Subscrip
 func (u *SubscriptionPurchaseUpsertOne) UpdateBalanceTopupEnabled() *SubscriptionPurchaseUpsertOne {
 	return u.Update(func(s *SubscriptionPurchaseUpsert) {
 		s.UpdateBalanceTopupEnabled()
+	})
+}
+
+// SetBillingPriority sets the "billing_priority" field.
+func (u *SubscriptionPurchaseUpsertOne) SetBillingPriority(v string) *SubscriptionPurchaseUpsertOne {
+	return u.Update(func(s *SubscriptionPurchaseUpsert) {
+		s.SetBillingPriority(v)
+	})
+}
+
+// UpdateBillingPriority sets the "billing_priority" field to the value that was provided on create.
+func (u *SubscriptionPurchaseUpsertOne) UpdateBillingPriority() *SubscriptionPurchaseUpsertOne {
+	return u.Update(func(s *SubscriptionPurchaseUpsert) {
+		s.UpdateBillingPriority()
 	})
 }
 
@@ -2433,6 +2489,20 @@ func (u *SubscriptionPurchaseUpsertBulk) SetBalanceTopupEnabled(v bool) *Subscri
 func (u *SubscriptionPurchaseUpsertBulk) UpdateBalanceTopupEnabled() *SubscriptionPurchaseUpsertBulk {
 	return u.Update(func(s *SubscriptionPurchaseUpsert) {
 		s.UpdateBalanceTopupEnabled()
+	})
+}
+
+// SetBillingPriority sets the "billing_priority" field.
+func (u *SubscriptionPurchaseUpsertBulk) SetBillingPriority(v string) *SubscriptionPurchaseUpsertBulk {
+	return u.Update(func(s *SubscriptionPurchaseUpsert) {
+		s.SetBillingPriority(v)
+	})
+}
+
+// UpdateBillingPriority sets the "billing_priority" field to the value that was provided on create.
+func (u *SubscriptionPurchaseUpsertBulk) UpdateBillingPriority() *SubscriptionPurchaseUpsertBulk {
+	return u.Update(func(s *SubscriptionPurchaseUpsert) {
+		s.UpdateBillingPriority()
 	})
 }
 

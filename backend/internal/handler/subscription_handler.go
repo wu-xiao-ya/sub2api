@@ -33,6 +33,7 @@ type SharedSubscriptionResponse struct {
 	WeeklyUsageUSD         float64                           `json:"weekly_usage_usd"`
 	MonthlyUsageUSD        float64                           `json:"monthly_usage_usd"`
 	BalanceTopupEnabled    bool                              `json:"balance_topup_enabled"`
+	BillingPriority        string                            `json:"billing_priority"`
 	Groups                 []service.SharedSubscriptionGroup `json:"groups"`
 }
 
@@ -71,10 +72,37 @@ func (h *SubscriptionHandler) ListShared(c *gin.Context) {
 			WeeklyQuotaUSD: item.WeeklyQuotaUSD, MonthlyQuotaUSD: item.MonthlyQuotaUSD,
 			LifetimeUsageUSD: item.LifetimeUsageUSD, DailyUsageUSD: item.DailyUsageUSD,
 			WeeklyUsageUSD: item.WeeklyUsageUSD, MonthlyUsageUSD: item.MonthlyUsageUSD,
-			BalanceTopupEnabled: item.BalanceTopupEnabled, Groups: groups,
+			BalanceTopupEnabled: item.BalanceTopupEnabled, BillingPriority: item.BillingPriority, Groups: groups,
 		})
 	}
 	response.Success(c, out)
+}
+
+func (h *SubscriptionHandler) SetSharedBillingPriority(c *gin.Context) {
+	subject, ok := middleware2.GetAuthSubjectFromContext(c)
+	if !ok {
+		response.Error(c, 401, "authentication required")
+		return
+	}
+	purchaseID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil || purchaseID <= 0 {
+		response.Error(c, 400, "invalid subscription purchase id")
+		return
+	}
+	var req struct {
+		Priority string `json:"priority"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil || req.Priority == "" {
+		response.Error(c, 400, "priority is required")
+		return
+	}
+	if err := h.subscriptionService.SetSharedSubscriptionBillingPriority(
+		c.Request.Context(), subject.UserID, purchaseID, req.Priority,
+	); err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, gin.H{"id": purchaseID, "billing_priority": req.Priority})
 }
 
 func (h *SubscriptionHandler) SetSharedBalanceTopup(c *gin.Context) {

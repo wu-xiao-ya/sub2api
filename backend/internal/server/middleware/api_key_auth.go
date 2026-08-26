@@ -221,7 +221,7 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 						c.Set(string(ContextKeySharedSubscription), sharedPurchase)
 					}
 				}
-				if sharedPurchase == nil && !plan.AllowBalanceTopup {
+				if sharedPurchase == nil && !plan.AllowBalanceTopup && !plan.AllowBalancePriority {
 					AbortWithError(c, http.StatusTooManyRequests, "USAGE_LIMIT_EXCEEDED", "All active subscription quotas for this group are exhausted")
 					return
 				}
@@ -260,32 +260,32 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 				return
 			}
 
-				// Subscription mode: validate the purchase snapshot directly.
-				// user_subscriptions is never read here; rolling quota windows are
-				// already normalised by the purchase reader, so no legacy
-				// window-maintenance write is required.
-				if sharedPurchase != nil {
-					if validateErr := subscriptionService.ValidateSharedPurchase(sharedPurchase, 0); validateErr != nil {
-						if sharedPurchase.BalanceTopupEnabled && isSharedSubscriptionQuotaError(validateErr) {
-							// Quota drained but the purchase allows spilling over to account
-							// balance: drop the entitlement and fall through to the balance check.
-							subscription = nil
-							sharedPurchase = nil
-							c.Set(string(ContextKeySharedSubscription), nil)
-						} else {
-							code := "SUBSCRIPTION_INVALID"
-							status := 403
-							if isSharedSubscriptionQuotaError(validateErr) {
-								code = "USAGE_LIMIT_EXCEEDED"
-								status = 429
-							}
-							AbortWithError(c, status, code, validateErr.Error())
-							return
+			// Subscription mode: validate the purchase snapshot directly.
+			// user_subscriptions is never read here; rolling quota windows are
+			// already normalised by the purchase reader, so no legacy
+			// window-maintenance write is required.
+			if sharedPurchase != nil {
+				if validateErr := subscriptionService.ValidateSharedPurchase(sharedPurchase, 0); validateErr != nil {
+					if sharedPurchase.BalanceTopupEnabled && isSharedSubscriptionQuotaError(validateErr) {
+						// Quota drained but the purchase allows spilling over to account
+						// balance: drop the entitlement and fall through to the balance check.
+						subscription = nil
+						sharedPurchase = nil
+						c.Set(string(ContextKeySharedSubscription), nil)
+					} else {
+						code := "SUBSCRIPTION_INVALID"
+						status := 403
+						if isSharedSubscriptionQuotaError(validateErr) {
+							code = "USAGE_LIMIT_EXCEEDED"
+							status = 429
 						}
+						AbortWithError(c, status, code, validateErr.Error())
+						return
 					}
 				}
-				if subscription == nil {
-					// No purchase snapshot (or balance fallback allowed): check balance.
+			}
+			if subscription == nil {
+				// No purchase snapshot (or balance fallback allowed): check balance.
 				if apiKeyBalanceBelowAuthThreshold(apiKey.User.Balance, cfg) {
 					AbortWithError(c, 403, "INSUFFICIENT_BALANCE", "Insufficient account balance")
 					return

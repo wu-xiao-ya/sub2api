@@ -71,6 +71,12 @@ func sharedSubscriptionConcurrencyPlan(
 	for _, item := range items {
 		validateErr := subscriptionService.ValidateSharedPurchase(&item, 0)
 		if validateErr != nil {
+			if item.BillingPriority == "balance" {
+				plan.AllowBalancePriority = true
+				if plan.BalancePriorityPurchaseID == 0 {
+					plan.BalancePriorityPurchaseID = item.ID
+				}
+			}
 			if item.BalanceTopupEnabled && isSharedSubscriptionQuotaError(validateErr) {
 				plan.AllowBalanceTopup = true
 				if plan.BalanceTopupPurchaseID == 0 {
@@ -78,6 +84,12 @@ func sharedSubscriptionConcurrencyPlan(
 				}
 			}
 			continue
+		}
+		if item.BillingPriority == "balance" {
+			plan.AllowBalancePriority = true
+			if plan.BalancePriorityPurchaseID == 0 {
+				plan.BalancePriorityPurchaseID = item.ID
+			}
 		}
 		if item.BalanceTopupEnabled {
 			plan.AllowBalanceTopup = true
@@ -90,6 +102,7 @@ func sharedSubscriptionConcurrencyPlan(
 			PurchaseID:          item.ID,
 			Concurrency:         item.ConcurrencyEntitlement,
 			BalanceTopupEnabled: item.BalanceTopupEnabled,
+			BillingPriority:     item.BillingPriority,
 			ExpiresAt:           item.ExpiresAt,
 			Subscription:        itemCopy.AsLegacySubscription(nil),
 			SharedSubscription:  &itemCopy,

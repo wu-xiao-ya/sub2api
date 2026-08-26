@@ -100,6 +100,12 @@
                   <div class="text-xs text-gray-500 dark:text-dark-400">
                     {{ t('admin.subscriptionPurchases.concurrency') }} {{ item.concurrency_entitlement }}
                   </div>
+                  <div class="mt-1 text-xs text-gray-500 dark:text-dark-400">
+                    {{ t('admin.subscriptionPurchases.billingPriority') }}:
+                    {{ item.billing_priority === 'balance'
+                      ? t('userSubscriptions.balancePriority')
+                      : t('userSubscriptions.subscriptionPriority') }}
+                  </div>
                 </td>
                 <td class="whitespace-nowrap px-4 py-3">
                   <div class="flex flex-wrap gap-1">

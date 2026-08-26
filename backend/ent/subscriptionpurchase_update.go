@@ -445,6 +445,20 @@ func (_u *SubscriptionPurchaseUpdate) SetNillableBalanceTopupEnabled(v *bool) *S
 	return _u
 }
 
+// SetBillingPriority sets the "billing_priority" field.
+func (_u *SubscriptionPurchaseUpdate) SetBillingPriority(v string) *SubscriptionPurchaseUpdate {
+	_u.mutation.SetBillingPriority(v)
+	return _u
+}
+
+// SetNillableBillingPriority sets the "billing_priority" field if the given value is not nil.
+func (_u *SubscriptionPurchaseUpdate) SetNillableBillingPriority(v *string) *SubscriptionPurchaseUpdate {
+	if v != nil {
+		_u.SetBillingPriority(*v)
+	}
+	return _u
+}
+
 // SetSource sets the "source" field.
 func (_u *SubscriptionPurchaseUpdate) SetSource(v string) *SubscriptionPurchaseUpdate {
 	_u.mutation.SetSource(v)
@@ -617,6 +631,11 @@ func (_u *SubscriptionPurchaseUpdate) check() error {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "SubscriptionPurchase.status": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.BillingPriority(); ok {
+		if err := subscriptionpurchase.BillingPriorityValidator(v); err != nil {
+			return &ValidationError{Name: "billing_priority", err: fmt.Errorf(`ent: validator failed for field "SubscriptionPurchase.billing_priority": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.Source(); ok {
 		if err := subscriptionpurchase.SourceValidator(v); err != nil {
 			return &ValidationError{Name: "source", err: fmt.Errorf(`ent: validator failed for field "SubscriptionPurchase.source": %w`, err)}
@@ -750,6 +769,9 @@ func (_u *SubscriptionPurchaseUpdate) sqlSave(ctx context.Context) (_node int, e
 	}
 	if value, ok := _u.mutation.BalanceTopupEnabled(); ok {
 		_spec.SetField(subscriptionpurchase.FieldBalanceTopupEnabled, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.BillingPriority(); ok {
+		_spec.SetField(subscriptionpurchase.FieldBillingPriority, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.Source(); ok {
 		_spec.SetField(subscriptionpurchase.FieldSource, field.TypeString, value)
@@ -1256,6 +1278,20 @@ func (_u *SubscriptionPurchaseUpdateOne) SetNillableBalanceTopupEnabled(v *bool)
 	return _u
 }
 
+// SetBillingPriority sets the "billing_priority" field.
+func (_u *SubscriptionPurchaseUpdateOne) SetBillingPriority(v string) *SubscriptionPurchaseUpdateOne {
+	_u.mutation.SetBillingPriority(v)
+	return _u
+}
+
+// SetNillableBillingPriority sets the "billing_priority" field if the given value is not nil.
+func (_u *SubscriptionPurchaseUpdateOne) SetNillableBillingPriority(v *string) *SubscriptionPurchaseUpdateOne {
+	if v != nil {
+		_u.SetBillingPriority(*v)
+	}
+	return _u
+}
+
 // SetSource sets the "source" field.
 func (_u *SubscriptionPurchaseUpdateOne) SetSource(v string) *SubscriptionPurchaseUpdateOne {
 	_u.mutation.SetSource(v)
@@ -1441,6 +1477,11 @@ func (_u *SubscriptionPurchaseUpdateOne) check() error {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "SubscriptionPurchase.status": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.BillingPriority(); ok {
+		if err := subscriptionpurchase.BillingPriorityValidator(v); err != nil {
+			return &ValidationError{Name: "billing_priority", err: fmt.Errorf(`ent: validator failed for field "SubscriptionPurchase.billing_priority": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.Source(); ok {
 		if err := subscriptionpurchase.SourceValidator(v); err != nil {
 			return &ValidationError{Name: "source", err: fmt.Errorf(`ent: validator failed for field "SubscriptionPurchase.source": %w`, err)}
@@ -1591,6 +1632,9 @@ func (_u *SubscriptionPurchaseUpdateOne) sqlSave(ctx context.Context) (_node *Su
 	}
 	if value, ok := _u.mutation.BalanceTopupEnabled(); ok {
 		_spec.SetField(subscriptionpurchase.FieldBalanceTopupEnabled, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.BillingPriority(); ok {
+		_spec.SetField(subscriptionpurchase.FieldBillingPriority, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.Source(); ok {
 		_spec.SetField(subscriptionpurchase.FieldSource, field.TypeString, value)

@@ -46,6 +46,7 @@ func (SubscriptionPurchase) Fields() []ent.Field {
 		field.Time("weekly_window_start").Optional().Nillable().SchemaType(map[string]string{dialect.Postgres: "timestamptz"}),
 		field.Time("monthly_window_start").Optional().Nillable().SchemaType(map[string]string{dialect.Postgres: "timestamptz"}),
 		field.Bool("balance_topup_enabled").Default(false),
+		field.String("billing_priority").MaxLen(20).Default("subscription"),
 		field.String("source").MaxLen(30).Default("payment"),
 		field.Int64("source_id").Optional().Nillable(),
 		field.JSON("snapshot", map[string]any{}).Optional().SchemaType(map[string]string{dialect.Postgres: "jsonb"}),

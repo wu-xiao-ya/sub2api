@@ -6,11 +6,13 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
@@ -863,30 +865,26 @@ func TestApiKeyAuthWithSubscriptionGoogle_SubscriptionLimitExceededReturns429(t 
 		},
 	})
 
-	now := time.Now()
-	sub := &service.UserSubscription{
-		ID:               601,
-		UserID:           user.ID,
-		GroupID:          group.ID,
-		Status:           service.SubscriptionStatusActive,
-		ExpiresAt:        now.Add(24 * time.Hour),
-		DailyWindowStart: &now,
-		DailyUsageUSD:    10,
-	}
-	subscriptionService := service.NewSubscriptionService(nil, fakeGoogleSubscriptionRepo{
-		getActive: func(ctx context.Context, userID, groupID int64) (*service.UserSubscription, error) {
-			if userID != user.ID || groupID != group.ID {
-				return nil, service.ErrSubscriptionNotFound
-			}
-			clone := *sub
-			return &clone, nil
-		},
-		updateStatus:   func(ctx context.Context, subscriptionID int64, status string) error { return nil },
-		activateWindow: func(ctx context.Context, id int64, start time.Time) error { return nil },
-		resetDaily:     func(ctx context.Context, id int64, start time.Time) error { return nil },
-		resetWeekly:    func(ctx context.Context, id int64, start time.Time) error { return nil },
-		resetMonthly:   func(ctx context.Context, id int64, start time.Time) error { return nil },
-	}, nil, nil, &config.Config{RunMode: config.RunModeStandard})
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	startsAt := time.Now().Add(-time.Hour)
+	expiresAt := time.Now().Add(24 * time.Hour)
+	mock.ExpectQuery(`(?s)`+regexp.QuoteMeta("SELECT p.id, p.user_id, p.name, p.tier_code")+
+		`.*WHERE p\.user_id = \$1 AND g\.group_id = \$2.*ORDER BY p\.expires_at ASC`).
+		WithArgs(int64(user.ID), int64(group.ID)).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"id", "user_id", "name", "tier_code", "starts_at", "expires_at", "status",
+			"concurrency_entitlement", "lifetime_quota_usd", "daily_quota_usd",
+			"weekly_quota_usd", "monthly_quota_usd", "lifetime_usage_usd",
+			"daily_usage_usd", "weekly_usage_usd", "monthly_usage_usd",
+			"balance_topup_enabled", "billing_priority",
+		}).AddRow(
+			int64(601), int64(user.ID), "Gemini daily", "standard", startsAt, expiresAt, "active",
+			3, 100.0, 1.0, 10.0, 40.0, 10.0, 10.0, 10.0, 10.0, false, "subscription",
+		))
+	subscriptionService := service.NewSubscriptionService(nil, nil, nil, nil, &config.Config{RunMode: config.RunModeStandard}, db)
+	t.Cleanup(subscriptionService.Stop)
 
 	r := gin.New()
 	r.Use(APIKeyAuthWithSubscriptionGoogle(apiKeyService, subscriptionService, &config.Config{RunMode: config.RunModeStandard}))
@@ -902,5 +900,6 @@ func TestApiKeyAuthWithSubscriptionGoogle_SubscriptionLimitExceededReturns429(t 
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
 	require.Equal(t, http.StatusTooManyRequests, resp.Error.Code)
 	require.Equal(t, "RESOURCE_EXHAUSTED", resp.Error.Status)
-	require.Contains(t, resp.Error.Message, "daily usage limit exceeded")
+	require.Contains(t, resp.Error.Message, "All active subscription quotas")
+	require.NoError(t, mock.ExpectationsWereMet())
 }

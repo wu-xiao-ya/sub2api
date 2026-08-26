@@ -49,6 +49,7 @@ func TestSubscriptionPurchaseRetirementMigrationChain(t *testing.T) {
 		"233_backfill_and_freeze_native_subscriptions.sql",
 		"234_backfill_legacy_usage_purchase_attribution.sql",
 		"235_align_subscription_plan_groups_ent_schema.sql",
+		"236_subscription_billing_priority.sql",
 	}
 	contents := make([]string, 0, len(names))
 	for _, name := range names {
@@ -75,6 +76,11 @@ func TestSubscriptionPurchaseRetirementMigrationChain(t *testing.T) {
 	require.Contains(t, contents[4], "add column if not exists id bigint")
 	require.Contains(t, contents[4], "create unique index if not exists idx_subscription_plan_groups_id")
 	require.NotContains(t, contents[4], "drop table subscription_plan_groups")
+	require.Contains(t, contents[5], "add column if not exists billing_priority")
+	require.Contains(t, contents[5], "default 'subscription'")
+	require.Contains(t, contents[5], "where billing_priority is null")
+	require.Contains(t, contents[5], "drop constraint if exists subscription_purchases_billing_priority_check")
+	require.Contains(t, contents[5], "check (billing_priority in ('subscription', 'balance'))")
 }
 
 func TestSubscriptionPlanGroupsEntAlignmentMigration(t *testing.T) {
@@ -85,4 +91,13 @@ func TestSubscriptionPlanGroupsEntAlignmentMigration(t *testing.T) {
 	require.Contains(t, sql, "where id is null")
 	require.Contains(t, sql, "create unique index if not exists idx_subscription_plan_groups_id")
 	require.NotContains(t, sql, "drop table")
+}
+
+func TestSubscriptionBillingPriorityMigration(t *testing.T) {
+	sql := readRetirementMigration(t, "236_subscription_billing_priority.sql")
+	require.Contains(t, sql, "add column if not exists billing_priority")
+	require.Contains(t, sql, "default 'subscription'")
+	require.Contains(t, sql, "where billing_priority is null")
+	require.Contains(t, sql, "drop constraint if exists subscription_purchases_billing_priority_check")
+	require.Contains(t, sql, "check (billing_priority in ('subscription', 'balance'))")
 }

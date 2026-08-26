@@ -165,6 +165,11 @@ func BalanceTopupEnabled(v bool) predicate.SubscriptionPurchase {
 	return predicate.SubscriptionPurchase(sql.FieldEQ(FieldBalanceTopupEnabled, v))
 }
 
+// BillingPriority applies equality check predicate on the "billing_priority" field. It's identical to BillingPriorityEQ.
+func BillingPriority(v string) predicate.SubscriptionPurchase {
+	return predicate.SubscriptionPurchase(sql.FieldEQ(FieldBillingPriority, v))
+}
+
 // Source applies equality check predicate on the "source" field. It's identical to SourceEQ.
 func Source(v string) predicate.SubscriptionPurchase {
 	return predicate.SubscriptionPurchase(sql.FieldEQ(FieldSource, v))
@@ -1178,6 +1183,71 @@ func BalanceTopupEnabledEQ(v bool) predicate.SubscriptionPurchase {
 // BalanceTopupEnabledNEQ applies the NEQ predicate on the "balance_topup_enabled" field.
 func BalanceTopupEnabledNEQ(v bool) predicate.SubscriptionPurchase {
 	return predicate.SubscriptionPurchase(sql.FieldNEQ(FieldBalanceTopupEnabled, v))
+}
+
+// BillingPriorityEQ applies the EQ predicate on the "billing_priority" field.
+func BillingPriorityEQ(v string) predicate.SubscriptionPurchase {
+	return predicate.SubscriptionPurchase(sql.FieldEQ(FieldBillingPriority, v))
+}
+
+// BillingPriorityNEQ applies the NEQ predicate on the "billing_priority" field.
+func BillingPriorityNEQ(v string) predicate.SubscriptionPurchase {
+	return predicate.SubscriptionPurchase(sql.FieldNEQ(FieldBillingPriority, v))
+}
+
+// BillingPriorityIn applies the In predicate on the "billing_priority" field.
+func BillingPriorityIn(vs ...string) predicate.SubscriptionPurchase {
+	return predicate.SubscriptionPurchase(sql.FieldIn(FieldBillingPriority, vs...))
+}
+
+// BillingPriorityNotIn applies the NotIn predicate on the "billing_priority" field.
+func BillingPriorityNotIn(vs ...string) predicate.SubscriptionPurchase {
+	return predicate.SubscriptionPurchase(sql.FieldNotIn(FieldBillingPriority, vs...))
+}
+
+// BillingPriorityGT applies the GT predicate on the "billing_priority" field.
+func BillingPriorityGT(v string) predicate.SubscriptionPurchase {
+	return predicate.SubscriptionPurchase(sql.FieldGT(FieldBillingPriority, v))
+}
+
+// BillingPriorityGTE applies the GTE predicate on the "billing_priority" field.
+func BillingPriorityGTE(v string) predicate.SubscriptionPurchase {
+	return predicate.SubscriptionPurchase(sql.FieldGTE(FieldBillingPriority, v))
+}
+
+// BillingPriorityLT applies the LT predicate on the "billing_priority" field.
+func BillingPriorityLT(v string) predicate.SubscriptionPurchase {
+	return predicate.SubscriptionPurchase(sql.FieldLT(FieldBillingPriority, v))
+}
+
+// BillingPriorityLTE applies the LTE predicate on the "billing_priority" field.
+func BillingPriorityLTE(v string) predicate.SubscriptionPurchase {
+	return predicate.SubscriptionPurchase(sql.FieldLTE(FieldBillingPriority, v))
+}
+
+// BillingPriorityContains applies the Contains predicate on the "billing_priority" field.
+func BillingPriorityContains(v string) predicate.SubscriptionPurchase {
+	return predicate.SubscriptionPurchase(sql.FieldContains(FieldBillingPriority, v))
+}
+
+// BillingPriorityHasPrefix applies the HasPrefix predicate on the "billing_priority" field.
+func BillingPriorityHasPrefix(v string) predicate.SubscriptionPurchase {
+	return predicate.SubscriptionPurchase(sql.FieldHasPrefix(FieldBillingPriority, v))
+}
+
+// BillingPriorityHasSuffix applies the HasSuffix predicate on the "billing_priority" field.
+func BillingPriorityHasSuffix(v string) predicate.SubscriptionPurchase {
+	return predicate.SubscriptionPurchase(sql.FieldHasSuffix(FieldBillingPriority, v))
+}
+
+// BillingPriorityEqualFold applies the EqualFold predicate on the "billing_priority" field.
+func BillingPriorityEqualFold(v string) predicate.SubscriptionPurchase {
+	return predicate.SubscriptionPurchase(sql.FieldEqualFold(FieldBillingPriority, v))
+}
+
+// BillingPriorityContainsFold applies the ContainsFold predicate on the "billing_priority" field.
+func BillingPriorityContainsFold(v string) predicate.SubscriptionPurchase {
+	return predicate.SubscriptionPurchase(sql.FieldContainsFold(FieldBillingPriority, v))
 }
 
 // SourceEQ applies the EQ predicate on the "source" field.

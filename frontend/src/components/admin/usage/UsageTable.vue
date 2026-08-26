@@ -122,6 +122,19 @@
           </span>
         </template>
 
+        <template #cell-billing_source="{ row }">
+          <span
+            class="inline-flex items-center rounded px-2 py-0.5 text-xs font-medium"
+            :class="row.billing_type === 1
+              ? 'bg-violet-100 text-violet-800 dark:bg-violet-900/40 dark:text-violet-200'
+              : row.billing_type === 0
+                ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200'
+                : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200'"
+          >
+            {{ row.billing_type === 1 ? t('admin.usage.billingTypeSubscription') : row.billing_type === 0 ? t('admin.usage.billingTypeBalance') : '-' }}
+          </span>
+        </template>
+
         <template #cell-tokens="{ row }">
           <!-- 图片生成请求（仅按次计费时显示图片格式） -->
           <div v-if="isImageUsage(row)" class="flex items-center gap-1.5">
@@ -201,6 +214,13 @@
                   <Icon name="infoCircle" size="xs" class="text-gray-400 group-hover:text-blue-500 dark:text-gray-500 dark:group-hover:text-blue-400" />
                 </div>
               </div>
+            </div>
+            <div
+              v-if="getBillingSourceLabel(row)"
+              data-testid="cost-billing-source"
+              class="mt-0.5 text-[11px] font-medium text-gray-500 dark:text-gray-400"
+            >
+              {{ getBillingSourceLabel(row) }}
             </div>
             <div v-if="showAccountBilling && row.account_rate_multiplier != null" class="mt-0.5 text-[11px] text-orange-500 dark:text-orange-400">
               A ${{ accountBilled(row).toFixed(6) }}
@@ -604,6 +624,12 @@ function accountBilled(row: { total_cost?: number | null; account_stats_cost?: n
   const base = row.account_stats_cost != null ? row.account_stats_cost : (row.total_cost ?? 0)
   const result = base * (row.account_rate_multiplier ?? 1)
   return Number.isNaN(result) ? 0 : result
+}
+
+function getBillingSourceLabel(row: { billing_type?: number | null }): string | null {
+  if (row.billing_type === 1) return t('admin.usage.billingTypeSubscription')
+  if (row.billing_type === 0) return t('admin.usage.billingTypeBalance')
+  return null
 }
 
 function promotionPercent(row: { base_rate_multiplier?: number | null; rate_multiplier?: number | null }): string {

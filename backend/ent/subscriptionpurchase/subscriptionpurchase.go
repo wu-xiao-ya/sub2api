@@ -58,6 +58,8 @@ const (
 	FieldMonthlyWindowStart = "monthly_window_start"
 	// FieldBalanceTopupEnabled holds the string denoting the balance_topup_enabled field in the database.
 	FieldBalanceTopupEnabled = "balance_topup_enabled"
+	// FieldBillingPriority holds the string denoting the billing_priority field in the database.
+	FieldBillingPriority = "billing_priority"
 	// FieldSource holds the string denoting the source field in the database.
 	FieldSource = "source"
 	// FieldSourceID holds the string denoting the source_id field in the database.
@@ -108,6 +110,7 @@ var Columns = []string{
 	FieldWeeklyWindowStart,
 	FieldMonthlyWindowStart,
 	FieldBalanceTopupEnabled,
+	FieldBillingPriority,
 	FieldSource,
 	FieldSourceID,
 	FieldSnapshot,
@@ -165,6 +168,10 @@ var (
 	DefaultMonthlyUsageUsd float64
 	// DefaultBalanceTopupEnabled holds the default value on creation for the "balance_topup_enabled" field.
 	DefaultBalanceTopupEnabled bool
+	// DefaultBillingPriority holds the default value on creation for the "billing_priority" field.
+	DefaultBillingPriority string
+	// BillingPriorityValidator is a validator for the "billing_priority" field. It is called by the builders before save.
+	BillingPriorityValidator func(string) error
 	// DefaultSource holds the default value on creation for the "source" field.
 	DefaultSource string
 	// SourceValidator is a validator for the "source" field. It is called by the builders before save.
@@ -295,6 +302,11 @@ func ByMonthlyWindowStart(opts ...sql.OrderTermOption) OrderOption {
 // ByBalanceTopupEnabled orders the results by the balance_topup_enabled field.
 func ByBalanceTopupEnabled(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldBalanceTopupEnabled, opts...).ToFunc()
+}
+
+// ByBillingPriority orders the results by the billing_priority field.
+func ByBillingPriority(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldBillingPriority, opts...).ToFunc()
 }
 
 // BySource orders the results by the source field.

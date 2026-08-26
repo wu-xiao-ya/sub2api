@@ -1705,6 +1705,38 @@ func TestOpenAIGatewayServiceRecordUsage_SubscriptionBillingSetsSubscriptionFiel
 	require.Equal(t, 0, userRepo.deductCalls)
 }
 
+func TestOpenAIGatewayServiceRecordUsage_BalanceSourceOverridesSubscriptionContext(t *testing.T) {
+	usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
+	userRepo := &openAIRecordUsageUserRepoStub{}
+	subRepo := &openAIRecordUsageSubRepoStub{}
+	svc := newOpenAIRecordUsageServiceForTest(usageRepo, userRepo, subRepo, nil)
+	purchaseID := int64(100)
+	ctx := WithSubscriptionConcurrencySource(context.Background(), SubscriptionConcurrencySource{
+		PurchaseID: purchaseID,
+		UseBalance: true,
+	})
+
+	err := svc.RecordUsage(ctx, &OpenAIRecordUsageInput{
+		Result: &OpenAIForwardResult{
+			RequestID: "resp_balance_priority",
+			Usage:     OpenAIUsage{InputTokens: 10, OutputTokens: 5},
+			Model:     "gpt-5.1",
+			Duration:  time.Second,
+		},
+		APIKey:       &APIKey{ID: 101, GroupID: i64p(89), Group: &Group{ID: 89, RateMultiplier: 1.0}},
+		User:         &User{ID: 201},
+		Account:      &Account{ID: 301},
+		Subscription: &UserSubscription{SubscriptionPurchaseID: &purchaseID},
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, usageRepo.lastLog)
+	require.Equal(t, BillingTypeBalance, usageRepo.lastLog.BillingType)
+	require.Nil(t, usageRepo.lastLog.SubscriptionPurchaseID)
+	require.Equal(t, 1, userRepo.deductCalls)
+	require.Zero(t, subRepo.purchaseIncrementCalls)
+}
+
 func TestOpenAIGatewayServiceRecordUsage_SimpleModeSkipsBillingAfterPersist(t *testing.T) {
 	usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
 	userRepo := &openAIRecordUsageUserRepoStub{}
