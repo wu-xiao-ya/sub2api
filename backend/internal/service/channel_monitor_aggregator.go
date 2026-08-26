@@ -252,6 +252,7 @@ func buildStatusSummary(
 		if l, ok := latestByModel[primary]; ok {
 			summary.PrimaryStatus = l.Status
 			summary.PrimaryLatencyMs = l.LatencyMs
+			summary.PrimaryLatencyBreakdown = l.LatencyBreakdown.Clone()
 			summary.PrimaryAccountID = l.AccountID
 			summary.PrimaryAccountName = l.AccountName
 			summary.PrimaryProbeMode = l.ProbeMode
@@ -268,6 +269,7 @@ func buildStatusSummary(
 		if l, ok := latestByModel[model]; ok {
 			entry.Status = l.Status
 			entry.LatencyMs = l.LatencyMs
+			entry.LatencyBreakdown = l.LatencyBreakdown.Clone()
 			entry.Source = publicChannelMonitorSource(l)
 		}
 		if a, ok := availByModel[model]; ok {
@@ -287,19 +289,20 @@ func buildUserViewFromSummary(
 	timelineEntries []*ChannelMonitorHistoryEntry,
 ) *UserMonitorView {
 	view := &UserMonitorView{
-		ID:               m.ID,
-		Name:             m.Name,
-		Provider:         m.Provider,
-		APIMode:          m.APIMode,
-		GroupName:        m.GroupName,
-		AccountGroupID:   m.AccountGroupID,
-		PrimaryModel:     m.PrimaryModel,
-		PrimaryStatus:    summary.PrimaryStatus,
-		PrimaryLatencyMs: summary.PrimaryLatencyMs,
-		PrimarySource:    publicChannelMonitorSource(primaryLatest),
-		Availability7d:   summary.Availability7d,
-		ExtraModels:      summary.ExtraModels,
-		Timeline:         buildTimelinePoints(timelineEntries),
+		ID:                      m.ID,
+		Name:                    m.Name,
+		Provider:                m.Provider,
+		APIMode:                 m.APIMode,
+		GroupName:               m.GroupName,
+		AccountGroupID:          m.AccountGroupID,
+		PrimaryModel:            m.PrimaryModel,
+		PrimaryStatus:           summary.PrimaryStatus,
+		PrimaryLatencyMs:        summary.PrimaryLatencyMs,
+		PrimaryLatencyBreakdown: summary.PrimaryLatencyBreakdown.Clone(),
+		PrimarySource:           publicChannelMonitorSource(primaryLatest),
+		Availability7d:          summary.Availability7d,
+		ExtraModels:             summary.ExtraModels,
+		Timeline:                buildTimelinePoints(timelineEntries),
 	}
 	if primaryLatest != nil {
 		view.PrimaryPingLatencyMs = primaryLatest.PingLatencyMs
@@ -336,6 +339,7 @@ func mergeModelDetails(
 		if l, ok := latestByModel[model]; ok {
 			d.LatestStatus = l.Status
 			d.LatestLatencyMs = l.LatencyMs
+			d.LatestLatencyBreakdown = l.LatencyBreakdown.Clone()
 			d.Source = publicChannelMonitorSource(l)
 		}
 		if a, ok := availMap[monitorAvailability7Days][model]; ok {

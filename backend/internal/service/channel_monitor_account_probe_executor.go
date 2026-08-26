@@ -44,10 +44,12 @@ func (s *AccountTestService) ProbeForChannelMonitor(
 
 	testErr := s.TestAccountConnection(ginCtx, accountID, model, "", AccountTestModeDefault)
 	success, message, usage, latestImage := parseChannelMonitorAccountProbeOutput(recorder.Body.String(), testErr)
+	durationMs := int(time.Since(startedAt).Milliseconds())
 
 	return &AccountMonitorProbeResult{
 		Success:          success,
-		LatencyMs:        int(time.Since(startedAt).Milliseconds()),
+		LatencyMs:        durationMs,
+		LatencyBreakdown: &UsageLatencyBreakdown{TotalDurationMs: &durationMs},
 		Message:          message,
 		Usage:            usage,
 		RequestAttempted: true,

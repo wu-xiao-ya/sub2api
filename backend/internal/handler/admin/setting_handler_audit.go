@@ -62,6 +62,9 @@ func diffSettings(before *service.SystemSettings, after *service.SystemSettings,
 	if before.StepUpEnabled != after.StepUpEnabled {
 		changed = append(changed, "step_up_enabled")
 	}
+	if before.MainlandAccessRestrictionEnabled != after.MainlandAccessRestrictionEnabled {
+		changed = append(changed, "mainland_access_restriction_enabled")
+	}
 	if before.LoginAgreementEnabled != after.LoginAgreementEnabled {
 		changed = append(changed, "login_agreement_enabled")
 	}

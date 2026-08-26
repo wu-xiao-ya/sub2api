@@ -60,11 +60,12 @@ type channelMonitorTrafficSettingsProvider interface {
 // ChannelMonitorTrafficSample is intentionally compact. The monitor scheduler
 // only needs successful request timing and selected-account attribution.
 type ChannelMonitorTrafficSample struct {
-	AccountID    int64
-	Model        string
-	DurationMs   int
-	FirstTokenMs int
-	CreatedAt    time.Time
+	AccountID        int64
+	Model            string
+	DurationMs       int
+	FirstTokenMs     int
+	LatencyBreakdown *UsageLatencyBreakdown
+	CreatedAt        time.Time
 }
 
 // channelMonitorTrafficUsageRepository stays optional so the monitoring service
@@ -293,17 +294,49 @@ func buildTrafficObservationResult(
 		formatTrafficObservationAge(now.Sub(fresh[0].CreatedAt)),
 	)
 	return &CheckResult{
-		Model:          model,
-		Status:         status,
-		LatencyMs:      &latency,
-		AccountID:      &accountID,
-		AccountName:    strings.TrimSpace(account.Name),
-		ProbeMode:      accountProbeModeTraffic,
-		CandidateCount: len(eligibleAccounts),
-		HealthyCount:   len(observedAccounts),
-		Message:        message,
-		CheckedAt:      fresh[0].CreatedAt.UTC(),
+		Model:            model,
+		Status:           status,
+		LatencyMs:        &latency,
+		LatencyBreakdown: medianTrafficLatencyBreakdown(recent),
+		AccountID:        &accountID,
+		AccountName:      strings.TrimSpace(account.Name),
+		ProbeMode:        accountProbeModeTraffic,
+		CandidateCount:   len(eligibleAccounts),
+		HealthyCount:     len(observedAccounts),
+		Message:          message,
+		CheckedAt:        fresh[0].CreatedAt.UTC(),
 	}, true
+}
+
+func medianTrafficLatencyBreakdown(samples []ChannelMonitorTrafficSample) *UsageLatencyBreakdown {
+	median := func(selectValue func(*UsageLatencyBreakdown) *int) *int {
+		values := make([]int, 0, len(samples))
+		for _, sample := range samples {
+			if sample.LatencyBreakdown == nil {
+				continue
+			}
+			if value := selectValue(sample.LatencyBreakdown); value != nil && *value >= 0 {
+				values = append(values, *value)
+			}
+		}
+		if len(values) == 0 {
+			return nil
+		}
+		sort.Ints(values)
+		value := values[len(values)/2]
+		return &value
+	}
+	result := &UsageLatencyBreakdown{
+		FirstResponseMs:  median(func(value *UsageLatencyBreakdown) *int { return value.FirstResponseMs }),
+		FirstEventMs:     median(func(value *UsageLatencyBreakdown) *int { return value.FirstEventMs }),
+		FirstOutputMs:    median(func(value *UsageLatencyBreakdown) *int { return value.FirstOutputMs }),
+		FirstCharacterMs: median(func(value *UsageLatencyBreakdown) *int { return value.FirstCharacterMs }),
+		TotalDurationMs:  median(func(value *UsageLatencyBreakdown) *int { return value.TotalDurationMs }),
+	}
+	if result.Empty() {
+		return nil
+	}
+	return result
 }
 
 func formatTrafficObservationAge(age time.Duration) string {

@@ -884,18 +884,19 @@ func (s *ChannelMonitorService) persistCheckResults(
 	rows := make([]*ChannelMonitorHistoryRow, 0, len(results))
 	for _, r := range results {
 		rows = append(rows, &ChannelMonitorHistoryRow{
-			MonitorID:      m.ID,
-			Model:          r.Model,
-			Status:         r.Status,
-			LatencyMs:      r.LatencyMs,
-			PingLatencyMs:  r.PingLatencyMs,
-			AccountID:      r.AccountID,
-			AccountName:    r.AccountName,
-			ProbeMode:      r.ProbeMode,
-			CandidateCount: r.CandidateCount,
-			HealthyCount:   r.HealthyCount,
-			Message:        r.Message,
-			CheckedAt:      r.CheckedAt,
+			MonitorID:        m.ID,
+			Model:            r.Model,
+			Status:           r.Status,
+			LatencyMs:        r.LatencyMs,
+			LatencyBreakdown: r.LatencyBreakdown.Clone(),
+			PingLatencyMs:    r.PingLatencyMs,
+			AccountID:        r.AccountID,
+			AccountName:      r.AccountName,
+			ProbeMode:        r.ProbeMode,
+			CandidateCount:   r.CandidateCount,
+			HealthyCount:     r.HealthyCount,
+			Message:          r.Message,
+			CheckedAt:        r.CheckedAt,
 		})
 	}
 	if err := s.repo.InsertHistoryBatch(persistCtx, rows); err != nil {

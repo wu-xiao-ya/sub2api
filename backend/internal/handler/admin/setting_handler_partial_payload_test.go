@@ -76,3 +76,20 @@ func TestUpdateSettingsGrokDefaultBaseURLModeIsWritable(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code)
 	require.Equal(t, service.GrokDefaultBaseURLModeEUWest1, repo.values[service.SettingKeyGrokDefaultBaseURLMode])
 }
+
+func TestUpdateSettingsMainlandAccessRestrictionPreservesOmittedAndAcceptsExplicitFalse(t *testing.T) {
+	h, repo := newStepUpSwitchTestHandler(t, map[string]string{
+		service.SettingKeyMainlandAccessRestrictionEnabled: "true",
+	})
+
+	preserved := doUpdateSettings(t, h, map[string]any{"risk_control_enabled": true}, nil)
+	require.Equal(t, http.StatusOK, preserved.Code)
+	require.Equal(t, "true", repo.values[service.SettingKeyMainlandAccessRestrictionEnabled])
+
+	disabled := doUpdateSettings(t, h, map[string]any{
+		"mainland_access_restriction_enabled": false,
+	}, nil)
+	require.Equal(t, http.StatusOK, disabled.Code)
+	require.Equal(t, "false", repo.values[service.SettingKeyMainlandAccessRestrictionEnabled])
+	require.Contains(t, disabled.Body.String(), `"mainland_access_restriction_enabled":false`)
+}

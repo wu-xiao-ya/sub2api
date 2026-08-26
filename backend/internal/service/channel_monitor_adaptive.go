@@ -34,6 +34,7 @@ const (
 type AccountMonitorProbeResult struct {
 	Success          bool
 	LatencyMs        int
+	LatencyBreakdown *UsageLatencyBreakdown
 	Message          string
 	Usage            monitorUsage
 	RequestAttempted bool
@@ -867,6 +868,10 @@ func (s *ChannelMonitorService) runLegacyAdaptiveAccountTestProbe(
 	s.recordMonitorCost(ctx, monitor, result, account)
 	latency := probe.LatencyMs
 	result.LatencyMs = &latency
+	result.LatencyBreakdown = probe.LatencyBreakdown.Clone()
+	if result.LatencyBreakdown == nil && latency >= 0 {
+		result.LatencyBreakdown = &UsageLatencyBreakdown{TotalDurationMs: &latency}
+	}
 	result.Message = truncateMessage(probe.Message)
 	if !probe.Success {
 		result.Status = MonitorStatusFailed

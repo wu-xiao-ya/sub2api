@@ -69,6 +69,12 @@ func (_c *ChannelMonitorHistoryCreate) SetNillablePingLatencyMs(v *int) *Channel
 	return _c
 }
 
+// SetLatencyBreakdown sets the "latency_breakdown" field.
+func (_c *ChannelMonitorHistoryCreate) SetLatencyBreakdown(v map[string]int) *ChannelMonitorHistoryCreate {
+	_c.mutation.SetLatencyBreakdown(v)
+	return _c
+}
+
 // SetAccountID sets the "account_id" field.
 func (_c *ChannelMonitorHistoryCreate) SetAccountID(v int64) *ChannelMonitorHistoryCreate {
 	_c.mutation.SetAccountID(v)
@@ -318,6 +324,10 @@ func (_c *ChannelMonitorHistoryCreate) createSpec() (*ChannelMonitorHistory, *sq
 		_spec.SetField(channelmonitorhistory.FieldPingLatencyMs, field.TypeInt, value)
 		_node.PingLatencyMs = &value
 	}
+	if value, ok := _c.mutation.LatencyBreakdown(); ok {
+		_spec.SetField(channelmonitorhistory.FieldLatencyBreakdown, field.TypeJSON, value)
+		_node.LatencyBreakdown = value
+	}
 	if value, ok := _c.mutation.AccountID(); ok {
 		_spec.SetField(channelmonitorhistory.FieldAccountID, field.TypeInt64, value)
 		_node.AccountID = &value
@@ -496,6 +506,24 @@ func (u *ChannelMonitorHistoryUpsert) AddPingLatencyMs(v int) *ChannelMonitorHis
 // ClearPingLatencyMs clears the value of the "ping_latency_ms" field.
 func (u *ChannelMonitorHistoryUpsert) ClearPingLatencyMs() *ChannelMonitorHistoryUpsert {
 	u.SetNull(channelmonitorhistory.FieldPingLatencyMs)
+	return u
+}
+
+// SetLatencyBreakdown sets the "latency_breakdown" field.
+func (u *ChannelMonitorHistoryUpsert) SetLatencyBreakdown(v map[string]int) *ChannelMonitorHistoryUpsert {
+	u.Set(channelmonitorhistory.FieldLatencyBreakdown, v)
+	return u
+}
+
+// UpdateLatencyBreakdown sets the "latency_breakdown" field to the value that was provided on create.
+func (u *ChannelMonitorHistoryUpsert) UpdateLatencyBreakdown() *ChannelMonitorHistoryUpsert {
+	u.SetExcluded(channelmonitorhistory.FieldLatencyBreakdown)
+	return u
+}
+
+// ClearLatencyBreakdown clears the value of the "latency_breakdown" field.
+func (u *ChannelMonitorHistoryUpsert) ClearLatencyBreakdown() *ChannelMonitorHistoryUpsert {
+	u.SetNull(channelmonitorhistory.FieldLatencyBreakdown)
 	return u
 }
 
@@ -772,6 +800,27 @@ func (u *ChannelMonitorHistoryUpsertOne) UpdatePingLatencyMs() *ChannelMonitorHi
 func (u *ChannelMonitorHistoryUpsertOne) ClearPingLatencyMs() *ChannelMonitorHistoryUpsertOne {
 	return u.Update(func(s *ChannelMonitorHistoryUpsert) {
 		s.ClearPingLatencyMs()
+	})
+}
+
+// SetLatencyBreakdown sets the "latency_breakdown" field.
+func (u *ChannelMonitorHistoryUpsertOne) SetLatencyBreakdown(v map[string]int) *ChannelMonitorHistoryUpsertOne {
+	return u.Update(func(s *ChannelMonitorHistoryUpsert) {
+		s.SetLatencyBreakdown(v)
+	})
+}
+
+// UpdateLatencyBreakdown sets the "latency_breakdown" field to the value that was provided on create.
+func (u *ChannelMonitorHistoryUpsertOne) UpdateLatencyBreakdown() *ChannelMonitorHistoryUpsertOne {
+	return u.Update(func(s *ChannelMonitorHistoryUpsert) {
+		s.UpdateLatencyBreakdown()
+	})
+}
+
+// ClearLatencyBreakdown clears the value of the "latency_breakdown" field.
+func (u *ChannelMonitorHistoryUpsertOne) ClearLatencyBreakdown() *ChannelMonitorHistoryUpsertOne {
+	return u.Update(func(s *ChannelMonitorHistoryUpsert) {
+		s.ClearLatencyBreakdown()
 	})
 }
 
@@ -1235,6 +1284,27 @@ func (u *ChannelMonitorHistoryUpsertBulk) UpdatePingLatencyMs() *ChannelMonitorH
 func (u *ChannelMonitorHistoryUpsertBulk) ClearPingLatencyMs() *ChannelMonitorHistoryUpsertBulk {
 	return u.Update(func(s *ChannelMonitorHistoryUpsert) {
 		s.ClearPingLatencyMs()
+	})
+}
+
+// SetLatencyBreakdown sets the "latency_breakdown" field.
+func (u *ChannelMonitorHistoryUpsertBulk) SetLatencyBreakdown(v map[string]int) *ChannelMonitorHistoryUpsertBulk {
+	return u.Update(func(s *ChannelMonitorHistoryUpsert) {
+		s.SetLatencyBreakdown(v)
+	})
+}
+
+// UpdateLatencyBreakdown sets the "latency_breakdown" field to the value that was provided on create.
+func (u *ChannelMonitorHistoryUpsertBulk) UpdateLatencyBreakdown() *ChannelMonitorHistoryUpsertBulk {
+	return u.Update(func(s *ChannelMonitorHistoryUpsert) {
+		s.UpdateLatencyBreakdown()
+	})
+}
+
+// ClearLatencyBreakdown clears the value of the "latency_breakdown" field.
+func (u *ChannelMonitorHistoryUpsertBulk) ClearLatencyBreakdown() *ChannelMonitorHistoryUpsertBulk {
+	return u.Update(func(s *ChannelMonitorHistoryUpsert) {
+		s.ClearLatencyBreakdown()
 	})
 }
 

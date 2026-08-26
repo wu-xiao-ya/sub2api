@@ -15,6 +15,7 @@ export interface GroupedChannelModel {
   model: string
   status: MonitorStatus | ''
   latency_ms: number | null
+  latency_breakdown: UserMonitorView['primary_latency_breakdown'] | null
   source: ChannelMonitorSource | null
   availability_7d: number | null
   timeline: UserMonitorView['timeline']
@@ -103,6 +104,7 @@ function extraModelRow(item: UserMonitorView, extra: UserMonitorExtraModel): Gro
     model: extra.model,
     status: extra.status,
     latency_ms: extra.latency_ms,
+    latency_breakdown: extra.latency_breakdown ?? null,
     source: normalizeSource(extra.source),
     availability_7d: extra.availability_7d ?? null,
     timeline: [],
@@ -116,6 +118,7 @@ function primaryModelRow(item: UserMonitorView): GroupedChannelModel {
     model: item.primary_model,
     status: item.primary_status,
     latency_ms: item.primary_latency_ms,
+    latency_breakdown: item.primary_latency_breakdown ?? null,
     source: normalizeSource(item.primary_source),
     availability_7d: item.availability_7d ?? null,
     timeline: item.timeline ?? [],

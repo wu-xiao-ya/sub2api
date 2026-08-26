@@ -169,6 +169,13 @@ export default {
         auditRetention: '操作日志保留天数',
         auditRetentionHint: '超过该天数的操作日志将被自动清理；填 0 表示永久保留（仅支持手动清空）。'
       },
+      regionRestriction: {
+        title: '地区访问限制',
+        description: '控制中国大陆地区是否可以访问控制台和调用 API。中国香港、中国澳门、中国台湾及其他支持地区不受影响。',
+        enabled: '禁止中国大陆地区访问和使用',
+        enabledHint: '开启后按现有规则执行限制。生效时间为 2026年8月24日 00:00（北京时间）；该时间已过，因此重新开启会立即生效。关闭后控制台和 API 会立即恢复访问，无需重启服务。',
+        cloudflareHint: '地区识别依赖受信任代理传入的 CF-IPCountry 请求头；缺少该请求头时会保持放行，避免直连和内网请求被误判。'
+      },
       turnstile: {
         title: 'Cloudflare Turnstile',
         description: '登录和注册的机器人防护',

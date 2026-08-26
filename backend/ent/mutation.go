@@ -18622,6 +18622,7 @@ type ChannelMonitorHistoryMutation struct {
 	addlatency_ms      *int
 	ping_latency_ms    *int
 	addping_latency_ms *int
+	latency_breakdown  *map[string]int
 	account_id         *int64
 	addaccount_id      *int64
 	account_name       *string
@@ -18984,6 +18985,55 @@ func (m *ChannelMonitorHistoryMutation) ResetPingLatencyMs() {
 	m.ping_latency_ms = nil
 	m.addping_latency_ms = nil
 	delete(m.clearedFields, channelmonitorhistory.FieldPingLatencyMs)
+}
+
+// SetLatencyBreakdown sets the "latency_breakdown" field.
+func (m *ChannelMonitorHistoryMutation) SetLatencyBreakdown(value map[string]int) {
+	m.latency_breakdown = &value
+}
+
+// LatencyBreakdown returns the value of the "latency_breakdown" field in the mutation.
+func (m *ChannelMonitorHistoryMutation) LatencyBreakdown() (r map[string]int, exists bool) {
+	v := m.latency_breakdown
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldLatencyBreakdown returns the old "latency_breakdown" field's value of the ChannelMonitorHistory entity.
+// If the ChannelMonitorHistory object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ChannelMonitorHistoryMutation) OldLatencyBreakdown(ctx context.Context) (v map[string]int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldLatencyBreakdown is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldLatencyBreakdown requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldLatencyBreakdown: %w", err)
+	}
+	return oldValue.LatencyBreakdown, nil
+}
+
+// ClearLatencyBreakdown clears the value of the "latency_breakdown" field.
+func (m *ChannelMonitorHistoryMutation) ClearLatencyBreakdown() {
+	m.latency_breakdown = nil
+	m.clearedFields[channelmonitorhistory.FieldLatencyBreakdown] = struct{}{}
+}
+
+// LatencyBreakdownCleared returns if the "latency_breakdown" field was cleared in this mutation.
+func (m *ChannelMonitorHistoryMutation) LatencyBreakdownCleared() bool {
+	_, ok := m.clearedFields[channelmonitorhistory.FieldLatencyBreakdown]
+	return ok
+}
+
+// ResetLatencyBreakdown resets all changes to the "latency_breakdown" field.
+func (m *ChannelMonitorHistoryMutation) ResetLatencyBreakdown() {
+	m.latency_breakdown = nil
+	delete(m.clearedFields, channelmonitorhistory.FieldLatencyBreakdown)
 }
 
 // SetAccountID sets the "account_id" field.
@@ -19440,7 +19490,7 @@ func (m *ChannelMonitorHistoryMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ChannelMonitorHistoryMutation) Fields() []string {
-	fields := make([]string, 0, 12)
+	fields := make([]string, 0, 13)
 	if m.monitor != nil {
 		fields = append(fields, channelmonitorhistory.FieldMonitorID)
 	}
@@ -19455,6 +19505,9 @@ func (m *ChannelMonitorHistoryMutation) Fields() []string {
 	}
 	if m.ping_latency_ms != nil {
 		fields = append(fields, channelmonitorhistory.FieldPingLatencyMs)
+	}
+	if m.latency_breakdown != nil {
+		fields = append(fields, channelmonitorhistory.FieldLatencyBreakdown)
 	}
 	if m.account_id != nil {
 		fields = append(fields, channelmonitorhistory.FieldAccountID)
@@ -19495,6 +19548,8 @@ func (m *ChannelMonitorHistoryMutation) Field(name string) (ent.Value, bool) {
 		return m.LatencyMs()
 	case channelmonitorhistory.FieldPingLatencyMs:
 		return m.PingLatencyMs()
+	case channelmonitorhistory.FieldLatencyBreakdown:
+		return m.LatencyBreakdown()
 	case channelmonitorhistory.FieldAccountID:
 		return m.AccountID()
 	case channelmonitorhistory.FieldAccountName:
@@ -19528,6 +19583,8 @@ func (m *ChannelMonitorHistoryMutation) OldField(ctx context.Context, name strin
 		return m.OldLatencyMs(ctx)
 	case channelmonitorhistory.FieldPingLatencyMs:
 		return m.OldPingLatencyMs(ctx)
+	case channelmonitorhistory.FieldLatencyBreakdown:
+		return m.OldLatencyBreakdown(ctx)
 	case channelmonitorhistory.FieldAccountID:
 		return m.OldAccountID(ctx)
 	case channelmonitorhistory.FieldAccountName:
@@ -19585,6 +19642,13 @@ func (m *ChannelMonitorHistoryMutation) SetField(name string, value ent.Value) e
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetPingLatencyMs(v)
+		return nil
+	case channelmonitorhistory.FieldLatencyBreakdown:
+		v, ok := value.(map[string]int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetLatencyBreakdown(v)
 		return nil
 	case channelmonitorhistory.FieldAccountID:
 		v, ok := value.(int64)
@@ -19734,6 +19798,9 @@ func (m *ChannelMonitorHistoryMutation) ClearedFields() []string {
 	if m.FieldCleared(channelmonitorhistory.FieldPingLatencyMs) {
 		fields = append(fields, channelmonitorhistory.FieldPingLatencyMs)
 	}
+	if m.FieldCleared(channelmonitorhistory.FieldLatencyBreakdown) {
+		fields = append(fields, channelmonitorhistory.FieldLatencyBreakdown)
+	}
 	if m.FieldCleared(channelmonitorhistory.FieldAccountID) {
 		fields = append(fields, channelmonitorhistory.FieldAccountID)
 	}
@@ -19771,6 +19838,9 @@ func (m *ChannelMonitorHistoryMutation) ClearField(name string) error {
 		return nil
 	case channelmonitorhistory.FieldPingLatencyMs:
 		m.ClearPingLatencyMs()
+		return nil
+	case channelmonitorhistory.FieldLatencyBreakdown:
+		m.ClearLatencyBreakdown()
 		return nil
 	case channelmonitorhistory.FieldAccountID:
 		m.ClearAccountID()
@@ -19812,6 +19882,9 @@ func (m *ChannelMonitorHistoryMutation) ResetField(name string) error {
 		return nil
 	case channelmonitorhistory.FieldPingLatencyMs:
 		m.ResetPingLatencyMs()
+		return nil
+	case channelmonitorhistory.FieldLatencyBreakdown:
+		m.ResetLatencyBreakdown()
 		return nil
 	case channelmonitorhistory.FieldAccountID:
 		m.ResetAccountID()
@@ -49410,6 +49483,7 @@ type UsageLogMutation struct {
 	addduration_ms               *int
 	first_token_ms               *int
 	addfirst_token_ms            *int
+	latency_breakdown            *map[string]int
 	user_agent                   *string
 	ip_address                   *string
 	image_count                  *int
@@ -51507,6 +51581,55 @@ func (m *UsageLogMutation) ResetFirstTokenMs() {
 	delete(m.clearedFields, usagelog.FieldFirstTokenMs)
 }
 
+// SetLatencyBreakdown sets the "latency_breakdown" field.
+func (m *UsageLogMutation) SetLatencyBreakdown(value map[string]int) {
+	m.latency_breakdown = &value
+}
+
+// LatencyBreakdown returns the value of the "latency_breakdown" field in the mutation.
+func (m *UsageLogMutation) LatencyBreakdown() (r map[string]int, exists bool) {
+	v := m.latency_breakdown
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldLatencyBreakdown returns the old "latency_breakdown" field's value of the UsageLog entity.
+// If the UsageLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UsageLogMutation) OldLatencyBreakdown(ctx context.Context) (v map[string]int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldLatencyBreakdown is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldLatencyBreakdown requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldLatencyBreakdown: %w", err)
+	}
+	return oldValue.LatencyBreakdown, nil
+}
+
+// ClearLatencyBreakdown clears the value of the "latency_breakdown" field.
+func (m *UsageLogMutation) ClearLatencyBreakdown() {
+	m.latency_breakdown = nil
+	m.clearedFields[usagelog.FieldLatencyBreakdown] = struct{}{}
+}
+
+// LatencyBreakdownCleared returns if the "latency_breakdown" field was cleared in this mutation.
+func (m *UsageLogMutation) LatencyBreakdownCleared() bool {
+	_, ok := m.clearedFields[usagelog.FieldLatencyBreakdown]
+	return ok
+}
+
+// ResetLatencyBreakdown resets all changes to the "latency_breakdown" field.
+func (m *UsageLogMutation) ResetLatencyBreakdown() {
+	m.latency_breakdown = nil
+	delete(m.clearedFields, usagelog.FieldLatencyBreakdown)
+}
+
 // SetUserAgent sets the "user_agent" field.
 func (m *UsageLogMutation) SetUserAgent(s string) {
 	m.user_agent = &s
@@ -52322,7 +52445,7 @@ func (m *UsageLogMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *UsageLogMutation) Fields() []string {
-	fields := make([]string, 0, 50)
+	fields := make([]string, 0, 51)
 	if m.user != nil {
 		fields = append(fields, usagelog.FieldUserID)
 	}
@@ -52433,6 +52556,9 @@ func (m *UsageLogMutation) Fields() []string {
 	}
 	if m.first_token_ms != nil {
 		fields = append(fields, usagelog.FieldFirstTokenMs)
+	}
+	if m.latency_breakdown != nil {
+		fields = append(fields, usagelog.FieldLatencyBreakdown)
 	}
 	if m.user_agent != nil {
 		fields = append(fields, usagelog.FieldUserAgent)
@@ -52555,6 +52681,8 @@ func (m *UsageLogMutation) Field(name string) (ent.Value, bool) {
 		return m.DurationMs()
 	case usagelog.FieldFirstTokenMs:
 		return m.FirstTokenMs()
+	case usagelog.FieldLatencyBreakdown:
+		return m.LatencyBreakdown()
 	case usagelog.FieldUserAgent:
 		return m.UserAgent()
 	case usagelog.FieldIPAddress:
@@ -52664,6 +52792,8 @@ func (m *UsageLogMutation) OldField(ctx context.Context, name string) (ent.Value
 		return m.OldDurationMs(ctx)
 	case usagelog.FieldFirstTokenMs:
 		return m.OldFirstTokenMs(ctx)
+	case usagelog.FieldLatencyBreakdown:
+		return m.OldLatencyBreakdown(ctx)
 	case usagelog.FieldUserAgent:
 		return m.OldUserAgent(ctx)
 	case usagelog.FieldIPAddress:
@@ -52957,6 +53087,13 @@ func (m *UsageLogMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetFirstTokenMs(v)
+		return nil
+	case usagelog.FieldLatencyBreakdown:
+		v, ok := value.(map[string]int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetLatencyBreakdown(v)
 		return nil
 	case usagelog.FieldUserAgent:
 		v, ok := value.(string)
@@ -53418,6 +53555,9 @@ func (m *UsageLogMutation) ClearedFields() []string {
 	if m.FieldCleared(usagelog.FieldFirstTokenMs) {
 		fields = append(fields, usagelog.FieldFirstTokenMs)
 	}
+	if m.FieldCleared(usagelog.FieldLatencyBreakdown) {
+		fields = append(fields, usagelog.FieldLatencyBreakdown)
+	}
 	if m.FieldCleared(usagelog.FieldUserAgent) {
 		fields = append(fields, usagelog.FieldUserAgent)
 	}
@@ -53506,6 +53646,9 @@ func (m *UsageLogMutation) ClearField(name string) error {
 		return nil
 	case usagelog.FieldFirstTokenMs:
 		m.ClearFirstTokenMs()
+		return nil
+	case usagelog.FieldLatencyBreakdown:
+		m.ClearLatencyBreakdown()
 		return nil
 	case usagelog.FieldUserAgent:
 		m.ClearUserAgent()
@@ -53652,6 +53795,9 @@ func (m *UsageLogMutation) ResetField(name string) error {
 		return nil
 	case usagelog.FieldFirstTokenMs:
 		m.ResetFirstTokenMs()
+		return nil
+	case usagelog.FieldLatencyBreakdown:
+		m.ResetLatencyBreakdown()
 		return nil
 	case usagelog.FieldUserAgent:
 		m.ResetUserAgent()

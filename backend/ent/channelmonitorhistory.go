@@ -3,6 +3,7 @@
 package ent
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -28,6 +29,8 @@ type ChannelMonitorHistory struct {
 	LatencyMs *int `json:"latency_ms,omitempty"`
 	// PingLatencyMs holds the value of the "ping_latency_ms" field.
 	PingLatencyMs *int `json:"ping_latency_ms,omitempty"`
+	// LatencyBreakdown holds the value of the "latency_breakdown" field.
+	LatencyBreakdown map[string]int `json:"latency_breakdown,omitempty"`
 	// AccountID holds the value of the "account_id" field.
 	AccountID *int64 `json:"account_id,omitempty"`
 	// AccountName holds the value of the "account_name" field.
@@ -73,6 +76,8 @@ func (*ChannelMonitorHistory) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
+		case channelmonitorhistory.FieldLatencyBreakdown:
+			values[i] = new([]byte)
 		case channelmonitorhistory.FieldID, channelmonitorhistory.FieldMonitorID, channelmonitorhistory.FieldLatencyMs, channelmonitorhistory.FieldPingLatencyMs, channelmonitorhistory.FieldAccountID, channelmonitorhistory.FieldCandidateCount, channelmonitorhistory.FieldHealthyCount:
 			values[i] = new(sql.NullInt64)
 		case channelmonitorhistory.FieldModel, channelmonitorhistory.FieldStatus, channelmonitorhistory.FieldAccountName, channelmonitorhistory.FieldProbeMode, channelmonitorhistory.FieldMessage:
@@ -131,6 +136,14 @@ func (_m *ChannelMonitorHistory) assignValues(columns []string, values []any) er
 			} else if value.Valid {
 				_m.PingLatencyMs = new(int)
 				*_m.PingLatencyMs = int(value.Int64)
+			}
+		case channelmonitorhistory.FieldLatencyBreakdown:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field latency_breakdown", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.LatencyBreakdown); err != nil {
+					return fmt.Errorf("unmarshal field latency_breakdown: %w", err)
+				}
 			}
 		case channelmonitorhistory.FieldAccountID:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
@@ -234,6 +247,9 @@ func (_m *ChannelMonitorHistory) String() string {
 		builder.WriteString("ping_latency_ms=")
 		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
+	builder.WriteString(", ")
+	builder.WriteString("latency_breakdown=")
+	builder.WriteString(fmt.Sprintf("%v", _m.LatencyBreakdown))
 	builder.WriteString(", ")
 	if v := _m.AccountID; v != nil {
 		builder.WriteString("account_id=")

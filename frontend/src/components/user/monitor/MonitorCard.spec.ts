@@ -7,6 +7,11 @@ import type { GroupedChannelStatus } from '@/utils/channelMonitorGrouping'
 vi.mock('vue-i18n', () => ({
   useI18n: () => ({
     t: (key: string) => ({
+      'channelStatus.latencyStage.firstResponse': 'First response',
+      'channelStatus.latencyStage.firstEvent': 'First event',
+      'channelStatus.latencyStage.firstOutput': 'First output',
+      'channelStatus.latencyStage.firstCharacter': 'First character',
+      'channelStatus.latencyStage.total': 'Total duration',
       'channelStatus.source.traffic': '用户请求',
       'channelStatus.source.probe': '站内探测',
       'channelStatus.source.mixed': '混合来源',
@@ -33,6 +38,13 @@ const item: GroupedChannelStatus = {
       model: 'gpt-5.6-sol',
       status: 'operational',
       latency_ms: 1280,
+      latency_breakdown: {
+        first_response_ms: 210,
+        first_event_ms: 230,
+        first_output_ms: 640,
+        first_character_ms: 1280,
+        total_duration_ms: 4320,
+      },
       source: 'traffic',
       availability_7d: 99.9,
       timeline: [],
@@ -43,6 +55,7 @@ const item: GroupedChannelStatus = {
       model: 'gpt-5.5',
       status: 'operational',
       latency_ms: 520,
+      latency_breakdown: null,
       source: 'probe',
       availability_7d: 99.8,
       timeline: [],
@@ -79,5 +92,13 @@ describe('MonitorCard model source labels', () => {
     expect(wrapper.text()).toContain('混合来源')
     expect(wrapper.find('[title="用户请求首字中位数"]').exists()).toBe(true)
     expect(wrapper.find('[title="站内探测完整响应耗时"]').exists()).toBe(true)
+    const latencyTitle = wrapper
+      .findAll('span')
+      .map((node) => node.attributes('title'))
+      .find((title) => title?.includes('First response: 210ms'))
+    expect(latencyTitle).toContain('First event: 230ms')
+    expect(latencyTitle).toContain('First output: 640ms')
+    expect(latencyTitle).toContain('First character: 1.28s')
+    expect(latencyTitle).toContain('Total duration: 4.32s')
   })
 })

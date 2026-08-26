@@ -125,6 +125,18 @@ func (_u *ChannelMonitorHistoryUpdate) ClearPingLatencyMs() *ChannelMonitorHisto
 	return _u
 }
 
+// SetLatencyBreakdown sets the "latency_breakdown" field.
+func (_u *ChannelMonitorHistoryUpdate) SetLatencyBreakdown(v map[string]int) *ChannelMonitorHistoryUpdate {
+	_u.mutation.SetLatencyBreakdown(v)
+	return _u
+}
+
+// ClearLatencyBreakdown clears the value of the "latency_breakdown" field.
+func (_u *ChannelMonitorHistoryUpdate) ClearLatencyBreakdown() *ChannelMonitorHistoryUpdate {
+	_u.mutation.ClearLatencyBreakdown()
+	return _u
+}
+
 // SetAccountID sets the "account_id" field.
 func (_u *ChannelMonitorHistoryUpdate) SetAccountID(v int64) *ChannelMonitorHistoryUpdate {
 	_u.mutation.ResetAccountID()
@@ -392,6 +404,12 @@ func (_u *ChannelMonitorHistoryUpdate) sqlSave(ctx context.Context) (_node int, 
 	if _u.mutation.PingLatencyMsCleared() {
 		_spec.ClearField(channelmonitorhistory.FieldPingLatencyMs, field.TypeInt)
 	}
+	if value, ok := _u.mutation.LatencyBreakdown(); ok {
+		_spec.SetField(channelmonitorhistory.FieldLatencyBreakdown, field.TypeJSON, value)
+	}
+	if _u.mutation.LatencyBreakdownCleared() {
+		_spec.ClearField(channelmonitorhistory.FieldLatencyBreakdown, field.TypeJSON)
+	}
 	if value, ok := _u.mutation.AccountID(); ok {
 		_spec.SetField(channelmonitorhistory.FieldAccountID, field.TypeInt64, value)
 	}
@@ -582,6 +600,18 @@ func (_u *ChannelMonitorHistoryUpdateOne) AddPingLatencyMs(v int) *ChannelMonito
 // ClearPingLatencyMs clears the value of the "ping_latency_ms" field.
 func (_u *ChannelMonitorHistoryUpdateOne) ClearPingLatencyMs() *ChannelMonitorHistoryUpdateOne {
 	_u.mutation.ClearPingLatencyMs()
+	return _u
+}
+
+// SetLatencyBreakdown sets the "latency_breakdown" field.
+func (_u *ChannelMonitorHistoryUpdateOne) SetLatencyBreakdown(v map[string]int) *ChannelMonitorHistoryUpdateOne {
+	_u.mutation.SetLatencyBreakdown(v)
+	return _u
+}
+
+// ClearLatencyBreakdown clears the value of the "latency_breakdown" field.
+func (_u *ChannelMonitorHistoryUpdateOne) ClearLatencyBreakdown() *ChannelMonitorHistoryUpdateOne {
+	_u.mutation.ClearLatencyBreakdown()
 	return _u
 }
 
@@ -881,6 +911,12 @@ func (_u *ChannelMonitorHistoryUpdateOne) sqlSave(ctx context.Context) (_node *C
 	}
 	if _u.mutation.PingLatencyMsCleared() {
 		_spec.ClearField(channelmonitorhistory.FieldPingLatencyMs, field.TypeInt)
+	}
+	if value, ok := _u.mutation.LatencyBreakdown(); ok {
+		_spec.SetField(channelmonitorhistory.FieldLatencyBreakdown, field.TypeJSON, value)
+	}
+	if _u.mutation.LatencyBreakdownCleared() {
+		_spec.ClearField(channelmonitorhistory.FieldLatencyBreakdown, field.TypeJSON)
 	}
 	if value, ok := _u.mutation.AccountID(); ok {
 		_spec.SetField(channelmonitorhistory.FieldAccountID, field.TypeInt64, value)

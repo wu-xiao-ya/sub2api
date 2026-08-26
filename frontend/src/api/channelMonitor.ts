@@ -4,15 +4,26 @@
  */
 
 import { apiClient } from './client'
-import type { APIMode, Provider, MonitorStatus } from './admin/channelMonitor'
+import type {
+  APIMode,
+  Provider,
+  MonitorStatus,
+  UsageLatencyBreakdown,
+} from './admin/channelMonitor'
 
-export type { APIMode, Provider, MonitorStatus } from './admin/channelMonitor'
+export type {
+  APIMode,
+  Provider,
+  MonitorStatus,
+  UsageLatencyBreakdown,
+} from './admin/channelMonitor'
 export type ChannelMonitorSource = 'traffic' | 'probe'
 
 export interface UserMonitorExtraModel {
   model: string
   status: MonitorStatus | ''
   latency_ms: number | null
+  latency_breakdown?: UsageLatencyBreakdown
   source?: ChannelMonitorSource
   availability_7d: number
 }
@@ -34,6 +45,7 @@ export interface UserMonitorView {
   primary_model: string
   primary_status: MonitorStatus
   primary_latency_ms: number | null
+  primary_latency_breakdown?: UsageLatencyBreakdown
   primary_ping_latency_ms: number | null
   primary_source?: ChannelMonitorSource
   availability_7d: number
@@ -49,6 +61,7 @@ export interface UserMonitorModelDetail {
   model: string
   latest_status: MonitorStatus
   latest_latency_ms: number | null
+  latest_latency_breakdown?: UsageLatencyBreakdown
   source?: ChannelMonitorSource
   availability_7d: number
   availability_15d: number

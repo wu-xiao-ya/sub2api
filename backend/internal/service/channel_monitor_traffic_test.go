@@ -73,6 +73,85 @@ func TestBuildTrafficObservationResultPrefersFirstTokenOverTotalDuration(t *test
 	}
 }
 
+func TestBuildTrafficObservationResultAggregatesLatencyBreakdownPerStage(t *testing.T) {
+	now := time.Date(2026, time.August, 13, 12, 0, 0, 0, time.UTC)
+	ms := func(value int) *int { return &value }
+	result, ok := buildTrafficObservationResult(
+		"gpt-5.6-sol",
+		[]ChannelMonitorTrafficSample{
+			{
+				AccountID:    7,
+				Model:        "gpt-5.6-sol",
+				DurationMs:   7000,
+				FirstTokenMs: 1500,
+				LatencyBreakdown: &UsageLatencyBreakdown{
+					FirstResponseMs:  ms(300),
+					FirstEventMs:     ms(400),
+					FirstOutputMs:    ms(900),
+					FirstCharacterMs: ms(1500),
+					TotalDurationMs:  ms(7000),
+				},
+				CreatedAt: now.Add(-time.Minute),
+			},
+			{
+				AccountID:    7,
+				Model:        "gpt-5.6-sol",
+				DurationMs:   9000,
+				FirstTokenMs: 2500,
+				LatencyBreakdown: &UsageLatencyBreakdown{
+					FirstResponseMs:  ms(500),
+					FirstEventMs:     ms(600),
+					FirstOutputMs:    ms(1200),
+					FirstCharacterMs: ms(2500),
+					TotalDurationMs:  ms(9000),
+				},
+				CreatedAt: now.Add(-2 * time.Minute),
+			},
+			{
+				AccountID:    7,
+				Model:        "gpt-5.6-sol",
+				DurationMs:   8000,
+				FirstTokenMs: 2000,
+				LatencyBreakdown: &UsageLatencyBreakdown{
+					FirstResponseMs:  ms(400),
+					FirstOutputMs:    ms(1000),
+					FirstCharacterMs: ms(2000),
+					TotalDurationMs:  ms(8000),
+				},
+				CreatedAt: now.Add(-3 * time.Minute),
+			},
+		},
+		map[int64]Account{7: {ID: 7, Name: "plus-a"}},
+		now,
+		ChannelMonitorTrafficObservationSettings{
+			FallbackIdleSeconds:      1800,
+			AggregationWindowSeconds: 300,
+			MinimumSamples:           2,
+		},
+	)
+	if !ok {
+		t.Fatal("expected latency breakdown traffic to be usable")
+	}
+	if result.LatencyBreakdown == nil {
+		t.Fatal("expected latency breakdown")
+	}
+	if got := *result.LatencyBreakdown.FirstResponseMs; got != 400 {
+		t.Fatalf("first response median = %d, want 400", got)
+	}
+	if got := *result.LatencyBreakdown.FirstEventMs; got != 600 {
+		t.Fatalf("first event median = %d, want 600", got)
+	}
+	if got := *result.LatencyBreakdown.FirstOutputMs; got != 1000 {
+		t.Fatalf("first output median = %d, want 1000", got)
+	}
+	if got := *result.LatencyBreakdown.FirstCharacterMs; got != 2000 {
+		t.Fatalf("first character median = %d, want 2000", got)
+	}
+	if got := *result.LatencyBreakdown.TotalDurationMs; got != 8000 {
+		t.Fatalf("total duration median = %d, want 8000", got)
+	}
+}
+
 func TestBuildTrafficObservationResultUsesFreshTrafficOutsideDisplayWindow(t *testing.T) {
 	now := time.Date(2026, time.August, 13, 12, 0, 0, 0, time.UTC)
 	result, ok := buildTrafficObservationResult(

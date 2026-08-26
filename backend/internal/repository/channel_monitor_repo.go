@@ -285,6 +285,9 @@ func (r *channelMonitorRepository) InsertHistoryBatch(ctx context.Context, rows 
 		if row.LatencyMs != nil {
 			c = c.SetLatencyMs(*row.LatencyMs)
 		}
+		if breakdown := row.LatencyBreakdown.Map(); len(breakdown) > 0 {
+			c = c.SetLatencyBreakdown(breakdown)
+		}
 		if row.PingLatencyMs != nil {
 			c = c.SetPingLatencyMs(*row.PingLatencyMs)
 		}
@@ -382,18 +385,19 @@ func (r *channelMonitorRepository) ListHistory(ctx context.Context, monitorID in
 	out := make([]*service.ChannelMonitorHistoryEntry, 0, len(rows))
 	for _, row := range rows {
 		entry := &service.ChannelMonitorHistoryEntry{
-			ID:             row.ID,
-			Model:          row.Model,
-			Status:         string(row.Status),
-			LatencyMs:      row.LatencyMs,
-			PingLatencyMs:  row.PingLatencyMs,
-			AccountID:      row.AccountID,
-			AccountName:    row.AccountName,
-			ProbeMode:      row.ProbeMode,
-			CandidateCount: row.CandidateCount,
-			HealthyCount:   row.HealthyCount,
-			Message:        row.Message,
-			CheckedAt:      row.CheckedAt,
+			ID:               row.ID,
+			Model:            row.Model,
+			Status:           string(row.Status),
+			LatencyMs:        row.LatencyMs,
+			LatencyBreakdown: service.UsageLatencyBreakdownFromMap(row.LatencyBreakdown),
+			PingLatencyMs:    row.PingLatencyMs,
+			AccountID:        row.AccountID,
+			AccountName:      row.AccountName,
+			ProbeMode:        row.ProbeMode,
+			CandidateCount:   row.CandidateCount,
+			HealthyCount:     row.HealthyCount,
+			Message:          row.Message,
+			CheckedAt:        row.CheckedAt,
 		}
 		out = append(out, entry)
 	}
@@ -539,7 +543,7 @@ func (r *channelMonitorRepository) ClearAccountProbeStates(ctx context.Context, 
 func (r *channelMonitorRepository) ListLatestPerModel(ctx context.Context, monitorID int64) ([]*service.ChannelMonitorLatest, error) {
 	const q = `
 		SELECT DISTINCT ON (model)
-		    model, status, latency_ms, ping_latency_ms, account_id, account_name, probe_mode,
+		    model, status, latency_ms, latency_breakdown, ping_latency_ms, account_id, account_name, probe_mode,
 		    candidate_count, healthy_count, checked_at
 		FROM channel_monitor_histories
 		WHERE monitor_id = $1
@@ -555,13 +559,15 @@ func (r *channelMonitorRepository) ListLatestPerModel(ctx context.Context, monit
 	for rows.Next() {
 		l := &service.ChannelMonitorLatest{}
 		var latency, ping, accountID sql.NullInt64
+		var latencyBreakdown sql.NullString
 		if err := rows.Scan(
-			&l.Model, &l.Status, &latency, &ping, &accountID, &l.AccountName, &l.ProbeMode,
+			&l.Model, &l.Status, &latency, &latencyBreakdown, &ping, &accountID, &l.AccountName, &l.ProbeMode,
 			&l.CandidateCount, &l.HealthyCount, &l.CheckedAt,
 		); err != nil {
 			return nil, fmt.Errorf("scan latest row: %w", err)
 		}
 		assignNullInt(&l.LatencyMs, latency)
+		l.LatencyBreakdown = usageLatencyBreakdownFromNullJSON(latencyBreakdown)
 		assignNullInt(&l.PingLatencyMs, ping)
 		assignNullInt64(&l.AccountID, accountID)
 		out = append(out, l)
@@ -659,7 +665,7 @@ func (r *channelMonitorRepository) ListLatestForMonitorIDs(ctx context.Context, 
 	}
 	const q = `
 		SELECT DISTINCT ON (monitor_id, model)
-		    monitor_id, model, status, latency_ms, ping_latency_ms, account_id, account_name, probe_mode,
+		    monitor_id, model, status, latency_ms, latency_breakdown, ping_latency_ms, account_id, account_name, probe_mode,
 		    candidate_count, healthy_count, checked_at
 		FROM channel_monitor_histories
 		WHERE monitor_id = ANY($1)
@@ -675,13 +681,15 @@ func (r *channelMonitorRepository) ListLatestForMonitorIDs(ctx context.Context, 
 		var monitorID int64
 		l := &service.ChannelMonitorLatest{}
 		var latency, ping, accountID sql.NullInt64
+		var latencyBreakdown sql.NullString
 		if err := rows.Scan(
-			&monitorID, &l.Model, &l.Status, &latency, &ping, &accountID, &l.AccountName, &l.ProbeMode,
+			&monitorID, &l.Model, &l.Status, &latency, &latencyBreakdown, &ping, &accountID, &l.AccountName, &l.ProbeMode,
 			&l.CandidateCount, &l.HealthyCount, &l.CheckedAt,
 		); err != nil {
 			return nil, fmt.Errorf("scan latest batch row: %w", err)
 		}
 		assignNullInt(&l.LatencyMs, latency)
+		l.LatencyBreakdown = usageLatencyBreakdownFromNullJSON(latencyBreakdown)
 		assignNullInt(&l.PingLatencyMs, ping)
 		assignNullInt64(&l.AccountID, accountID)
 		out[monitorID] = append(out[monitorID], l)

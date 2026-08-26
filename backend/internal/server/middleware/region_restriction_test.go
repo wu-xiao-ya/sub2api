@@ -1,8 +1,10 @@
 package middleware
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -211,4 +213,39 @@ func TestRegionRestrictionDisabled(t *testing.T) {
 	router.ServeHTTP(recorder, request)
 
 	require.Equal(t, http.StatusNoContent, recorder.Code)
+}
+
+func TestRegionRestrictionRuntimeSwitch(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	var enabled atomic.Bool
+	cfg := config.RegionRestrictionConfig{
+		Enabled:          false,
+		CountryHeader:    "CF-IPCountry",
+		BlockedCountries: []string{"CN"},
+		RestrictedPath:   "/region-restricted",
+	}
+
+	router := gin.New()
+	router.Use(newRegionRestrictionWithRuntime(
+		cfg,
+		time.Now,
+		func(context.Context) bool { return enabled.Load() },
+	))
+	router.POST("/v1/responses", func(c *gin.Context) {
+		c.Status(http.StatusNoContent)
+	})
+
+	request := func() *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodPost, "/v1/responses", nil)
+		req.Header.Set("CF-IPCountry", "CN")
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+		return rec
+	}
+
+	enabled.Store(false)
+	require.Equal(t, http.StatusNoContent, request().Code)
+
+	enabled.Store(true)
+	require.Equal(t, http.StatusForbidden, request().Code)
 }

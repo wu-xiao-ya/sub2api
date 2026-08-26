@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"entgo.io/ent"
+	"entgo.io/ent/dialect"
 	"entgo.io/ent/dialect/entsql"
 	"entgo.io/ent/schema"
 	"entgo.io/ent/schema/edge"
@@ -39,6 +40,9 @@ func (ChannelMonitorHistory) Fields() []ent.Field {
 		field.Int("ping_latency_ms").
 			Optional().
 			Nillable(),
+		field.JSON("latency_breakdown", map[string]int{}).
+			Optional().
+			SchemaType(map[string]string{dialect.Postgres: "jsonb"}),
 		// Admin-only account source metadata for adaptive account probes.
 		field.Int64("account_id").
 			Optional().

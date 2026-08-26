@@ -411,8 +411,21 @@ function modelSourceTooltip(source: NonNullable<GroupedChannelModel['source']>):
 }
 
 function modelLatencyTooltip(model: GroupedChannelModel): string {
-  if (!model.source) return t('channelStatus.latencyMetric.unknown')
-  return modelSourceTooltip(model.source)
+  const metric = model.latency_breakdown
+  if (!metric) {
+    if (!model.source) return t('channelStatus.latencyMetric.unknown')
+    return modelSourceTooltip(model.source)
+  }
+  const rows = [
+    [t('channelStatus.latencyStage.firstResponse'), metric.first_response_ms],
+    [t('channelStatus.latencyStage.firstEvent'), metric.first_event_ms],
+    [t('channelStatus.latencyStage.firstOutput'), metric.first_output_ms],
+    [t('channelStatus.latencyStage.firstCharacter'), metric.first_character_ms],
+    [t('channelStatus.latencyStage.total'), metric.total_duration_ms],
+  ]
+  return rows
+    .map(([label, value]) => `${label}: ${typeof value === 'number' ? formatTrafficLatency(value) : '-'}`)
+    .join('\n')
 }
 
 function modelLatencyKind(source: NonNullable<GroupedChannelModel['source']>): string {

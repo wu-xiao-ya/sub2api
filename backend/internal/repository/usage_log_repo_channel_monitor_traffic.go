@@ -44,7 +44,7 @@ func (r *usageLogRepository) ListRecentChannelMonitorTraffic(
 
 	requestedModel := resolveModelDimensionExpressionWithAlias("requested", "ul")
 	const base = `
-		SELECT ul.account_id, %s AS model, ul.duration_ms, ul.first_token_ms, ul.created_at
+		SELECT ul.account_id, %s AS model, ul.duration_ms, ul.first_token_ms, ul.latency_breakdown, ul.created_at
 		FROM usage_logs ul
 		WHERE ul.account_id = ANY($2)
 		  AND EXISTS (
@@ -73,12 +73,19 @@ func (r *usageLogRepository) ListRecentChannelMonitorTraffic(
 	for rows.Next() {
 		var sample service.ChannelMonitorTrafficSample
 		var firstToken sql.NullInt64
-		if err := rows.Scan(&sample.AccountID, &sample.Model, &sample.DurationMs, &firstToken, &sample.CreatedAt); err != nil {
+		var latencyBreakdown sql.NullString
+		if err := rows.Scan(&sample.AccountID, &sample.Model, &sample.DurationMs, &firstToken, &latencyBreakdown, &sample.CreatedAt); err != nil {
 			return nil, fmt.Errorf("scan recent channel monitor traffic: %w", err)
 		}
 		if firstToken.Valid && firstToken.Int64 > 0 {
 			sample.FirstTokenMs = int(firstToken.Int64)
 		}
+		sample.LatencyBreakdown = usageLatencyBreakdownFromNullJSON(latencyBreakdown)
+		if sample.LatencyBreakdown == nil {
+			sample.LatencyBreakdown = &service.UsageLatencyBreakdown{}
+		}
+		totalDuration := sample.DurationMs
+		sample.LatencyBreakdown.TotalDurationMs = &totalDuration
 		out = append(out, sample)
 	}
 	if err := rows.Err(); err != nil {

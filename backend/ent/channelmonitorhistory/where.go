@@ -315,6 +315,16 @@ func PingLatencyMsNotNil() predicate.ChannelMonitorHistory {
 	return predicate.ChannelMonitorHistory(sql.FieldNotNull(FieldPingLatencyMs))
 }
 
+// LatencyBreakdownIsNil applies the IsNil predicate on the "latency_breakdown" field.
+func LatencyBreakdownIsNil() predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldIsNull(FieldLatencyBreakdown))
+}
+
+// LatencyBreakdownNotNil applies the NotNil predicate on the "latency_breakdown" field.
+func LatencyBreakdownNotNil() predicate.ChannelMonitorHistory {
+	return predicate.ChannelMonitorHistory(sql.FieldNotNull(FieldLatencyBreakdown))
+}
+
 // AccountIDEQ applies the EQ predicate on the "account_id" field.
 func AccountIDEQ(v int64) predicate.ChannelMonitorHistory {
 	return predicate.ChannelMonitorHistory(sql.FieldEQ(FieldAccountID, v))

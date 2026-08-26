@@ -169,6 +169,13 @@ export default {
         auditRetention: 'Audit Log Retention (days)',
         auditRetentionHint: 'Audit logs older than this are cleaned up automatically. Set to 0 to keep them forever (manual clear only).'
       },
+      regionRestriction: {
+        title: 'Regional Access Restriction',
+        description: 'Control access to the console and APIs from mainland China. Hong Kong, Macao, Taiwan, and other supported regions remain unaffected.',
+        enabled: 'Block access and API use from mainland China',
+        enabledHint: 'When enabled, the existing policy applies. Its effective time is August 24, 2026 at 00:00 (Asia/Shanghai), which has already passed, so re-enabling takes effect immediately. Disabling restores console and API access immediately without a restart.',
+        cloudflareHint: 'Country detection relies on the trusted proxy CF-IPCountry header. Requests without this header fail open to avoid misclassifying direct or internal traffic.'
+      },
       turnstile: {
         title: 'Cloudflare Turnstile',
         description: 'Bot protection for login and registration',

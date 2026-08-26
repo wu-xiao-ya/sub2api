@@ -46,20 +46,21 @@ func (h *ChannelMonitorUserHandler) featureEnabled(c *gin.Context) bool {
 // --- Response ---
 
 type channelMonitorUserListItem struct {
-	ID                   int64                                `json:"id"`
-	Name                 string                               `json:"name"`
-	Provider             string                               `json:"provider"`
-	APIMode              string                               `json:"api_mode"`
-	GroupName            string                               `json:"group_name"`
-	AccountGroupID       *int64                               `json:"account_group_id,omitempty"`
-	PrimaryModel         string                               `json:"primary_model"`
-	PrimaryStatus        string                               `json:"primary_status"`
-	PrimaryLatencyMs     *int                                 `json:"primary_latency_ms"`
-	PrimaryPingLatencyMs *int                                 `json:"primary_ping_latency_ms"`
-	PrimarySource        string                               `json:"primary_source,omitempty"`
-	Availability7d       float64                              `json:"availability_7d"`
-	ExtraModels          []dto.ChannelMonitorExtraModelStatus `json:"extra_models"`
-	Timeline             []channelMonitorUserTimelinePoint    `json:"timeline"`
+	ID                      int64                                `json:"id"`
+	Name                    string                               `json:"name"`
+	Provider                string                               `json:"provider"`
+	APIMode                 string                               `json:"api_mode"`
+	GroupName               string                               `json:"group_name"`
+	AccountGroupID          *int64                               `json:"account_group_id,omitempty"`
+	PrimaryModel            string                               `json:"primary_model"`
+	PrimaryStatus           string                               `json:"primary_status"`
+	PrimaryLatencyMs        *int                                 `json:"primary_latency_ms"`
+	PrimaryLatencyBreakdown *service.UsageLatencyBreakdown       `json:"primary_latency_breakdown,omitempty"`
+	PrimaryPingLatencyMs    *int                                 `json:"primary_ping_latency_ms"`
+	PrimarySource           string                               `json:"primary_source,omitempty"`
+	Availability7d          float64                              `json:"availability_7d"`
+	ExtraModels             []dto.ChannelMonitorExtraModelStatus `json:"extra_models"`
+	Timeline                []channelMonitorUserTimelinePoint    `json:"timeline"`
 }
 
 // channelMonitorUserTimelinePoint 主模型最近一次检测的 timeline 点。
@@ -80,25 +81,27 @@ type channelMonitorUserDetailResponse struct {
 }
 
 type channelMonitorUserModelStat struct {
-	Model           string  `json:"model"`
-	LatestStatus    string  `json:"latest_status"`
-	LatestLatencyMs *int    `json:"latest_latency_ms"`
-	Source          string  `json:"source,omitempty"`
-	Availability7d  float64 `json:"availability_7d"`
-	Availability15d float64 `json:"availability_15d"`
-	Availability30d float64 `json:"availability_30d"`
-	AvgLatency7dMs  *int    `json:"avg_latency_7d_ms"`
+	Model                  string                         `json:"model"`
+	LatestStatus           string                         `json:"latest_status"`
+	LatestLatencyMs        *int                           `json:"latest_latency_ms"`
+	LatestLatencyBreakdown *service.UsageLatencyBreakdown `json:"latest_latency_breakdown,omitempty"`
+	Source                 string                         `json:"source,omitempty"`
+	Availability7d         float64                        `json:"availability_7d"`
+	Availability15d        float64                        `json:"availability_15d"`
+	Availability30d        float64                        `json:"availability_30d"`
+	AvgLatency7dMs         *int                           `json:"avg_latency_7d_ms"`
 }
 
 func userMonitorViewToItem(v *service.UserMonitorView) channelMonitorUserListItem {
 	extras := make([]dto.ChannelMonitorExtraModelStatus, 0, len(v.ExtraModels))
 	for _, e := range v.ExtraModels {
 		extras = append(extras, dto.ChannelMonitorExtraModelStatus{
-			Model:          e.Model,
-			Status:         e.Status,
-			LatencyMs:      e.LatencyMs,
-			Source:         e.Source,
-			Availability7d: e.Availability7d,
+			Model:            e.Model,
+			Status:           e.Status,
+			LatencyMs:        e.LatencyMs,
+			LatencyBreakdown: e.LatencyBreakdown.Clone(),
+			Source:           e.Source,
+			Availability7d:   e.Availability7d,
 		})
 	}
 	timeline := make([]channelMonitorUserTimelinePoint, 0, len(v.Timeline))
@@ -111,20 +114,21 @@ func userMonitorViewToItem(v *service.UserMonitorView) channelMonitorUserListIte
 		})
 	}
 	return channelMonitorUserListItem{
-		ID:                   v.ID,
-		Name:                 v.Name,
-		Provider:             v.Provider,
-		APIMode:              v.APIMode,
-		GroupName:            v.GroupName,
-		AccountGroupID:       v.AccountGroupID,
-		PrimaryModel:         v.PrimaryModel,
-		PrimaryStatus:        v.PrimaryStatus,
-		PrimaryLatencyMs:     v.PrimaryLatencyMs,
-		PrimaryPingLatencyMs: v.PrimaryPingLatencyMs,
-		PrimarySource:        v.PrimarySource,
-		Availability7d:       v.Availability7d,
-		ExtraModels:          extras,
-		Timeline:             timeline,
+		ID:                      v.ID,
+		Name:                    v.Name,
+		Provider:                v.Provider,
+		APIMode:                 v.APIMode,
+		GroupName:               v.GroupName,
+		AccountGroupID:          v.AccountGroupID,
+		PrimaryModel:            v.PrimaryModel,
+		PrimaryStatus:           v.PrimaryStatus,
+		PrimaryLatencyMs:        v.PrimaryLatencyMs,
+		PrimaryLatencyBreakdown: v.PrimaryLatencyBreakdown.Clone(),
+		PrimaryPingLatencyMs:    v.PrimaryPingLatencyMs,
+		PrimarySource:           v.PrimarySource,
+		Availability7d:          v.Availability7d,
+		ExtraModels:             extras,
+		Timeline:                timeline,
 	}
 }
 
@@ -132,14 +136,15 @@ func userMonitorDetailToResponse(d *service.UserMonitorDetail) *channelMonitorUs
 	models := make([]channelMonitorUserModelStat, 0, len(d.Models))
 	for _, m := range d.Models {
 		models = append(models, channelMonitorUserModelStat{
-			Model:           m.Model,
-			LatestStatus:    m.LatestStatus,
-			LatestLatencyMs: m.LatestLatencyMs,
-			Source:          m.Source,
-			Availability7d:  m.Availability7d,
-			Availability15d: m.Availability15d,
-			Availability30d: m.Availability30d,
-			AvgLatency7dMs:  m.AvgLatency7dMs,
+			Model:                  m.Model,
+			LatestStatus:           m.LatestStatus,
+			LatestLatencyMs:        m.LatestLatencyMs,
+			LatestLatencyBreakdown: m.LatestLatencyBreakdown.Clone(),
+			Source:                 m.Source,
+			Availability7d:         m.Availability7d,
+			Availability15d:        m.Availability15d,
+			Availability30d:        m.Availability30d,
+			AvgLatency7dMs:         m.AvgLatency7dMs,
 		})
 	}
 	return &channelMonitorUserDetailResponse{

@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -18,15 +19,27 @@ const (
 // RegionRestriction uses a trusted CDN country header to block configured
 // regions. A missing country header fails open for local checks and development.
 func RegionRestriction(cfg config.RegionRestrictionConfig) gin.HandlerFunc {
-	return newRegionRestriction(cfg, time.Now)
+	return newRegionRestrictionWithRuntime(cfg, time.Now, nil)
 }
 
 func newRegionRestriction(cfg config.RegionRestrictionConfig, now func() time.Time) gin.HandlerFunc {
-	if !cfg.Enabled {
-		return func(c *gin.Context) {
-			c.Next()
-		}
-	}
+	return newRegionRestrictionWithRuntime(cfg, now, nil)
+}
+
+// RegionRestrictionWithRuntime allows the persisted admin switch to override
+// the startup configuration without rebuilding the router or restarting.
+func RegionRestrictionWithRuntime(
+	cfg config.RegionRestrictionConfig,
+	enabled func(context.Context) bool,
+) gin.HandlerFunc {
+	return newRegionRestrictionWithRuntime(cfg, time.Now, enabled)
+}
+
+func newRegionRestrictionWithRuntime(
+	cfg config.RegionRestrictionConfig,
+	now func() time.Time,
+	runtimeEnabled func(context.Context) bool,
+) gin.HandlerFunc {
 
 	countryHeader := strings.TrimSpace(cfg.CountryHeader)
 	if countryHeader == "" {
@@ -58,6 +71,15 @@ func newRegionRestriction(cfg config.RegionRestrictionConfig, now func() time.Ti
 	}
 
 	return func(c *gin.Context) {
+		enabled := cfg.Enabled
+		if runtimeEnabled != nil {
+			enabled = runtimeEnabled(c.Request.Context())
+		}
+		if !enabled {
+			c.Next()
+			return
+		}
+
 		if !effectiveAt.IsZero() && now().Before(effectiveAt) {
 			c.Next()
 			return

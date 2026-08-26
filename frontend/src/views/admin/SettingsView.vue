@@ -1630,6 +1630,36 @@
             </div>
           </div>
 
+          <!-- Mainland China access restriction -->
+          <div class="card">
+            <div
+              class="border-b border-gray-100 px-6 py-4 dark:border-dark-700"
+            >
+              <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+                {{ t("admin.settings.regionRestriction.title") }}
+              </h2>
+              <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                {{ t("admin.settings.regionRestriction.description") }}
+              </p>
+            </div>
+            <div class="p-6">
+              <div class="flex items-start justify-between gap-4">
+                <div class="min-w-0">
+                  <label class="font-medium text-gray-900 dark:text-white">
+                    {{ t("admin.settings.regionRestriction.enabled") }}
+                  </label>
+                  <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                    {{ t("admin.settings.regionRestriction.enabledHint") }}
+                  </p>
+                  <p class="mt-2 text-xs text-amber-600 dark:text-amber-400">
+                    {{ t("admin.settings.regionRestriction.cloudflareHint") }}
+                  </p>
+                </div>
+                <Toggle v-model="form.mainland_access_restriction_enabled" />
+              </div>
+            </div>
+          </div>
+
           <!-- API Key IP ACL Settings -->
           <div class="card">
             <div
@@ -8496,6 +8526,7 @@ const form = reactive<SettingsForm>({
   session_binding_enabled: false,
   step_up_enabled: false,
   audit_log_retention_days: 180,
+  mainland_access_restriction_enabled: true,
   login_agreement_enabled: false,
   login_agreement_mode: "modal",
   login_agreement_updated_at: "2026-03-31",
@@ -10061,6 +10092,8 @@ async function saveSettings() {
       min_claude_code_version: form.min_claude_code_version,
       max_claude_code_version: form.max_claude_code_version,
       allow_ungrouped_key_scheduling: form.allow_ungrouped_key_scheduling,
+      mainland_access_restriction_enabled:
+        form.mainland_access_restriction_enabled,
       enable_fingerprint_unification: form.enable_fingerprint_unification,
       enable_metadata_passthrough: form.enable_metadata_passthrough,
       enable_cch_signing: form.enable_cch_signing,

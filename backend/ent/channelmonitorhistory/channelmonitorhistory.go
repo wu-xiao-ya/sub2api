@@ -25,6 +25,8 @@ const (
 	FieldLatencyMs = "latency_ms"
 	// FieldPingLatencyMs holds the string denoting the ping_latency_ms field in the database.
 	FieldPingLatencyMs = "ping_latency_ms"
+	// FieldLatencyBreakdown holds the string denoting the latency_breakdown field in the database.
+	FieldLatencyBreakdown = "latency_breakdown"
 	// FieldAccountID holds the string denoting the account_id field in the database.
 	FieldAccountID = "account_id"
 	// FieldAccountName holds the string denoting the account_name field in the database.
@@ -60,6 +62,7 @@ var Columns = []string{
 	FieldStatus,
 	FieldLatencyMs,
 	FieldPingLatencyMs,
+	FieldLatencyBreakdown,
 	FieldAccountID,
 	FieldAccountName,
 	FieldProbeMode,

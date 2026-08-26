@@ -75,6 +75,7 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 		SettingKeyTablePageSizeOptions:                      "[10,20,50,100]",
 		SettingKeyCustomMenuItems:                           "[]",
 		SettingKeyCustomEndpoints:                           "[]",
+		SettingKeyMainlandAccessRestrictionEnabled:          strconv.FormatBool(s.defaultMainlandAccessRestrictionEnabled()),
 		SettingKeyWeChatConnectEnabled:                      "false",
 		SettingKeyWeChatConnectAppID:                        "",
 		SettingKeyWeChatConnectAppSecret:                    "",
@@ -313,6 +314,7 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 		SessionBindingEnabled:            settings[SettingKeySessionBindingEnabled] == "true", // 默认关闭
 		StepUpEnabled:                    settings[SettingKeyStepUpEnabled] == "true",         // 默认关闭
 		AuditLogRetentionDays:            parseAuditLogRetentionDays(settings[SettingKeyAuditLogRetentionDays]),
+		MainlandAccessRestrictionEnabled: s.parseMainlandAccessRestrictionEnabled(settings),
 		LoginAgreementEnabled:            settings[SettingKeyLoginAgreementEnabled] == "true",
 		LoginAgreementMode:               normalizeLoginAgreementMode(settings[SettingKeyLoginAgreementMode]),
 		LoginAgreementUpdatedAt:          loginAgreementUpdatedAt,
@@ -938,6 +940,19 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 	})
 
 	return result
+}
+
+func (s *SettingService) defaultMainlandAccessRestrictionEnabled() bool {
+	return s != nil && s.cfg != nil && s.cfg.Security.RegionRestriction.Enabled
+}
+
+func (s *SettingService) parseMainlandAccessRestrictionEnabled(settings map[string]string) bool {
+	if value, ok := settings[SettingKeyMainlandAccessRestrictionEnabled]; ok {
+		if enabled, err := strconv.ParseBool(strings.TrimSpace(value)); err == nil {
+			return enabled
+		}
+	}
+	return s.defaultMainlandAccessRestrictionEnabled()
 }
 
 func clampAffiliateRebateRate(value float64) float64 {

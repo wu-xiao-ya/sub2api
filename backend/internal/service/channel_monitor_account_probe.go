@@ -209,12 +209,17 @@ func (s *ChannelMonitorService) runOpenAIAPIKeyAccountProbe(
 	res.LatencyMs = &latencyMs
 	res.PingLatencyMs = pingEndpointOrigin(ctx, baseURL)
 	if err != nil {
+		res.LatencyBreakdown = &UsageLatencyBreakdown{TotalDurationMs: &latencyMs}
 		res.Message = truncateMessage(sanitizeErrorMessage(fmt.Sprintf("do request: %v", err)))
 		return res
 	}
+	firstResponseMs := latencyMs
+	res.LatencyBreakdown = &UsageLatencyBreakdown{FirstResponseMs: &firstResponseMs}
 	defer func() { _ = resp.Body.Close() }()
 
 	respBytes, readErr := io.ReadAll(io.LimitReader(resp.Body, monitorResponseMaxBytes))
+	totalDurationMs := int(time.Since(start).Milliseconds())
+	res.LatencyBreakdown.TotalDurationMs = &totalDurationMs
 	if readErr != nil {
 		res.Message = truncateMessage(sanitizeErrorMessage(fmt.Sprintf("read body: %v", readErr)))
 		return res

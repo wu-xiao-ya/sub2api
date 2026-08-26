@@ -19,7 +19,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/service"
 )
 
-const usageLogSelectColumns = "id, user_id, api_key_id, account_id, request_id, model, requested_model, upstream_model, group_id, subscription_id, subscription_purchase_id, input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens, cache_creation_5m_tokens, cache_creation_1h_tokens, image_output_tokens, image_output_cost, image_input_tokens, image_input_cost, input_cost, output_cost, cache_creation_cost, cache_read_cost, total_cost, actual_cost, rate_multiplier, promotion_id, promotion_name, base_rate_multiplier, account_rate_multiplier, billing_type, request_type, stream, openai_ws_mode, duration_ms, first_token_ms, user_agent, ip_address, image_count, image_size, image_input_size, image_output_size, image_size_source, image_size_breakdown, video_count, video_resolution, video_duration_seconds, service_tier, reasoning_effort, inbound_endpoint, upstream_endpoint, cache_ttl_overridden, long_context_billing_applied, channel_id, model_mapping_chain, billing_tier, billing_mode, account_stats_cost, usage_source, created_at"
+const usageLogSelectColumns = "id, user_id, api_key_id, account_id, request_id, model, requested_model, upstream_model, group_id, subscription_id, subscription_purchase_id, input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens, cache_creation_5m_tokens, cache_creation_1h_tokens, image_output_tokens, image_output_cost, image_input_tokens, image_input_cost, input_cost, output_cost, cache_creation_cost, cache_read_cost, total_cost, actual_cost, rate_multiplier, promotion_id, promotion_name, base_rate_multiplier, account_rate_multiplier, billing_type, request_type, stream, openai_ws_mode, duration_ms, first_token_ms, user_agent, ip_address, image_count, image_size, image_input_size, image_output_size, image_size_source, image_size_breakdown, video_count, video_resolution, video_duration_seconds, service_tier, reasoning_effort, inbound_endpoint, upstream_endpoint, cache_ttl_overridden, long_context_billing_applied, channel_id, model_mapping_chain, billing_tier, billing_mode, account_stats_cost, usage_source, latency_breakdown, created_at"
 
 func (r *usageLogRepository) GetByID(ctx context.Context, id int64) (log *service.UsageLog, err error) {
 	query := "SELECT " + usageLogSelectColumns + " FROM usage_logs WHERE id = $1"
@@ -487,6 +487,7 @@ func scanUsageLog(scanner interface{ Scan(...any) error }) (*service.UsageLog, e
 		billingMode               sql.NullString
 		accountStatsCost          sql.NullFloat64
 		usageSource               sql.NullString
+		latencyBreakdown          sql.NullString
 		createdAt                 time.Time
 	)
 
@@ -552,6 +553,7 @@ func scanUsageLog(scanner interface{ Scan(...any) error }) (*service.UsageLog, e
 		&billingMode,
 		&accountStatsCost,
 		&usageSource,
+		&latencyBreakdown,
 		&createdAt,
 	); err != nil {
 		return nil, err
@@ -622,6 +624,7 @@ func scanUsageLog(scanner interface{ Scan(...any) error }) (*service.UsageLog, e
 		value := int(firstTokenMs.Int64)
 		log.FirstTokenMs = &value
 	}
+	log.LatencyBreakdown = usageLatencyBreakdownFromNullJSON(latencyBreakdown)
 	if userAgent.Valid {
 		log.UserAgent = &userAgent.String
 	}
@@ -740,6 +743,28 @@ func nullStringIntMapJSON(v map[string]int) any {
 		return nil
 	}
 	return string(payload)
+}
+
+func nullUsageLatencyBreakdownJSON(v *service.UsageLatencyBreakdown) any {
+	if v.Empty() {
+		return nil
+	}
+	payload, err := json.Marshal(v)
+	if err != nil {
+		return nil
+	}
+	return string(payload)
+}
+
+func usageLatencyBreakdownFromNullJSON(v sql.NullString) *service.UsageLatencyBreakdown {
+	if !v.Valid || strings.TrimSpace(v.String) == "" {
+		return nil
+	}
+	var out service.UsageLatencyBreakdown
+	if err := json.Unmarshal([]byte(v.String), &out); err != nil || out.Empty() {
+		return nil
+	}
+	return &out
 }
 
 func stringIntMapFromNullJSON(v sql.NullString) map[string]int {

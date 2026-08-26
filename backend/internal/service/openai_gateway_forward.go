@@ -896,6 +896,8 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 		// Handle normal response
 		var usage *OpenAIUsage
 		var firstTokenMs *int
+		latencyTracker := newOpenAIStreamLatencyTracker(startTime)
+		var latencyBreakdown *UsageLatencyBreakdown
 		responseID := ""
 		terminalEvent := ""
 		incompleteReason := ""
@@ -909,6 +911,7 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 			}
 			usage = streamResult.usage
 			firstTokenMs = streamResult.firstTokenMs
+			latencyBreakdown = streamResult.latencyBreakdown
 			responseID = strings.TrimSpace(streamResult.responseID)
 			terminalEvent = streamResult.terminalEvent
 			incompleteReason = streamResult.incompleteReason
@@ -925,6 +928,7 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 			imageCount = nonStreamResult.imageCount
 			imageOutputSizes = nonStreamResult.imageOutputSizes
 			searchCount = nonStreamResult.searchCount
+			latencyBreakdown = latencyTracker.result()
 		}
 		s.bindHTTPResponseAccount(ctx, c, account, responseID)
 
@@ -955,6 +959,7 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 			UpstreamIncompleteReason: incompleteReason,
 			Duration:                 time.Since(startTime),
 			FirstTokenMs:             firstTokenMs,
+			LatencyBreakdown:         latencyBreakdown,
 		}
 		if imageCount > 0 {
 			forwardResult.ImageCount = imageCount

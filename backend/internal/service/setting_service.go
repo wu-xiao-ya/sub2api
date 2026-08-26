@@ -5,14 +5,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/xai"
 	"golang.org/x/sync/singleflight"
-	"sync"
 )
 
 const (
@@ -131,8 +132,9 @@ type SettingService struct {
 	codexRestrictionPolicyCache atomic.Value // *cachedCodexRestrictionPolicy
 	codexRestrictionPolicySF    singleflight.Group
 
-	cyberSessionBlockRuntimeCache atomic.Value // *cachedCyberSessionBlockRuntime
-	cyberSessionBlockRuntimeSF    singleflight.Group
+	cyberSessionBlockRuntimeCache    atomic.Value // *cachedCyberSessionBlockRuntime
+	cyberSessionBlockRuntimeSF       singleflight.Group
+	mainlandAccessRestrictionEnabled atomic.Bool
 
 	// openAIQuotaAutoPauseSettingsCache holds the most recently observed quota auto-pause
 	// settings. GetOpenAIQuotaAutoPauseSettings reads this atomic.Value on the request hot
@@ -275,10 +277,14 @@ const (
 
 // NewSettingService 创建系统设置服务实例
 func NewSettingService(settingRepo SettingRepository, cfg *config.Config) *SettingService {
-	return &SettingService{
+	svc := &SettingService{
 		settingRepo: settingRepo,
 		cfg:         cfg,
 	}
+	if cfg != nil {
+		svc.mainlandAccessRestrictionEnabled.Store(cfg.Security.RegionRestriction.Enabled)
+	}
+	return svc
 }
 
 // SetDefaultSubscriptionGroupReader injects an optional group reader for default subscription validation.
@@ -351,6 +357,53 @@ func (s *SettingService) LoadForwardedClientIPSettings(ctx context.Context) erro
 
 	s.cfg.SetForwardedClientIPSettings(enabled, headers)
 	return headersErr
+}
+
+// LoadMainlandAccessRestrictionSetting loads the runtime switch and backfills
+// existing installations from their current static region-restriction config.
+func (s *SettingService) LoadMainlandAccessRestrictionSetting(ctx context.Context) error {
+	if s == nil {
+		return nil
+	}
+
+	fallback := false
+	if s.cfg != nil {
+		fallback = s.cfg.Security.RegionRestriction.Enabled
+	}
+	if s.settingRepo == nil {
+		s.mainlandAccessRestrictionEnabled.Store(fallback)
+		return nil
+	}
+
+	value, err := s.settingRepo.GetValue(ctx, SettingKeyMainlandAccessRestrictionEnabled)
+	if err != nil {
+		s.mainlandAccessRestrictionEnabled.Store(fallback)
+		if errors.Is(err, ErrSettingNotFound) {
+			if setErr := s.settingRepo.Set(
+				ctx,
+				SettingKeyMainlandAccessRestrictionEnabled,
+				strconv.FormatBool(fallback),
+			); setErr != nil {
+				return fmt.Errorf("backfill mainland access restriction setting: %w", setErr)
+			}
+			return nil
+		}
+		return fmt.Errorf("load mainland access restriction setting: %w", err)
+	}
+
+	enabled, parseErr := strconv.ParseBool(strings.TrimSpace(value))
+	if parseErr != nil {
+		s.mainlandAccessRestrictionEnabled.Store(fallback)
+		return fmt.Errorf("parse mainland access restriction setting: %w", parseErr)
+	}
+	s.mainlandAccessRestrictionEnabled.Store(enabled)
+	return nil
+}
+
+// IsMainlandAccessRestrictionEnabled is safe for request hot paths and does
+// not query the database.
+func (s *SettingService) IsMainlandAccessRestrictionEnabled(context.Context) bool {
+	return s != nil && s.mainlandAccessRestrictionEnabled.Load()
 }
 
 // GetAllSettings 获取所有系统设置

@@ -516,6 +516,13 @@ export default {
       firstToken: 'TTFT',
       probe: 'Probe',
     },
+    latencyStage: {
+      firstResponse: 'First response',
+      firstEvent: 'First event',
+      firstOutput: 'First output',
+      firstCharacter: 'First character',
+      total: 'Total duration',
+    },
     primaryModel: 'Direct probe',
     responseLatency: 'Response latency',
     windowAvailability: '{window} availability',

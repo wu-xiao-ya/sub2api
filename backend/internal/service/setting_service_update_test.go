@@ -95,6 +95,106 @@ type forwardedIPMigrationRepoStub struct {
 	setMultipleErr error
 }
 
+type mainlandRestrictionRepoStub struct {
+	values map[string]string
+	setErr error
+}
+
+func (s *mainlandRestrictionRepoStub) Get(context.Context, string) (*Setting, error) {
+	panic("unexpected Get call")
+}
+
+func (s *mainlandRestrictionRepoStub) GetValue(_ context.Context, key string) (string, error) {
+	value, ok := s.values[key]
+	if !ok {
+		return "", ErrSettingNotFound
+	}
+	return value, nil
+}
+
+func (s *mainlandRestrictionRepoStub) Set(_ context.Context, key, value string) error {
+	if s.setErr != nil {
+		return s.setErr
+	}
+	s.values[key] = value
+	return nil
+}
+
+func (s *mainlandRestrictionRepoStub) GetMultiple(context.Context, []string) (map[string]string, error) {
+	panic("unexpected GetMultiple call")
+}
+
+func (s *mainlandRestrictionRepoStub) SetMultiple(context.Context, map[string]string) error {
+	panic("unexpected SetMultiple call")
+}
+
+func (s *mainlandRestrictionRepoStub) GetAll(context.Context) (map[string]string, error) {
+	panic("unexpected GetAll call")
+}
+
+func (s *mainlandRestrictionRepoStub) Delete(context.Context, string) error {
+	panic("unexpected Delete call")
+}
+
+func TestSettingService_MainlandAccessRestrictionRuntime(t *testing.T) {
+	t.Run("admin settings fallback follows static config", func(t *testing.T) {
+		svc := NewSettingService(
+			&settingGetAllRepoStub{values: map[string]string{}},
+			&config.Config{
+				Security: config.SecurityConfig{
+					RegionRestriction: config.RegionRestrictionConfig{Enabled: true},
+				},
+			},
+		)
+
+		settings, err := svc.GetAllSettings(context.Background())
+		require.NoError(t, err)
+		require.True(t, settings.MainlandAccessRestrictionEnabled)
+	})
+
+	t.Run("missing setting inherits and backfills static config", func(t *testing.T) {
+		repo := &mainlandRestrictionRepoStub{values: map[string]string{}}
+		cfg := &config.Config{
+			Security: config.SecurityConfig{
+				RegionRestriction: config.RegionRestrictionConfig{Enabled: true},
+			},
+		}
+		svc := NewSettingService(repo, cfg)
+
+		require.True(t, svc.IsMainlandAccessRestrictionEnabled(context.Background()))
+		require.NoError(t, svc.LoadMainlandAccessRestrictionSetting(context.Background()))
+		require.Equal(t, "true", repo.values[SettingKeyMainlandAccessRestrictionEnabled])
+		require.True(t, svc.IsMainlandAccessRestrictionEnabled(context.Background()))
+	})
+
+	t.Run("persisted switch overrides static config", func(t *testing.T) {
+		repo := &mainlandRestrictionRepoStub{values: map[string]string{
+			SettingKeyMainlandAccessRestrictionEnabled: "false",
+		}}
+		cfg := &config.Config{
+			Security: config.SecurityConfig{
+				RegionRestriction: config.RegionRestrictionConfig{Enabled: true},
+			},
+		}
+		svc := NewSettingService(repo, cfg)
+
+		require.NoError(t, svc.LoadMainlandAccessRestrictionSetting(context.Background()))
+		require.False(t, svc.IsMainlandAccessRestrictionEnabled(context.Background()))
+	})
+}
+
+func TestSettingService_UpdateSettingsRefreshesMainlandAccessRestrictionRuntime(t *testing.T) {
+	repo := &settingUpdateRepoStub{}
+	svc := NewSettingService(repo, &config.Config{})
+
+	require.NoError(t, svc.UpdateSettings(context.Background(), &SystemSettings{
+		MainlandAccessRestrictionEnabled: true,
+	}))
+
+	require.Equal(t, "true", repo.updates[SettingKeyMainlandAccessRestrictionEnabled])
+	require.True(t, svc.IsMainlandAccessRestrictionEnabled(context.Background()))
+}
+
 func (s *forwardedIPMigrationRepoStub) Get(context.Context, string) (*Setting, error) {
 	panic("unexpected Get call")
 }

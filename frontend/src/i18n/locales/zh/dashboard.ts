@@ -521,6 +521,13 @@ export default {
       firstToken: '首字',
       probe: '探测',
     },
+    latencyStage: {
+      firstResponse: '首响应',
+      firstEvent: '首事件',
+      firstOutput: '首输出',
+      firstCharacter: '首字',
+      total: '总耗时',
+    },
     primaryModel: '独立监测',
     responseLatency: '响应延迟',
     windowAvailability: '{window} 可用率',

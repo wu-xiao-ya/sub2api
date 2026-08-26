@@ -18,6 +18,14 @@ export type MonitorStatus = 'operational' | 'degraded' | 'failed' | 'error'
 export type BodyOverrideMode = 'off' | 'merge' | 'replace'
 export type APIMode = 'chat_completions' | 'responses' | 'models' | 'images'
 
+export interface UsageLatencyBreakdown {
+  first_response_ms?: number
+  first_event_ms?: number
+  first_output_ms?: number
+  first_character_ms?: number
+  total_duration_ms?: number
+}
+
 export interface ChannelMonitor {
   id: number
   name: string
@@ -50,6 +58,7 @@ export interface ChannelMonitor {
   primary_status: MonitorStatus | ''
   /** Latest latency of the primary model in ms (null when no history yet) */
   primary_latency_ms: number | null
+  primary_latency_breakdown?: UsageLatencyBreakdown
   /** Admin-only metadata for the most recent primary-model probe. */
   primary_account_id?: number | null
   primary_account_name?: string
@@ -72,6 +81,7 @@ export interface ExtraModelStatus {
   model: string
   status: MonitorStatus | ''
   latency_ms: number | null
+  latency_breakdown?: UsageLatencyBreakdown
   availability_7d?: number
 }
 
@@ -121,6 +131,7 @@ export interface CheckResult {
   model: string
   status: MonitorStatus
   latency_ms: number | null
+  latency_breakdown?: UsageLatencyBreakdown
   ping_latency_ms: number | null
   account_id?: number | null
   account_name?: string
@@ -140,6 +151,7 @@ export interface HistoryItem {
   model: string
   status: MonitorStatus
   latency_ms: number | null
+  latency_breakdown?: UsageLatencyBreakdown
   ping_latency_ms: number | null
   account_id?: number | null
   account_name?: string

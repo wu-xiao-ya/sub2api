@@ -16,8 +16,15 @@ func TestListRecentChannelMonitorTrafficUsesAccountGroupMembership(t *testing.T)
 
 	repo := &usageLogRepository{sql: db}
 	now := time.Date(2026, time.August, 13, 14, 0, 0, 0, time.UTC)
-	rows := sqlmock.NewRows([]string{"account_id", "model", "duration_ms", "first_token_ms", "created_at"}).
-		AddRow(int64(82), "gpt-5.6-sol", 1200, 480, now)
+	rows := sqlmock.NewRows([]string{"account_id", "model", "duration_ms", "first_token_ms", "latency_breakdown", "created_at"}).
+		AddRow(
+			int64(82),
+			"gpt-5.6-sol",
+			1200,
+			480,
+			`{"first_response_ms":220,"first_event_ms":250,"first_output_ms":360,"first_character_ms":480,"total_duration_ms":1100}`,
+			now,
+		)
 	mock.ExpectQuery(
 		`(?s)SELECT ul\.account_id.*FROM usage_logs ul.*EXISTS \(.*FROM account_groups ag.*ag\.account_id = ul\.account_id.*ag\.group_id = \$1.*ul\.actual_cost > 0`,
 	).
@@ -37,5 +44,11 @@ func TestListRecentChannelMonitorTrafficUsesAccountGroupMembership(t *testing.T)
 	require.Equal(t, int64(82), samples[0].AccountID)
 	require.Equal(t, 1200, samples[0].DurationMs)
 	require.Equal(t, 480, samples[0].FirstTokenMs)
+	require.NotNil(t, samples[0].LatencyBreakdown)
+	require.Equal(t, 220, *samples[0].LatencyBreakdown.FirstResponseMs)
+	require.Equal(t, 250, *samples[0].LatencyBreakdown.FirstEventMs)
+	require.Equal(t, 360, *samples[0].LatencyBreakdown.FirstOutputMs)
+	require.Equal(t, 480, *samples[0].LatencyBreakdown.FirstCharacterMs)
+	require.Equal(t, 1200, *samples[0].LatencyBreakdown.TotalDurationMs)
 	require.NoError(t, mock.ExpectationsWereMet())
 }

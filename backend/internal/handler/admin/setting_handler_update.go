@@ -31,6 +31,7 @@ type UpdateSettingsRequest struct {
 	SessionBindingEnabled            *bool                        `json:"session_binding_enabled"`  // 会话 IP/UA 绑定（省略=保持现值）
 	StepUpEnabled                    *bool                        `json:"step_up_enabled"`          // 敏感操作 step-up 2FA（省略=保持现值）
 	AuditLogRetentionDays            int                          `json:"audit_log_retention_days"` // 审计日志保留天数
+	MainlandAccessRestrictionEnabled *bool                        `json:"mainland_access_restriction_enabled"`
 	LoginAgreementEnabled            bool                         `json:"login_agreement_enabled"`
 	LoginAgreementMode               string                       `json:"login_agreement_mode"`
 	LoginAgreementUpdatedAt          string                       `json:"login_agreement_updated_at"`
@@ -1268,20 +1269,26 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		SessionBindingEnabled:            sessionBindingEnabled,
 		StepUpEnabled:                    stepUpEnabled,
 		AuditLogRetentionDays:            req.AuditLogRetentionDays,
-		LoginAgreementEnabled:            req.LoginAgreementEnabled,
-		LoginAgreementMode:               loginAgreementMode,
-		LoginAgreementUpdatedAt:          loginAgreementUpdatedAt,
-		LoginAgreementDocuments:          loginAgreementDocuments,
-		SMTPHost:                         req.SMTPHost,
-		SMTPPort:                         req.SMTPPort,
-		SMTPUsername:                     req.SMTPUsername,
-		SMTPPassword:                     req.SMTPPassword,
-		SMTPFrom:                         req.SMTPFrom,
-		SMTPFromName:                     req.SMTPFromName,
-		SMTPUseTLS:                       req.SMTPUseTLS,
-		TurnstileEnabled:                 req.TurnstileEnabled,
-		TurnstileSiteKey:                 req.TurnstileSiteKey,
-		TurnstileSecretKey:               req.TurnstileSecretKey,
+		MainlandAccessRestrictionEnabled: func() bool {
+			if req.MainlandAccessRestrictionEnabled != nil {
+				return *req.MainlandAccessRestrictionEnabled
+			}
+			return previousSettings.MainlandAccessRestrictionEnabled
+		}(),
+		LoginAgreementEnabled:   req.LoginAgreementEnabled,
+		LoginAgreementMode:      loginAgreementMode,
+		LoginAgreementUpdatedAt: loginAgreementUpdatedAt,
+		LoginAgreementDocuments: loginAgreementDocuments,
+		SMTPHost:                req.SMTPHost,
+		SMTPPort:                req.SMTPPort,
+		SMTPUsername:            req.SMTPUsername,
+		SMTPPassword:            req.SMTPPassword,
+		SMTPFrom:                req.SMTPFrom,
+		SMTPFromName:            req.SMTPFromName,
+		SMTPUseTLS:              req.SMTPUseTLS,
+		TurnstileEnabled:        req.TurnstileEnabled,
+		TurnstileSiteKey:        req.TurnstileSiteKey,
+		TurnstileSecretKey:      req.TurnstileSecretKey,
 		APIKeyACLTrustForwardedIP: func() bool {
 			if req.APIKeyACLTrustForwardedIP != nil {
 				return *req.APIKeyACLTrustForwardedIP
@@ -1849,6 +1856,7 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		SessionBindingEnabled:                                  updatedSettings.SessionBindingEnabled,
 		StepUpEnabled:                                          updatedSettings.StepUpEnabled,
 		AuditLogRetentionDays:                                  updatedSettings.AuditLogRetentionDays,
+		MainlandAccessRestrictionEnabled:                       updatedSettings.MainlandAccessRestrictionEnabled,
 		LoginAgreementEnabled:                                  updatedSettings.LoginAgreementEnabled,
 		LoginAgreementMode:                                     updatedSettings.LoginAgreementMode,
 		LoginAgreementUpdatedAt:                                updatedSettings.LoginAgreementUpdatedAt,
