@@ -11,6 +11,7 @@ import (
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/ent/subscriptionpurchase"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/timezone"
 )
 
 // SharedSubscriptionEntitlement is the request-scoped snapshot selected for a
@@ -140,22 +141,33 @@ func (s *SubscriptionService) ValidateSharedPurchase(purchase *SharedSubscriptio
 
 var ErrSharedSubscriptionNotFound = errors.New("shared subscription not found")
 
-// GetActiveSharedSubscriptionForGroup returns the earliest expiring active
-// purchase that authorizes the requested group.
-func (s *SubscriptionService) GetActiveSharedSubscriptionForGroup(ctx context.Context, userID, groupID int64) (*SharedSubscriptionEntitlement, error) {
-	if s == nil || s.sqlDB == nil || userID <= 0 || groupID <= 0 {
-		return nil, ErrSharedSubscriptionNotFound
+type sqlExecer interface {
+	ExecContext(context.Context, string, ...any) (sql.Result, error)
+}
+
+// refreshSharedPurchaseQuotaWindows keeps persisted quota usage aligned before
+// a purchase is displayed or authorized. The daily boundary follows the
+// application's configured timezone; weekly/monthly windows retain their
+// existing rolling 7/30-day semantics.
+func refreshSharedPurchaseQuotaWindows(ctx context.Context, execer sqlExecer, userID int64) error {
+	if execer == nil || userID <= 0 {
+		return nil
 	}
-	// Keep rolling quota windows consistent with the legacy subscription
-	// semantics before reading the entitlement used for this request.
-	_, _ = s.sqlDB.ExecContext(ctx, `
+	tzName := timezone.Name()
+	if tzName == "" || tzName == "Local" {
+		tzName = "Asia/Shanghai"
+	}
+	const query = `
 		UPDATE subscription_purchases
 		SET daily_usage_usd = CASE
-				WHEN daily_window_start IS NULL OR daily_window_start < date_trunc('day', NOW())
+				WHEN daily_window_start IS NULL
+					OR daily_window_start < (date_trunc('day', NOW() AT TIME ZONE $2) AT TIME ZONE $2)
 				THEN 0 ELSE daily_usage_usd END,
 			daily_window_start = CASE
-				WHEN daily_window_start IS NULL OR daily_window_start < date_trunc('day', NOW())
-				THEN date_trunc('day', NOW()) ELSE daily_window_start END,
+				WHEN daily_window_start IS NULL
+					OR daily_window_start < (date_trunc('day', NOW() AT TIME ZONE $2) AT TIME ZONE $2)
+				THEN (date_trunc('day', NOW() AT TIME ZONE $2) AT TIME ZONE $2)
+				ELSE daily_window_start END,
 			weekly_usage_usd = CASE
 				WHEN weekly_window_start IS NULL OR weekly_window_start < NOW() - INTERVAL '7 days'
 				THEN 0 ELSE weekly_usage_usd END,
@@ -169,8 +181,33 @@ func (s *SubscriptionService) GetActiveSharedSubscriptionForGroup(ctx context.Co
 				WHEN monthly_window_start IS NULL OR monthly_window_start < NOW() - INTERVAL '30 days'
 				THEN NOW() ELSE monthly_window_start END,
 			updated_at = NOW()
-		WHERE user_id = $1 AND status = 'active' AND starts_at <= NOW() AND expires_at > NOW()
-	`, userID)
+		WHERE user_id = $1
+			AND status = 'active'
+			AND starts_at <= NOW()
+			AND expires_at > NOW()
+			AND (
+				daily_window_start IS NULL
+				OR daily_window_start < (date_trunc('day', NOW() AT TIME ZONE $2) AT TIME ZONE $2)
+				OR weekly_window_start IS NULL
+				OR weekly_window_start < NOW() - INTERVAL '7 days'
+				OR monthly_window_start IS NULL
+				OR monthly_window_start < NOW() - INTERVAL '30 days'
+			)
+	`
+	_, err := execer.ExecContext(ctx, query, userID, tzName)
+	return err
+}
+
+// GetActiveSharedSubscriptionForGroup returns the earliest expiring active
+// purchase that authorizes the requested group.
+func (s *SubscriptionService) GetActiveSharedSubscriptionForGroup(ctx context.Context, userID, groupID int64) (*SharedSubscriptionEntitlement, error) {
+	if s == nil || s.sqlDB == nil || userID <= 0 || groupID <= 0 {
+		return nil, ErrSharedSubscriptionNotFound
+	}
+	// Keep the persisted daily window current before validating the entitlement.
+	// Errors are intentionally ignored here to preserve the existing fail-open
+	// read behavior; the billing update remains authoritative and transactional.
+	_ = refreshSharedPurchaseQuotaWindows(ctx, s.sqlDB, userID)
 	row := s.sqlDB.QueryRowContext(ctx, `
 		SELECT p.id, p.user_id, g.group_id, p.name, p.tier_code,
 		       p.starts_at, p.expires_at, p.status,
@@ -209,6 +246,7 @@ func (s *SubscriptionService) ListActiveSharedSubscriptions(ctx context.Context,
 	if s == nil || s.sqlDB == nil || userID <= 0 {
 		return []SharedSubscriptionEntitlement{}, nil
 	}
+	_ = refreshSharedPurchaseQuotaWindows(ctx, s.sqlDB, userID)
 	rows, err := s.sqlDB.QueryContext(ctx, `
 		SELECT id, user_id, name, tier_code, starts_at, expires_at, status,
 		       concurrency_entitlement, lifetime_quota_usd, daily_quota_usd,
@@ -248,6 +286,7 @@ func (s *SubscriptionService) ListActiveSharedSubscriptionsForGroup(ctx context.
 	if s == nil || s.sqlDB == nil || userID <= 0 || groupID <= 0 {
 		return []SharedSubscriptionEntitlement{}, nil
 	}
+	_ = refreshSharedPurchaseQuotaWindows(ctx, s.sqlDB, userID)
 	rows, err := s.sqlDB.QueryContext(ctx, `
 		SELECT p.id, p.user_id, p.name, p.tier_code, p.starts_at, p.expires_at, p.status,
 		       p.concurrency_entitlement, p.lifetime_quota_usd, p.daily_quota_usd,

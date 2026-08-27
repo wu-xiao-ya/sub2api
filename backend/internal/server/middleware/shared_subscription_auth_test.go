@@ -31,6 +31,9 @@ func TestSharedSubscriptionConcurrencyPlanUsesGlobalBalanceTopupPreference(t *te
 
 			startsAt := time.Now().Add(-time.Hour)
 			expiresAt := time.Now().Add(time.Hour)
+			mock.ExpectExec(`UPDATE subscription_purchases`).
+				WithArgs(int64(42), sqlmock.AnyArg()).
+				WillReturnResult(sqlmock.NewResult(0, 0))
 			mock.ExpectQuery(`SELECT p\.id, p\.user_id, p\.name, p\.tier_code`).
 				WithArgs(int64(42), int64(9)).
 				WillReturnRows(sqlmock.NewRows([]string{

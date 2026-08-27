@@ -870,6 +870,9 @@ func TestApiKeyAuthWithSubscriptionGoogle_SubscriptionLimitExceededReturns429(t 
 	t.Cleanup(func() { _ = db.Close() })
 	startsAt := time.Now().Add(-time.Hour)
 	expiresAt := time.Now().Add(24 * time.Hour)
+	mock.ExpectExec(`UPDATE subscription_purchases`).
+		WithArgs(int64(user.ID), sqlmock.AnyArg()).
+		WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectQuery(`(?s)`+regexp.QuoteMeta("SELECT p.id, p.user_id, p.name, p.tier_code")+
 		`.*WHERE p\.user_id = \$1 AND g\.group_id = \$2.*ORDER BY p\.expires_at ASC`).
 		WithArgs(int64(user.ID), int64(group.ID)).

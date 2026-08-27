@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/timezone"
 	"github.com/stretchr/testify/require"
 )
 
@@ -55,6 +56,9 @@ func TestListActiveSharedSubscriptionsForGroup(t *testing.T) {
 
 	startsAt := time.Date(2026, 8, 22, 0, 0, 0, 0, time.UTC)
 	expiresAt := startsAt.Add(7 * 24 * time.Hour)
+	mock.ExpectExec(`UPDATE subscription_purchases`).
+		WithArgs(int64(42), sqlmock.AnyArg()).
+		WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectQuery(`SELECT p\.id, p\.user_id, p\.name, p\.tier_code`).
 		WithArgs(int64(42), int64(9)).
 		WillReturnRows(sqlmock.NewRows([]string{
@@ -75,6 +79,22 @@ func TestListActiveSharedSubscriptionsForGroup(t *testing.T) {
 	require.Equal(t, 5, items[0].ConcurrencyEntitlement)
 	require.False(t, items[0].BalanceTopupEnabled)
 	require.Equal(t, "subscription", items[0].BillingPriority)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestRefreshSharedPurchaseDailyWindowsUsesConfiguredTimezone(t *testing.T) {
+	require.NoError(t, timezone.Init("Asia/Shanghai"))
+	t.Cleanup(func() { require.NoError(t, timezone.Init("UTC")) })
+
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+
+	mock.ExpectExec(`UPDATE subscription_purchases`).
+		WithArgs(int64(42), "Asia/Shanghai").
+		WillReturnResult(sqlmock.NewResult(0, 1))
+
+	require.NoError(t, refreshSharedPurchaseQuotaWindows(context.Background(), db, 42))
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 

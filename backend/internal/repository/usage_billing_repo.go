@@ -8,6 +8,7 @@ import (
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/timezone"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 )
 
@@ -349,11 +350,14 @@ func incrementUsageBillingSubscriptionPurchase(ctx context.Context, tx *sql.Tx, 
 			SET
 				lifetime_usage_usd = lifetime_usage_usd + $1,
 				daily_usage_usd = CASE
-					WHEN daily_window_start IS NULL OR daily_window_start < date_trunc('day', NOW())
+					WHEN daily_window_start IS NULL
+						OR daily_window_start < (date_trunc('day', NOW() AT TIME ZONE $3) AT TIME ZONE $3)
 					THEN $1 ELSE daily_usage_usd + $1 END,
 				daily_window_start = CASE
-					WHEN daily_window_start IS NULL OR daily_window_start < date_trunc('day', NOW())
-					THEN date_trunc('day', NOW()) ELSE daily_window_start END,
+					WHEN daily_window_start IS NULL
+						OR daily_window_start < (date_trunc('day', NOW() AT TIME ZONE $3) AT TIME ZONE $3)
+					THEN (date_trunc('day', NOW() AT TIME ZONE $3) AT TIME ZONE $3)
+					ELSE daily_window_start END,
 				weekly_usage_usd = CASE
 					WHEN weekly_window_start IS NULL OR weekly_window_start < NOW() - INTERVAL '7 days'
 					THEN $1 ELSE weekly_usage_usd + $1 END,
@@ -372,7 +376,11 @@ func incrementUsageBillingSubscriptionPurchase(ctx context.Context, tx *sql.Tx, 
 				AND starts_at <= NOW()
 				AND expires_at > NOW()
 		`
-	res, err := tx.ExecContext(ctx, sharedUpdateSQL, costUSD, purchaseID)
+	tzName := timezone.Name()
+	if tzName == "" || tzName == "Local" {
+		tzName = "Asia/Shanghai"
+	}
+	res, err := tx.ExecContext(ctx, sharedUpdateSQL, costUSD, purchaseID, tzName)
 	if err != nil {
 		return err
 	}

@@ -17,7 +17,7 @@ func TestIncrementUsageBillingSubscriptionPurchaseUsesExplicitPurchaseID(t *test
 	tx, err := db.BeginTx(context.Background(), nil)
 	require.NoError(t, err)
 	mock.ExpectExec("UPDATE subscription_purchases").
-		WithArgs(1.25, int64(101)).
+		WithArgs(1.25, int64(101), sqlmock.AnyArg()).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectCommit()
 
