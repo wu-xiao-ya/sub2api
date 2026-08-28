@@ -2,6 +2,7 @@
 package service
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"hash/fnv"
@@ -196,7 +197,31 @@ func (a *Account) EffectiveLoadFactor() int {
 }
 
 func (a *Account) IsSchedulable() bool {
-	if !a.IsActive() || !a.Schedulable || !a.IsContributionSchedulable() {
+	return a.isSchedulable(false)
+}
+
+// IsMonitorOnly reports whether the account is reserved for trusted internal
+// monitoring. The flag lives in Extra so the normal account schema stays
+// backwards-compatible.
+func (a *Account) IsMonitorOnly() bool {
+	if a == nil || a.Extra == nil {
+		return false
+	}
+	enabled, ok := a.Extra["monitor_only"].(bool)
+	return ok && enabled
+}
+
+// IsSchedulableForContext applies the normal scheduling rules while allowing
+// explicitly marked monitor-only accounts only for trusted station probes.
+func (a *Account) IsSchedulableForContext(ctx context.Context) bool {
+	if a == nil {
+		return false
+	}
+	return a.isSchedulable(IsChannelMonitorRequest(ctx) && a.IsMonitorOnly())
+}
+
+func (a *Account) isSchedulable(allowMonitorOnly bool) bool {
+	if !a.IsActive() || (!a.Schedulable && !allowMonitorOnly) || !a.IsContributionSchedulable() {
 		return false
 	}
 	now := time.Now()

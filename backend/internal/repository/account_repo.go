@@ -3101,10 +3101,19 @@ func (r *accountRepository) queryAccountsByGroup(ctx context.Context, groupID in
 		preds = append(preds, dbaccount.PlatformIn(opts.platforms...))
 	}
 	if opts.schedulable {
-		preds = append(preds,
-			dbaccount.SchedulableEQ(true),
-			contributionSchedulablePredicate(),
-		)
+		schedulablePredicate := dbaccount.SchedulableEQ(true)
+		if service.IsChannelMonitorRequest(ctx) {
+			// Monitor-only accounts remain invisible to normal gateway traffic,
+			// but a trusted internal probe may use them without flipping the
+			// account's public schedulable switch.
+			schedulablePredicate = dbaccount.Or(
+				dbaccount.SchedulableEQ(true),
+				dbpredicate.Account(func(s *entsql.Selector) {
+					s.Where(sqljson.ValueEQ(dbaccount.FieldExtra, true, sqljson.Path("monitor_only")))
+				}),
+			)
+		}
+		preds = append(preds, schedulablePredicate, contributionSchedulablePredicate())
 		if !opts.ignoreTransientState {
 			now := time.Now()
 			preds = append(preds,
