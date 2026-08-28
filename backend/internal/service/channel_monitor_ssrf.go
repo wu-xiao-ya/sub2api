@@ -3,7 +3,11 @@ package service
 import (
 	"context"
 	"net"
+	"net/http"
 	"strings"
+	"time"
+
+	"github.com/Wei-Shaw/sub2api/internal/pkg/servertiming"
 )
 
 // SSRF 防护 helper：
@@ -147,6 +151,56 @@ func safeDialContext(ctx context.Context, network, address string) (net.Conn, er
 	}
 	if lastErr == nil {
 		lastErr = &net.AddrError{Err: "no usable addresses", Addr: host}
+	}
+	return nil, lastErr
+}
+
+// newLoopbackOnlyHTTPClient is the deliberately narrow transport used by the
+// in-process channel monitor. The gateway endpoint is validated separately,
+// while this dialer provides a second socket-level guard against DNS rebinding.
+func newLoopbackOnlyHTTPClient(timeout, responseHeaderTimeout time.Duration) *http.Client {
+	tr := &http.Transport{
+		DialContext:           loopbackDialContext,
+		ForceAttemptHTTP2:     true,
+		MaxIdleConns:          8,
+		IdleConnTimeout:       monitorIdleConnTimeout,
+		TLSHandshakeTimeout:   monitorTLSHandshakeTimeout,
+		ResponseHeaderTimeout: responseHeaderTimeout,
+	}
+	return &http.Client{Timeout: timeout, Transport: servertiming.WrapRoundTripper(tr)}
+}
+
+func loopbackDialContext(ctx context.Context, network, address string) (net.Conn, error) {
+	host, port, err := net.SplitHostPort(address)
+	if err != nil {
+		return nil, err
+	}
+	if ip := net.ParseIP(strings.Trim(host, "[]")); ip != nil {
+		if !ip.IsLoopback() {
+			return nil, &net.AddrError{Err: "non-loopback address blocked", Addr: address}
+		}
+		return monitorDialer.DialContext(ctx, network, net.JoinHostPort(ip.String(), port))
+	}
+	if strings.ToLower(host) != "localhost" {
+		return nil, &net.AddrError{Err: "non-loopback hostname blocked", Addr: host}
+	}
+	addrs, err := net.DefaultResolver.LookupIPAddr(ctx, host)
+	if err != nil {
+		return nil, err
+	}
+	if len(addrs) == 0 {
+		return nil, &net.AddrError{Err: "no addresses for host", Addr: host}
+	}
+	var lastErr error
+	for _, addr := range addrs {
+		if !addr.IP.IsLoopback() {
+			return nil, &net.AddrError{Err: "localhost resolved outside loopback", Addr: addr.IP.String()}
+		}
+		conn, dialErr := monitorDialer.DialContext(ctx, network, net.JoinHostPort(addr.IP.String(), port))
+		if dialErr == nil {
+			return conn, nil
+		}
+		lastErr = dialErr
 	}
 	return nil, lastErr
 }

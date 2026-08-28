@@ -30,6 +30,7 @@ func (s *ChannelMonitorService) runInternalGatewayChecks(ctx context.Context, m 
 		ExtraHeaders:     channelMonitorInternalHeaders(m.ExtraHeaders),
 		BodyOverrideMode: m.BodyOverrideMode,
 		BodyOverride:     m.BodyOverride,
+		httpClient:       monitorInternalGatewayHTTPClient,
 	}
 	var group errgroup.Group
 	var mu sync.Mutex

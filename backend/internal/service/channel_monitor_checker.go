@@ -39,6 +39,13 @@ var monitorPingHTTPClient = newSSRFSafeHTTPClient(
 	monitorResponseHeaderTimeout,
 )
 
+// monitorInternalGatewayHTTPClient 只用于站内监测请求。
+// 它仅允许连接本机回环地址，不能被普通监控路径复用。
+var monitorInternalGatewayHTTPClient = newLoopbackOnlyHTTPClient(
+	monitorRequestTimeout,
+	monitorResponseHeaderTimeout,
+)
+
 // newSSRFSafeHTTPClient 返回一个使用 safeDialContext 的 http.Client。
 // 仅供监控模块对外发起请求使用——所有目标都应是公网 endpoint。
 func newSSRFSafeHTTPClient(timeout, responseHeaderTimeout time.Duration) *http.Client {
@@ -72,6 +79,9 @@ type CheckOptions struct {
 	// RequestTimeout is the monitor-specific upstream wait limit. It is only
 	// applied to images mode; text clients retain their lower fixed timeout.
 	RequestTimeout time.Duration
+	// httpClient is restricted to internal monitor calls. Keeping it private
+	// prevents API callers from opting out of the normal SSRF protection.
+	httpClient *http.Client
 }
 
 // runCheckForModel 对单个 (provider, model) 做一次完整检测。
@@ -385,7 +395,7 @@ func callProvider(ctx context.Context, provider, endpoint, apiKey, model, prompt
 	}
 	if provider == MonitorProviderOpenAI && requestedAPIMode == MonitorAPIModeModels {
 		full := joinURL(endpoint, providerOpenAIModelsPath)
-		respBytes, status, err := getRaw(ctx, full, usagesource.MarkChannelMonitor(map[string]string{"Authorization": "Bearer " + apiKey}))
+		respBytes, status, err := getRawWithClient(ctx, monitorClientFor(opts), full, usagesource.MarkChannelMonitor(map[string]string{"Authorization": "Bearer " + apiKey}))
 		if err != nil {
 			return "", "", status, err
 		}
@@ -406,7 +416,7 @@ func callProvider(ctx context.Context, provider, endpoint, apiKey, model, prompt
 	}
 	headers := usagesource.MarkChannelMonitor(mergeHeaders(adapter.buildHeaders(apiKey), opts))
 	full := joinURL(endpoint, adapter.buildPath(model))
-	respBytes, status, err := postRawJSON(ctx, full, body, headers)
+	respBytes, status, err := postRawJSONWithClientAndLimit(ctx, monitorClientFor(opts), full, body, headers, monitorResponseMaxBytes)
 	if err != nil {
 		return "", "", status, err
 	}
@@ -433,7 +443,7 @@ func callImageProvider(ctx context.Context, endpoint, apiKey, model string, opts
 	headers := usagesource.MarkChannelMonitor(mergeHeaders(map[string]string{"Authorization": "Bearer " + apiKey}, opts))
 	return postRawJSONWithClientAndLimit(
 		ctx,
-		monitorImageHTTPClient,
+		imageMonitorClientFor(opts),
 		joinURL(endpoint, providerOpenAIImagesPath),
 		body,
 		headers,
@@ -529,6 +539,10 @@ func validateGeneratedImage(data []byte) (*monitorLatestImagePayload, error) {
 }
 
 func getRaw(ctx context.Context, full string, headers map[string]string) ([]byte, int, error) {
+	return getRawWithClient(ctx, monitorHTTPClient, full, headers)
+}
+
+func getRawWithClient(ctx context.Context, client *http.Client, full string, headers map[string]string) ([]byte, int, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, full, nil)
 	if err != nil {
 		return nil, 0, err
@@ -536,7 +550,7 @@ func getRaw(ctx context.Context, full string, headers map[string]string) ([]byte
 	for key, value := range headers {
 		req.Header.Set(key, value)
 	}
-	resp, err := monitorHTTPClient.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -909,6 +923,20 @@ func postRawJSON(ctx context.Context, fullURL string, payload []byte, headers ma
 
 func postRawJSONWithLimit(ctx context.Context, fullURL string, payload []byte, headers map[string]string, maxBytes int64) ([]byte, int, error) {
 	return postRawJSONWithClientAndLimit(ctx, monitorHTTPClient, fullURL, payload, headers, maxBytes)
+}
+
+func monitorClientFor(opts *CheckOptions) *http.Client {
+	if opts != nil && opts.httpClient != nil {
+		return opts.httpClient
+	}
+	return monitorHTTPClient
+}
+
+func imageMonitorClientFor(opts *CheckOptions) *http.Client {
+	if opts != nil && opts.httpClient != nil {
+		return opts.httpClient
+	}
+	return monitorImageHTTPClient
 }
 
 func postRawJSONWithClientAndLimit(
