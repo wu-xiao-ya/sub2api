@@ -580,6 +580,9 @@ export default {
   availableChannels: {
     title: '模型广场',
     description: '浏览全部可用模型、当前价格与可用分组',
+    pricingPolicyTitle: '本站统一使用美元余额结算',
+    pricingPolicyDescription: '国产模型按官方人民币价格的数字等额设置美元计费价，不进行人民币兑美元汇率换算。',
+    deepSeekTimePricingDescription: 'DeepSeek 展示峰值价格；北京时间 12:00-14:00、18:00-次日 09:00 按展示价格的 50% 计费。',
     searchPlaceholder: '搜索模型、分组或平台...',
     allPlatforms: '全部平台',
     platformFilter: '筛选平台',

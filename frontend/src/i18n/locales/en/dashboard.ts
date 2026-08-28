@@ -575,6 +575,9 @@ export default {
   availableChannels: {
     title: 'Model Plaza',
     description: 'Browse available models, current prices, and accessible groups',
+    pricingPolicyTitle: 'All balances and charges are settled in USD',
+    pricingPolicyDescription: 'For domestic models, the official CNY price number is carried over unchanged as the USD billing price; no foreign-exchange conversion is applied.',
+    deepSeekTimePricingDescription: 'DeepSeek displays peak pricing. From 12:00-14:00 and 18:00-09:00 Beijing time, billing is 50% of the displayed price.',
     searchPlaceholder: 'Search models, groups, or platforms...',
     allPlatforms: 'All platforms',
     platformFilter: 'Filter platform',

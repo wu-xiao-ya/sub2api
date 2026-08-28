@@ -6,6 +6,21 @@
         <p class="text-sm text-gray-500 dark:text-dark-400">{{ t('availableChannels.description') }}</p>
       </section>
 
+      <section
+        class="flex items-start gap-3 rounded-md border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900 dark:border-sky-900/70 dark:bg-sky-950/30 dark:text-sky-200"
+      >
+        <Icon name="infoCircle" size="sm" class="mt-0.5 flex-shrink-0" />
+        <div class="min-w-0">
+          <p class="font-medium">{{ t('availableChannels.pricingPolicyTitle') }}</p>
+          <p class="mt-0.5 text-xs leading-5 text-sky-800/80 dark:text-sky-300/80">
+            {{ t('availableChannels.pricingPolicyDescription') }}
+          </p>
+          <p class="mt-0.5 text-xs leading-5 text-sky-800/80 dark:text-sky-300/80">
+            {{ t('availableChannels.deepSeekTimePricingDescription') }}
+          </p>
+        </div>
+      </section>
+
       <section class="flex flex-col gap-3 xl:flex-row xl:items-center">
         <div class="relative min-w-0 flex-1">
           <Icon

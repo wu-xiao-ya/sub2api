@@ -625,12 +625,12 @@ func applyOfficialDeepSeekPricingOverrides(data map[string]*LiteLLMModelPricing)
 	}
 
 	const (
-		flashInput  = 0.22e-6
-		flashCached = 0.007e-6
-		flashOutput = 0.66e-6
-		proInput    = 0.66e-6
-		proCached   = 0.022e-6
-		proOutput   = 1.98e-6
+		flashInput  = 3e-6
+		flashCached = 0.1e-6
+		flashOutput = 9e-6
+		proInput    = 9e-6
+		proCached   = 0.3e-6
+		proOutput   = 27e-6
 	)
 
 	apply := func(model string, input, cached, output float64) {

@@ -175,6 +175,7 @@ type BillingService struct {
 	cfg            *config.Config
 	pricingService *PricingService
 	fallbackPrices map[string]*ModelPricing // 硬编码回退价格
+	now            func() time.Time
 
 	// fallbackWarnSeen 记录已打过 fallback 警告日志的(已小写化)模型名,
 	// 让 "[Billing] Using fallback pricing" 每个模型每进程最多打一条,
@@ -188,6 +189,7 @@ func NewBillingService(cfg *config.Config, pricingService *PricingService) *Bill
 		cfg:            cfg,
 		pricingService: pricingService,
 		fallbackPrices: make(map[string]*ModelPricing),
+		now:            time.Now,
 	}
 
 	// 初始化硬编码回退价格（当动态价格不可用时使用）
@@ -869,7 +871,7 @@ func (s *BillingService) GetModelPricing(model string) (*ModelPricing, error) {
 			price5m := litellmPricing.CacheCreationInputTokenCost
 			price1h := litellmPricing.CacheCreationInputTokenCostAbove1hr
 			enableBreakdown := price1h > 0 && price1h > price5m
-			return s.applyModelSpecificPricingPolicy(model, &ModelPricing{
+			pricing := applyDomesticNumericPricing(model, &ModelPricing{
 				InputPricePerToken:                 litellmPricing.InputCostPerToken,
 				InputPricePerTokenPriority:         litellmPricing.InputCostPerTokenPriority,
 				OutputPricePerToken:                litellmPricing.OutputCostPerToken,
@@ -886,11 +888,15 @@ func (s *BillingService) GetModelPricing(model string) (*ModelPricing, error) {
 				LongContextOutputMultiplier:        litellmPricing.LongContextOutputCostMultiplier,
 				ImageInputPricePerToken:            litellmPricing.InputCostPerImageToken,
 				ImageOutputPricePerToken:           litellmPricing.OutputCostPerImageToken,
-			}), nil
+			})
+			return s.applyModelSpecificPricingPolicy(model, pricing), nil
 		}
 	}
 
 	// 2. 使用硬编码回退价格
+	if domestic := domesticNumericPricing(model); domestic != nil {
+		return domestic, nil
+	}
 	fallback := s.getFallbackPricing(model)
 	if fallback != nil {
 		// 按模型名去重:每个模型每进程最多打一条 warn,避免热路径每请求刷屏（issue #3394）。
@@ -1023,6 +1029,7 @@ func (s *BillingService) calculateTokenCost(resolved *ResolvedPricing, input Cos
 	}
 
 	pricing = s.applyModelSpecificPricingPolicy(input.Model, pricing)
+	pricing = applyDomesticTimePricingAt(input.Model, pricing, s.currentTime())
 
 	// 长上下文定价仅在无区间定价时应用（区间定价已包含上下文分层）
 	applyLongCtx := len(resolved.Intervals) == 0
@@ -1231,8 +1238,16 @@ func (s *BillingService) calculateCostInternalWithPolicy(
 	if err != nil {
 		return nil, err
 	}
+	pricing = applyDomesticTimePricingAt(model, pricing, s.currentTime())
 
 	return s.computeTokenBreakdown(pricing, tokens, rateMultiplier, serviceTier, longContextBillingEnabled), nil
+}
+
+func (s *BillingService) currentTime() time.Time {
+	if s != nil && s.now != nil {
+		return s.now()
+	}
+	return time.Now()
 }
 
 func (s *BillingService) applyModelSpecificPricingPolicy(model string, pricing *ModelPricing) *ModelPricing {
