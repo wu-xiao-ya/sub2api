@@ -818,6 +818,10 @@ func TestAdaptiveAccountProbeExplicitCompatibleProviderRequiresMatchingAccountPl
 		MonitorProviderDeepSeek,
 		MonitorProviderKimi,
 		MonitorProviderGLM,
+		MonitorProviderQwen,
+		MonitorProviderMiniMax,
+		MonitorProviderMiMo,
+		MonitorProviderHunyuan,
 	} {
 		t.Run(provider, func(t *testing.T) {
 			executor := &adaptiveProbeExecutorStub{
@@ -856,6 +860,10 @@ func TestAdaptiveAccountProbeCompatibleProviderUsesShortStableOutputBudget(t *te
 		MonitorProviderDeepSeek,
 		MonitorProviderKimi,
 		MonitorProviderGLM,
+		MonitorProviderQwen,
+		MonitorProviderMiniMax,
+		MonitorProviderMiMo,
+		MonitorProviderHunyuan,
 	} {
 		t.Run(provider, func(t *testing.T) {
 			executor := &adaptiveProbeExecutorStub{results: map[int64][]AccountMonitorProbeResult{}, callIndex: map[int64]int{}}

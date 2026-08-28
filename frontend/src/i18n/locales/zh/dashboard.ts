@@ -462,7 +462,11 @@ export default {
       antigravity: 'Antigravity',
       deepseek: 'DeepSeek',
       kimi: 'Kimi',
-      glm: 'GLM'
+      glm: 'GLM',
+      qwen: '通义千问',
+      minimax: 'MiniMax',
+      mimo: 'MiMo',
+      hunyuan: '腾讯混元'
     },
     extraModelsHeader: '附加模型',
     extraModelsEmpty: '无附加模型',

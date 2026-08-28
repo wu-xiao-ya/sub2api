@@ -46,6 +46,10 @@ const (
 	PlatformDeepSeek    = domain.PlatformDeepSeek
 	PlatformKimi        = domain.PlatformKimi
 	PlatformGLM         = domain.PlatformGLM
+	PlatformQwen        = domain.PlatformQwen
+	PlatformMiniMax     = domain.PlatformMiniMax
+	PlatformMiMo        = domain.PlatformMiMo
+	PlatformHunyuan     = domain.PlatformHunyuan
 	// PlatformKiro is retained for unsupported-platform threshold tests and legacy
 	// account rows. Scheduling-threshold evaluation never pauses kiro accounts.
 	PlatformKiro = "kiro"
@@ -57,7 +61,8 @@ const (
 // the generic OpenAI platform.
 func IsOpenAICompatiblePlatform(platform string) bool {
 	switch platform {
-	case PlatformOpenAI, PlatformGrok, PlatformDeepSeek, PlatformKimi, PlatformGLM:
+	case PlatformOpenAI, PlatformGrok, PlatformDeepSeek, PlatformKimi, PlatformGLM,
+		PlatformQwen, PlatformMiniMax, PlatformMiMo, PlatformHunyuan:
 		return true
 	default:
 		return false
@@ -76,6 +81,10 @@ var AllowedQuotaPlatforms = []string{
 	PlatformDeepSeek,
 	PlatformKimi,
 	PlatformGLM,
+	PlatformQwen,
+	PlatformMiniMax,
+	PlatformMiMo,
+	PlatformHunyuan,
 }
 
 // AllowedSchedulingThresholdPlatforms 是允许设置账号自动停调阈值的平台列表。

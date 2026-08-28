@@ -457,7 +457,11 @@ export default {
       antigravity: 'Antigravity',
       deepseek: 'DeepSeek',
       kimi: 'Kimi',
-      glm: 'GLM'
+      glm: 'GLM',
+      qwen: 'Qwen',
+      minimax: 'MiniMax',
+      mimo: 'MiMo',
+      hunyuan: 'Hunyuan'
     },
     extraModelsHeader: 'Extra Models',
     extraModelsEmpty: 'No extra models',

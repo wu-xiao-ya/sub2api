@@ -438,7 +438,11 @@ func accountProbeProvider(m *ChannelMonitor, account *Account) string {
 		MonitorProviderGrok,
 		MonitorProviderDeepSeek,
 		MonitorProviderKimi,
-		MonitorProviderGLM:
+		MonitorProviderGLM,
+		MonitorProviderQwen,
+		MonitorProviderMiniMax,
+		MonitorProviderMiMo,
+		MonitorProviderHunyuan:
 		if provider != MonitorProviderOpenAI || account == nil {
 			return provider
 		}
@@ -449,6 +453,14 @@ func accountProbeProvider(m *ChannelMonitor, account *Account) string {
 			return MonitorProviderKimi
 		case PlatformGLM:
 			return MonitorProviderGLM
+		case PlatformQwen:
+			return MonitorProviderQwen
+		case PlatformMiniMax:
+			return MonitorProviderMiniMax
+		case PlatformMiMo:
+			return MonitorProviderMiMo
+		case PlatformHunyuan:
+			return MonitorProviderHunyuan
 		default:
 			return provider
 		}

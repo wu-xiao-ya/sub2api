@@ -26,6 +26,10 @@ const (
 	PlatformDeepSeek    = "deepseek"
 	PlatformKimi        = "kimi"
 	PlatformGLM         = "glm"
+	PlatformQwen        = "qwen"
+	PlatformMiniMax     = "minimax"
+	PlatformMiMo        = "mimo"
+	PlatformHunyuan     = "hunyuan"
 )
 
 // Account type constants

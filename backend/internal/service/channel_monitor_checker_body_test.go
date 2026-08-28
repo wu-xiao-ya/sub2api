@@ -279,6 +279,10 @@ func TestRunCheckForModel_OpenAICompatibleProvidersUseLowCostChatCompletions(t *
 		MonitorProviderDeepSeek,
 		MonitorProviderKimi,
 		MonitorProviderGLM,
+		MonitorProviderQwen,
+		MonitorProviderMiniMax,
+		MonitorProviderMiMo,
+		MonitorProviderHunyuan,
 	} {
 		t.Run(provider, func(t *testing.T) {
 			h := &openAICaptureHandler{}
@@ -323,6 +327,10 @@ func TestRunCheckForModel_CompatibleLowCostReasoningCountsAsLiveness(t *testing.
 		MonitorProviderDeepSeek,
 		MonitorProviderKimi,
 		MonitorProviderGLM,
+		MonitorProviderQwen,
+		MonitorProviderMiniMax,
+		MonitorProviderMiMo,
+		MonitorProviderHunyuan,
 	} {
 		t.Run(provider, func(t *testing.T) {
 			h := &openAICaptureHandler{

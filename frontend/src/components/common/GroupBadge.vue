@@ -171,6 +171,18 @@ const labelClass = computed(() => {
   if (props.platform === 'glm') {
     return `${base} bg-indigo-200/60 text-indigo-800 dark:bg-indigo-800/40 dark:text-indigo-300`
   }
+  if (props.platform === 'qwen') {
+    return `${base} bg-amber-200/60 text-amber-900 dark:bg-amber-800/40 dark:text-amber-300`
+  }
+  if (props.platform === 'minimax') {
+    return `${base} bg-rose-200/60 text-rose-800 dark:bg-rose-800/40 dark:text-rose-300`
+  }
+  if (props.platform === 'mimo') {
+    return `${base} bg-emerald-200/60 text-emerald-800 dark:bg-emerald-800/40 dark:text-emerald-300`
+  }
+  if (props.platform === 'hunyuan') {
+    return `${base} bg-sky-200/60 text-sky-800 dark:bg-sky-800/40 dark:text-sky-300`
+  }
   return `${base} bg-violet-200/60 text-violet-800 dark:bg-violet-800/40 dark:text-violet-300`
 })
 
@@ -220,6 +232,26 @@ const badgeClass = computed(() => {
     return isSubscription.value
       ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300'
       : 'bg-indigo-50 text-indigo-700 dark:bg-indigo-900/20 dark:text-indigo-300'
+  }
+  if (props.platform === 'qwen') {
+    return isSubscription.value
+      ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300'
+      : 'bg-amber-50 text-amber-800 dark:bg-amber-900/20 dark:text-amber-300'
+  }
+  if (props.platform === 'minimax') {
+    return isSubscription.value
+      ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300'
+      : 'bg-rose-50 text-rose-700 dark:bg-rose-900/20 dark:text-rose-300'
+  }
+  if (props.platform === 'mimo') {
+    return isSubscription.value
+      ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'
+      : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300'
+  }
+  if (props.platform === 'hunyuan') {
+    return isSubscription.value
+      ? 'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-300'
+      : 'bg-sky-50 text-sky-700 dark:bg-sky-900/20 dark:text-sky-300'
   }
   // Fallback: original colors
   return isSubscription.value

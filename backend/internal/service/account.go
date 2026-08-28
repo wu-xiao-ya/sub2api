@@ -303,7 +303,7 @@ func ShouldUseOpenAIResponsesAPI(account *Account) bool {
 	}
 	if account.Type == AccountTypeAPIKey {
 		switch account.Platform {
-		case PlatformDeepSeek, PlatformKimi, PlatformGLM:
+		case PlatformDeepSeek, PlatformKimi, PlatformGLM, PlatformQwen, PlatformMiniMax, PlatformMiMo, PlatformHunyuan:
 			mode, _ := account.Extra[openai_compat.ExtraKeyResponsesMode].(string)
 			return openai_compat.NormalizeResponsesSupportMode(mode) == openai_compat.ResponsesSupportModeForceResponses
 		}

@@ -10,10 +10,10 @@ const enOverview = readFileSync(resolve(currentDir, '../../../i18n/locales/en/ad
 
 describe('GroupsView compatible platform display', () => {
   it('renders labels and distinct platform colors for DeepSeek, Kimi, and GLM', () => {
-    for (const platform of ['deepseek', 'kimi', 'glm']) {
+    for (const platform of ['deepseek', 'kimi', 'glm', 'qwen', 'minimax', 'mimo', 'hunyuan']) {
       expect(groupsView).toContain(`value === '${platform}'`)
-      expect(zhOverview).toMatch(new RegExp(`${platform}: '\\w+'`))
-      expect(enOverview).toMatch(new RegExp(`${platform}: '\\w+'`))
+      expect(zhOverview).toContain(`${platform}: '`)
+      expect(enOverview).toContain(`${platform}: '`)
     }
     expect(groupsView).toContain('bg-blue-100 text-blue-700')
     expect(groupsView).toContain('bg-cyan-100 text-cyan-700')

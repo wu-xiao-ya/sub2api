@@ -219,7 +219,8 @@ func monitorUsageFromResponse(provider, apiMode string, response []byte) monitor
 
 func monitorUsageFromPayload(provider, apiMode string, payload map[string]any) monitorUsage {
 	switch provider {
-	case MonitorProviderOpenAI, MonitorProviderGrok, MonitorProviderDeepSeek, MonitorProviderKimi, MonitorProviderGLM:
+	case MonitorProviderOpenAI, MonitorProviderGrok, MonitorProviderDeepSeek, MonitorProviderKimi, MonitorProviderGLM,
+		MonitorProviderQwen, MonitorProviderMiniMax, MonitorProviderMiMo, MonitorProviderHunyuan:
 		if defaultAPIMode(apiMode) == MonitorAPIModeResponses {
 			if response, ok := payload["response"].(map[string]any); ok {
 				return monitorUsageFromOpenAIPayload(response)

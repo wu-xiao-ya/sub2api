@@ -269,6 +269,10 @@ var providerAdapters = map[string]providerAdapter{
 	MonitorProviderDeepSeek: providerOpenAIChatAdapter,
 	MonitorProviderKimi:     providerOpenAIChatAdapter,
 	MonitorProviderGLM:      providerOpenAIChatAdapter,
+	MonitorProviderQwen:     providerOpenAIChatAdapter,
+	MonitorProviderMiniMax:  providerOpenAIChatAdapter,
+	MonitorProviderMiMo:     providerOpenAIChatAdapter,
+	MonitorProviderHunyuan:  providerOpenAIChatAdapter,
 	MonitorProviderAnthropic: {
 		buildPath: func(string) string { return providerAnthropicPath },
 		buildBody: func(model, prompt string, maxTokens int) ([]byte, error) {
@@ -735,7 +739,8 @@ func validateMonitorChallengeResponse(
 
 func isCompatibleReasoningMonitorProvider(provider string) bool {
 	switch provider {
-	case MonitorProviderDeepSeek, MonitorProviderKimi, MonitorProviderGLM:
+	case MonitorProviderDeepSeek, MonitorProviderKimi, MonitorProviderGLM,
+		MonitorProviderQwen, MonitorProviderMiniMax, MonitorProviderMiMo, MonitorProviderHunyuan:
 		return true
 	default:
 		return false
@@ -777,7 +782,8 @@ func applyLowCostOutputLimit(provider, apiMode string, body map[string]any) {
 		return
 	}
 	switch provider {
-	case MonitorProviderOpenAI, MonitorProviderDeepSeek, MonitorProviderKimi, MonitorProviderGLM:
+	case MonitorProviderOpenAI, MonitorProviderDeepSeek, MonitorProviderKimi, MonitorProviderGLM,
+		MonitorProviderQwen, MonitorProviderMiniMax, MonitorProviderMiMo, MonitorProviderHunyuan:
 		if defaultAPIMode(apiMode) == MonitorAPIModeResponses {
 			body["max_output_tokens"] = lowCostOutputTokenLimit(provider)
 			return
@@ -804,7 +810,8 @@ func applyLowCostOutputLimit(provider, apiMode string, body map[string]any) {
 
 func lowCostOutputTokenLimit(provider string) int {
 	switch provider {
-	case MonitorProviderDeepSeek, MonitorProviderKimi, MonitorProviderGLM:
+	case MonitorProviderDeepSeek, MonitorProviderKimi, MonitorProviderGLM,
+		MonitorProviderQwen, MonitorProviderMiniMax, MonitorProviderMiMo, MonitorProviderHunyuan:
 		return monitorCompatibleLowCostMaxTokens
 	default:
 		return monitorLowCostMaxTokens
@@ -823,6 +830,10 @@ var bodyMergeKeyDenyList = map[string]map[string]bool{
 	MonitorProviderDeepSeek:  {"model": true, "messages": true, "stream": true},
 	MonitorProviderKimi:      {"model": true, "messages": true, "stream": true},
 	MonitorProviderGLM:       {"model": true, "messages": true, "stream": true},
+	MonitorProviderQwen:      {"model": true, "messages": true, "stream": true},
+	MonitorProviderMiniMax:   {"model": true, "messages": true, "stream": true},
+	MonitorProviderMiMo:      {"model": true, "messages": true, "stream": true},
+	MonitorProviderHunyuan:   {"model": true, "messages": true, "stream": true},
 	MonitorProviderAnthropic: {"model": true, "messages": true},
 	MonitorProviderGemini:    {"contents": true},
 }
@@ -860,7 +871,8 @@ func validateReplaceRequestBody(provider, apiMode string, body map[string]any) e
 
 func isOpenAICompatibleMonitorProvider(provider string) bool {
 	switch provider {
-	case MonitorProviderOpenAI, MonitorProviderGrok, MonitorProviderDeepSeek, MonitorProviderKimi, MonitorProviderGLM:
+	case MonitorProviderOpenAI, MonitorProviderGrok, MonitorProviderDeepSeek, MonitorProviderKimi, MonitorProviderGLM,
+		MonitorProviderQwen, MonitorProviderMiniMax, MonitorProviderMiMo, MonitorProviderHunyuan:
 		return true
 	default:
 		return false

@@ -702,9 +702,9 @@ func TestGetFallbackPricing_FamilyMatching(t *testing.T) {
 		{
 			name:              "minimax m3",
 			model:             "minimax-m3",
-			expectedInput:     0.60e-6,
-			expectedOutput:    floatPtr(2.40e-6),
-			expectedCacheRead: floatPtr(0.12e-6),
+			expectedInput:     2e-6,
+			expectedOutput:    floatPtr(8e-6),
+			expectedCacheRead: floatPtr(0.2e-6),
 		},
 		{
 			name:              "minimax m3 long ctx boundary keep standard tier",
@@ -716,16 +716,16 @@ func TestGetFallbackPricing_FamilyMatching(t *testing.T) {
 		{
 			name:              "minimax m2.7",
 			model:             "minimax-m2.7",
-			expectedInput:     0.30e-6,
-			expectedOutput:    floatPtr(1.20e-6),
-			expectedCacheRead: floatPtr(0.06e-6),
+			expectedInput:     2e-6,
+			expectedOutput:    floatPtr(8e-6),
+			expectedCacheRead: floatPtr(0.2e-6),
 		},
 		{
 			name:              "minimax m2.7 highspeed",
 			model:             "minimax-m2.7-highspeed",
-			expectedInput:     0.60e-6,
-			expectedOutput:    floatPtr(2.40e-6),
-			expectedCacheRead: floatPtr(0.06e-6),
+			expectedInput:     2.4e-6,
+			expectedOutput:    floatPtr(9.6e-6),
+			expectedCacheRead: floatPtr(0.24e-6),
 		},
 		{
 			name:              "minimax m2.5",

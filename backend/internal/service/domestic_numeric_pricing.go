@@ -37,6 +37,10 @@ func domesticNumericPricing(model string) *ModelPricing {
 		return tokenPricing(6.5, 27, 1.1)
 	case "kimi-k2.5":
 		return tokenPricing(4, 21, 0.7)
+	case "minimax-m3", "minimax-m2.7":
+		return tokenPricing(2, 8, 0.2)
+	case "minimax-m2.7-highspeed":
+		return tokenPricing(2.4, 9.6, 0.24)
 	case "mimo-v2.5":
 		return tokenPricing(1, 2, 0.02)
 	case "mimo-v2.5-pro":

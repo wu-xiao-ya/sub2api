@@ -98,13 +98,7 @@ const zhipuModels = [
 
 // 阿里 通义千问
 const qwenModels = [
-  'qwen-turbo', 'qwen-plus', 'qwen-max', 'qwen-max-longcontext', 'qwen-long',
-  'qwen2-72b-instruct', 'qwen2-57b-a14b-instruct', 'qwen2-7b-instruct',
-  'qwen2.5-72b-instruct', 'qwen2.5-32b-instruct', 'qwen2.5-14b-instruct',
-  'qwen2.5-7b-instruct', 'qwen2.5-3b-instruct', 'qwen2.5-1.5b-instruct',
-  'qwen2.5-coder-32b-instruct', 'qwen2.5-coder-14b-instruct', 'qwen2.5-coder-7b-instruct',
-  'qwen3-235b-a22b',
-  'qwq-32b', 'qwq-32b-preview'
+  'qwen3.8-max', 'qwen3.7-max', 'qwen3.7-plus'
 ]
 
 // DeepSeek
@@ -198,9 +192,11 @@ const doubaoModels = [
 
 // MiniMax
 const minimaxModels = [
-  'abab6.5-chat', 'abab6.5s-chat', 'abab6.5s-chat-pro',
-  'abab6-chat',
-  'abab5.5-chat', 'abab5.5s-chat'
+  'minimax-m3', 'minimax-m2.7', 'minimax-m2.7-highspeed'
+]
+
+const mimoModels = [
+  'mimo-v2.5-pro', 'mimo-v2.5'
 ]
 
 // 百度 文心
@@ -221,9 +217,7 @@ const sparkModels = [
 
 // 腾讯 混元
 const hunyuanModels = [
-  'hunyuan-lite', 'hunyuan-standard', 'hunyuan-standard-256k',
-  'hunyuan-pro', 'hunyuan-turbo', 'hunyuan-large',
-  'hunyuan-vision', 'hunyuan-code'
+  'hy3', 'hunyuan-hy3'
 ]
 
 // Perplexity
@@ -249,6 +243,7 @@ const allModelsList: string[] = [
   ...moonshotModels,
   ...doubaoModels,
   ...minimaxModels,
+  ...mimoModels,
   ...baiduModels,
   ...sparkModels,
   ...hunyuanModels,
@@ -434,6 +429,7 @@ export function getModelsByPlatform(platform: string): string[] {
     case 'moonshot': return moonshotModels
     case 'doubao': return doubaoModels
     case 'minimax': return minimaxModels
+    case 'mimo': return mimoModels
     case 'baidu': return baiduModels
     case 'spark': return sparkModels
     case 'hunyuan': return hunyuanModels
@@ -448,6 +444,10 @@ export function getPresetMappingsByPlatform(platform: string) {
   if (platform === 'deepseek') return deepseekModels.map(model => ({ label: model, from: model, to: model, color: 'bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900/30 dark:text-blue-400' }))
   if (platform === 'kimi') return moonshotModels.map(model => ({ label: model, from: model, to: model, color: 'bg-cyan-100 text-cyan-700 hover:bg-cyan-200 dark:bg-cyan-900/30 dark:text-cyan-300' }))
   if (platform === 'glm') return zhipuModels.map(model => ({ label: model, from: model, to: model, color: 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200 dark:bg-indigo-900/30 dark:text-indigo-400' }))
+  if (platform === 'qwen') return qwenModels.map(model => ({ label: model, from: model, to: model, color: 'bg-amber-100 text-amber-800 hover:bg-amber-200 dark:bg-amber-900/30 dark:text-amber-300' }))
+  if (platform === 'minimax') return minimaxModels.map(model => ({ label: model, from: model, to: model, color: 'bg-rose-100 text-rose-700 hover:bg-rose-200 dark:bg-rose-900/30 dark:text-rose-300' }))
+  if (platform === 'mimo') return mimoModels.map(model => ({ label: model, from: model, to: model, color: 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300' }))
+  if (platform === 'hunyuan') return hunyuanModels.map(model => ({ label: model, from: model, to: model, color: 'bg-sky-100 text-sky-700 hover:bg-sky-200 dark:bg-sky-900/30 dark:text-sky-300' }))
   if (platform === 'gemini') return geminiPresetMappings
   if (platform === 'grok' || platform === 'xai') return grokPresetMappings
   if (platform === 'antigravity') return antigravityPresetMappings

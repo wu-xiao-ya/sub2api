@@ -164,7 +164,11 @@
             v-for="provider in [
               { value: 'deepseek', label: 'DeepSeek' },
               { value: 'kimi', label: 'Kimi' },
-              { value: 'glm', label: 'GLM' }
+              { value: 'glm', label: 'GLM' },
+              { value: 'qwen', label: 'Qwen' },
+              { value: 'minimax', label: 'MiniMax' },
+              { value: 'mimo', label: 'MiMo' },
+              { value: 'hunyuan', label: 'Hunyuan' }
             ]"
             :key="provider.value"
             type="button"
@@ -3722,7 +3726,7 @@ interface TempUnschedRuleForm {
 const step = ref(1)
 const submitting = ref(false)
 const accountCategory = ref<'oauth-based' | 'apikey' | 'bedrock' | 'service_account'>('oauth-based') // UI selection for account category
-const isAPIKeyOnlyPlatform = computed(() => ['deepseek', 'kimi', 'glm'].includes(form.platform))
+const isAPIKeyOnlyPlatform = computed(() => ['deepseek', 'kimi', 'glm', 'qwen', 'minimax', 'mimo', 'hunyuan'].includes(form.platform))
 const addMethod = ref<AddMethod>('oauth') // For oauth-based: 'oauth' or 'setup-token'
 const apiKeyBaseUrl = ref('https://api.anthropic.com')
 const apiKeyValue = ref('')
@@ -4229,8 +4233,16 @@ watch(
           ? 'https://api.deepseek.com'
           : newPlatform === 'kimi'
             ? 'https://api.moonshot.cn/v1'
-            : newPlatform === 'glm'
-              ? 'https://open.bigmodel.cn/api/paas/v4'
+        : newPlatform === 'glm'
+          ? 'https://open.bigmodel.cn/api/paas/v4'
+          : newPlatform === 'qwen'
+            ? 'https://dashscope.aliyuncs.com/compatible-mode/v1'
+            : newPlatform === 'minimax'
+              ? 'https://api.minimax.io/v1'
+              : newPlatform === 'mimo'
+                ? 'https://api.xiaomimimo.com/v1'
+                : newPlatform === 'hunyuan'
+                  ? 'https://api.hunyuan.cloud.tencent.com/v1'
         : newPlatform === 'gemini'
           ? 'https://generativelanguage.googleapis.com'
           : newPlatform === 'grok'
@@ -4262,7 +4274,7 @@ watch(
       form.concurrency = 1
       form.load_factor = null
     }
-    if (newPlatform === 'deepseek' || newPlatform === 'kimi' || newPlatform === 'glm') {
+    if (['deepseek', 'kimi', 'glm', 'qwen', 'minimax', 'mimo', 'hunyuan'].includes(newPlatform)) {
       accountCategory.value = 'apikey'
       addMethod.value = 'oauth'
       form.type = 'apikey'
@@ -5106,7 +5118,7 @@ const handleSubmit = async () => {
     return
   }
 
-  if (form.platform === 'deepseek' || form.platform === 'kimi' || form.platform === 'glm') {
+  if (['deepseek', 'kimi', 'glm', 'qwen', 'minimax', 'mimo', 'hunyuan'].includes(form.platform)) {
     accountCategory.value = 'apikey'
     form.type = 'apikey'
   }
@@ -5127,6 +5139,14 @@ const handleSubmit = async () => {
           ? 'https://api.moonshot.cn/v1'
           : form.platform === 'glm'
             ? 'https://open.bigmodel.cn/api/paas/v4'
+            : form.platform === 'qwen'
+              ? 'https://dashscope.aliyuncs.com/compatible-mode/v1'
+              : form.platform === 'minimax'
+                ? 'https://api.minimax.io/v1'
+                : form.platform === 'mimo'
+                  ? 'https://api.xiaomimimo.com/v1'
+                  : form.platform === 'hunyuan'
+                    ? 'https://api.hunyuan.cloud.tencent.com/v1'
             : form.platform === 'gemini'
               ? 'https://generativelanguage.googleapis.com'
               : form.platform === 'grok'

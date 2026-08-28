@@ -9,7 +9,10 @@ import (
 )
 
 func TestShouldUseOpenAIResponsesAPICompatiblePlatforms(t *testing.T) {
-	for _, platform := range []string{PlatformDeepSeek, PlatformKimi, PlatformGLM} {
+	for _, platform := range []string{
+		PlatformDeepSeek, PlatformKimi, PlatformGLM, PlatformQwen,
+		PlatformMiniMax, PlatformMiMo, PlatformHunyuan,
+	} {
 		t.Run(platform+"_auto_uses_chat_completions", func(t *testing.T) {
 			account := &Account{Platform: platform, Type: AccountTypeAPIKey}
 			if ShouldUseOpenAIResponsesAPI(account) {

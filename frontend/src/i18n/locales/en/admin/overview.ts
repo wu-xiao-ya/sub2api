@@ -955,6 +955,10 @@ export default {
         deepseek: 'DeepSeek',
         kimi: 'Kimi',
         glm: 'GLM',
+        qwen: 'Qwen',
+        minimax: 'MiniMax',
+        mimo: 'MiMo',
+        hunyuan: 'Hunyuan',
       },
       deleteConfirm:
         "Are you sure you want to delete '{name}'? All associated API keys will no longer belong to any group.",

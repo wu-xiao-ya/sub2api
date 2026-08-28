@@ -173,7 +173,9 @@ func monitorProviderSupportsAccountPlatform(provider, platform string) bool {
 	if provider == MonitorProviderOpenAI {
 		return IsOpenAICompatiblePlatform(platform)
 	}
-	if provider == MonitorProviderDeepSeek || provider == MonitorProviderKimi || provider == MonitorProviderGLM {
+	if provider == MonitorProviderDeepSeek || provider == MonitorProviderKimi || provider == MonitorProviderGLM ||
+		provider == MonitorProviderQwen || provider == MonitorProviderMiniMax ||
+		provider == MonitorProviderMiMo || provider == MonitorProviderHunyuan {
 		return provider == platform
 	}
 	return provider != "" && provider == platform

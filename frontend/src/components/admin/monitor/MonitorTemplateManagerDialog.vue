@@ -253,6 +253,10 @@ import {
   PROVIDER_DEEPSEEK,
   PROVIDER_KIMI,
   PROVIDER_GLM,
+  PROVIDER_QWEN,
+  PROVIDER_MINIMAX,
+  PROVIDER_MIMO,
+  PROVIDER_HUNYUAN,
   API_MODE_CHAT_COMPLETIONS,
   API_MODE_RESPONSES,
   API_MODE_MODELS,
@@ -280,6 +284,10 @@ const providerTabs = computed<{ value: Provider; label: string }[]>(() => [
   { value: PROVIDER_DEEPSEEK, label: t('monitorCommon.providers.deepseek') },
   { value: PROVIDER_KIMI, label: t('monitorCommon.providers.kimi') },
   { value: PROVIDER_GLM, label: t('monitorCommon.providers.glm') },
+  { value: PROVIDER_QWEN, label: t('monitorCommon.providers.qwen') },
+  { value: PROVIDER_MINIMAX, label: t('monitorCommon.providers.minimax') },
+  { value: PROVIDER_MIMO, label: t('monitorCommon.providers.mimo') },
+  { value: PROVIDER_HUNYUAN, label: t('monitorCommon.providers.hunyuan') },
 ])
 
 const activeProvider = ref<Provider>(PROVIDER_ANTHROPIC)
@@ -300,6 +308,10 @@ const countByProvider = computed<Record<Provider, number>>(() => {
     deepseek: 0,
     kimi: 0,
     glm: 0,
+    qwen: 0,
+    minimax: 0,
+    mimo: 0,
+    hunyuan: 0,
   }
   for (const t of templates.value) out[t.provider]++
   return out

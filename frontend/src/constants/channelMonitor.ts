@@ -17,6 +17,10 @@ export const PROVIDER_ANTIGRAVITY: Provider = 'antigravity'
 export const PROVIDER_DEEPSEEK: Provider = 'deepseek'
 export const PROVIDER_KIMI: Provider = 'kimi'
 export const PROVIDER_GLM: Provider = 'glm'
+export const PROVIDER_QWEN: Provider = 'qwen'
+export const PROVIDER_MINIMAX: Provider = 'minimax'
+export const PROVIDER_MIMO: Provider = 'mimo'
+export const PROVIDER_HUNYUAN: Provider = 'hunyuan'
 
 export const DEFAULT_GROK_ENDPOINT = 'https://api.x.ai'
 export const DEFAULT_GROK_MODEL = 'grok-4.5'
@@ -35,6 +39,10 @@ export const PROVIDERS: readonly Provider[] = [
   PROVIDER_DEEPSEEK,
   PROVIDER_KIMI,
   PROVIDER_GLM,
+  PROVIDER_QWEN,
+  PROVIDER_MINIMAX,
+  PROVIDER_MIMO,
+  PROVIDER_HUNYUAN,
 ]
 
 /** Only OpenAI monitors expose the protocol-specific mode selector. */

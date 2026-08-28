@@ -45,10 +45,21 @@ func TestDefaultOpenAICompatibleModelIDs(t *testing.T) {
 			"glm-4.5",
 		}, defaultOpenAICompatibleModelIDs(PlatformGLM))
 	})
+
+	t.Run("new domestic aggregate platforms", func(t *testing.T) {
+		require.Equal(t, []string{"qwen3.8-max", "qwen3.7-max", "qwen3.7-plus"}, defaultOpenAICompatibleModelIDs(PlatformQwen))
+		require.Equal(t, []string{"minimax-m3", "minimax-m2.7", "minimax-m2.7-highspeed"}, defaultOpenAICompatibleModelIDs(PlatformMiniMax))
+		require.Equal(t, []string{"mimo-v2.5-pro", "mimo-v2.5"}, defaultOpenAICompatibleModelIDs(PlatformMiMo))
+		require.Equal(t, []string{"hy3", "hunyuan-hy3"}, defaultOpenAICompatibleModelIDs(PlatformHunyuan))
+	})
 }
 
 func TestDefaultModelsListCandidateIDs_OpenAICompatiblePlatforms(t *testing.T) {
 	require.Equal(t, defaultOpenAICompatibleModelIDs(PlatformDeepSeek), defaultModelsListCandidateIDs(PlatformDeepSeek))
 	require.Equal(t, defaultOpenAICompatibleModelIDs(PlatformKimi), defaultModelsListCandidateIDs(PlatformKimi))
 	require.Equal(t, defaultOpenAICompatibleModelIDs(PlatformGLM), defaultModelsListCandidateIDs(PlatformGLM))
+	require.Equal(t, defaultOpenAICompatibleModelIDs(PlatformQwen), defaultModelsListCandidateIDs(PlatformQwen))
+	require.Equal(t, defaultOpenAICompatibleModelIDs(PlatformMiniMax), defaultModelsListCandidateIDs(PlatformMiniMax))
+	require.Equal(t, defaultOpenAICompatibleModelIDs(PlatformMiMo), defaultModelsListCandidateIDs(PlatformMiMo))
+	require.Equal(t, defaultOpenAICompatibleModelIDs(PlatformHunyuan), defaultModelsListCandidateIDs(PlatformHunyuan))
 }

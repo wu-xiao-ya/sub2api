@@ -116,7 +116,7 @@ func defaultModelsListCandidateIDs(platform string) []string {
 		return ids
 	case PlatformGrok:
 		return xai.DefaultModelIDs()
-	case PlatformDeepSeek, PlatformKimi, PlatformGLM:
+	case PlatformDeepSeek, PlatformKimi, PlatformGLM, PlatformQwen, PlatformMiniMax, PlatformMiMo, PlatformHunyuan:
 		return defaultOpenAICompatibleModelIDs(platform)
 	default:
 		ids := make([]string, 0, len(claude.DefaultModels))
@@ -161,6 +161,28 @@ func defaultOpenAICompatibleModelIDs(platform string) []string {
 			"glm-4.7-flashx",
 			"glm-4.6",
 			"glm-4.5",
+		}
+	case PlatformQwen:
+		return []string{
+			"qwen3.8-max",
+			"qwen3.7-max",
+			"qwen3.7-plus",
+		}
+	case PlatformMiniMax:
+		return []string{
+			"minimax-m3",
+			"minimax-m2.7",
+			"minimax-m2.7-highspeed",
+		}
+	case PlatformMiMo:
+		return []string{
+			"mimo-v2.5-pro",
+			"mimo-v2.5",
+		}
+	case PlatformHunyuan:
+		return []string{
+			"hy3",
+			"hunyuan-hy3",
 		}
 	default:
 		return nil

@@ -138,6 +138,14 @@ const ratePillClass = computed(() => {
       return 'bg-cyan-50 text-cyan-700 dark:bg-cyan-900/20 dark:text-cyan-300'
     case 'glm':
       return 'bg-indigo-50 text-indigo-700 dark:bg-indigo-900/20 dark:text-indigo-300'
+    case 'qwen':
+      return 'bg-amber-50 text-amber-800 dark:bg-amber-900/20 dark:text-amber-300'
+    case 'minimax':
+      return 'bg-rose-50 text-rose-700 dark:bg-rose-900/20 dark:text-rose-300'
+    case 'mimo':
+      return 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300'
+    case 'hunyuan':
+      return 'bg-sky-50 text-sky-700 dark:bg-sky-900/20 dark:text-sky-300'
     default:
       return 'bg-violet-50 text-violet-700 dark:bg-violet-900/20 dark:text-violet-400'
   }

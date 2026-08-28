@@ -914,6 +914,14 @@ func defaultOpenAICompatibleTestModel(platform string) string {
 		return "kimi-k2.6"
 	case PlatformGLM:
 		return "glm-4.7"
+	case PlatformQwen:
+		return "qwen3.7-plus"
+	case PlatformMiniMax:
+		return "minimax-m3"
+	case PlatformMiMo:
+		return "mimo-v2.5"
+	case PlatformHunyuan:
+		return "hy3"
 	default:
 		return openai.DefaultTestModel
 	}

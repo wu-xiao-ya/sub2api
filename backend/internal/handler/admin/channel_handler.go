@@ -518,6 +518,10 @@ var platformToLiteLLMProvider = map[string]string{
 	service.PlatformDeepSeek:    "deepseek",
 	service.PlatformKimi:        "moonshot",
 	service.PlatformGLM:         "zhipu",
+	service.PlatformQwen:        "qwen",
+	service.PlatformMiniMax:     "minimax",
+	service.PlatformMiMo:        "mimo",
+	service.PlatformHunyuan:     "hunyuan",
 }
 
 // SyncPricingModels 返回 LiteLLM 定价目录中指定平台的最新模型列表

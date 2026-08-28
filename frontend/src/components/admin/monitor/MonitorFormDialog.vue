@@ -237,6 +237,10 @@ import {
   PROVIDER_DEEPSEEK,
   PROVIDER_KIMI,
   PROVIDER_GLM,
+  PROVIDER_QWEN,
+  PROVIDER_MINIMAX,
+  PROVIDER_MIMO,
+  PROVIDER_HUNYUAN,
   API_MODE_CHAT_COMPLETIONS,
   API_MODE_RESPONSES,
   API_MODE_MODELS,
@@ -457,6 +461,10 @@ const providerOptions = computed<ProviderOption[]>(() => [
   { value: PROVIDER_DEEPSEEK, label: t('monitorCommon.providers.deepseek') },
   { value: PROVIDER_KIMI, label: t('monitorCommon.providers.kimi') },
   { value: PROVIDER_GLM, label: t('monitorCommon.providers.glm') },
+  { value: PROVIDER_QWEN, label: t('monitorCommon.providers.qwen') },
+  { value: PROVIDER_MINIMAX, label: t('monitorCommon.providers.minimax') },
+  { value: PROVIDER_MIMO, label: t('monitorCommon.providers.mimo') },
+  { value: PROVIDER_HUNYUAN, label: t('monitorCommon.providers.hunyuan') },
 ])
 
 const accountGroupOptions = computed(() => [

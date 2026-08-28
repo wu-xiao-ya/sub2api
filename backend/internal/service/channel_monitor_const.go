@@ -84,6 +84,10 @@ const (
 	MonitorProviderDeepSeek    = "deepseek"
 	MonitorProviderKimi        = "kimi"
 	MonitorProviderGLM         = "glm"
+	MonitorProviderQwen        = "qwen"
+	MonitorProviderMiniMax     = "minimax"
+	MonitorProviderMiMo        = "mimo"
+	MonitorProviderHunyuan     = "hunyuan"
 
 	// MonitorDefaultGrokModel 是新增 Grok 监控未显式指定模型时使用的轻量测活模型。
 	MonitorDefaultGrokModel = "grok-4.5"
@@ -160,7 +164,7 @@ var (
 		"CHANNEL_MONITOR_NOT_FOUND", "channel monitor not found",
 	)
 	ErrChannelMonitorInvalidProvider = infraerrors.BadRequest(
-		"CHANNEL_MONITOR_INVALID_PROVIDER", "provider must be one of openai/anthropic/gemini/grok/deepseek/kimi/glm",
+		"CHANNEL_MONITOR_INVALID_PROVIDER", "provider must be one of openai/anthropic/gemini/grok/deepseek/kimi/glm/qwen/minimax/mimo/hunyuan",
 	)
 	ErrChannelMonitorInvalidAPIMode = infraerrors.BadRequest(
 		"CHANNEL_MONITOR_INVALID_API_MODE", "api_mode must be chat_completions, responses, models, or images; responses, models, and images are only supported for openai",

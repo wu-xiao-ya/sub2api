@@ -24,6 +24,8 @@ func TestDomesticNumericPricing(t *testing.T) {
 		{"kimi-k2.7-code", 6.5, 27, 1.3, 0, 0},
 		{"kimi-k2.7code", 6.5, 27, 1.3, 0, 0},
 		{"kimi-k2.5", 4, 21, 0.7, 0, 0},
+		{"minimax-m3", 2, 8, 0.2, 0, 0},
+		{"minimax-m2.7-highspeed", 2.4, 9.6, 0.24, 0, 0},
 		{"mimo-v2.5-pro", 3, 6, 0.025, 0, 0},
 		{"hy3", 1, 4, 0.25, 0, 0},
 		{"qwen3.7-plus", 2, 8, 0.4, 256000, 3},

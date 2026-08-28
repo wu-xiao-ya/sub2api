@@ -150,9 +150,17 @@
                             ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
                             : value === 'kimi'
                               ? 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-300'
-                              : value === 'glm'
-                                ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300'
-                                : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+                               : value === 'glm'
+                                 ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300'
+                                 : value === 'qwen'
+                                   ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300'
+                                   : value === 'minimax'
+                                     ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300'
+                                     : value === 'mimo'
+                                       ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'
+                                       : value === 'hunyuan'
+                                         ? 'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-300'
+                                         : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
               ]"
             >
               <PlatformIcon :platform="value" size="xs" />
@@ -4076,6 +4084,10 @@ const platformOptions = computed(() => [
   { value: "deepseek", label: "DeepSeek" },
   { value: "kimi", label: "Kimi" },
   { value: "glm", label: "GLM" },
+  { value: "qwen", label: "Qwen" },
+  { value: "minimax", label: "MiniMax" },
+  { value: "mimo", label: "MiMo" },
+  { value: "hunyuan", label: "Hunyuan" },
 ]);
 
 const platformFilterOptions = computed(() => [
@@ -4088,6 +4100,10 @@ const platformFilterOptions = computed(() => [
   { value: "deepseek", label: "DeepSeek" },
   { value: "kimi", label: "Kimi" },
   { value: "glm", label: "GLM" },
+  { value: "qwen", label: "Qwen" },
+  { value: "minimax", label: "MiniMax" },
+  { value: "mimo", label: "MiMo" },
+  { value: "hunyuan", label: "Hunyuan" },
 ]);
 
 const editStatusOptions = computed(() => [

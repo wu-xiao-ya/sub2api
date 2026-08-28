@@ -1267,7 +1267,8 @@ func defaultModelIDsForPlatform(platform string) []string {
 		return mergeModelIDs(ids, nil)
 	case service.PlatformGrok:
 		return xai.DefaultModelIDs()
-	case service.PlatformDeepSeek, service.PlatformKimi, service.PlatformGLM:
+	case service.PlatformDeepSeek, service.PlatformKimi, service.PlatformGLM,
+		service.PlatformQwen, service.PlatformMiniMax, service.PlatformMiMo, service.PlatformHunyuan:
 		return service.DefaultOpenAICompatibleModelIDs(platform)
 	default:
 		ids := make([]string, 0, len(claude.DefaultModels))

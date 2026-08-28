@@ -300,6 +300,10 @@ func TestGatewayModels_OpenAICompatiblePlatformsReturnOpenAIStyleModelsList(t *t
 			platform: service.PlatformGLM,
 			wantIDs:  []string{"glm-5.3-flash", "glm-5.3", "glm-5.2", "glm-5.1", "glm-5", "glm-5-turbo", "glm-4.7", "glm-4.7-flash", "glm-4.7-flashx", "glm-4.6", "glm-4.5"},
 		},
+		{name: "qwen", platform: service.PlatformQwen, wantIDs: []string{"qwen3.8-max", "qwen3.7-max", "qwen3.7-plus"}},
+		{name: "minimax", platform: service.PlatformMiniMax, wantIDs: []string{"minimax-m3", "minimax-m2.7", "minimax-m2.7-highspeed"}},
+		{name: "mimo", platform: service.PlatformMiMo, wantIDs: []string{"mimo-v2.5-pro", "mimo-v2.5"}},
+		{name: "hunyuan", platform: service.PlatformHunyuan, wantIDs: []string{"hy3", "hunyuan-hy3"}},
 	}
 
 	for _, tc := range cases {

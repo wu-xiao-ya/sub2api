@@ -320,7 +320,11 @@ func (h *ConcurrencyHelper) applySubscriptionAcquisition(c *gin.Context, result 
 		return
 	}
 	if result.Subscription != nil {
-		c.Set(string(middleware2.ContextKeySubscription), result.Subscription)
+		subscription := *result.Subscription
+		if subscription.ID == 0 {
+			subscription.ID = -result.SubscriptionPurchaseID
+		}
+		c.Set(string(middleware2.ContextKeySubscription), &subscription)
 	}
 	if result.SharedSubscription != nil {
 		c.Set(string(middleware2.ContextKeySharedSubscription), result.SharedSubscription)
