@@ -59,6 +59,7 @@ describe('useModelWhitelist', () => {
     expect(getModelsByPlatform('moonshot')).toContain('kimi-k3')
     expect(getModelsByPlatform('moonshot')).toContain('k3-256k')
     expect(getModelsByPlatform('zhipu')).toContain('glm-5.3')
+    expect(getModelsByPlatform('zhipu')).toContain('glm-5.3-flash')
   })
 
   it('combined 模式支持 Grok 4.5 官方别名映射', () => {

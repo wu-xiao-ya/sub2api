@@ -150,6 +150,7 @@ func defaultOpenAICompatibleModelIDs(platform string) []string {
 		}
 	case PlatformGLM:
 		return []string{
+			"glm-5.3-flash",
 			"glm-5.3",
 			"glm-5.2",
 			"glm-5.1",

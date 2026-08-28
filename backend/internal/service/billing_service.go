@@ -396,6 +396,12 @@ func (s *BillingService) initFallbackPricing() {
 		CacheReadPricePerToken: 0.16e-6,
 		SupportsCacheBreakdown: false,
 	}
+	s.fallbackPrices["glm-5.3-flash"] = &ModelPricing{
+		InputPricePerToken:     0.8e-6,
+		OutputPricePerToken:    2.8e-6,
+		CacheReadPricePerToken: 0.23e-6,
+		SupportsCacheBreakdown: false,
+	}
 	s.fallbackPrices["glm-5.2"] = &ModelPricing{
 		InputPricePerToken:     1.4e-6,
 		OutputPricePerToken:    4.4e-6,
@@ -672,6 +678,9 @@ func (s *BillingService) getFallbackPricing(model string) *ModelPricing {
 
 	// 智谱 GLM（z.ai 公开 SKU：glm-5.3 / glm-5.2 / glm-5.1 / glm-5 / glm-5-turbo / glm-4.7 / glm-4.6 / glm-4.5 等）
 	// 匹配顺序：先判别最高 tier，再依次降级。
+	if strings.Contains(modelLower, "glm-5.3-flash") {
+		return s.fallbackPrices["glm-5.3-flash"]
+	}
 	if strings.Contains(modelLower, "glm-5.3") {
 		return s.fallbackPrices["glm-5.3"]
 	}

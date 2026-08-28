@@ -23,7 +23,7 @@ func TestSyncPricingModelsCompatiblePlatformsIncludeMaintainedDefaults(t *testin
 	}{
 		{platform: service.PlatformDeepSeek, model: "deepseek-chat"},
 		{platform: service.PlatformKimi, model: "kimi-k2.6"},
-		{platform: service.PlatformGLM, model: "glm-4.7"},
+		{platform: service.PlatformGLM, model: "glm-5.3-flash"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.platform, func(t *testing.T) {

@@ -177,9 +177,21 @@ func TestGetModelPricing_GLM53UsesOwnPrice(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, got)
 
+	require.InDelta(t, 8e-6, got.InputPricePerToken, 1e-12)
+	require.InDelta(t, 28e-6, got.OutputPricePerToken, 1e-12)
+	require.InDelta(t, 2e-6, got.CacheReadPricePerToken, 1e-12)
+}
+
+func TestGetModelPricing_GLM53FlashUsesDomesticNumericPrice(t *testing.T) {
+	svc := newTestBillingService()
+
+	got, err := svc.GetModelPricing("glm-5.3-flash")
+	require.NoError(t, err)
+	require.NotNil(t, got)
+
 	require.InDelta(t, 0.8e-6, got.InputPricePerToken, 1e-12)
-	require.InDelta(t, 2.56e-6, got.OutputPricePerToken, 1e-12)
-	require.InDelta(t, 0.16e-6, got.CacheReadPricePerToken, 1e-12)
+	require.InDelta(t, 2.8e-6, got.OutputPricePerToken, 1e-12)
+	require.InDelta(t, 0.23e-6, got.CacheReadPricePerToken, 1e-12)
 }
 
 func TestGetModelPricing_UnknownClaudeModelFallsBackToSonnet(t *testing.T) {
