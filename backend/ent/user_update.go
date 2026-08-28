@@ -185,6 +185,20 @@ func (_u *UserUpdate) SetNillableStatus(v *string) *UserUpdate {
 	return _u
 }
 
+// SetIsMonitoringUser sets the "is_monitoring_user" field.
+func (_u *UserUpdate) SetIsMonitoringUser(v bool) *UserUpdate {
+	_u.mutation.SetIsMonitoringUser(v)
+	return _u
+}
+
+// SetNillableIsMonitoringUser sets the "is_monitoring_user" field if the given value is not nil.
+func (_u *UserUpdate) SetNillableIsMonitoringUser(v *bool) *UserUpdate {
+	if v != nil {
+		_u.SetIsMonitoringUser(*v)
+	}
+	return _u
+}
+
 // SetUsername sets the "username" field.
 func (_u *UserUpdate) SetUsername(v string) *UserUpdate {
 	_u.mutation.SetUsername(v)
@@ -1033,6 +1047,9 @@ func (_u *UserUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(user.FieldStatus, field.TypeString, value)
 	}
+	if value, ok := _u.mutation.IsMonitoringUser(); ok {
+		_spec.SetField(user.FieldIsMonitoringUser, field.TypeBool, value)
+	}
 	if value, ok := _u.mutation.Username(); ok {
 		_spec.SetField(user.FieldUsername, field.TypeString, value)
 	}
@@ -1857,6 +1874,20 @@ func (_u *UserUpdateOne) SetStatus(v string) *UserUpdateOne {
 func (_u *UserUpdateOne) SetNillableStatus(v *string) *UserUpdateOne {
 	if v != nil {
 		_u.SetStatus(*v)
+	}
+	return _u
+}
+
+// SetIsMonitoringUser sets the "is_monitoring_user" field.
+func (_u *UserUpdateOne) SetIsMonitoringUser(v bool) *UserUpdateOne {
+	_u.mutation.SetIsMonitoringUser(v)
+	return _u
+}
+
+// SetNillableIsMonitoringUser sets the "is_monitoring_user" field if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableIsMonitoringUser(v *bool) *UserUpdateOne {
+	if v != nil {
+		_u.SetIsMonitoringUser(*v)
 	}
 	return _u
 }
@@ -2738,6 +2769,9 @@ func (_u *UserUpdateOne) sqlSave(ctx context.Context) (_node *User, err error) {
 	}
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(user.FieldStatus, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.IsMonitoringUser(); ok {
+		_spec.SetField(user.FieldIsMonitoringUser, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.Username(); ok {
 		_spec.SetField(user.FieldUsername, field.TypeString, value)

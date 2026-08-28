@@ -49,20 +49,46 @@
       </div>
 
       <div>
-        <label class="input-label">{{ t('admin.channelMonitor.form.endpoint') }} <span class="text-red-500">*</span></label>
+        <label class="input-label">{{ t('admin.channelMonitor.form.sourceMode') }}</label>
+        <Select v-model="sourceModeSelectValue" :options="sourceModeOptions" />
+        <p class="mt-1 text-xs text-gray-400">{{ t('admin.channelMonitor.form.sourceModeHint') }}</p>
+      </div>
+
+      <div>
+        <label class="input-label">{{ t('admin.channelMonitor.form.endpoint') }} <span v-if="form.source_mode !== 'internal_gateway'" class="text-red-500">*</span></label>
         <div class="flex gap-2">
-          <input v-model="form.endpoint" data-testid="monitor-endpoint" type="text" required class="input flex-1" :placeholder="t('admin.channelMonitor.form.endpointPlaceholder')" />
+          <input v-model="form.endpoint" data-testid="monitor-endpoint" type="text" :required="form.source_mode !== 'internal_gateway'" :disabled="form.source_mode === 'internal_gateway'" class="input flex-1" :placeholder="t('admin.channelMonitor.form.endpointPlaceholder')" />
           <button type="button" @click="useCurrentDomain" class="btn btn-secondary whitespace-nowrap">
             {{ t('admin.channelMonitor.form.useCurrentDomain') }}
           </button>
         </div>
       </div>
 
+      <div v-if="form.source_mode === 'internal_gateway'">
+        <label class="input-label">{{ t('admin.channelMonitor.form.internalKey') }}</label>
+        <Select
+          v-model="internalKeySelectValue"
+          :options="internalKeyOptions"
+          :placeholder="t('admin.channelMonitor.form.internalKeyPlaceholder')"
+          :disabled="internalKeysLoading"
+        />
+        <button
+          v-if="canProvisionInternalKeys"
+          type="button"
+          class="btn btn-secondary mt-2"
+          :disabled="internalKeysLoading || accountGroupsLoading || accountGroups.length === 0"
+          @click="ensureMonitoringKeys"
+        >
+          {{ t('admin.channelMonitor.form.ensureInternalKeys') }}
+        </button>
+        <p class="mt-1 text-xs text-gray-400">{{ t('admin.channelMonitor.form.internalKeyHint') }}</p>
+      </div>
+
       <div>
-        <label class="input-label">
+        <label v-if="form.source_mode !== 'internal_gateway'" class="input-label">
           {{ t('admin.channelMonitor.form.apiKey') }}<span v-if="!editing" class="text-red-500"> *</span>
         </label>
-        <div class="flex gap-2">
+        <div v-if="form.source_mode !== 'internal_gateway'" class="flex gap-2">
           <input
             v-model="form.api_key"
             type="password"
@@ -74,7 +100,7 @@
             {{ t('admin.channelMonitor.form.useMyKey') }}
           </button>
         </div>
-        <p v-if="editing && editing.api_key_masked" class="mt-1 text-xs text-gray-400">{{ editing.api_key_masked }}</p>
+        <p v-if="editing && editing.api_key_masked && form.source_mode !== 'internal_gateway'" class="mt-1 text-xs text-gray-400">{{ editing.api_key_masked }}</p>
       </div>
 
       <div>
@@ -139,7 +165,7 @@
         <Toggle v-model="form.enabled" />
       </div>
 
-      <!-- 高级设置区：请求模板 + 自定义 headers/body -->
+      <!-- ?????????? + ??? headers/body -->
       <details class="rounded-lg border border-gray-200 bg-gray-50/50 p-3 dark:border-dark-700 dark:bg-dark-900/30">
         <summary class="cursor-pointer text-sm font-medium text-gray-700 dark:text-gray-300">
           {{ t('admin.channelMonitor.advanced.section') }}
@@ -210,12 +236,14 @@ import { adminAPI } from '@/api/admin'
 import { keysAPI } from '@/api/keys'
 import { userGroupsAPI } from '@/api/groups'
 import type {
-  BodyOverrideMode,
-  ChannelMonitor,
-  CreateParams,
-  APIMode,
-  Provider,
-  UpdateParams,
+	BodyOverrideMode,
+	ChannelMonitor,
+	CreateParams,
+	APIMode,
+	Provider,
+	UpdateParams,
+	MonitorSourceMode,
+	InternalMonitorKey,
 } from '@/api/admin/channelMonitor'
 import type { ChannelMonitorTemplate } from '@/api/admin/channelMonitorTemplate'
 import type { AdminGroup, ApiKey } from '@/types'
@@ -292,6 +320,9 @@ interface MonitorForm {
   api_mode: APIMode
   endpoint: string
   api_key: string
+  source_mode: MonitorSourceMode
+  internal_api_key_id: number | null
+  internal_group_id: number | null
   primary_model: string
   extra_models: string[]
   group_name: string
@@ -300,7 +331,7 @@ interface MonitorForm {
   jitter_seconds: number
   request_timeout_seconds: number
   enabled: boolean
-  // 高级设置快照
+  // ??????
   template_id: number | null
   extra_headers: Record<string, string>
   body_override_mode: BodyOverrideMode
@@ -313,6 +344,9 @@ const form = reactive<MonitorForm>({
   api_mode: API_MODE_CHAT_COMPLETIONS,
   endpoint: '',
   api_key: '',
+  source_mode: 'direct_upstream',
+  internal_api_key_id: null,
+  internal_group_id: null,
   primary_model: '',
   extra_models: [],
   group_name: '',
@@ -327,17 +361,74 @@ const form = reactive<MonitorForm>({
   body_override: null,
 })
 
-// jitter 上限与后端校验一致：interval - jitter 不得低于最小检测间隔 15 秒。
+// jitter ??????????interval - jitter ?????????? 15 ??
 const maxJitterSeconds = computed<number>(() => Math.max(0, (form.interval_seconds || 0) - 15))
 
 let suppressFormWatchers = false
 
-// 可用模板列表（进入 dialog 时一次性拉取 cache；按 provider / api mode 过滤）。
+// ????????? dialog ?????? cache?? provider / api mode ????
 const templatesCache = ref<ChannelMonitorTemplate[]>([])
 const templatesLoading = ref(false)
 const accountGroupsCache = new Map<Provider, AdminGroup[]>()
 const accountGroups = ref<AdminGroup[]>([])
 const accountGroupsLoading = ref(false)
+const internalKeys = ref<InternalMonitorKey[]>([])
+const internalKeysLoading = ref(false)
+const canProvisionInternalKeys = computed(() =>
+  [PROVIDER_DEEPSEEK, PROVIDER_KIMI, PROVIDER_GLM, PROVIDER_QWEN, PROVIDER_MINIMAX, PROVIDER_MIMO, PROVIDER_HUNYUAN]
+    .includes(form.provider),
+)
+
+const sourceModeOptions = computed(() => [
+  { value: 'direct_upstream', label: t('admin.channelMonitor.form.sourceModeDirect') },
+  { value: 'internal_gateway', label: t('admin.channelMonitor.form.sourceModeInternal') },
+])
+
+const sourceModeSelectValue = computed<string>({
+  get: () => form.source_mode,
+  set: (value) => {
+    form.source_mode = value === 'internal_gateway' ? 'internal_gateway' : 'direct_upstream'
+    if (form.source_mode === 'internal_gateway') {
+      form.endpoint = ''
+      form.api_key = ''
+      form.api_mode = API_MODE_CHAT_COMPLETIONS
+      void loadInternalKeys()
+    } else {
+      form.internal_api_key_id = null
+      form.internal_group_id = null
+    }
+  },
+})
+
+const internalKeyOptions = computed(() => [
+  { value: '', label: t('admin.channelMonitor.form.internalKeyPlaceholder') },
+  ...internalKeys.value
+    .filter((key) => key.provider === form.provider || (form.provider === 'openai' && key.provider === 'openai'))
+    .map((key) => ({ value: String(key.id), label: `${key.name} ? ${key.group_name} (#${key.group_id})` })),
+])
+
+const internalKeySelectValue = computed<string>({
+  get: () => (form.internal_api_key_id == null ? '' : String(form.internal_api_key_id)),
+  set: (raw) => {
+    const key = internalKeys.value.find((item) => String(item.id) === raw)
+    form.internal_api_key_id = key?.id ?? null
+    form.internal_group_id = key?.group_id ?? null
+    if (key) form.provider = key.provider as Provider
+  },
+})
+
+async function loadInternalKeys() {
+  if (internalKeys.value.length > 0 || internalKeysLoading.value) return
+  internalKeysLoading.value = true
+  try {
+    const result = await adminAPI.channelMonitor.listInternalKeys()
+    internalKeys.value = result.items || []
+  } catch (err: unknown) {
+    appStore.showError(extractApiErrorMessage(err, t('admin.channelMonitor.form.internalKeyLoadFailed')))
+  } finally {
+    internalKeysLoading.value = false
+  }
+}
 
 const templateOptions = computed(() => {
   const items = templatesCache.value.filter((t) => {
@@ -358,14 +449,14 @@ async function loadTemplates() {
     const { items } = await adminAPI.channelMonitorTemplate.list()
     templatesCache.value = items
   } catch (err: unknown) {
-    // 模板拉取失败不阻塞监控表单，用户可以不选模板
+    // ??????????????????????
     console.warn('load monitor templates failed', err)
   } finally {
     templatesLoading.value = false
   }
 }
 
-// 模板下拉绑定：value 是 string（Select 组件约束），需要与 number | null 互转。
+// ???????value ? string?Select ????????? number | null ???
 const templateSelectValue = computed<string>({
   get: () => (form.template_id == null ? '' : String(form.template_id)),
   set: (raw: string) => {
@@ -376,7 +467,7 @@ const templateSelectValue = computed<string>({
     const id = Number(raw)
     if (!Number.isFinite(id)) return
     form.template_id = id
-    // 应用模板 = 拷贝快照
+    // ???? = ????
     const tpl = templatesCache.value.find((t) => t.id === id)
     if (tpl) {
       suppressFormWatchers = true
@@ -437,7 +528,7 @@ function templateOptionLabel(tpl: ChannelMonitorTemplate): string {
       : normalizeAPIMode(tpl.api_mode) === API_MODE_IMAGES
         ? 'admin.channelMonitor.form.apiModeImages'
         : 'admin.channelMonitor.form.apiModeChatCompletions'
-  return `${tpl.name} · ${t(labelKey)}`
+  return `${tpl.name} ? ${t(labelKey)}`
 }
 
 function clearRequestSnapshot() {
@@ -511,6 +602,25 @@ async function loadAccountGroups() {
   }
 }
 
+async function ensureMonitoringKeys() {
+  const groupIds = accountGroups.value.map(group => group.id).filter(id => Number.isSafeInteger(id) && id > 0)
+  if (groupIds.length === 0) {
+    appStore.showError(t('admin.channelMonitor.form.noMonitoringGroups'))
+    return
+  }
+  internalKeysLoading.value = true
+  try {
+    const result = await adminAPI.channelMonitor.ensureInternalKeys(groupIds)
+    const created = result.items.filter(item => item.created).length
+    internalKeys.value = (await adminAPI.channelMonitor.listInternalKeys()).items
+    appStore.showSuccess(t('admin.channelMonitor.form.ensureInternalKeysSuccess', { count: created }))
+  } catch (err: unknown) {
+    appStore.showError(extractApiErrorMessage(err, t('admin.channelMonitor.form.ensureInternalKeysFailed')))
+  } finally {
+    internalKeysLoading.value = false
+  }
+}
+
 function selectProvider(provider: Provider) {
   if (form.provider === provider) return
   const previousProvider = form.provider
@@ -532,10 +642,12 @@ function selectProvider(provider: Provider) {
 // Editing mode loads api_key='' via loadFromMonitor and only sets it on user
 // typing, so clearing on provider change is always a safe no-op until the user
 // picks a new key.
-// 同时清空 template_id（模板有 provider 归属，跨平台不通用）。
+// ???? template_id???? provider ???????????
 watch(() => form.provider, () => {
   if (suppressFormWatchers) return
   form.api_key = ''
+  form.internal_api_key_id = null
+  form.internal_group_id = null
   form.account_group_id = null
   if (!supportsSelectableAPIMode(form.provider)) {
     form.api_mode = API_MODE_CHAT_COMPLETIONS
@@ -580,6 +692,9 @@ function resetForm() {
   form.api_mode = API_MODE_CHAT_COMPLETIONS
   form.endpoint = ''
   form.api_key = ''
+  form.source_mode = 'direct_upstream'
+  form.internal_api_key_id = null
+  form.internal_group_id = null
   form.primary_model = ''
   form.extra_models = []
   form.group_name = ''
@@ -602,6 +717,9 @@ function loadFromMonitor(m: ChannelMonitor) {
   form.api_mode = normalizeAPIMode(m.api_mode)
   form.endpoint = m.endpoint
   form.api_key = ''
+  form.source_mode = m.source_mode || 'direct_upstream'
+  form.internal_api_key_id = m.internal_api_key_id ?? null
+  form.internal_group_id = m.internal_group_id ?? null
   form.primary_model = m.primary_model
   form.extra_models = [...(m.extra_models || [])]
   form.group_name = m.group_name || ''
@@ -618,7 +736,7 @@ function loadFromMonitor(m: ChannelMonitor) {
 }
 
 // Re-sync form whenever the dialog is opened or the target monitor changes.
-// 同时拉取模板列表（cache 过的话一次性返回）。
+// ?????????cache ??????????
 watch(
   () => [props.show, props.monitor] as const,
   ([show, m]) => {
@@ -627,6 +745,7 @@ watch(
     if (m) loadFromMonitor(m)
     else resetForm()
     void loadAccountGroups()
+    if (form.source_mode === 'internal_gateway') void loadInternalKeys()
   },
   { immediate: true },
 )
@@ -671,6 +790,9 @@ function buildPayload(): CreateParams {
     api_mode: supportsSelectableAPIMode(form.provider) ? form.api_mode : API_MODE_CHAT_COMPLETIONS,
     endpoint: form.endpoint.trim(),
     api_key: form.api_key.trim(),
+    source_mode: form.source_mode,
+    internal_api_key_id: form.internal_api_key_id,
+    internal_group_id: form.internal_group_id,
     primary_model: form.primary_model.trim(),
     extra_models: form.extra_models,
     group_name: form.group_name.trim(),
@@ -705,7 +827,7 @@ async function handleSubmit() {
       const req: UpdateParams = { ...rest }
       // Only send api_key if user typed a new value
       if (api_key) req.api_key = api_key
-      // template_id=null 用 clear_template=true 明确告诉后端清空（pointer 语义）
+      // template_id=null ? clear_template=true ?????????pointer ???
       if (form.template_id == null) {
         req.clear_template = true
         delete req.template_id

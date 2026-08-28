@@ -21,3 +21,11 @@ func usageSourceFromContext(ctx context.Context) *string {
 	}
 	return &normalized
 }
+
+// IsChannelMonitorRequest reports whether the request carries the trusted
+// internal monitoring source marker. This is used to bypass customer billing
+// while preserving normal gateway authentication and account routing.
+func IsChannelMonitorRequest(ctx context.Context) bool {
+	source := usageSourceFromContext(ctx)
+	return source != nil && *source == usagesource.ChannelMonitor
+}

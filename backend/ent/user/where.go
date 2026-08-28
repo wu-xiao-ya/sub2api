@@ -105,6 +105,11 @@ func Status(v string) predicate.User {
 	return predicate.User(sql.FieldEQ(FieldStatus, v))
 }
 
+// IsMonitoringUser applies equality check predicate on the "is_monitoring_user" field. It's identical to IsMonitoringUserEQ.
+func IsMonitoringUser(v bool) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldIsMonitoringUser, v))
+}
+
 // Username applies equality check predicate on the "username" field. It's identical to UsernameEQ.
 func Username(v string) predicate.User {
 	return predicate.User(sql.FieldEQ(FieldUsername, v))
@@ -683,6 +688,16 @@ func StatusEqualFold(v string) predicate.User {
 // StatusContainsFold applies the ContainsFold predicate on the "status" field.
 func StatusContainsFold(v string) predicate.User {
 	return predicate.User(sql.FieldContainsFold(FieldStatus, v))
+}
+
+// IsMonitoringUserEQ applies the EQ predicate on the "is_monitoring_user" field.
+func IsMonitoringUserEQ(v bool) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldIsMonitoringUser, v))
+}
+
+// IsMonitoringUserNEQ applies the NEQ predicate on the "is_monitoring_user" field.
+func IsMonitoringUserNEQ(v bool) predicate.User {
+	return predicate.User(sql.FieldNEQ(FieldIsMonitoringUser, v))
 }
 
 // UsernameEQ applies the EQ predicate on the "username" field.

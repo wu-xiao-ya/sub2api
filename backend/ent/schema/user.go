@@ -35,8 +35,8 @@ func (User) Mixin() []ent.Mixin {
 
 func (User) Fields() []ent.Field {
 	return []ent.Field{
-		// 唯一约束通过部分索引实现（WHERE deleted_at IS NULL），支持软删除后重用
-		// 见迁移文件 016_soft_delete_partial_unique_indexes.sql
+		// ?????????????WHERE deleted_at IS NULL??????????
+		// ????? 016_soft_delete_partial_unique_indexes.sql
 		field.String("email").
 			MaxLen(255).
 			NotEmpty(),
@@ -57,6 +57,9 @@ func (User) Fields() []ent.Field {
 		field.String("status").
 			MaxLen(20).
 			Default(domain.StatusActive),
+		field.Bool("is_monitoring_user").
+			Default(false).
+			Comment("Internal user reserved for channel monitoring"),
 
 		// Optional profile fields (added later; default '' in DB migration)
 		field.String("username").
@@ -67,7 +70,7 @@ func (User) Fields() []ent.Field {
 			SchemaType(map[string]string{dialect.Postgres: "text"}).
 			Default(""),
 
-		// TOTP 双因素认证字段
+		// TOTP ???????
 		field.String("totp_secret_encrypted").
 			SchemaType(map[string]string{dialect.Postgres: "text"}).
 			Optional().
@@ -96,7 +99,7 @@ func (User) Fields() []ent.Field {
 			Nillable().
 			SchemaType(map[string]string{dialect.Postgres: "timestamptz"}),
 
-		// 余额不足通知
+		// ??????
 		field.Bool("balance_notify_enabled").
 			Default(true),
 		field.String("balance_notify_threshold_type").
@@ -112,7 +115,7 @@ func (User) Fields() []ent.Field {
 			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}).
 			Default(0),
 
-		// 用户级每分钟请求数上限（0 = 不限制）。仅当所在分组未设置 rpm_limit 时作为兜底生效。
+		// ????????????0 = ?????????????? rpm_limit ????????
 		field.Int("rpm_limit").
 			Default(0),
 	}
@@ -140,7 +143,7 @@ func (User) Edges() []ent.Edge {
 
 func (User) Indexes() []ent.Index {
 	return []ent.Index{
-		// email 字段已在 Fields() 中声明 Unique()，无需重复索引
+		// email ???? Fields() ??? Unique()???????
 		index.Fields("status"),
 		index.Fields("deleted_at"),
 	}

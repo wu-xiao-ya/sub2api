@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"os"
 	"time"
 
@@ -96,11 +97,11 @@ func ProvideTokenRefreshService(
 	runtimeBlocker AccountRuntimeBlocker,
 ) *TokenRefreshService {
 	svc := NewTokenRefreshService(accountRepo, oauthService, openaiOAuthService, geminiOAuthService, antigravityOAuthService, cacheInvalidator, schedulerCache, cfg, tempUnschedCache, grokOAuthService)
-	// 注入 OpenAI privacy opt-out 依赖
+	// ?? OpenAI privacy opt-out ??
 	svc.SetPrivacyDeps(privacyClientFactory, proxyRepo)
-	// 注入统一 OAuth 刷新 API（消除 TokenRefreshService 与 TokenProvider 之间的竞争条件）
+	// ???? OAuth ?? API??? TokenRefreshService ? TokenProvider ????????
 	svc.SetRefreshAPI(refreshAPI)
-	// 调用侧显式注入后台刷新策略，避免策略漂移
+	// ????????????????????
 	svc.SetRefreshPolicy(DefaultBackgroundRefreshPolicy())
 	svc.SetAccountRuntimeBlocker(runtimeBlocker)
 	svc.Start()
@@ -268,7 +269,7 @@ func ProvideGrokTokenProvider(
 	return p
 }
 
-// ProvideDashboardAggregationService 创建并启动仪表盘聚合服务
+// ProvideDashboardAggregationService ????????????
 func ProvideDashboardAggregationService(repo DashboardAggregationRepository, timingWheel *TimingWheelService, lockCache LeaderLockCache, db *sql.DB, cfg *config.Config) *DashboardAggregationService {
 	svc := NewDashboardAggregationService(repo, timingWheel, cfg)
 	svc.SetLeaderLock(lockCache, db)
@@ -276,7 +277,7 @@ func ProvideDashboardAggregationService(repo DashboardAggregationRepository, tim
 	return svc
 }
 
-// ProvideUsageCleanupService 创建并启动使用记录清理任务服务
+// ProvideUsageCleanupService ???????????????
 func ProvideUsageCleanupService(repo UsageCleanupRepository, timingWheel *TimingWheelService, dashboardAgg *DashboardAggregationService, cfg *config.Config) *UsageCleanupService {
 	svc := NewUsageCleanupService(repo, timingWheel, dashboardAgg, cfg)
 	svc.Start()
@@ -327,7 +328,7 @@ func ProvideConcurrencyService(cache ConcurrencyCache, accountRepo AccountReposi
 	return svc
 }
 
-// ProvideUserMessageQueueService 创建用户消息串行队列服务并启动清理 worker
+// ProvideUserMessageQueueService ????????????????? worker
 func ProvideUserMessageQueueService(cache UserMsgQueueCache, rpmCache RPMCache, cfg *config.Config) *UserMessageQueueService {
 	svc := NewUserMessageQueueService(cache, rpmCache, &cfg.Gateway.UserMessageQueue)
 	if cfg.Gateway.UserMessageQueue.CleanupIntervalSeconds > 0 {
@@ -412,10 +413,10 @@ func ProvideOpsAlertEvaluatorService(
 }
 
 // ProvideOpsCleanupService creates and starts OpsCleanupService (cron scheduled).
-// channelMonitorSvc 让维护任务（聚合 + 历史/聚合软删）跟随 ops 清理 cron 一起跑，
-// 共享 leader lock + heartbeat。
-// settingRepo 让 cleanup service 自己读 ops_advanced_settings.data_retention 覆盖 cfg；
-// opsService 用来反向注入 cleanup hook，以便 UI 改清理设置时能 Reload cron。
+// channelMonitorSvc ???????? + ??/??????? ops ?? cron ????
+// ?? leader lock + heartbeat?
+// settingRepo ? cleanup service ??? ops_advanced_settings.data_retention ?? cfg?
+// opsService ?????? cleanup hook??? UI ??????? Reload cron?
 func ProvideOpsCleanupService(
 	opsRepo OpsRepository,
 	db *sql.DB,
@@ -440,8 +441,8 @@ func ProvideOpsSystemLogSink(opsRepo OpsRepository) *OpsSystemLogSink {
 	return sink
 }
 
-// ProvideAuditLogService 创建操作审计日志服务并启动异步写入与保留期清理协程。
-// 停止逻辑挂在 cmd/server 的 provideCleanup。
+// ProvideAuditLogService ??????????????????????????
+// ?????? cmd/server ? provideCleanup?
 func ProvideAuditLogService(repo AuditLogRepository, settingService *SettingService) *AuditLogService {
 	svc := NewAuditLogService(repo, settingService)
 	svc.Start()
@@ -521,17 +522,17 @@ func ProvideOpsScheduledReportService(
 	return svc
 }
 
-// ProvideAPIKeyAuthCacheInvalidator 提供 API Key 认证缓存失效能力
+// ProvideAPIKeyAuthCacheInvalidator ?? API Key ????????
 func ProvideAPIKeyAuthCacheInvalidator(apiKeyService *APIKeyService) APIKeyAuthCacheInvalidator {
 	// Start Pub/Sub subscriber for L1 cache invalidation across instances
 	apiKeyService.StartAuthCacheInvalidationSubscriber(context.Background())
 	return apiKeyService
 }
 
-// ProvideImageStorageSettingService 构造异步生图对象存储的后台设置服务。
+// ProvideImageStorageSettingService ??????????????????
 //
-// config.yaml 里的 image_storage 作为回落：后台从未保存过设置时沿用它，
-// 使升级前已通过配置文件开启该功能的部署不被打断。
+// config.yaml ?? image_storage ???????????????????
+// ????????????????????????
 func ProvideImageStorageSettingService(
 	settingRepo SettingRepository,
 	encryptor SecretEncryptor,
@@ -540,19 +541,19 @@ func ProvideImageStorageSettingService(
 	cfg *config.Config,
 ) *ImageStorageSettingService {
 	if cfg.ImageStorage.Enabled && !cfg.ImageStorage.Active() {
-		// 列出具体缺失的键。若这些键其实已在环境变量里设过，说明它们没被读进来，
-		// 请确认 setDefaults 中已为其注册默认值（见 config.setEnvReachableDefaults）。
+		// ???????????????????????????????????
+		// ??? setDefaults ??????????? config.setEnvReachableDefaults??
 		logger.L().Warn("image_storage.enabled is true in config but object storage is not fully configured; configure it in the admin UI or complete the config file",
 			zap.Strings("missing_keys", cfg.ImageStorage.MissingCredentialKeys()))
 	}
 	return NewImageStorageSettingService(settingRepo, encryptor, backup, factory, cfg.ImageStorage)
 }
 
-// ProvideImageTaskService 构造异步图片任务服务。
+// ProvideImageTaskService ???????????
 //
-// 对象存储是异步图片任务的启用前提：仅当开关打开且凭证齐全时功能才可用，否则整体禁用
-// （handler 返回 404，不创建任务、不写 Redis），从而避免大 base64 结果撑爆 Redis。
-// 启用状态由 settings 服务在运行时解析，因此后台改开关后无需重启即可生效。
+// ?????????????????????????????????????????
+// ?handler ?? 404????????? Redis??????? base64 ???? Redis?
+// ????? settings ??????????????????????????
 func ProvideImageTaskService(store ImageTaskStore, settings *ImageStorageSettingService) *ImageTaskService {
 	return NewImageTaskServiceWithResolver(store, settings.Resolver(), defaultImageTaskTTL, defaultImageTaskExecutionTimeout)
 }
@@ -812,7 +813,7 @@ var ProviderSet = wire.NewSet(
 	ProvideUserPlatformQuotaUsageFlusher,
 )
 
-// ProvideUserPlatformQuotaUsageFlusher 创建并启动 UserPlatformQuotaUsageFlusher。
+// ProvideUserPlatformQuotaUsageFlusher ????? UserPlatformQuotaUsageFlusher?
 func ProvideUserPlatformQuotaUsageFlusher(cfg *config.Config, cache BillingCache, quotaRepo UserPlatformQuotaRepository, tw *TimingWheelService) *UserPlatformQuotaUsageFlusher {
 	svc := NewUserPlatformQuotaUsageFlusher(cfg, cache, quotaRepo, tw)
 	svc.Start()
@@ -847,8 +848,8 @@ func ProvidePaymentOrderExpiryService(paymentSvc *PaymentService, lockCache Lead
 	return svc
 }
 
-// ProvideChannelMonitorService 创建渠道监控服务（CRUD + RunCheck + 用户视图聚合）。
-// 加密器复用 wire 中已注入的 SecretEncryptor（AES-256-GCM）。
+// ProvideChannelMonitorService ?????????CRUD + RunCheck + ????????
+// ????? wire ????? SecretEncryptor?AES-256-GCM??
 func ProvideChannelMonitorService(
 	repo ChannelMonitorRepository,
 	encryptor SecretEncryptor,
@@ -860,6 +861,7 @@ func ProvideChannelMonitorService(
 	accountTestService *AccountTestService,
 	channelService *ChannelService,
 	billingService *BillingService,
+	apiKeyService *APIKeyService,
 	usageLogRepo UsageLogRepository,
 ) *ChannelMonitorService {
 	svc := NewChannelMonitorService(repo, encryptor)
@@ -871,13 +873,18 @@ func ProvideChannelMonitorService(
 	svc.SetCostDependencies(settingService, channelService, billingService)
 	svc.SetTrafficObservationDependencies(usageLogRepo, settingService)
 	svc.SetRuntimeReader(settingService)
+	gatewayURL := "http://127.0.0.1:8080"
+	if cfg != nil && cfg.Server.Port > 0 {
+		gatewayURL = fmt.Sprintf("http://127.0.0.1:%d", cfg.Server.Port)
+	}
+	svc.SetInternalGatewayDependencies(apiKeyService, gatewayURL)
 	return svc
 }
 
-// ProvideChannelMonitorRunner 创建并启动渠道监控调度器。
-// 通过 SetScheduler 注入回 service 后再 Start，确保启动时加载所有 enabled monitor，
-// 后续 CRUD 也能即时同步任务表。Runner.Stop 由 cleanup function 调用。
-// settingService 用于 runner 每次 fire 读取功能开关。
+// ProvideChannelMonitorRunner ?????????????
+// ?? SetScheduler ??? service ?? Start?????????? enabled monitor?
+// ?? CRUD ??????????Runner.Stop ? cleanup function ???
+// settingService ?? runner ?? fire ???????
 func ProvideChannelMonitorRunner(svc *ChannelMonitorService, settingService *SettingService) *ChannelMonitorRunner {
 	r := NewChannelMonitorRunner(svc, settingService)
 	if svc != nil {

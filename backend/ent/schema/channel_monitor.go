@@ -12,7 +12,7 @@ import (
 )
 
 // ChannelMonitor holds the schema definition for the ChannelMonitor entity.
-// 渠道监控配置：定期对指定 provider/endpoint/api_key 下的模型做心跳测试。
+// ???????????? provider/endpoint/api_key ??????????
 type ChannelMonitor struct {
 	ent.Schema
 }
@@ -48,6 +48,18 @@ func (ChannelMonitor) Fields() []ent.Field {
 			NotEmpty().
 			Sensitive().
 			Comment("AES-256-GCM encrypted API key"),
+		field.String("source_mode").
+			Default("direct_upstream").
+			MaxLen(24).
+			Comment("direct_upstream or internal_gateway"),
+		field.Int64("internal_api_key_id").
+			Optional().
+			Nillable().
+			Comment("Station API key used by internal gateway monitors"),
+		field.Int64("internal_group_id").
+			Optional().
+			Nillable().
+			Comment("Station API key group snapshot"),
 		field.String("primary_model").
 			NotEmpty().
 			MaxLen(200),
@@ -70,33 +82,33 @@ func (ChannelMonitor) Fields() []ent.Field {
 		field.Int("jitter_seconds").
 			Default(0).
 			Range(0, 3600).
-			Comment("每次调度在 interval 基础上 ± [0, jitter] 的均匀随机偏移（秒）；0 表示固定间隔。service 层另保证 interval - jitter >= 15"),
+			Comment("????? interval ??? ? [0, jitter] ???????????0 ???????service ???? interval - jitter >= 15"),
 		field.Int("request_timeout_seconds").
 			Default(45).
 			Range(15, 900).
-			Comment("单次上游检测等待上限（秒）；生图监控可单独配置更长等待时间"),
+			Comment("?????????????????????????????"),
 		field.Time("last_checked_at").
 			Optional().
 			Nillable(),
 		field.Int64("created_by"),
 
-		// ---- 自定义请求快照字段（来自模板 / 手动编辑） ----
+		// ---- ?????????????? / ????? ----
 
-		// template_id: 关联的请求模板 ID（仅用于 UI 分组 + 一键应用）。
-		// 实际运行时 checker 只读下面 3 个快照字段，**不再回查模板表**。
-		// 模板被删除时此字段会被 SET NULL（见 Edges 的 OnDelete 注解）。
+		// template_id: ??????? ID???? UI ?? + ??????
+		// ????? checker ???? 3 ??????**???????**?
+		// ??????????? SET NULL?? Edges ? OnDelete ????
 		field.Int64("template_id").
 			Optional().
 			Nillable(),
-		// extra_headers: 自定义 HTTP 头快照（来自模板 or 用户手填）。
-		// 运行时 merge 进 adapter 默认 headers。
+		// extra_headers: ??? HTTP ???????? or ??????
+		// ??? merge ? adapter ?? headers?
 		field.JSON("extra_headers", map[string]string{}).
 			Default(map[string]string{}),
-		// body_override_mode: 同 ChannelMonitorRequestTemplate.body_override_mode
+		// body_override_mode: ? ChannelMonitorRequestTemplate.body_override_mode
 		field.String("body_override_mode").
 			Default("off").
 			MaxLen(10),
-		// body_override: 同 ChannelMonitorRequestTemplate.body_override
+		// body_override: ? ChannelMonitorRequestTemplate.body_override
 		field.JSON("body_override", map[string]any{}).
 			Optional(),
 	}
@@ -108,8 +120,8 @@ func (ChannelMonitor) Edges() []ent.Edge {
 			Annotations(entsql.OnDelete(entsql.Cascade)),
 		edge.To("daily_rollups", ChannelMonitorDailyRollup.Type).
 			Annotations(entsql.OnDelete(entsql.Cascade)),
-		// 关联请求模板：模板被删除时 template_id 自动置空，
-		// 监控本身保留（继续用快照字段跑）。
+		// ????????????? template_id ?????
+		// ?????????????????
 		edge.To("request_template", ChannelMonitorRequestTemplate.Type).
 			Field("template_id").
 			Unique().
@@ -124,5 +136,6 @@ func (ChannelMonitor) Indexes() []ent.Index {
 		index.Fields("provider", "api_mode"),
 		index.Fields("group_name"),
 		index.Fields("template_id"),
+		index.Fields("source_mode", "internal_api_key_id"),
 	}
 }

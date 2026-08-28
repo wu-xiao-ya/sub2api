@@ -15284,6 +15284,11 @@ type ChannelMonitorMutation struct {
 	api_mode                   *string
 	endpoint                   *string
 	api_key_encrypted          *string
+	source_mode                *string
+	internal_api_key_id        *int64
+	addinternal_api_key_id     *int64
+	internal_group_id          *int64
+	addinternal_group_id       *int64
 	primary_model              *string
 	extra_models               *[]string
 	appendextra_models         []string
@@ -15665,6 +15670,182 @@ func (m *ChannelMonitorMutation) OldAPIKeyEncrypted(ctx context.Context) (v stri
 // ResetAPIKeyEncrypted resets all changes to the "api_key_encrypted" field.
 func (m *ChannelMonitorMutation) ResetAPIKeyEncrypted() {
 	m.api_key_encrypted = nil
+}
+
+// SetSourceMode sets the "source_mode" field.
+func (m *ChannelMonitorMutation) SetSourceMode(s string) {
+	m.source_mode = &s
+}
+
+// SourceMode returns the value of the "source_mode" field in the mutation.
+func (m *ChannelMonitorMutation) SourceMode() (r string, exists bool) {
+	v := m.source_mode
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSourceMode returns the old "source_mode" field's value of the ChannelMonitor entity.
+// If the ChannelMonitor object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ChannelMonitorMutation) OldSourceMode(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSourceMode is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSourceMode requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSourceMode: %w", err)
+	}
+	return oldValue.SourceMode, nil
+}
+
+// ResetSourceMode resets all changes to the "source_mode" field.
+func (m *ChannelMonitorMutation) ResetSourceMode() {
+	m.source_mode = nil
+}
+
+// SetInternalAPIKeyID sets the "internal_api_key_id" field.
+func (m *ChannelMonitorMutation) SetInternalAPIKeyID(i int64) {
+	m.internal_api_key_id = &i
+	m.addinternal_api_key_id = nil
+}
+
+// InternalAPIKeyID returns the value of the "internal_api_key_id" field in the mutation.
+func (m *ChannelMonitorMutation) InternalAPIKeyID() (r int64, exists bool) {
+	v := m.internal_api_key_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldInternalAPIKeyID returns the old "internal_api_key_id" field's value of the ChannelMonitor entity.
+// If the ChannelMonitor object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ChannelMonitorMutation) OldInternalAPIKeyID(ctx context.Context) (v *int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldInternalAPIKeyID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldInternalAPIKeyID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldInternalAPIKeyID: %w", err)
+	}
+	return oldValue.InternalAPIKeyID, nil
+}
+
+// AddInternalAPIKeyID adds i to the "internal_api_key_id" field.
+func (m *ChannelMonitorMutation) AddInternalAPIKeyID(i int64) {
+	if m.addinternal_api_key_id != nil {
+		*m.addinternal_api_key_id += i
+	} else {
+		m.addinternal_api_key_id = &i
+	}
+}
+
+// AddedInternalAPIKeyID returns the value that was added to the "internal_api_key_id" field in this mutation.
+func (m *ChannelMonitorMutation) AddedInternalAPIKeyID() (r int64, exists bool) {
+	v := m.addinternal_api_key_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearInternalAPIKeyID clears the value of the "internal_api_key_id" field.
+func (m *ChannelMonitorMutation) ClearInternalAPIKeyID() {
+	m.internal_api_key_id = nil
+	m.addinternal_api_key_id = nil
+	m.clearedFields[channelmonitor.FieldInternalAPIKeyID] = struct{}{}
+}
+
+// InternalAPIKeyIDCleared returns if the "internal_api_key_id" field was cleared in this mutation.
+func (m *ChannelMonitorMutation) InternalAPIKeyIDCleared() bool {
+	_, ok := m.clearedFields[channelmonitor.FieldInternalAPIKeyID]
+	return ok
+}
+
+// ResetInternalAPIKeyID resets all changes to the "internal_api_key_id" field.
+func (m *ChannelMonitorMutation) ResetInternalAPIKeyID() {
+	m.internal_api_key_id = nil
+	m.addinternal_api_key_id = nil
+	delete(m.clearedFields, channelmonitor.FieldInternalAPIKeyID)
+}
+
+// SetInternalGroupID sets the "internal_group_id" field.
+func (m *ChannelMonitorMutation) SetInternalGroupID(i int64) {
+	m.internal_group_id = &i
+	m.addinternal_group_id = nil
+}
+
+// InternalGroupID returns the value of the "internal_group_id" field in the mutation.
+func (m *ChannelMonitorMutation) InternalGroupID() (r int64, exists bool) {
+	v := m.internal_group_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldInternalGroupID returns the old "internal_group_id" field's value of the ChannelMonitor entity.
+// If the ChannelMonitor object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ChannelMonitorMutation) OldInternalGroupID(ctx context.Context) (v *int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldInternalGroupID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldInternalGroupID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldInternalGroupID: %w", err)
+	}
+	return oldValue.InternalGroupID, nil
+}
+
+// AddInternalGroupID adds i to the "internal_group_id" field.
+func (m *ChannelMonitorMutation) AddInternalGroupID(i int64) {
+	if m.addinternal_group_id != nil {
+		*m.addinternal_group_id += i
+	} else {
+		m.addinternal_group_id = &i
+	}
+}
+
+// AddedInternalGroupID returns the value that was added to the "internal_group_id" field in this mutation.
+func (m *ChannelMonitorMutation) AddedInternalGroupID() (r int64, exists bool) {
+	v := m.addinternal_group_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearInternalGroupID clears the value of the "internal_group_id" field.
+func (m *ChannelMonitorMutation) ClearInternalGroupID() {
+	m.internal_group_id = nil
+	m.addinternal_group_id = nil
+	m.clearedFields[channelmonitor.FieldInternalGroupID] = struct{}{}
+}
+
+// InternalGroupIDCleared returns if the "internal_group_id" field was cleared in this mutation.
+func (m *ChannelMonitorMutation) InternalGroupIDCleared() bool {
+	_, ok := m.clearedFields[channelmonitor.FieldInternalGroupID]
+	return ok
+}
+
+// ResetInternalGroupID resets all changes to the "internal_group_id" field.
+func (m *ChannelMonitorMutation) ResetInternalGroupID() {
+	m.internal_group_id = nil
+	m.addinternal_group_id = nil
+	delete(m.clearedFields, channelmonitor.FieldInternalGroupID)
 }
 
 // SetPrimaryModel sets the "primary_model" field.
@@ -16534,7 +16715,7 @@ func (m *ChannelMonitorMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ChannelMonitorMutation) Fields() []string {
-	fields := make([]string, 0, 21)
+	fields := make([]string, 0, 24)
 	if m.created_at != nil {
 		fields = append(fields, channelmonitor.FieldCreatedAt)
 	}
@@ -16555,6 +16736,15 @@ func (m *ChannelMonitorMutation) Fields() []string {
 	}
 	if m.api_key_encrypted != nil {
 		fields = append(fields, channelmonitor.FieldAPIKeyEncrypted)
+	}
+	if m.source_mode != nil {
+		fields = append(fields, channelmonitor.FieldSourceMode)
+	}
+	if m.internal_api_key_id != nil {
+		fields = append(fields, channelmonitor.FieldInternalAPIKeyID)
+	}
+	if m.internal_group_id != nil {
+		fields = append(fields, channelmonitor.FieldInternalGroupID)
 	}
 	if m.primary_model != nil {
 		fields = append(fields, channelmonitor.FieldPrimaryModel)
@@ -16620,6 +16810,12 @@ func (m *ChannelMonitorMutation) Field(name string) (ent.Value, bool) {
 		return m.Endpoint()
 	case channelmonitor.FieldAPIKeyEncrypted:
 		return m.APIKeyEncrypted()
+	case channelmonitor.FieldSourceMode:
+		return m.SourceMode()
+	case channelmonitor.FieldInternalAPIKeyID:
+		return m.InternalAPIKeyID()
+	case channelmonitor.FieldInternalGroupID:
+		return m.InternalGroupID()
 	case channelmonitor.FieldPrimaryModel:
 		return m.PrimaryModel()
 	case channelmonitor.FieldExtraModels:
@@ -16671,6 +16867,12 @@ func (m *ChannelMonitorMutation) OldField(ctx context.Context, name string) (ent
 		return m.OldEndpoint(ctx)
 	case channelmonitor.FieldAPIKeyEncrypted:
 		return m.OldAPIKeyEncrypted(ctx)
+	case channelmonitor.FieldSourceMode:
+		return m.OldSourceMode(ctx)
+	case channelmonitor.FieldInternalAPIKeyID:
+		return m.OldInternalAPIKeyID(ctx)
+	case channelmonitor.FieldInternalGroupID:
+		return m.OldInternalGroupID(ctx)
 	case channelmonitor.FieldPrimaryModel:
 		return m.OldPrimaryModel(ctx)
 	case channelmonitor.FieldExtraModels:
@@ -16756,6 +16958,27 @@ func (m *ChannelMonitorMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetAPIKeyEncrypted(v)
+		return nil
+	case channelmonitor.FieldSourceMode:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSourceMode(v)
+		return nil
+	case channelmonitor.FieldInternalAPIKeyID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetInternalAPIKeyID(v)
+		return nil
+	case channelmonitor.FieldInternalGroupID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetInternalGroupID(v)
 		return nil
 	case channelmonitor.FieldPrimaryModel:
 		v, ok := value.(string)
@@ -16863,6 +17086,12 @@ func (m *ChannelMonitorMutation) SetField(name string, value ent.Value) error {
 // this mutation.
 func (m *ChannelMonitorMutation) AddedFields() []string {
 	var fields []string
+	if m.addinternal_api_key_id != nil {
+		fields = append(fields, channelmonitor.FieldInternalAPIKeyID)
+	}
+	if m.addinternal_group_id != nil {
+		fields = append(fields, channelmonitor.FieldInternalGroupID)
+	}
 	if m.addaccount_group_id != nil {
 		fields = append(fields, channelmonitor.FieldAccountGroupID)
 	}
@@ -16886,6 +17115,10 @@ func (m *ChannelMonitorMutation) AddedFields() []string {
 // was not set, or was not defined in the schema.
 func (m *ChannelMonitorMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
+	case channelmonitor.FieldInternalAPIKeyID:
+		return m.AddedInternalAPIKeyID()
+	case channelmonitor.FieldInternalGroupID:
+		return m.AddedInternalGroupID()
 	case channelmonitor.FieldAccountGroupID:
 		return m.AddedAccountGroupID()
 	case channelmonitor.FieldIntervalSeconds:
@@ -16905,6 +17138,20 @@ func (m *ChannelMonitorMutation) AddedField(name string) (ent.Value, bool) {
 // type.
 func (m *ChannelMonitorMutation) AddField(name string, value ent.Value) error {
 	switch name {
+	case channelmonitor.FieldInternalAPIKeyID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddInternalAPIKeyID(v)
+		return nil
+	case channelmonitor.FieldInternalGroupID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddInternalGroupID(v)
+		return nil
 	case channelmonitor.FieldAccountGroupID:
 		v, ok := value.(int64)
 		if !ok {
@@ -16948,6 +17195,12 @@ func (m *ChannelMonitorMutation) AddField(name string, value ent.Value) error {
 // mutation.
 func (m *ChannelMonitorMutation) ClearedFields() []string {
 	var fields []string
+	if m.FieldCleared(channelmonitor.FieldInternalAPIKeyID) {
+		fields = append(fields, channelmonitor.FieldInternalAPIKeyID)
+	}
+	if m.FieldCleared(channelmonitor.FieldInternalGroupID) {
+		fields = append(fields, channelmonitor.FieldInternalGroupID)
+	}
 	if m.FieldCleared(channelmonitor.FieldGroupName) {
 		fields = append(fields, channelmonitor.FieldGroupName)
 	}
@@ -16977,6 +17230,12 @@ func (m *ChannelMonitorMutation) FieldCleared(name string) bool {
 // error if the field is not defined in the schema.
 func (m *ChannelMonitorMutation) ClearField(name string) error {
 	switch name {
+	case channelmonitor.FieldInternalAPIKeyID:
+		m.ClearInternalAPIKeyID()
+		return nil
+	case channelmonitor.FieldInternalGroupID:
+		m.ClearInternalGroupID()
+		return nil
 	case channelmonitor.FieldGroupName:
 		m.ClearGroupName()
 		return nil
@@ -17020,6 +17279,15 @@ func (m *ChannelMonitorMutation) ResetField(name string) error {
 		return nil
 	case channelmonitor.FieldAPIKeyEncrypted:
 		m.ResetAPIKeyEncrypted()
+		return nil
+	case channelmonitor.FieldSourceMode:
+		m.ResetSourceMode()
+		return nil
+	case channelmonitor.FieldInternalAPIKeyID:
+		m.ResetInternalAPIKeyID()
+		return nil
+	case channelmonitor.FieldInternalGroupID:
+		m.ResetInternalGroupID()
 		return nil
 	case channelmonitor.FieldPrimaryModel:
 		m.ResetPrimaryModel()
@@ -54007,6 +54275,7 @@ type UserMutation struct {
 	concurrency                   *int
 	addconcurrency                *int
 	status                        *string
+	is_monitoring_user            *bool
 	username                      *string
 	notes                         *string
 	totp_secret_encrypted         *string
@@ -54598,6 +54867,42 @@ func (m *UserMutation) OldStatus(ctx context.Context) (v string, err error) {
 // ResetStatus resets all changes to the "status" field.
 func (m *UserMutation) ResetStatus() {
 	m.status = nil
+}
+
+// SetIsMonitoringUser sets the "is_monitoring_user" field.
+func (m *UserMutation) SetIsMonitoringUser(b bool) {
+	m.is_monitoring_user = &b
+}
+
+// IsMonitoringUser returns the value of the "is_monitoring_user" field in the mutation.
+func (m *UserMutation) IsMonitoringUser() (r bool, exists bool) {
+	v := m.is_monitoring_user
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldIsMonitoringUser returns the old "is_monitoring_user" field's value of the User entity.
+// If the User object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserMutation) OldIsMonitoringUser(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldIsMonitoringUser is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldIsMonitoringUser requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldIsMonitoringUser: %w", err)
+	}
+	return oldValue.IsMonitoringUser, nil
+}
+
+// ResetIsMonitoringUser resets all changes to the "is_monitoring_user" field.
+func (m *UserMutation) ResetIsMonitoringUser() {
+	m.is_monitoring_user = nil
 }
 
 // SetUsername sets the "username" field.
@@ -55966,7 +56271,7 @@ func (m *UserMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *UserMutation) Fields() []string {
-	fields := make([]string, 0, 24)
+	fields := make([]string, 0, 25)
 	if m.created_at != nil {
 		fields = append(fields, user.FieldCreatedAt)
 	}
@@ -55996,6 +56301,9 @@ func (m *UserMutation) Fields() []string {
 	}
 	if m.status != nil {
 		fields = append(fields, user.FieldStatus)
+	}
+	if m.is_monitoring_user != nil {
+		fields = append(fields, user.FieldIsMonitoringUser)
 	}
 	if m.username != nil {
 		fields = append(fields, user.FieldUsername)
@@ -56067,6 +56375,8 @@ func (m *UserMutation) Field(name string) (ent.Value, bool) {
 		return m.Concurrency()
 	case user.FieldStatus:
 		return m.Status()
+	case user.FieldIsMonitoringUser:
+		return m.IsMonitoringUser()
 	case user.FieldUsername:
 		return m.Username()
 	case user.FieldNotes:
@@ -56124,6 +56434,8 @@ func (m *UserMutation) OldField(ctx context.Context, name string) (ent.Value, er
 		return m.OldConcurrency(ctx)
 	case user.FieldStatus:
 		return m.OldStatus(ctx)
+	case user.FieldIsMonitoringUser:
+		return m.OldIsMonitoringUser(ctx)
 	case user.FieldUsername:
 		return m.OldUsername(ctx)
 	case user.FieldNotes:
@@ -56230,6 +56542,13 @@ func (m *UserMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetStatus(v)
+		return nil
+	case user.FieldIsMonitoringUser:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetIsMonitoringUser(v)
 		return nil
 	case user.FieldUsername:
 		v, ok := value.(string)
@@ -56521,6 +56840,9 @@ func (m *UserMutation) ResetField(name string) error {
 		return nil
 	case user.FieldStatus:
 		m.ResetStatus()
+		return nil
+	case user.FieldIsMonitoringUser:
+		m.ResetIsMonitoringUser()
 		return nil
 	case user.FieldUsername:
 		m.ResetUsername()

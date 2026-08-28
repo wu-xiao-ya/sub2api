@@ -21,6 +21,7 @@ export type Provider =
 export type MonitorStatus = 'operational' | 'degraded' | 'failed' | 'error'
 export type BodyOverrideMode = 'off' | 'merge' | 'replace'
 export type APIMode = 'chat_completions' | 'responses' | 'models' | 'images'
+export type MonitorSourceMode = 'direct_upstream' | 'internal_gateway'
 
 export interface UsageLatencyBreakdown {
   first_response_ms?: number
@@ -37,6 +38,9 @@ export interface ChannelMonitor {
   api_mode: APIMode
   endpoint: string
   api_key_masked: string
+  source_mode: MonitorSourceMode
+  internal_api_key_id?: number | null
+  internal_group_id?: number | null
   /**
    * True when the stored encrypted API key cannot be decrypted (e.g. the
    * encryption key has changed). Admin must re-edit the monitor to provide
@@ -50,7 +54,7 @@ export interface ChannelMonitor {
   account_group_id?: number | null
   enabled: boolean
   interval_seconds: number
-  /** 每次调度在 interval 基础上 ± [0, jitter] 的随机偏移（秒），0 = 固定间隔 */
+  /** ????? interval ??? ? [0, jitter] ?????????0 = ???? */
   jitter_seconds: number
   /** One upstream check's maximum wait time. Images can use a longer value. */
   request_timeout_seconds: number
@@ -74,7 +78,7 @@ export interface ChannelMonitor {
   availability_7d: number
   /** Latest status per extra model (used for hover tooltip) */
   extra_models_status: ExtraModelStatus[]
-  /** 请求自定义快照字段（高级设置） */
+  /** ??????????????? */
   template_id: number | null
   extra_headers: Record<string, string>
   body_override_mode: BodyOverrideMode
@@ -111,6 +115,9 @@ export interface CreateParams {
   api_mode?: APIMode
   endpoint: string
   api_key: string
+  source_mode?: MonitorSourceMode
+  internal_api_key_id?: number | null
+  internal_group_id?: number | null
   primary_model: string
   extra_models?: string[]
   group_name?: string
@@ -125,7 +132,7 @@ export interface CreateParams {
   body_override?: Record<string, unknown> | null
 }
 
-// Update request: api_key 空串 = 不修改；clear_template=true 时把 template_id 置空
+// Update request: api_key ?? = ????clear_template=true ?? template_id ??
 export type UpdateParams = Partial<CreateParams> & {
   clear_template?: boolean
   clear_account_group?: boolean
@@ -173,6 +180,43 @@ export interface HistoryParams {
 
 export interface HistoryResponse {
   items: HistoryItem[]
+}
+
+export interface InternalMonitorKey {
+  id: number
+  name: string
+  user_id: number
+  group_id: number
+  group_name: string
+  provider: Provider
+  status: string
+  expires_at?: string | null
+}
+
+export interface EnsureInternalMonitorKeysResponse {
+  user_id: number
+  user_email: string
+  items: Array<InternalMonitorKey & {
+    plain_key?: string
+    created?: boolean
+  }>
+}
+
+export async function listInternalKeys(): Promise<{ items: InternalMonitorKey[] }> {
+  const { data } = await apiClient.get<{ items: InternalMonitorKey[] }>(
+    '/admin/channel-monitors/internal-keys'
+  )
+  return data
+}
+
+export async function ensureInternalKeys(
+  groupIds: number[],
+): Promise<EnsureInternalMonitorKeysResponse> {
+  const { data } = await apiClient.post<EnsureInternalMonitorKeysResponse>(
+    '/admin/channel-monitors/internal-keys/ensure',
+    { group_ids: groupIds },
+  )
+  return data
 }
 
 /**
@@ -350,6 +394,8 @@ export const channelMonitorAPI = {
   del,
   runNow,
   listHistory,
+  listInternalKeys,
+  ensureInternalKeys,
   getLatestImage,
 }
 

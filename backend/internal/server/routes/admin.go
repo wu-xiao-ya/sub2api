@@ -10,7 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// RegisterAdminRoutes 注册管理员路由
+// RegisterAdminRoutes ???????
 func RegisterAdminRoutes(
 	v1 *gin.RouterGroup,
 	h *handler.Handlers,
@@ -21,26 +21,26 @@ func RegisterAdminRoutes(
 ) {
 	admin := v1.Group("/admin")
 	admin.Use(gin.HandlerFunc(adminAuth))
-	// 审计中间件挂在认证之后：所有管理面变更类操作 + 敏感读取入审计日志
+	// ?????????????????????? + ?????????
 	admin.Use(gin.HandlerFunc(auditLog))
 	admin.Use(middleware.AdminComplianceGuard(settingService))
 	{
-		// 部署与运营合规确认
+		// ?????????
 		registerAdminComplianceRoutes(admin, h)
 
-		// 仪表盘
+		// ???
 		registerDashboardRoutes(admin, h)
 
-		// 用户管理
+		// ????
 		registerUserManagementRoutes(admin, h)
 
-		// 分组管理
+		// ????
 		registerGroupRoutes(admin, h)
 
-		// 账号管理
+		// ????
 		registerAccountRoutes(admin, h, stepUpAuth)
 
-		// 共享号池审核
+		// ??????
 		accountContributions := admin.Group("/account-contributions")
 		{
 			accountContributions.GET("", h.AccountContribution.ListPending)
@@ -48,10 +48,10 @@ func RegisterAdminRoutes(
 			accountContributions.POST("/:id/reject", h.AccountContribution.Reject)
 		}
 
-		// 公告管理
+		// ????
 		registerAnnouncementRoutes(admin, h)
 
-		// 分组限时活动
+		// ??????
 		registerGroupPromotionRoutes(admin, h)
 
 		// OpenAI OAuth
@@ -66,73 +66,73 @@ func RegisterAdminRoutes(
 		// Grok OAuth
 		registerGrokOAuthRoutes(admin, h)
 
-		// 代理管理
+		// ????
 		registerProxyRoutes(admin, h, stepUpAuth)
 
-		// 卡密管理
+		// ????
 		registerRedeemCodeRoutes(admin, h)
 		registerSubscriptionPurchaseRoutes(admin, h)
 
-		// 优惠码管理
+		// ?????
 		registerPromoCodeRoutes(admin, h)
 
-		// 系统设置
+		// ????
 		registerSettingsRoutes(admin, h)
 
-		// 数据管理
+		// ????
 		registerDataManagementRoutes(admin, h, stepUpAuth)
 
-		// 数据库备份恢复
+		// ???????
 		registerBackupRoutes(admin, h, stepUpAuth)
 
-		// 运维监控（Ops）
+		// ?????Ops?
 		registerOpsRoutes(admin, h)
 
-		// 系统管理
+		// ????
 		registerSystemRoutes(admin, h)
 
-		// 使用记录管理
+		// ??????
 		registerUsageRoutes(admin, h)
 
-		// 用户属性管理
+		// ??????
 		registerUserAttributeRoutes(admin, h)
 
-		// 错误透传规则管理
+		// ????????
 		registerErrorPassthroughRoutes(admin, h)
 
-		// TLS 指纹模板管理
+		// TLS ??????
 		registerTLSFingerprintProfileRoutes(admin, h)
 
-		// API Key 管理
+		// API Key ??
 		registerAdminAPIKeyRoutes(admin, h)
 
-		// 定时测试计划
+		// ??????
 		registerScheduledTestRoutes(admin, h)
 
-		// 渠道管理
+		// ????
 		registerChannelRoutes(admin, h)
 
-		// 渠道监控
+		// ????
 		registerChannelMonitorRoutes(admin, h, settingService)
 		registerChannelMonitorV2Routes(admin, h, settingService)
 
-		// 风控中心
+		// ????
 		registerContentModerationRoutes(admin, h)
 
-		// 独立提示词输入审计
+		// ?????????
 		registerPromptAuditRoutes(admin, h)
 
-		// 邀请返利（专属用户管理）
+		// ????????????
 		registerAffiliateRoutes(admin, h)
 
-		// 财务资金流水
+		// ??????
 		finance := admin.Group("/finance")
 		{
 			finance.GET("/ledger", h.Admin.Payment.ListFinanceLedger)
 			finance.GET("/ledger/export", h.Admin.Payment.ExportFinanceLedger)
 		}
 
-		// 操作审计日志
+		// ??????
 		registerAuditLogRoutes(admin, h, stepUpAuth)
 	}
 }
@@ -158,7 +158,7 @@ func registerAuditLogRoutes(admin *gin.RouterGroup, h *handler.Handlers, _ middl
 	{
 		auditLogs.GET("", h.Admin.AuditLog.List)
 		auditLogs.GET("/:id", h.Admin.AuditLog.Get)
-		// 清空需现场 TOTP 校验（在 handler 内强制），不复用 step-up sudo 窗口
+		// ????? TOTP ???? handler ???????? step-up sudo ??
 		auditLogs.POST("/clear", h.Admin.AuditLog.Clear)
 	}
 }
@@ -397,7 +397,7 @@ func registerAccountRoutes(admin *gin.RouterGroup, h *handler.Handlers, stepUpAu
 		accounts.GET("/:id/models", h.Admin.Account.GetAvailableModels)
 		accounts.POST("/:id/models/sync-upstream", h.Admin.Account.SyncUpstreamModels)
 		accounts.POST("/batch", h.Admin.Account.BatchCreate)
-		// 账号导出泄露上游凭证原文——要求 step-up 2FA
+		// ???????????????? step-up 2FA
 		accounts.GET("/data", gin.HandlerFunc(stepUpAuth), h.Admin.Account.ExportData)
 		accounts.POST("/data", h.Admin.Account.ImportData)
 		accounts.POST("/batch-update-credentials", h.Admin.Account.BatchUpdateCredentials)
@@ -406,10 +406,10 @@ func registerAccountRoutes(admin *gin.RouterGroup, h *handler.Handlers, stepUpAu
 		accounts.POST("/batch-clear-error", h.Admin.Account.BatchClearError)
 		accounts.POST("/batch-refresh", h.Admin.Account.BatchRefresh)
 
-		// Antigravity 默认模型映射
+		// Antigravity ??????
 		accounts.GET("/antigravity/default-model-mapping", h.Admin.Account.GetAntigravityDefaultModelMapping)
 
-		// Spark 影子账号
+		// Spark ????
 		accounts.POST("/:id/shadow", h.Admin.OpenAIOAuth.CreateShadow)
 
 		// Claude OAuth routes
@@ -501,7 +501,7 @@ func registerProxyRoutes(admin *gin.RouterGroup, h *handler.Handlers, stepUpAuth
 	{
 		proxies.GET("", h.Admin.Proxy.List)
 		proxies.GET("/all", h.Admin.Proxy.GetAll)
-		// 代理导出泄露账号密码原文——要求 step-up 2FA
+		// ???????????????? step-up 2FA
 		proxies.GET("/data", gin.HandlerFunc(stepUpAuth), h.Admin.Proxy.ExportData)
 		proxies.POST("/data", h.Admin.Proxy.ImportData)
 		proxies.GET("/:id", h.Admin.Proxy.GetByID)
@@ -573,26 +573,26 @@ func registerSettingsRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		adminSettings.GET("/email-templates/:event/:locale", h.Admin.Setting.GetEmailTemplate)
 		adminSettings.PUT("/email-templates/:event/:locale", h.Admin.Setting.UpdateEmailTemplate)
 		adminSettings.POST("/email-templates/:event/:locale/restore-official", h.Admin.Setting.RestoreOfficialEmailTemplate)
-		// Admin API Key 管理
+		// Admin API Key ??
 		adminSettings.GET("/admin-api-key", h.Admin.Setting.GetAdminAPIKey)
 		adminSettings.POST("/admin-api-key/regenerate", h.Admin.Setting.RegenerateAdminAPIKey)
 		adminSettings.DELETE("/admin-api-key", h.Admin.Setting.DeleteAdminAPIKey)
-		// 529过载冷却配置
+		// 529??????
 		adminSettings.GET("/overload-cooldown", h.Admin.Setting.GetOverloadCooldownSettings)
 		adminSettings.PUT("/overload-cooldown", h.Admin.Setting.UpdateOverloadCooldownSettings)
-		// 429默认回避配置
+		// 429??????
 		adminSettings.GET("/rate-limit-429-cooldown", h.Admin.Setting.GetRateLimit429CooldownSettings)
 		adminSettings.PUT("/rate-limit-429-cooldown", h.Admin.Setting.UpdateRateLimit429CooldownSettings)
-		// 流超时处理配置
+		// ???????
 		adminSettings.GET("/stream-timeout", h.Admin.Setting.GetStreamTimeoutSettings)
 		adminSettings.PUT("/stream-timeout", h.Admin.Setting.UpdateStreamTimeoutSettings)
-		// 请求整流器配置
+		// ???????
 		adminSettings.GET("/rectifier", h.Admin.Setting.GetRectifierSettings)
 		adminSettings.PUT("/rectifier", h.Admin.Setting.UpdateRectifierSettings)
-		// Beta 策略配置
+		// Beta ????
 		adminSettings.GET("/beta-policy", h.Admin.Setting.GetBetaPolicySettings)
 		adminSettings.PUT("/beta-policy", h.Admin.Setting.UpdateBetaPolicySettings)
-		// Web Search 模拟配置
+		// Web Search ????
 		adminSettings.GET("/web-search-emulation", h.Admin.Setting.GetWebSearchEmulationConfig)
 		adminSettings.PUT("/web-search-emulation", h.Admin.Setting.UpdateWebSearchEmulationConfig)
 		adminSettings.POST("/web-search-emulation/test", h.Admin.Setting.TestWebSearchEmulation)
@@ -613,7 +613,7 @@ func registerDataManagementRoutes(admin *gin.RouterGroup, h *handler.Handlers, s
 		dataManagement.POST("/sources/:source_type/profiles/:profile_id/activate", h.Admin.DataManagement.SetActiveSourceProfile)
 		dataManagement.POST("/s3/test", h.Admin.DataManagement.TestS3)
 		dataManagement.GET("/s3/profiles", h.Admin.DataManagement.ListS3Profiles)
-		// 修改 S3 目标可将数据备份外泄——要求 step-up 2FA
+		// ?? S3 ?????????????? step-up 2FA
 		dataManagement.POST("/s3/profiles", gin.HandlerFunc(stepUpAuth), h.Admin.DataManagement.CreateS3Profile)
 		dataManagement.PUT("/s3/profiles/:profile_id", gin.HandlerFunc(stepUpAuth), h.Admin.DataManagement.UpdateS3Profile)
 		dataManagement.DELETE("/s3/profiles/:profile_id", h.Admin.DataManagement.DeleteS3Profile)
@@ -627,31 +627,31 @@ func registerDataManagementRoutes(admin *gin.RouterGroup, h *handler.Handlers, s
 func registerBackupRoutes(admin *gin.RouterGroup, h *handler.Handlers, stepUpAuth middleware.StepUpAuthMiddleware) {
 	backup := admin.Group("/backups")
 	{
-		// S3 存储配置
+		// S3 ????
 		backup.GET("/s3-config", h.Admin.Backup.GetS3Config)
-		// 修改 S3 目标可将数据库备份外泄——要求 step-up 2FA
+		// ?? S3 ??????????????? step-up 2FA
 		backup.PUT("/s3-config", gin.HandlerFunc(stepUpAuth), h.Admin.Backup.UpdateS3Config)
 		backup.POST("/s3-config/test", h.Admin.Backup.TestS3Connection)
 
-		// 异步生图对象存储配置（与备份共用 S3 客户端，可直接复用备份凭证）
+		// ???????????????? S3 ??????????????
 		backup.GET("/image-storage", h.Admin.Backup.GetImageStorageConfig)
-		// 同 S3 配置：改写对象存储目标可将生成内容导向外部账号——要求 step-up 2FA
+		// ? S3 ??????????????????????????? step-up 2FA
 		backup.PUT("/image-storage", gin.HandlerFunc(stepUpAuth), h.Admin.Backup.UpdateImageStorageConfig)
 		backup.POST("/image-storage/test", h.Admin.Backup.TestImageStorageConnection)
 
-		// 定时备份配置
+		// ??????
 		backup.GET("/schedule", h.Admin.Backup.GetSchedule)
 		backup.PUT("/schedule", h.Admin.Backup.UpdateSchedule)
 
-		// 备份操作
+		// ????
 		backup.POST("", gin.HandlerFunc(stepUpAuth), h.Admin.Backup.CreateBackup)
 		backup.GET("", h.Admin.Backup.ListBackups)
 		backup.GET("/:id", h.Admin.Backup.GetBackup)
 		backup.DELETE("/:id", h.Admin.Backup.DeleteBackup)
-		// 备份下载链接可直接取走整库数据——要求 step-up 2FA
+		// ??????????????????? step-up 2FA
 		backup.GET("/:id/download-url", gin.HandlerFunc(stepUpAuth), h.Admin.Backup.GetDownloadURL)
 
-		// 恢复操作：整库覆盖可回滚安全设置（含 step-up 开关本身）——要求 step-up 2FA
+		// ?????????????????? step-up ????????? step-up 2FA
 		backup.POST("/:id/restore", gin.HandlerFunc(stepUpAuth), h.Admin.Backup.RestoreBackup)
 	}
 }
@@ -746,6 +746,8 @@ func registerChannelMonitorRoutes(admin *gin.RouterGroup, h *handler.Handlers, s
 	monitors.Use(guard)
 	{
 		monitors.GET("", h.Admin.ChannelMonitor.List)
+		monitors.GET("/internal-keys", h.Admin.ChannelMonitor.InternalKeys)
+		monitors.POST("/internal-keys/ensure", h.Admin.ChannelMonitor.EnsureInternalKeys)
 		monitors.POST("", h.Admin.ChannelMonitor.Create)
 		monitors.GET("/:id", h.Admin.ChannelMonitor.Get)
 		monitors.POST("/:id/duplicate", h.Admin.ChannelMonitor.Duplicate)
@@ -769,7 +771,7 @@ func registerChannelMonitorRoutes(admin *gin.RouterGroup, h *handler.Handlers, s
 	}
 }
 
-// registerAffiliateRoutes 注册邀请返利的管理端路由（专属用户配置）
+// registerAffiliateRoutes ????????????????????
 func registerAffiliateRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 	affiliates := admin.Group("/affiliates")
 	{

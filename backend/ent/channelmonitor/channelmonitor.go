@@ -29,6 +29,12 @@ const (
 	FieldEndpoint = "endpoint"
 	// FieldAPIKeyEncrypted holds the string denoting the api_key_encrypted field in the database.
 	FieldAPIKeyEncrypted = "api_key_encrypted"
+	// FieldSourceMode holds the string denoting the source_mode field in the database.
+	FieldSourceMode = "source_mode"
+	// FieldInternalAPIKeyID holds the string denoting the internal_api_key_id field in the database.
+	FieldInternalAPIKeyID = "internal_api_key_id"
+	// FieldInternalGroupID holds the string denoting the internal_group_id field in the database.
+	FieldInternalGroupID = "internal_group_id"
 	// FieldPrimaryModel holds the string denoting the primary_model field in the database.
 	FieldPrimaryModel = "primary_model"
 	// FieldExtraModels holds the string denoting the extra_models field in the database.
@@ -98,6 +104,9 @@ var Columns = []string{
 	FieldAPIMode,
 	FieldEndpoint,
 	FieldAPIKeyEncrypted,
+	FieldSourceMode,
+	FieldInternalAPIKeyID,
+	FieldInternalGroupID,
 	FieldPrimaryModel,
 	FieldExtraModels,
 	FieldGroupName,
@@ -141,6 +150,10 @@ var (
 	EndpointValidator func(string) error
 	// APIKeyEncryptedValidator is a validator for the "api_key_encrypted" field. It is called by the builders before save.
 	APIKeyEncryptedValidator func(string) error
+	// DefaultSourceMode holds the default value on creation for the "source_mode" field.
+	DefaultSourceMode string
+	// SourceModeValidator is a validator for the "source_mode" field. It is called by the builders before save.
+	SourceModeValidator func(string) error
 	// PrimaryModelValidator is a validator for the "primary_model" field. It is called by the builders before save.
 	PrimaryModelValidator func(string) error
 	// DefaultExtraModels holds the default value on creation for the "extra_models" field.
@@ -243,6 +256,21 @@ func ByEndpoint(opts ...sql.OrderTermOption) OrderOption {
 // ByAPIKeyEncrypted orders the results by the api_key_encrypted field.
 func ByAPIKeyEncrypted(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldAPIKeyEncrypted, opts...).ToFunc()
+}
+
+// BySourceMode orders the results by the source_mode field.
+func BySourceMode(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSourceMode, opts...).ToFunc()
+}
+
+// ByInternalAPIKeyID orders the results by the internal_api_key_id field.
+func ByInternalAPIKeyID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldInternalAPIKeyID, opts...).ToFunc()
+}
+
+// ByInternalGroupID orders the results by the internal_group_id field.
+func ByInternalGroupID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldInternalGroupID, opts...).ToFunc()
 }
 
 // ByPrimaryModel orders the results by the primary_model field.

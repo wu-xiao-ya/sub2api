@@ -1,7 +1,7 @@
 package service
 
-// 本文件由 openai_gateway_service.go 纯移动拆分而来：用量记录、计费成本计算与
-// Codex 用量快照。仅做代码搬迁，无任何行为变更。
+// ???? openai_gateway_service.go ????????????????????
+// Codex ????????????????????
 
 import (
 	"context"
@@ -27,19 +27,19 @@ type OpenAIRecordUsageInput struct {
 	Subscription       *UserSubscription
 	InboundEndpoint    string
 	UpstreamEndpoint   string
-	UserAgent          string // 请求的 User-Agent
-	IPAddress          string // 请求的客户端 IP 地址
+	UserAgent          string // ??? User-Agent
+	IPAddress          string // ?????? IP ??
 	RequestPayloadHash string
 	APIKeyService      APIKeyQuotaUpdater
-	QuotaPlatform      string // user×platform quota platform resolved by the handler before async billing.
-	// CyberBlocked 为 true 时把该用量行标记为 cyber（request_type=cyber），计费逻辑不变。
+	QuotaPlatform      string // user?platform quota platform resolved by the handler before async billing.
+	// CyberBlocked ? true ????????? cyber?request_type=cyber?????????
 	CyberBlocked bool
 	ChannelUsageFields
 }
 
-// CyberPolicyUsageInput 是 cyber 拒绝、未走正常 RecordUsage 的请求记录用量的入参。
-// 用量按上游真实 token 计费，与 WS cyber 及正常请求口径一致（InputTokens/OutputTokens
-// 取自上游 response.failed 报告的 usage，即 mark.UpstreamInTok/OutTok）。
+// CyberPolicyUsageInput ? cyber ??????? RecordUsage ???????????
+// ??????? token ???? WS cyber ??????????InputTokens/OutputTokens
+// ???? response.failed ??? usage?? mark.UpstreamInTok/OutTok??
 type CyberPolicyUsageInput struct {
 	APIKey       *APIKey
 	Account      *Account
@@ -49,8 +49,8 @@ type CyberPolicyUsageInput struct {
 	Stream       bool
 	InputTokens  int
 	OutputTokens int
-	// 渠道归因与请求级 meta，使 cyber 计费行与正常 RecordUsage 行口径一致
-	// （否则 cyber 行 channel_id 等为空，渠道维度统计会遗漏 cyber 命中）。
+	// ???????? meta?? cyber ?????? RecordUsage ?????
+	// ??? cyber ? channel_id ????????????? cyber ????
 	InboundEndpoint    string
 	UpstreamEndpoint   string
 	UserAgent          string
@@ -60,12 +60,12 @@ type CyberPolicyUsageInput struct {
 	ChannelUsageFields
 }
 
-// RecordCyberPolicyUsageLog 为被上游 cyber_policy 拒绝、未走正常 RecordUsage 的请求
-// （HTTP forward 返回错误路径）记录用量并按上游真实 token 计费，使其与 WS cyber 路径、
-// 与正常请求的计费口径统一（不再是 tokens=0 免费行）。token 取自上游 response.failed
-// 报告的 usage（非流式直接拒通常为 0，cost 随之为 0）。复用 RecordUsage 完成成本计算、
-// 扣费与用量行写入（request_type=cyber 由 CyberBlocked 置位）。仅 forward 返回错误的
-// 路径由 handler 调用，避免与成功路径的正常 RecordUsage 重复。
+// RecordCyberPolicyUsageLog ???? cyber_policy ??????? RecordUsage ???
+// ?HTTP forward ????????????????? token ?????? WS cyber ???
+// ???????????????? tokens=0 ?????token ???? response.failed
+// ??? usage?????????? 0?cost ??? 0???? RecordUsage ???????
+// ?????????request_type=cyber ? CyberBlocked ????? forward ?????
+// ??? handler ????????????? RecordUsage ???
 func (s *OpenAIGatewayService) RecordCyberPolicyUsageLog(ctx context.Context, in CyberPolicyUsageInput) {
 	if s == nil || in.APIKey == nil || in.APIKey.User == nil || in.Account == nil || strings.TrimSpace(in.Model) == "" {
 		return
@@ -112,6 +112,9 @@ func (s *OpenAIGatewayService) ResolveUserGroupRateMultiplier(ctx context.Contex
 
 // RecordUsage records usage and deducts balance
 func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRecordUsageInput) error {
+	if IsChannelMonitorRequest(ctx) {
+		return nil
+	}
 	if input == nil {
 		return errors.New("openai usage input is nil")
 	}
@@ -131,8 +134,8 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		ApplyOpenAIImageBillingResolution(result)
 	}
 
-	// OpenAI input_tokens 是总输入，包含缓存读取和缓存写入明细。
-	// 将三类 token 拆成互斥桶，避免缓存写入同时按普通输入和 cache_write 重复计费。
+	// OpenAI input_tokens ???????????????????
+	// ??? token ???????????????????? cache_write ?????
 	actualInputTokens := result.Usage.InputTokens - result.Usage.CacheReadInputTokens - result.Usage.CacheCreationInputTokens
 	if actualInputTokens < 0 {
 		actualInputTokens = 0
@@ -259,7 +262,7 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		}
 	}
 
-	// 确定 RequestedModel（渠道映射前的原始模型）
+	// ?? RequestedModel????????????
 	requestedModel := result.Model
 	if input.OriginalModel != "" {
 		requestedModel = input.OriginalModel
@@ -334,10 +337,10 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 	usageLog.FirstTokenMs = result.FirstTokenMs
 	usageLog.LatencyBreakdown = result.LatencyBreakdown.Clone()
 	usageLog.CreatedAt = time.Now()
-	// 设置渠道信息
+	// ??????
 	usageLog.ChannelID = optionalInt64Ptr(input.ChannelID)
 	usageLog.ModelMappingChain = optionalTrimmedStringPtr(input.ModelMappingChain)
-	// 设置计费模式
+	// ??????
 	if cost != nil && cost.BillingMode != "" {
 		billingMode := cost.BillingMode
 		usageLog.BillingMode = &billingMode
@@ -351,12 +354,12 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		billingMode := string(BillingModeToken)
 		usageLog.BillingMode = &billingMode
 	}
-	// 添加 UserAgent
+	// ?? UserAgent
 	if input.UserAgent != "" {
 		usageLog.UserAgent = &input.UserAgent
 	}
 
-	// 添加 IPAddress
+	// ?? IPAddress
 	if input.IPAddress != "" {
 		usageLog.IPAddress = &input.IPAddress
 	}
@@ -370,7 +373,7 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		}
 	}
 
-	// 计算账号统计定价费用（使用最终上游模型匹配自定义规则）
+	// ???????????????????????????
 	if apiKey.GroupID != nil {
 		applyAccountStatsCost(ctx, usageLog, s.channelService, s.billingService,
 			account.ID, *apiKey.GroupID, result.UpstreamModel, result.Model,
@@ -433,10 +436,10 @@ func (s *OpenAIGatewayService) calculateOpenAIRecordUsageCost(
 ) (*CostBreakdown, error) {
 	billingModel := firstUsageBillingModel(billingModels)
 	if result != nil && result.WebSearchCalls > 0 {
-		// Codex alpha/search 网页搜索按次计费：上游不返回 usage/token 字段，单价只取
-		// 分组覆盖价（nil 时默认 0.01 = 官方 $10/1000 次），不参与渠道级模型定价。
-		// 倍率与 image/video 按次口径一致：使用不含高峰因子的基础倍率
-		//（用户专属 > 分组 rate_multiplier > 系统默认），与分组表单的价格预览承诺一致。
+		// Codex alpha/search ?????????????? usage/token ???????
+		// ??????nil ??? 0.01 = ?? $10/1000 ??????????????
+		// ??? image/video ????????????????????
+		//????? > ?? rate_multiplier > ?????????????????????
 		return s.billingService.CalculateWebSearchCost(result.WebSearchCalls, webSearchPricePerCallFromAPIKey(apiKey), webSearchMultiplier), nil
 	}
 	if isGrokVideoUsageResult(result, billingModels) {
@@ -450,13 +453,13 @@ func (s *OpenAIGatewayService) calculateOpenAIRecordUsageCost(
 	}
 
 	if result != nil && result.ImageCount > 0 {
-		// 渠道定价为 token 计费时走 token 路径，否则走图片计费
+		// ????? token ???? token ??????????
 		if resolved := s.resolveOpenAIChannelPricing(ctx, billingModel, apiKey); resolved == nil || resolved.Mode != BillingModeToken {
 			return s.calculateOpenAIImageCost(ctx, billingModel, apiKey, result, imageMultiplier), nil
 		}
 	}
 
-	// Token path (optional search surcharge is additive — never replaces token cost).
+	// Token path (optional search surcharge is additive ? never replaces token cost).
 	var tokenCost *CostBreakdown
 	var lastErr error
 	if len(billingModels) > 0 && billingModel != "" {
@@ -647,7 +650,7 @@ func (s *OpenAIGatewayService) calculateOpenAIVideoCost(
 	}
 	if resolved := s.resolveOpenAIChannelPricing(ctx, billingModel, apiKey); resolved != nil &&
 		(resolved.Mode == BillingModePerRequest || resolved.Mode == BillingModeImage) {
-		// 渠道 per_request/image 定价保持"按请求次数"口径（价格由管理员按次配置），不乘视频时长。
+		// ?? per_request/image ????"?????"??????????????????????
 		gid := apiKey.Group.ID
 		cost, err := s.billingService.CalculateCostUnified(CostInput{
 			Ctx:            ctx,
@@ -688,10 +691,10 @@ func (s *OpenAIGatewayService) apiKeyWithFreshGroupMediaPricing(ctx context.Cont
 	return &clone
 }
 
-// groupMediaPricingLooksIncomplete 判断分组对象是否可能缺失媒体计费字段（例如由不含
-// 这些字段的旧快照或手工构造的上下文对象生成）。image/video 独立倍率在数据库中的
-// 默认值均为 1.0，正常加载的分组不可能两个倍率同时为 0 且未开启独立倍率、全部媒体
-// 价为 nil——只有这种情况才回源查库，避免对未配置覆盖价的分组每条媒体用量都多打一次 DB 查询。
+// groupMediaPricingLooksIncomplete ????????????????????????
+// ???????????????????????image/video ??????????
+// ????? 1.0?????????????????? 0 ?????????????
+// ?? nil????????????????????????????????????? DB ???
 func groupMediaPricingLooksIncomplete(group *Group) bool {
 	if group == nil {
 		return true
@@ -825,7 +828,7 @@ func buildCodexUsageExtraUpdates(snapshot *OpenAICodexUsageSnapshot, fallbackNow
 	baseTime := codexSnapshotBaseTime(snapshot, fallbackNow)
 	updates := make(map[string]any)
 
-	// 保存原始 primary/secondary 字段，便于排查问题
+	// ???? primary/secondary ?????????
 	if snapshot.PrimaryUsedPercent != nil {
 		updates["codex_primary_used_percent"] = *snapshot.PrimaryUsedPercent
 	}
@@ -849,7 +852,7 @@ func buildCodexUsageExtraUpdates(snapshot *OpenAICodexUsageSnapshot, fallbackNow
 	}
 	updates["codex_usage_updated_at"] = baseTime.Format(time.RFC3339)
 
-	// 归一化到 5h/7d 规范字段
+	// ???? 5h/7d ????
 	if normalized := snapshot.Normalize(); normalized != nil {
 		if normalized.Used5hPercent != nil {
 			updates["codex_5h_used_percent"] = *normalized.Used5hPercent
@@ -881,10 +884,10 @@ func buildCodexUsageExtraUpdates(snapshot *OpenAICodexUsageSnapshot, fallbackNow
 }
 
 // updateCodexUsageSnapshot saves the Codex usage snapshot to account's Extra field
-// updateCodexUsageSnapshot 把 /responses 的 x-codex-* 全局头快照写入账号 codex_* Extra。
-// ⚠️ 调用方必须排除 spark 影子账号(account.IsShadow()):影子的 codex_* 仅由 QueryUsage
-// (/wham/usage bengalfox 道)更新,不能被全局头口径污染(外审第7轮 P1)。本函数仅持 accountID,
-// 无法在此自检影子,故守卫前置到各调用点。
+// updateCodexUsageSnapshot ? /responses ? x-codex-* ????????? codex_* Extra?
+// ?? ??????? spark ????(account.IsShadow()):??? codex_* ?? QueryUsage
+// (/wham/usage bengalfox ?)??,??????????(???7? P1)?????? accountID,
+// ????????,???????????
 func (s *OpenAIGatewayService) updateCodexUsageSnapshot(ctx context.Context, accountID int64, snapshot *OpenAICodexUsageSnapshot) {
 	if snapshot == nil {
 		return

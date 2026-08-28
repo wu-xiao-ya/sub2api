@@ -85,6 +85,21 @@ func APIKeyEncrypted(v string) predicate.ChannelMonitor {
 	return predicate.ChannelMonitor(sql.FieldEQ(FieldAPIKeyEncrypted, v))
 }
 
+// SourceMode applies equality check predicate on the "source_mode" field. It's identical to SourceModeEQ.
+func SourceMode(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldEQ(FieldSourceMode, v))
+}
+
+// InternalAPIKeyID applies equality check predicate on the "internal_api_key_id" field. It's identical to InternalAPIKeyIDEQ.
+func InternalAPIKeyID(v int64) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldEQ(FieldInternalAPIKeyID, v))
+}
+
+// InternalGroupID applies equality check predicate on the "internal_group_id" field. It's identical to InternalGroupIDEQ.
+func InternalGroupID(v int64) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldEQ(FieldInternalGroupID, v))
+}
+
 // PrimaryModel applies equality check predicate on the "primary_model" field. It's identical to PrimaryModelEQ.
 func PrimaryModel(v string) predicate.ChannelMonitor {
 	return predicate.ChannelMonitor(sql.FieldEQ(FieldPrimaryModel, v))
@@ -498,6 +513,171 @@ func APIKeyEncryptedEqualFold(v string) predicate.ChannelMonitor {
 // APIKeyEncryptedContainsFold applies the ContainsFold predicate on the "api_key_encrypted" field.
 func APIKeyEncryptedContainsFold(v string) predicate.ChannelMonitor {
 	return predicate.ChannelMonitor(sql.FieldContainsFold(FieldAPIKeyEncrypted, v))
+}
+
+// SourceModeEQ applies the EQ predicate on the "source_mode" field.
+func SourceModeEQ(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldEQ(FieldSourceMode, v))
+}
+
+// SourceModeNEQ applies the NEQ predicate on the "source_mode" field.
+func SourceModeNEQ(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldNEQ(FieldSourceMode, v))
+}
+
+// SourceModeIn applies the In predicate on the "source_mode" field.
+func SourceModeIn(vs ...string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldIn(FieldSourceMode, vs...))
+}
+
+// SourceModeNotIn applies the NotIn predicate on the "source_mode" field.
+func SourceModeNotIn(vs ...string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldNotIn(FieldSourceMode, vs...))
+}
+
+// SourceModeGT applies the GT predicate on the "source_mode" field.
+func SourceModeGT(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldGT(FieldSourceMode, v))
+}
+
+// SourceModeGTE applies the GTE predicate on the "source_mode" field.
+func SourceModeGTE(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldGTE(FieldSourceMode, v))
+}
+
+// SourceModeLT applies the LT predicate on the "source_mode" field.
+func SourceModeLT(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldLT(FieldSourceMode, v))
+}
+
+// SourceModeLTE applies the LTE predicate on the "source_mode" field.
+func SourceModeLTE(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldLTE(FieldSourceMode, v))
+}
+
+// SourceModeContains applies the Contains predicate on the "source_mode" field.
+func SourceModeContains(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldContains(FieldSourceMode, v))
+}
+
+// SourceModeHasPrefix applies the HasPrefix predicate on the "source_mode" field.
+func SourceModeHasPrefix(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldHasPrefix(FieldSourceMode, v))
+}
+
+// SourceModeHasSuffix applies the HasSuffix predicate on the "source_mode" field.
+func SourceModeHasSuffix(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldHasSuffix(FieldSourceMode, v))
+}
+
+// SourceModeEqualFold applies the EqualFold predicate on the "source_mode" field.
+func SourceModeEqualFold(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldEqualFold(FieldSourceMode, v))
+}
+
+// SourceModeContainsFold applies the ContainsFold predicate on the "source_mode" field.
+func SourceModeContainsFold(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldContainsFold(FieldSourceMode, v))
+}
+
+// InternalAPIKeyIDEQ applies the EQ predicate on the "internal_api_key_id" field.
+func InternalAPIKeyIDEQ(v int64) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldEQ(FieldInternalAPIKeyID, v))
+}
+
+// InternalAPIKeyIDNEQ applies the NEQ predicate on the "internal_api_key_id" field.
+func InternalAPIKeyIDNEQ(v int64) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldNEQ(FieldInternalAPIKeyID, v))
+}
+
+// InternalAPIKeyIDIn applies the In predicate on the "internal_api_key_id" field.
+func InternalAPIKeyIDIn(vs ...int64) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldIn(FieldInternalAPIKeyID, vs...))
+}
+
+// InternalAPIKeyIDNotIn applies the NotIn predicate on the "internal_api_key_id" field.
+func InternalAPIKeyIDNotIn(vs ...int64) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldNotIn(FieldInternalAPIKeyID, vs...))
+}
+
+// InternalAPIKeyIDGT applies the GT predicate on the "internal_api_key_id" field.
+func InternalAPIKeyIDGT(v int64) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldGT(FieldInternalAPIKeyID, v))
+}
+
+// InternalAPIKeyIDGTE applies the GTE predicate on the "internal_api_key_id" field.
+func InternalAPIKeyIDGTE(v int64) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldGTE(FieldInternalAPIKeyID, v))
+}
+
+// InternalAPIKeyIDLT applies the LT predicate on the "internal_api_key_id" field.
+func InternalAPIKeyIDLT(v int64) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldLT(FieldInternalAPIKeyID, v))
+}
+
+// InternalAPIKeyIDLTE applies the LTE predicate on the "internal_api_key_id" field.
+func InternalAPIKeyIDLTE(v int64) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldLTE(FieldInternalAPIKeyID, v))
+}
+
+// InternalAPIKeyIDIsNil applies the IsNil predicate on the "internal_api_key_id" field.
+func InternalAPIKeyIDIsNil() predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldIsNull(FieldInternalAPIKeyID))
+}
+
+// InternalAPIKeyIDNotNil applies the NotNil predicate on the "internal_api_key_id" field.
+func InternalAPIKeyIDNotNil() predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldNotNull(FieldInternalAPIKeyID))
+}
+
+// InternalGroupIDEQ applies the EQ predicate on the "internal_group_id" field.
+func InternalGroupIDEQ(v int64) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldEQ(FieldInternalGroupID, v))
+}
+
+// InternalGroupIDNEQ applies the NEQ predicate on the "internal_group_id" field.
+func InternalGroupIDNEQ(v int64) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldNEQ(FieldInternalGroupID, v))
+}
+
+// InternalGroupIDIn applies the In predicate on the "internal_group_id" field.
+func InternalGroupIDIn(vs ...int64) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldIn(FieldInternalGroupID, vs...))
+}
+
+// InternalGroupIDNotIn applies the NotIn predicate on the "internal_group_id" field.
+func InternalGroupIDNotIn(vs ...int64) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldNotIn(FieldInternalGroupID, vs...))
+}
+
+// InternalGroupIDGT applies the GT predicate on the "internal_group_id" field.
+func InternalGroupIDGT(v int64) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldGT(FieldInternalGroupID, v))
+}
+
+// InternalGroupIDGTE applies the GTE predicate on the "internal_group_id" field.
+func InternalGroupIDGTE(v int64) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldGTE(FieldInternalGroupID, v))
+}
+
+// InternalGroupIDLT applies the LT predicate on the "internal_group_id" field.
+func InternalGroupIDLT(v int64) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldLT(FieldInternalGroupID, v))
+}
+
+// InternalGroupIDLTE applies the LTE predicate on the "internal_group_id" field.
+func InternalGroupIDLTE(v int64) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldLTE(FieldInternalGroupID, v))
+}
+
+// InternalGroupIDIsNil applies the IsNil predicate on the "internal_group_id" field.
+func InternalGroupIDIsNil() predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldIsNull(FieldInternalGroupID))
+}
+
+// InternalGroupIDNotNil applies the NotNil predicate on the "internal_group_id" field.
+func InternalGroupIDNotNil() predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldNotNull(FieldInternalGroupID))
 }
 
 // PrimaryModelEQ applies the EQ predicate on the "primary_model" field.

@@ -108,6 +108,74 @@ func (_u *ChannelMonitorUpdate) SetNillableAPIKeyEncrypted(v *string) *ChannelMo
 	return _u
 }
 
+// SetSourceMode sets the "source_mode" field.
+func (_u *ChannelMonitorUpdate) SetSourceMode(v string) *ChannelMonitorUpdate {
+	_u.mutation.SetSourceMode(v)
+	return _u
+}
+
+// SetNillableSourceMode sets the "source_mode" field if the given value is not nil.
+func (_u *ChannelMonitorUpdate) SetNillableSourceMode(v *string) *ChannelMonitorUpdate {
+	if v != nil {
+		_u.SetSourceMode(*v)
+	}
+	return _u
+}
+
+// SetInternalAPIKeyID sets the "internal_api_key_id" field.
+func (_u *ChannelMonitorUpdate) SetInternalAPIKeyID(v int64) *ChannelMonitorUpdate {
+	_u.mutation.ResetInternalAPIKeyID()
+	_u.mutation.SetInternalAPIKeyID(v)
+	return _u
+}
+
+// SetNillableInternalAPIKeyID sets the "internal_api_key_id" field if the given value is not nil.
+func (_u *ChannelMonitorUpdate) SetNillableInternalAPIKeyID(v *int64) *ChannelMonitorUpdate {
+	if v != nil {
+		_u.SetInternalAPIKeyID(*v)
+	}
+	return _u
+}
+
+// AddInternalAPIKeyID adds value to the "internal_api_key_id" field.
+func (_u *ChannelMonitorUpdate) AddInternalAPIKeyID(v int64) *ChannelMonitorUpdate {
+	_u.mutation.AddInternalAPIKeyID(v)
+	return _u
+}
+
+// ClearInternalAPIKeyID clears the value of the "internal_api_key_id" field.
+func (_u *ChannelMonitorUpdate) ClearInternalAPIKeyID() *ChannelMonitorUpdate {
+	_u.mutation.ClearInternalAPIKeyID()
+	return _u
+}
+
+// SetInternalGroupID sets the "internal_group_id" field.
+func (_u *ChannelMonitorUpdate) SetInternalGroupID(v int64) *ChannelMonitorUpdate {
+	_u.mutation.ResetInternalGroupID()
+	_u.mutation.SetInternalGroupID(v)
+	return _u
+}
+
+// SetNillableInternalGroupID sets the "internal_group_id" field if the given value is not nil.
+func (_u *ChannelMonitorUpdate) SetNillableInternalGroupID(v *int64) *ChannelMonitorUpdate {
+	if v != nil {
+		_u.SetInternalGroupID(*v)
+	}
+	return _u
+}
+
+// AddInternalGroupID adds value to the "internal_group_id" field.
+func (_u *ChannelMonitorUpdate) AddInternalGroupID(v int64) *ChannelMonitorUpdate {
+	_u.mutation.AddInternalGroupID(v)
+	return _u
+}
+
+// ClearInternalGroupID clears the value of the "internal_group_id" field.
+func (_u *ChannelMonitorUpdate) ClearInternalGroupID() *ChannelMonitorUpdate {
+	_u.mutation.ClearInternalGroupID()
+	return _u
+}
+
 // SetPrimaryModel sets the "primary_model" field.
 func (_u *ChannelMonitorUpdate) SetPrimaryModel(v string) *ChannelMonitorUpdate {
 	_u.mutation.SetPrimaryModel(v)
@@ -516,6 +584,11 @@ func (_u *ChannelMonitorUpdate) check() error {
 			return &ValidationError{Name: "api_key_encrypted", err: fmt.Errorf(`ent: validator failed for field "ChannelMonitor.api_key_encrypted": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.SourceMode(); ok {
+		if err := channelmonitor.SourceModeValidator(v); err != nil {
+			return &ValidationError{Name: "source_mode", err: fmt.Errorf(`ent: validator failed for field "ChannelMonitor.source_mode": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.PrimaryModel(); ok {
 		if err := channelmonitor.PrimaryModelValidator(v); err != nil {
 			return &ValidationError{Name: "primary_model", err: fmt.Errorf(`ent: validator failed for field "ChannelMonitor.primary_model": %w`, err)}
@@ -578,6 +651,27 @@ func (_u *ChannelMonitorUpdate) sqlSave(ctx context.Context) (_node int, err err
 	}
 	if value, ok := _u.mutation.APIKeyEncrypted(); ok {
 		_spec.SetField(channelmonitor.FieldAPIKeyEncrypted, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.SourceMode(); ok {
+		_spec.SetField(channelmonitor.FieldSourceMode, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.InternalAPIKeyID(); ok {
+		_spec.SetField(channelmonitor.FieldInternalAPIKeyID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedInternalAPIKeyID(); ok {
+		_spec.AddField(channelmonitor.FieldInternalAPIKeyID, field.TypeInt64, value)
+	}
+	if _u.mutation.InternalAPIKeyIDCleared() {
+		_spec.ClearField(channelmonitor.FieldInternalAPIKeyID, field.TypeInt64)
+	}
+	if value, ok := _u.mutation.InternalGroupID(); ok {
+		_spec.SetField(channelmonitor.FieldInternalGroupID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedInternalGroupID(); ok {
+		_spec.AddField(channelmonitor.FieldInternalGroupID, field.TypeInt64, value)
+	}
+	if _u.mutation.InternalGroupIDCleared() {
+		_spec.ClearField(channelmonitor.FieldInternalGroupID, field.TypeInt64)
 	}
 	if value, ok := _u.mutation.PrimaryModel(); ok {
 		_spec.SetField(channelmonitor.FieldPrimaryModel, field.TypeString, value)
@@ -862,6 +956,74 @@ func (_u *ChannelMonitorUpdateOne) SetNillableAPIKeyEncrypted(v *string) *Channe
 	if v != nil {
 		_u.SetAPIKeyEncrypted(*v)
 	}
+	return _u
+}
+
+// SetSourceMode sets the "source_mode" field.
+func (_u *ChannelMonitorUpdateOne) SetSourceMode(v string) *ChannelMonitorUpdateOne {
+	_u.mutation.SetSourceMode(v)
+	return _u
+}
+
+// SetNillableSourceMode sets the "source_mode" field if the given value is not nil.
+func (_u *ChannelMonitorUpdateOne) SetNillableSourceMode(v *string) *ChannelMonitorUpdateOne {
+	if v != nil {
+		_u.SetSourceMode(*v)
+	}
+	return _u
+}
+
+// SetInternalAPIKeyID sets the "internal_api_key_id" field.
+func (_u *ChannelMonitorUpdateOne) SetInternalAPIKeyID(v int64) *ChannelMonitorUpdateOne {
+	_u.mutation.ResetInternalAPIKeyID()
+	_u.mutation.SetInternalAPIKeyID(v)
+	return _u
+}
+
+// SetNillableInternalAPIKeyID sets the "internal_api_key_id" field if the given value is not nil.
+func (_u *ChannelMonitorUpdateOne) SetNillableInternalAPIKeyID(v *int64) *ChannelMonitorUpdateOne {
+	if v != nil {
+		_u.SetInternalAPIKeyID(*v)
+	}
+	return _u
+}
+
+// AddInternalAPIKeyID adds value to the "internal_api_key_id" field.
+func (_u *ChannelMonitorUpdateOne) AddInternalAPIKeyID(v int64) *ChannelMonitorUpdateOne {
+	_u.mutation.AddInternalAPIKeyID(v)
+	return _u
+}
+
+// ClearInternalAPIKeyID clears the value of the "internal_api_key_id" field.
+func (_u *ChannelMonitorUpdateOne) ClearInternalAPIKeyID() *ChannelMonitorUpdateOne {
+	_u.mutation.ClearInternalAPIKeyID()
+	return _u
+}
+
+// SetInternalGroupID sets the "internal_group_id" field.
+func (_u *ChannelMonitorUpdateOne) SetInternalGroupID(v int64) *ChannelMonitorUpdateOne {
+	_u.mutation.ResetInternalGroupID()
+	_u.mutation.SetInternalGroupID(v)
+	return _u
+}
+
+// SetNillableInternalGroupID sets the "internal_group_id" field if the given value is not nil.
+func (_u *ChannelMonitorUpdateOne) SetNillableInternalGroupID(v *int64) *ChannelMonitorUpdateOne {
+	if v != nil {
+		_u.SetInternalGroupID(*v)
+	}
+	return _u
+}
+
+// AddInternalGroupID adds value to the "internal_group_id" field.
+func (_u *ChannelMonitorUpdateOne) AddInternalGroupID(v int64) *ChannelMonitorUpdateOne {
+	_u.mutation.AddInternalGroupID(v)
+	return _u
+}
+
+// ClearInternalGroupID clears the value of the "internal_group_id" field.
+func (_u *ChannelMonitorUpdateOne) ClearInternalGroupID() *ChannelMonitorUpdateOne {
+	_u.mutation.ClearInternalGroupID()
 	return _u
 }
 
@@ -1286,6 +1448,11 @@ func (_u *ChannelMonitorUpdateOne) check() error {
 			return &ValidationError{Name: "api_key_encrypted", err: fmt.Errorf(`ent: validator failed for field "ChannelMonitor.api_key_encrypted": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.SourceMode(); ok {
+		if err := channelmonitor.SourceModeValidator(v); err != nil {
+			return &ValidationError{Name: "source_mode", err: fmt.Errorf(`ent: validator failed for field "ChannelMonitor.source_mode": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.PrimaryModel(); ok {
 		if err := channelmonitor.PrimaryModelValidator(v); err != nil {
 			return &ValidationError{Name: "primary_model", err: fmt.Errorf(`ent: validator failed for field "ChannelMonitor.primary_model": %w`, err)}
@@ -1365,6 +1532,27 @@ func (_u *ChannelMonitorUpdateOne) sqlSave(ctx context.Context) (_node *ChannelM
 	}
 	if value, ok := _u.mutation.APIKeyEncrypted(); ok {
 		_spec.SetField(channelmonitor.FieldAPIKeyEncrypted, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.SourceMode(); ok {
+		_spec.SetField(channelmonitor.FieldSourceMode, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.InternalAPIKeyID(); ok {
+		_spec.SetField(channelmonitor.FieldInternalAPIKeyID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedInternalAPIKeyID(); ok {
+		_spec.AddField(channelmonitor.FieldInternalAPIKeyID, field.TypeInt64, value)
+	}
+	if _u.mutation.InternalAPIKeyIDCleared() {
+		_spec.ClearField(channelmonitor.FieldInternalAPIKeyID, field.TypeInt64)
+	}
+	if value, ok := _u.mutation.InternalGroupID(); ok {
+		_spec.SetField(channelmonitor.FieldInternalGroupID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedInternalGroupID(); ok {
+		_spec.AddField(channelmonitor.FieldInternalGroupID, field.TypeInt64, value)
+	}
+	if _u.mutation.InternalGroupIDCleared() {
+		_spec.ClearField(channelmonitor.FieldInternalGroupID, field.TypeInt64)
 	}
 	if value, ok := _u.mutation.PrimaryModel(); ok {
 		_spec.SetField(channelmonitor.FieldPrimaryModel, field.TypeString, value)

@@ -91,6 +91,48 @@ func (_c *ChannelMonitorCreate) SetAPIKeyEncrypted(v string) *ChannelMonitorCrea
 	return _c
 }
 
+// SetSourceMode sets the "source_mode" field.
+func (_c *ChannelMonitorCreate) SetSourceMode(v string) *ChannelMonitorCreate {
+	_c.mutation.SetSourceMode(v)
+	return _c
+}
+
+// SetNillableSourceMode sets the "source_mode" field if the given value is not nil.
+func (_c *ChannelMonitorCreate) SetNillableSourceMode(v *string) *ChannelMonitorCreate {
+	if v != nil {
+		_c.SetSourceMode(*v)
+	}
+	return _c
+}
+
+// SetInternalAPIKeyID sets the "internal_api_key_id" field.
+func (_c *ChannelMonitorCreate) SetInternalAPIKeyID(v int64) *ChannelMonitorCreate {
+	_c.mutation.SetInternalAPIKeyID(v)
+	return _c
+}
+
+// SetNillableInternalAPIKeyID sets the "internal_api_key_id" field if the given value is not nil.
+func (_c *ChannelMonitorCreate) SetNillableInternalAPIKeyID(v *int64) *ChannelMonitorCreate {
+	if v != nil {
+		_c.SetInternalAPIKeyID(*v)
+	}
+	return _c
+}
+
+// SetInternalGroupID sets the "internal_group_id" field.
+func (_c *ChannelMonitorCreate) SetInternalGroupID(v int64) *ChannelMonitorCreate {
+	_c.mutation.SetInternalGroupID(v)
+	return _c
+}
+
+// SetNillableInternalGroupID sets the "internal_group_id" field if the given value is not nil.
+func (_c *ChannelMonitorCreate) SetNillableInternalGroupID(v *int64) *ChannelMonitorCreate {
+	if v != nil {
+		_c.SetInternalGroupID(*v)
+	}
+	return _c
+}
+
 // SetPrimaryModel sets the "primary_model" field.
 func (_c *ChannelMonitorCreate) SetPrimaryModel(v string) *ChannelMonitorCreate {
 	_c.mutation.SetPrimaryModel(v)
@@ -335,6 +377,10 @@ func (_c *ChannelMonitorCreate) defaults() {
 		v := channelmonitor.DefaultAPIMode
 		_c.mutation.SetAPIMode(v)
 	}
+	if _, ok := _c.mutation.SourceMode(); !ok {
+		v := channelmonitor.DefaultSourceMode
+		_c.mutation.SetSourceMode(v)
+	}
 	if _, ok := _c.mutation.ExtraModels(); !ok {
 		v := channelmonitor.DefaultExtraModels
 		_c.mutation.SetExtraModels(v)
@@ -411,6 +457,14 @@ func (_c *ChannelMonitorCreate) check() error {
 	if v, ok := _c.mutation.APIKeyEncrypted(); ok {
 		if err := channelmonitor.APIKeyEncryptedValidator(v); err != nil {
 			return &ValidationError{Name: "api_key_encrypted", err: fmt.Errorf(`ent: validator failed for field "ChannelMonitor.api_key_encrypted": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.SourceMode(); !ok {
+		return &ValidationError{Name: "source_mode", err: errors.New(`ent: missing required field "ChannelMonitor.source_mode"`)}
+	}
+	if v, ok := _c.mutation.SourceMode(); ok {
+		if err := channelmonitor.SourceModeValidator(v); err != nil {
+			return &ValidationError{Name: "source_mode", err: fmt.Errorf(`ent: validator failed for field "ChannelMonitor.source_mode": %w`, err)}
 		}
 	}
 	if _, ok := _c.mutation.PrimaryModel(); !ok {
@@ -524,6 +578,18 @@ func (_c *ChannelMonitorCreate) createSpec() (*ChannelMonitor, *sqlgraph.CreateS
 	if value, ok := _c.mutation.APIKeyEncrypted(); ok {
 		_spec.SetField(channelmonitor.FieldAPIKeyEncrypted, field.TypeString, value)
 		_node.APIKeyEncrypted = value
+	}
+	if value, ok := _c.mutation.SourceMode(); ok {
+		_spec.SetField(channelmonitor.FieldSourceMode, field.TypeString, value)
+		_node.SourceMode = value
+	}
+	if value, ok := _c.mutation.InternalAPIKeyID(); ok {
+		_spec.SetField(channelmonitor.FieldInternalAPIKeyID, field.TypeInt64, value)
+		_node.InternalAPIKeyID = &value
+	}
+	if value, ok := _c.mutation.InternalGroupID(); ok {
+		_spec.SetField(channelmonitor.FieldInternalGroupID, field.TypeInt64, value)
+		_node.InternalGroupID = &value
 	}
 	if value, ok := _c.mutation.PrimaryModel(); ok {
 		_spec.SetField(channelmonitor.FieldPrimaryModel, field.TypeString, value)
@@ -747,6 +813,66 @@ func (u *ChannelMonitorUpsert) SetAPIKeyEncrypted(v string) *ChannelMonitorUpser
 // UpdateAPIKeyEncrypted sets the "api_key_encrypted" field to the value that was provided on create.
 func (u *ChannelMonitorUpsert) UpdateAPIKeyEncrypted() *ChannelMonitorUpsert {
 	u.SetExcluded(channelmonitor.FieldAPIKeyEncrypted)
+	return u
+}
+
+// SetSourceMode sets the "source_mode" field.
+func (u *ChannelMonitorUpsert) SetSourceMode(v string) *ChannelMonitorUpsert {
+	u.Set(channelmonitor.FieldSourceMode, v)
+	return u
+}
+
+// UpdateSourceMode sets the "source_mode" field to the value that was provided on create.
+func (u *ChannelMonitorUpsert) UpdateSourceMode() *ChannelMonitorUpsert {
+	u.SetExcluded(channelmonitor.FieldSourceMode)
+	return u
+}
+
+// SetInternalAPIKeyID sets the "internal_api_key_id" field.
+func (u *ChannelMonitorUpsert) SetInternalAPIKeyID(v int64) *ChannelMonitorUpsert {
+	u.Set(channelmonitor.FieldInternalAPIKeyID, v)
+	return u
+}
+
+// UpdateInternalAPIKeyID sets the "internal_api_key_id" field to the value that was provided on create.
+func (u *ChannelMonitorUpsert) UpdateInternalAPIKeyID() *ChannelMonitorUpsert {
+	u.SetExcluded(channelmonitor.FieldInternalAPIKeyID)
+	return u
+}
+
+// AddInternalAPIKeyID adds v to the "internal_api_key_id" field.
+func (u *ChannelMonitorUpsert) AddInternalAPIKeyID(v int64) *ChannelMonitorUpsert {
+	u.Add(channelmonitor.FieldInternalAPIKeyID, v)
+	return u
+}
+
+// ClearInternalAPIKeyID clears the value of the "internal_api_key_id" field.
+func (u *ChannelMonitorUpsert) ClearInternalAPIKeyID() *ChannelMonitorUpsert {
+	u.SetNull(channelmonitor.FieldInternalAPIKeyID)
+	return u
+}
+
+// SetInternalGroupID sets the "internal_group_id" field.
+func (u *ChannelMonitorUpsert) SetInternalGroupID(v int64) *ChannelMonitorUpsert {
+	u.Set(channelmonitor.FieldInternalGroupID, v)
+	return u
+}
+
+// UpdateInternalGroupID sets the "internal_group_id" field to the value that was provided on create.
+func (u *ChannelMonitorUpsert) UpdateInternalGroupID() *ChannelMonitorUpsert {
+	u.SetExcluded(channelmonitor.FieldInternalGroupID)
+	return u
+}
+
+// AddInternalGroupID adds v to the "internal_group_id" field.
+func (u *ChannelMonitorUpsert) AddInternalGroupID(v int64) *ChannelMonitorUpsert {
+	u.Add(channelmonitor.FieldInternalGroupID, v)
+	return u
+}
+
+// ClearInternalGroupID clears the value of the "internal_group_id" field.
+func (u *ChannelMonitorUpsert) ClearInternalGroupID() *ChannelMonitorUpsert {
+	u.SetNull(channelmonitor.FieldInternalGroupID)
 	return u
 }
 
@@ -1104,6 +1230,76 @@ func (u *ChannelMonitorUpsertOne) SetAPIKeyEncrypted(v string) *ChannelMonitorUp
 func (u *ChannelMonitorUpsertOne) UpdateAPIKeyEncrypted() *ChannelMonitorUpsertOne {
 	return u.Update(func(s *ChannelMonitorUpsert) {
 		s.UpdateAPIKeyEncrypted()
+	})
+}
+
+// SetSourceMode sets the "source_mode" field.
+func (u *ChannelMonitorUpsertOne) SetSourceMode(v string) *ChannelMonitorUpsertOne {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.SetSourceMode(v)
+	})
+}
+
+// UpdateSourceMode sets the "source_mode" field to the value that was provided on create.
+func (u *ChannelMonitorUpsertOne) UpdateSourceMode() *ChannelMonitorUpsertOne {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.UpdateSourceMode()
+	})
+}
+
+// SetInternalAPIKeyID sets the "internal_api_key_id" field.
+func (u *ChannelMonitorUpsertOne) SetInternalAPIKeyID(v int64) *ChannelMonitorUpsertOne {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.SetInternalAPIKeyID(v)
+	})
+}
+
+// AddInternalAPIKeyID adds v to the "internal_api_key_id" field.
+func (u *ChannelMonitorUpsertOne) AddInternalAPIKeyID(v int64) *ChannelMonitorUpsertOne {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.AddInternalAPIKeyID(v)
+	})
+}
+
+// UpdateInternalAPIKeyID sets the "internal_api_key_id" field to the value that was provided on create.
+func (u *ChannelMonitorUpsertOne) UpdateInternalAPIKeyID() *ChannelMonitorUpsertOne {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.UpdateInternalAPIKeyID()
+	})
+}
+
+// ClearInternalAPIKeyID clears the value of the "internal_api_key_id" field.
+func (u *ChannelMonitorUpsertOne) ClearInternalAPIKeyID() *ChannelMonitorUpsertOne {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.ClearInternalAPIKeyID()
+	})
+}
+
+// SetInternalGroupID sets the "internal_group_id" field.
+func (u *ChannelMonitorUpsertOne) SetInternalGroupID(v int64) *ChannelMonitorUpsertOne {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.SetInternalGroupID(v)
+	})
+}
+
+// AddInternalGroupID adds v to the "internal_group_id" field.
+func (u *ChannelMonitorUpsertOne) AddInternalGroupID(v int64) *ChannelMonitorUpsertOne {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.AddInternalGroupID(v)
+	})
+}
+
+// UpdateInternalGroupID sets the "internal_group_id" field to the value that was provided on create.
+func (u *ChannelMonitorUpsertOne) UpdateInternalGroupID() *ChannelMonitorUpsertOne {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.UpdateInternalGroupID()
+	})
+}
+
+// ClearInternalGroupID clears the value of the "internal_group_id" field.
+func (u *ChannelMonitorUpsertOne) ClearInternalGroupID() *ChannelMonitorUpsertOne {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.ClearInternalGroupID()
 	})
 }
 
@@ -1665,6 +1861,76 @@ func (u *ChannelMonitorUpsertBulk) SetAPIKeyEncrypted(v string) *ChannelMonitorU
 func (u *ChannelMonitorUpsertBulk) UpdateAPIKeyEncrypted() *ChannelMonitorUpsertBulk {
 	return u.Update(func(s *ChannelMonitorUpsert) {
 		s.UpdateAPIKeyEncrypted()
+	})
+}
+
+// SetSourceMode sets the "source_mode" field.
+func (u *ChannelMonitorUpsertBulk) SetSourceMode(v string) *ChannelMonitorUpsertBulk {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.SetSourceMode(v)
+	})
+}
+
+// UpdateSourceMode sets the "source_mode" field to the value that was provided on create.
+func (u *ChannelMonitorUpsertBulk) UpdateSourceMode() *ChannelMonitorUpsertBulk {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.UpdateSourceMode()
+	})
+}
+
+// SetInternalAPIKeyID sets the "internal_api_key_id" field.
+func (u *ChannelMonitorUpsertBulk) SetInternalAPIKeyID(v int64) *ChannelMonitorUpsertBulk {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.SetInternalAPIKeyID(v)
+	})
+}
+
+// AddInternalAPIKeyID adds v to the "internal_api_key_id" field.
+func (u *ChannelMonitorUpsertBulk) AddInternalAPIKeyID(v int64) *ChannelMonitorUpsertBulk {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.AddInternalAPIKeyID(v)
+	})
+}
+
+// UpdateInternalAPIKeyID sets the "internal_api_key_id" field to the value that was provided on create.
+func (u *ChannelMonitorUpsertBulk) UpdateInternalAPIKeyID() *ChannelMonitorUpsertBulk {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.UpdateInternalAPIKeyID()
+	})
+}
+
+// ClearInternalAPIKeyID clears the value of the "internal_api_key_id" field.
+func (u *ChannelMonitorUpsertBulk) ClearInternalAPIKeyID() *ChannelMonitorUpsertBulk {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.ClearInternalAPIKeyID()
+	})
+}
+
+// SetInternalGroupID sets the "internal_group_id" field.
+func (u *ChannelMonitorUpsertBulk) SetInternalGroupID(v int64) *ChannelMonitorUpsertBulk {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.SetInternalGroupID(v)
+	})
+}
+
+// AddInternalGroupID adds v to the "internal_group_id" field.
+func (u *ChannelMonitorUpsertBulk) AddInternalGroupID(v int64) *ChannelMonitorUpsertBulk {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.AddInternalGroupID(v)
+	})
+}
+
+// UpdateInternalGroupID sets the "internal_group_id" field to the value that was provided on create.
+func (u *ChannelMonitorUpsertBulk) UpdateInternalGroupID() *ChannelMonitorUpsertBulk {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.UpdateInternalGroupID()
+	})
+}
+
+// ClearInternalGroupID clears the value of the "internal_group_id" field.
+func (u *ChannelMonitorUpsertBulk) ClearInternalGroupID() *ChannelMonitorUpsertBulk {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.ClearInternalGroupID()
 	})
 }
 
