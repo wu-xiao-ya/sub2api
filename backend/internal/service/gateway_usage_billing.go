@@ -34,24 +34,24 @@ func (s *GatewayService) ResolveUserGroupRateMultiplier(ctx context.Context, use
 	return s.getUserGroupRateMultiplier(ctx, userID, groupID, groupDefaultMultiplier)
 }
 
-// RecordUsageInput ???????????
-// ?? worker ?????????????? ParsedRequest/RequestBodyRef ?????????
+// RecordUsageInput 记录使用量的输入参数。
+// 异步 worker 只接收计费所需快照，不能持有 ParsedRequest/RequestBodyRef 这类大请求体引用。
 type RecordUsageInput struct {
 	Result             *ForwardResult
 	APIKey             *APIKey
 	User               *User
 	Account            *Account
-	Subscription       *UserSubscription  // ???????
-	InboundEndpoint    string             // ?????????????
-	UpstreamEndpoint   string             // ???????????????
-	UserAgent          string             // ??? User-Agent
-	IPAddress          string             // ?????? IP ??
-	RequestPayloadHash string             // ???????????? request_id ????????????
-	ForceCacheBilling  bool               // ???????? input_tokens ?? cache_read ????????????
-	APIKeyService      APIKeyQuotaUpdater // ???????API Key??
-	QuotaPlatform      string             // user?platform ???????handler ??? ctx ?? QuotaPlatform() ??????????? worker ? background ctx ????? ForcePlatform?
+	Subscription       *UserSubscription  // 可选：订阅信息
+	InboundEndpoint    string             // 入站端点（客户端请求路径）
+	UpstreamEndpoint   string             // 上游端点（标准化后的上游路径）
+	UserAgent          string             // 请求的 User-Agent
+	IPAddress          string             // 请求的客户端 IP 地址
+	RequestPayloadHash string             // 请求体语义哈希，用于降低 request_id 误复用时的静默误去重风险
+	ForceCacheBilling  bool               // 强制缓存计费：将 input_tokens 转为 cache_read 计费（用于粘性会话切换）
+	APIKeyService      APIKeyQuotaUpdater // 可选：用于更新API Key配额
+	QuotaPlatform      string             // user×platform 配额计量平台：handler 在请求 ctx 内经 QuotaPlatform() 算定后传入（后扣运行在 worker 池 background ctx 上，取不到 ForcePlatform）
 
-	ChannelUsageFields // ???????? handler ? Forward ????
+	ChannelUsageFields // 渠道映射信息（由 handler 在 Forward 前解析）
 }
 
 // APIKeyQuotaUpdater defines the interface for updating API Key quota and rate limit usage
@@ -68,7 +68,7 @@ type usageLogBestEffortWriter interface {
 	CreateBestEffort(ctx context.Context, log *UsageLog) error
 }
 
-// postUsageBillingParams ?????????
+// postUsageBillingParams 统一扣费所需的参数
 type postUsageBillingParams struct {
 	Cost                  *CostBreakdown
 	User                  *User
@@ -79,12 +79,12 @@ type postUsageBillingParams struct {
 	IsSubscriptionBill    bool
 	AccountRateMultiplier float64
 	APIKeyService         APIKeyQuotaUpdater
-	Platform              string // ?? APIKey ?? Group ?????
+	Platform              string // 来自 APIKey 关联 Group 的平台标识
 }
 
-// PlatformFromAPIKey ? APIKey ??? Group ?? platform ???
-// apiKey ? nil ? Group ??????????????? short-circuit quota ????
-// ??? handler ????
+// PlatformFromAPIKey 从 APIKey 关联的 Group 推导 platform 名称。
+// apiKey 为 nil 或 Group 信息缺失时返回空串（调用方据此 short-circuit quota 累加）。
+// 导出供 handler 层调用。
 func PlatformFromAPIKey(apiKey *APIKey) string {
 	if apiKey == nil || apiKey.Group == nil {
 		return ""
@@ -92,13 +92,13 @@ func PlatformFromAPIKey(apiKey *APIKey) string {
 	return apiKey.Group.Platform
 }
 
-// QuotaPlatform ?? user?platform ????????????
-// ???????? /antigravity???? ctx ?? ForcePlatform ????????
-// APIKey ?? Group ????
+// QuotaPlatform 返回 user×platform 配额计量使用的平台标识。
+// 强制平台路由（如 /antigravity）优先按 ctx 中的 ForcePlatform 计量，否则回退到
+// APIKey 关联 Group 的平台。
 //
-// ??????? ForcePlatform ??? context ???? handler ? c.Request.Context()??
-// ????? worker ?? background ctx ??? ForcePlatform???????? handler
-// ?????? RecordUsageInput.QuotaPlatform ??????????? worker ctx ??????
+// 注意：必须用带 ForcePlatform 的请求 context 调用（如 handler 的 c.Request.Context()）。
+// 后扣运行在 worker 池的 background ctx 上没有 ForcePlatform，因此后扣平台由 handler
+// 预先算定、经 RecordUsageInput.QuotaPlatform 传入，不要在后扣链路用 worker ctx 调用本函数。
 func QuotaPlatform(ctx context.Context, apiKey *APIKey) string {
 	if fp, ok := ctx.Value(ctxkey.ForcePlatform).(string); ok && fp != "" {
 		return fp
@@ -119,7 +119,7 @@ func (p *postUsageBillingParams) shouldUpdateAccountQuota() bool {
 }
 
 // postUsageBilling is the legacy fallback billing path used when the unified
-// billing repo is unavailable (nil). Production uses applyUsageBilling ? repo.Apply
+// billing repo is unavailable (nil). Production uses applyUsageBilling → repo.Apply
 // for atomic billing. This path only runs in tests or degraded mode.
 type subscriptionPurchaseUsageIncrementer interface {
 	IncrementPurchaseUsage(ctx context.Context, purchaseID int64, costUSD float64) error
@@ -177,23 +177,23 @@ func postUsageBilling(ctx context.Context, p *postUsageBillingParams, deps *bill
 		}
 	}
 
-	// Platform quota ???legacy ???????? standard??????????????????? limit ????
-	//   - HasUserPlatformQuotaLimit ??:????????? limit ????
-	//   - ?? Redis ???:enforcement ? Redis?legacy ??????????? preflight ?????
-	//   - flusher_enabled=false????:???????? DB
-	//   - flusher_enabled=true:???? DB?? flusher ??????markDirty ? IncrementUserPlatformQuotaUsage ?????
-	//   - ???? ALERT log + counter?????????
+	// Platform quota 累加（legacy 兜底路径）：仅对 standard（余额）模式生效；订阅模式豁免；仅对有 limit 的用户写
+	//   - HasUserPlatformQuotaLimit 守卫:与正常路径对齐，无 limit 公司跳过
+	//   - 新增 Redis 同步写:enforcement 走 Redis，legacy 路径也必须同步写，否则 preflight 看不到消费
+	//   - flusher_enabled=false（降级）:保留原有同步直写 DB
+	//   - flusher_enabled=true:跳过直写 DB，由 flusher 异步批量刷（markDirty 在 IncrementUserPlatformQuotaUsage 内部完成）
+	//   - 失败仅记 ALERT log + counter，不阻断主扣费流程
 	if !p.IsSubscriptionBill && p.Platform != "" && cost.ActualCost > 0 && p.User != nil && deps.userPlatformQuotaRepo != nil {
 		if deps.billingCacheService.HasUserPlatformQuotaLimit(billingCtx, p.User.ID, p.Platform) {
 			deps.billingCacheService.IncrementUserPlatformQuotaUsage(p.User.ID, p.Platform, cost.ActualCost)
 			if deps.cfg == nil || !deps.cfg.Database.UserPlatformQuotaFlusherEnabled {
-				// ????:flusher ???????????? DB
+				// 降级路径:flusher 未启用时保留原有同步直写 DB
 				if err := deps.userPlatformQuotaRepo.IncrementUsageWithReset(billingCtx, p.User.ID, p.Platform, cost.ActualCost, time.Now().UTC()); err != nil {
 					userPlatformQuotaDBIncrLegacyErrorTotal.Add(1)
 					logger.LegacyPrintf("service.gateway", "ALERT: legacy incr user platform quota DB failed user=%d platform=%s cost=%f: %v", p.User.ID, p.Platform, cost.ActualCost, err)
 				}
 			}
-			// flusher_enabled=true:??? DB?flusher ?????
+			// flusher_enabled=true:不直写 DB，flusher 异步批量刷
 		}
 	}
 
@@ -330,8 +330,8 @@ func buildUsageBillingCommand(requestID string, usageLog *UsageLog, p *postUsage
 		cmd.AccountQuotaCost = p.Cost.TotalCost * p.AccountRateMultiplier
 	}
 
-	// ???????????????????????????????????
-	// ?????????????????????
+	// 贡献账号仅在管理员审核通过后才可能被调度到这里。奖励以原始成本为基数，
+	// 但不会超过这次请求对消费者实际扣除的金额。
 	if p.Account.OwnerUserID != nil &&
 		p.Account.ContributionStatus == ContributionStatusApproved &&
 		p.APIKey.Group != nil &&
@@ -425,18 +425,18 @@ func finalizePostUsageBilling(ctx context.Context, p *postUsageBillingParams, de
 
 	deps.deferredService.ScheduleLastUsedUpdate(p.Account.ID)
 
-	// Platform quota ????? standard??????????????????? limit ????
-	// Redis ??? + DB ??????flag=false ???? flusher ????flag=true?:
-	//   - HasUserPlatformQuotaLimit ??:? limit ?????,?????? + ?? Redis ??
-	//   - Redis ??:???? preflight ?????? usage,? TOCTOU ????
-	//     ????? in-flight ???????????????????????? worker ???
-	//   - DB ??(flusher_enabled=false):??? goroutine ?? detached context,??? ALERT log ?? oncall ??
-	//   - flusher_enabled=true:??? DB,? flusher ??????markDirty ?? IncrementUserPlatformQuotaUsage ?????
+	// Platform quota 累加：仅在 standard（余额）模式生效；订阅模式豁免；仅对有 limit 的用户写
+	// Redis 同步写 + DB 异步持久化（flag=false 降级）或 flusher 异步刷（flag=true）:
+	//   - HasUserPlatformQuotaLimit 守卫:无 limit 的公司跳过,避免无效写入 + 浪费 Redis 容量
+	//   - Redis 同步:确保下次 preflight 立即看到最新 usage,把 TOCTOU 超支窗口
+	//     限制在并发 in-flight 请求数量内（旧实现的异步入队会让超支无限累积直到 worker 处理）
+	//   - DB 异步(flusher_enabled=false):在独立 goroutine 中走 detached context,失败用 ALERT log 触发 oncall 对账
+	//   - flusher_enabled=true:不直写 DB,由 flusher 异步批量刷（markDirty 已在 IncrementUserPlatformQuotaUsage 内部完成）
 	if !p.IsSubscriptionBill && p.Platform != "" && p.Cost.ActualCost > 0 && p.User != nil && deps.userPlatformQuotaRepo != nil {
 		if deps.billingCacheService.HasUserPlatformQuotaLimit(ctx, p.User.ID, p.Platform) {
 			deps.billingCacheService.IncrementUserPlatformQuotaUsage(p.User.ID, p.Platform, p.Cost.ActualCost)
 			if deps.cfg == nil || !deps.cfg.Database.UserPlatformQuotaFlusherEnabled {
-				// ????:flusher ???????????? DB
+				// 降级路径:flusher 未启用时保留原有异步直写 DB
 				dbCtx, dbCancel := detachUpstreamContext(ctx)
 				userID, platform, cost := p.User.ID, p.Platform, p.Cost.ActualCost
 				go func() {
@@ -447,19 +447,19 @@ func finalizePostUsageBilling(ctx context.Context, p *postUsageBillingParams, de
 					}()
 					defer dbCancel()
 					if err := deps.userPlatformQuotaRepo.IncrementUsageWithReset(dbCtx, userID, platform, cost, time.Now().UTC()); err != nil {
-						// ?????:??? GatewayUserPlatformQuotaIncrStats(),? ops ????????
+						// 失败计数器:暴露给 GatewayUserPlatformQuotaIncrStats(),由 ops 面板做斜率告警。
 						userPlatformQuotaDBIncrErrorTotal.Add(1)
-						// ALERT ??:DB ???????? Redis cache ????? cost ????,
-						// ??????????????,oncall ????????????
+						// ALERT 级别:DB 持久化失败意味着 Redis cache 失效后该笔 cost 永久丢失,
+						// 用户配额视图与实际消费会偏差,oncall 需要据此对账或人工补录。
 						logger.LegacyPrintf("service.gateway", "ALERT: incr user platform quota DB failed user=%d platform=%s cost=%f: %v", userID, platform, cost, err)
 					}
 				}()
 			}
-			// flusher_enabled=true:??? DB,flusher ?????
+			// flusher_enabled=true:不直写 DB,flusher 异步批量刷
 		}
 	}
 
-	// Notification checks run async ? all parameters are already captured,
+	// Notification checks run async — all parameters are already captured,
 	// no dependency on the request context or upstream connection.
 	go notifyBalanceLow(p, deps, result)
 	go notifyAccountQuota(p, deps, result)
@@ -580,7 +580,7 @@ func detachUpstreamContext(ctx context.Context) (context.Context, context.Cancel
 	return context.WithoutCancel(ctx), func() {}
 }
 
-// billingDeps ???????????? gateway service ???
+// billingDeps 扣费逻辑依赖的服务（由各 gateway service 提供）
 type billingDeps struct {
 	accountRepo           AccountRepository
 	userRepo              UserRepository
@@ -615,12 +615,12 @@ func writeUsageLogBestEffort(ctx context.Context, repo UsageLogRepository, usage
 	if writer, ok := repo.(usageLogBestEffortWriter); ok {
 		if err := writer.CreateBestEffort(usageCtx, usageLog); err != nil {
 			logger.LegacyPrintf(logKey, "Create usage log failed: %v", err)
-			// ????????????????dropped?????????????????
-			// ??????????? usage_log???????issue #3656??
-			// ????? usage_logs ? ON CONFLICT (request_id, api_key_id) DO NOTHING ???
+			// 计费已在此前完成，日志必须落库：dropped（批处理队列超时）同样走同步兜底，
+			// 否则会出现“已扣费但无 usage_log”的对账缺口（issue #3656）。
+			// 重复写入由 usage_logs 的 ON CONFLICT (request_id, api_key_id) DO NOTHING 防护。
 			fallbackCtx := usageCtx
 			if usageCtx.Err() != nil {
-				// usageCtx ????best-effort ???????????? detached ????????????
+				// usageCtx 已耗尽（best-effort 入队阻塞到期限）：换新的 detached 窗口，避免兜底必然失败。
 				var fallbackCancel context.CancelFunc
 				fallbackCtx, fallbackCancel = detachedBillingContext(context.Background())
 				defer fallbackCancel()
@@ -637,14 +637,14 @@ func writeUsageLogBestEffort(ctx context.Context, repo UsageLogRepository, usage
 	}
 }
 
-// recordUsageOpts ????????????????????????
+// recordUsageOpts 内部选项，参数化普通计费与长上下文计费的差异点。
 type recordUsageOpts struct {
-	// ???????? Gemini ?????
+	// 长上下文计费（仅 Gemini 路径需要）
 	LongContextThreshold  int
 	LongContextMultiplier float64
 }
 
-// RecordUsage ?????????????????
+// RecordUsage 记录使用量并扣费（或更新订阅用量）
 func (s *GatewayService) RecordUsage(ctx context.Context, input *RecordUsageInput) error {
 	if IsChannelMonitorRequest(ctx) {
 		return nil
@@ -667,28 +667,28 @@ func (s *GatewayService) RecordUsage(ctx context.Context, input *RecordUsageInpu
 	}, &recordUsageOpts{})
 }
 
-// RecordUsageLongContextInput ??????????????????????
+// RecordUsageLongContextInput 记录使用量的输入参数（支持长上下文双倍计费）
 type RecordUsageLongContextInput struct {
 	Result                *ForwardResult
 	APIKey                *APIKey
 	User                  *User
 	Account               *Account
-	Subscription          *UserSubscription  // ???????
-	InboundEndpoint       string             // ?????????????
-	UpstreamEndpoint      string             // ???????????????
-	UserAgent             string             // ??? User-Agent
-	IPAddress             string             // ?????? IP ??
-	RequestPayloadHash    string             // ???????????? request_id ????????????
-	LongContextThreshold  int                // ???????? 200000?
-	LongContextMultiplier float64            // ??????????? 2.0?
-	ForceCacheBilling     bool               // ???????? input_tokens ?? cache_read ????????????
-	APIKeyService         APIKeyQuotaUpdater // API Key ????????
-	QuotaPlatform         string             // user?platform ???????handler ??? ctx ?? QuotaPlatform() ??????????? worker ? background ctx ????? ForcePlatform?
+	Subscription          *UserSubscription  // 可选：订阅信息
+	InboundEndpoint       string             // 入站端点（客户端请求路径）
+	UpstreamEndpoint      string             // 上游端点（标准化后的上游路径）
+	UserAgent             string             // 请求的 User-Agent
+	IPAddress             string             // 请求的客户端 IP 地址
+	RequestPayloadHash    string             // 请求体语义哈希，用于降低 request_id 误复用时的静默误去重风险
+	LongContextThreshold  int                // 长上下文阈值（如 200000）
+	LongContextMultiplier float64            // 超出阈值部分的倍率（如 2.0）
+	ForceCacheBilling     bool               // 强制缓存计费：将 input_tokens 转为 cache_read 计费（用于粘性会话切换）
+	APIKeyService         APIKeyQuotaUpdater // API Key 配额服务（可选）
+	QuotaPlatform         string             // user×platform 配额计量平台：handler 在请求 ctx 内经 QuotaPlatform() 算定后传入（后扣运行在 worker 池 background ctx 上，取不到 ForcePlatform）
 
-	ChannelUsageFields // ???????? handler ? Forward ????
+	ChannelUsageFields // 渠道映射信息（由 handler 在 Forward 前解析）
 }
 
-// RecordUsageWithLongContext ?????????????????????? Gemini?
+// RecordUsageWithLongContext 记录使用量并扣费，支持长上下文双倍计费（用于 Gemini）
 func (s *GatewayService) RecordUsageWithLongContext(ctx context.Context, input *RecordUsageLongContextInput) error {
 	return s.recordUsageCore(ctx, &recordUsageCoreInput{
 		Result:             input.Result,
@@ -711,7 +711,7 @@ func (s *GatewayService) RecordUsageWithLongContext(ctx context.Context, input *
 	})
 }
 
-// recordUsageCoreInput ? recordUsageCore ????????????????????
+// recordUsageCoreInput 是 recordUsageCore 的公共输入字段，从两种输入结构体中提取。
 type recordUsageCoreInput struct {
 	Result             *ForwardResult
 	APIKey             *APIKey
@@ -729,8 +729,8 @@ type recordUsageCoreInput struct {
 	ChannelUsageFields
 }
 
-// recordUsageCore ? RecordUsage ? RecordUsageWithLongContext ??????
-// LongContextThreshold > 0 ? Token ????? CalculateCostWithLongContext?
+// recordUsageCore 是 RecordUsage 和 RecordUsageWithLongContext 的统一实现。
+// LongContextThreshold > 0 时 Token 计费回退走 CalculateCostWithLongContext。
 func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsageCoreInput, opts *recordUsageOpts) error {
 	result := input.Result
 	apiKey := input.APIKey
@@ -739,24 +739,24 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 	subscription := effectiveSubscriptionForBilling(ctx, input.Subscription)
 	ApplyForwardImageBillingResolution(result)
 
-	// ???????? input_tokens ?? cache_read_input_tokens
-	// ????????????????
+	// 强制缓存计费：将 input_tokens 转为 cache_read_input_tokens
+	// 用于粘性会话切换时的特殊计费处理
 	if input.ForceCacheBilling && result.Usage.InputTokens > 0 {
-		logger.LegacyPrintf("service.gateway", "force_cache_billing: %d input_tokens ? cache_read_input_tokens (account=%d)",
+		logger.LegacyPrintf("service.gateway", "force_cache_billing: %d input_tokens → cache_read_input_tokens (account=%d)",
 			result.Usage.InputTokens, account.ID)
 		result.Usage.CacheReadInputTokens += result.Usage.InputTokens
 		result.Usage.InputTokens = 0
 	}
 
-	// Cache TTL Override: ????? token ??????????
-	// ?????????? 1h ??????????? usage ???? 5m?
+	// Cache TTL Override: 确保计费时 token 分类与账号设置一致。
+	// 账号级设置优先；全局 1h 请求注入开启时，默认把 usage 计费归回 5m。
 	cacheTTLOverridden := false
 	if overrideTarget, ok := s.resolveCacheTTLUsageOverrideTarget(ctx, account); ok {
 		applyCacheTTLOverride(&result.Usage, overrideTarget)
 		cacheTTLOverridden = (result.Usage.CacheCreation5mTokens + result.Usage.CacheCreation1hTokens) > 0
 	}
 
-	// ??????????????? > ???? > ?????
+	// 获取费率倍数（优先级：用户专属 > 分组默认 > 系统默认）
 	multiplier := 1.0
 	if s.cfg != nil {
 		multiplier = s.cfg.Default.RateMultiplier
@@ -777,7 +777,7 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 	multiplier, textPromotion := applyCurrentGroupPromotion(ctx, groupID, textBaseMultiplier, now)
 	imageMultiplier, imagePromotion := applyCurrentGroupPromotion(ctx, groupID, imageBaseMultiplier, now)
 
-	// ??????
+	// 确定计费模型
 	billingModel := forwardResultBillingModel(result.Model, result.UpstreamModel)
 	if input.BillingModelSource == BillingModelSourceChannelMapped && input.ChannelMappedModel != "" {
 		billingModel = input.ChannelMappedModel
@@ -786,28 +786,28 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 		billingModel = input.OriginalModel
 	}
 
-	// ?? RequestedModel????????????
+	// 确定 RequestedModel（渠道映射前的原始模型）
 	requestedModel := result.Model
 	if input.OriginalModel != "" {
 		requestedModel = input.OriginalModel
 	}
 
-	// ????
+	// 计算费用
 	cost := s.calculateRecordUsageCost(ctx, result, apiKey, billingModel, multiplier, imageMultiplier, opts)
 
-	// ??????????? vs ????
+	// 判断计费方式：订阅模式 vs 余额模式
 	isSubscriptionBilling := subscription != nil
 	billingType := BillingTypeBalance
 	if isSubscriptionBilling {
 		billingType = BillingTypeSubscription
 	}
 
-	// ??????
+	// 创建使用日志
 	accountRateMultiplier := account.BillingRateMultiplier()
 	usageLog := s.buildRecordUsageLog(ctx, input, result, apiKey, user, account, subscription,
 		requestedModel, multiplier, imageMultiplier, textPromotion, imagePromotion, accountRateMultiplier, billingType, cacheTTLOverridden, cost, opts)
 
-	// ???????????????????????????
+	// 计算账号统计定价费用（使用最终上游模型匹配自定义规则）
 	if apiKey.GroupID != nil {
 		applyAccountStatsCost(ctx, usageLog, s.channelService, s.billingService,
 			account.ID, *apiKey.GroupID, result.UpstreamModel, result.Model,
@@ -831,9 +831,9 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 		return nil
 	}
 
-	// ????? handler ??? ctx ?? QuotaPlatform() ????? input ???
-	// ????? worker ?? background ctx ?????? ctx ? ForcePlatform?
-	// ????????????????????????????
+	// 配额平台由 handler 在请求 ctx 内经 QuotaPlatform() 算定并通过 input 传入；
+	// 后扣运行在 worker 池的 background ctx 上，无法再从 ctx 取 ForcePlatform。
+	// 缺省（未设置）时回退到分组平台，保持对其它调用方的兼容。
 	quotaPlatform := input.QuotaPlatform
 	if quotaPlatform == "" {
 		quotaPlatform = PlatformFromAPIKey(apiKey)
@@ -862,7 +862,7 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 	return nil
 }
 
-// calculateRecordUsageCost ??????????????
+// calculateRecordUsageCost 根据请求类型和选项计算费用。
 func (s *GatewayService) calculateRecordUsageCost(
 	ctx context.Context,
 	result *ForwardResult,
@@ -872,7 +872,7 @@ func (s *GatewayService) calculateRecordUsageCost(
 	imageMultiplier float64,
 	opts *recordUsageOpts,
 ) *CostBreakdown {
-	// ?????????? token ???? token ??????????
+	// 图片生成：渠道定价为 token 计费时走 token 路径，否则走图片计费
 	if result.ImageCount > 0 {
 		if resolved := s.resolveChannelPricing(ctx, billingModel, apiKey); resolved != nil && resolved.Mode == BillingModeToken {
 			return s.calculateTokenCost(ctx, result, apiKey, billingModel, multiplier, opts)
@@ -886,7 +886,7 @@ func (s *GatewayService) calculateRecordUsageCost(
 		return s.billingService.CalculateAudioCost(result.AudioUsage.Mode, result.AudioUsage.DurationOrUnits, cfg, multiplier)
 	}
 
-	// Token ???SearchCount ??? surcharge???? token??
+	// Token 计费；SearchCount 为叠加 surcharge（不替代 token）。
 	tokenCost := s.calculateTokenCost(ctx, result, apiKey, billingModel, multiplier, opts)
 	if result.SearchCount > 0 {
 		price := groupSearchPricePer1kFromAPIKey(apiKey)
@@ -905,8 +905,8 @@ func (s *GatewayService) calculateRecordUsageCost(
 	return tokenCost
 }
 
-// resolveChannelPricing ?????????????????
-// ??? nil ? ResolvedPricing ????????nil ??????????
+// resolveChannelPricing 检查指定模型是否存在渠道级别定价。
+// 返回非 nil 的 ResolvedPricing 表示有渠道定价，nil 表示走默认定价路径。
 func (s *GatewayService) resolveChannelPricing(ctx context.Context, billingModel string, apiKey *APIKey) *ResolvedPricing {
 	if s.resolver == nil || apiKey.Group == nil {
 		return nil
@@ -919,7 +919,7 @@ func (s *GatewayService) resolveChannelPricing(ctx context.Context, billingModel
 	return nil
 }
 
-// calculateImageCost ??????????????????????????
+// calculateImageCost 计算图片生成费用：渠道级别定价优先，否则走按次计费。
 func (s *GatewayService) calculateImageCost(
 	ctx context.Context,
 	result *ForwardResult,
@@ -960,7 +960,7 @@ func (s *GatewayService) calculateImageCost(
 	return s.billingService.CalculateImageCost(billingModel, sizeTier, result.ImageCount, groupConfig, multiplier)
 }
 
-// calculateTokenCost ?? Token ????? opts ?????/????/???????
+// calculateTokenCost 计算 Token 计费：根据 opts 决定走普通/长上下文/渠道统一计费。
 func (s *GatewayService) calculateTokenCost(
 	ctx context.Context,
 	result *ForwardResult,
@@ -982,7 +982,7 @@ func (s *GatewayService) calculateTokenCost(
 	var cost *CostBreakdown
 	var err error
 
-	// ???????? ? CalculateCostUnified
+	// 优先尝试渠道定价 → CalculateCostUnified
 	if resolved := s.resolveChannelPricing(ctx, billingModel, apiKey); resolved != nil {
 		gid := apiKey.Group.ID
 		cost, err = s.billingService.CalculateCostUnified(CostInput{
@@ -996,7 +996,7 @@ func (s *GatewayService) calculateTokenCost(
 			Resolved:       resolved,
 		})
 	} else if opts.LongContextThreshold > 0 {
-		// ?????????? Gemini 200K ???
+		// 长上下文双倍计费（如 Gemini 200K 阈值）
 		cost, err = s.billingService.CalculateCostWithLongContext(billingModel, tokens, multiplier, opts.LongContextThreshold, opts.LongContextMultiplier)
 	} else {
 		cost, err = s.billingService.CalculateCost(billingModel, tokens, multiplier)
@@ -1008,7 +1008,7 @@ func (s *GatewayService) calculateTokenCost(
 	return cost
 }
 
-// buildRecordUsageLog ??????????????
+// buildRecordUsageLog 构建使用日志并设置计费模式。
 func (s *GatewayService) buildRecordUsageLog(
 	ctx context.Context,
 	input *recordUsageCoreInput,
@@ -1092,7 +1092,7 @@ func (s *GatewayService) buildRecordUsageLog(
 	return usageLog
 }
 
-// resolveBillingMode ??????????????????
+// resolveBillingMode 根据计费结果和请求类型确定计费模式。
 func resolveBillingMode(result *ForwardResult, cost *CostBreakdown) *string {
 	var mode string
 	switch {

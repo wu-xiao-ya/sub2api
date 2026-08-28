@@ -62,8 +62,8 @@ func (s *APIKeyService) ensureMonitoringUser(ctx context.Context, groupIDs []int
 	}
 	user := &User{
 		Email:            monitoringUserEmail,
-		Username:         "Sub2API ????",
-		Notes:            "???????????????????",
+		Username:         "Sub2API 站内监测",
+		Notes:            "仅用于渠道监控，不允许承载普通用户请求",
 		Role:             RoleUser,
 		Balance:          0,
 		Concurrency:      0,
@@ -217,7 +217,7 @@ func (s *APIKeyService) EnsureMonitoringMonitorKeys(ctx context.Context, groupID
 			return nil, fmt.Errorf("generate monitoring key for group %d: %w", group.ID, keyErr)
 		}
 		key := &APIKey{
-			UserID: user.ID, Key: plainKey, Name: fmt.Sprintf("???? ? %s", group.Name),
+			UserID: user.ID, Key: plainKey, Name: fmt.Sprintf("站内监测 · %s", group.Name),
 			GroupID: &group.ID, Status: StatusAPIKeyActive,
 		}
 		if err := s.apiKeyRepo.Create(ctx, key); err != nil {

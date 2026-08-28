@@ -18,20 +18,20 @@ import (
 )
 
 const (
-	// monitorMaxPageSize ???????
+	// monitorMaxPageSize 列表分页上限。
 	monitorMaxPageSize = 100
-	// monitorAPIKeyMaskPrefix ?????????????
+	// monitorAPIKeyMaskPrefix 脱敏时保留的明文前缀长度。
 	monitorAPIKeyMaskPrefix = 4
-	// monitorAPIKeyMaskSuffix ????????????
+	// monitorAPIKeyMaskSuffix 脱敏后追加的占位字符串。
 	monitorAPIKeyMaskSuffix = "***"
 )
 
-// ChannelMonitorHandler ???????? handler?
+// ChannelMonitorHandler 渠道监控管理后台 handler。
 type ChannelMonitorHandler struct {
 	monitorService *service.ChannelMonitorService
 }
 
-// NewChannelMonitorHandler ?? handler?
+// NewChannelMonitorHandler 创建 handler。
 func NewChannelMonitorHandler(monitorService *service.ChannelMonitorService) *ChannelMonitorHandler {
 	return &ChannelMonitorHandler{monitorService: monitorService}
 }
@@ -93,7 +93,7 @@ type channelMonitorUpdateRequest struct {
 	JitterSeconds         *int               `json:"jitter_seconds" binding:"omitempty,min=0,max=3585"`
 	RequestTimeoutSeconds *int               `json:"request_timeout_seconds" binding:"omitempty,min=15,max=900"`
 	TemplateID            *int64             `json:"template_id"`
-	ClearTemplate         bool               `json:"clear_template"` // true ?? template_id ????? TemplateID
+	ClearTemplate         bool               `json:"clear_template"` // true 时把 template_id 置空，忽略 TemplateID
 	ExtraHeaders          *map[string]string `json:"extra_headers"`
 	BodyOverrideMode      *string            `json:"body_override_mode" binding:"omitempty,oneof=off merge replace"`
 	BodyOverride          *map[string]any    `json:"body_override"`
@@ -133,7 +133,7 @@ type channelMonitorResponse struct {
 	PrimaryCheckedAt        *string                              `json:"primary_checked_at,omitempty"`
 	Availability7d          float64                              `json:"availability_7d"`
 	ExtraModelsStatus       []dto.ChannelMonitorExtraModelStatus `json:"extra_models_status"`
-	// ???????????? / ?????????
+	// 请求自定义快照：前端编辑 / 展示「高级设置」用
 	TemplateID       *int64            `json:"template_id"`
 	ExtraHeaders     map[string]string `json:"extra_headers"`
 	BodyOverrideMode string            `json:"body_override_mode"`
@@ -171,7 +171,7 @@ type channelMonitorHistoryItemResponse struct {
 	HealthyCount     int                            `json:"healthy_count,omitempty"`
 }
 
-// maskAPIKey ? API Key ??????? 4 ?? + "***"??? ? 4 ???? "***"?
+// maskAPIKey 对 API Key 明文做脱敏：前 4 字符 + "***"，长度 ≤ 4 时只显示 "***"。
 func maskAPIKey(plain string) string {
 	if len(plain) <= monitorAPIKeyMaskPrefix {
 		return monitorAPIKeyMaskSuffix
@@ -221,7 +221,7 @@ func channelMonitorToResponse(m *service.ChannelMonitor) *channelMonitorResponse
 		ExtraHeaders:          headers,
 		BodyOverrideMode:      m.BodyOverrideMode,
 		BodyOverride:          m.BodyOverride,
-		// PrimaryStatus / PrimaryLatencyMs / Availability7d ? List handler ?????????
+		// PrimaryStatus / PrimaryLatencyMs / Availability7d 由 List handler 在批量聚合后填充。
 	}
 	if m.LastCheckedAt != nil {
 		s := m.LastCheckedAt.UTC().Format(time.RFC3339)
@@ -273,8 +273,8 @@ func cloneResponseInt64(value *int64) *int64 {
 	return &cloned
 }
 
-// ParseChannelMonitorID ????????? :id?admin ? user handler ????
-// ???????? 4xx ???????? return?
+// ParseChannelMonitorID 提取并校验路径参数 :id（admin 与 user handler 共享）。
+// 校验失败时已写入 4xx 响应，调用方只需 return。
 func ParseChannelMonitorID(c *gin.Context) (int64, bool) {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil || id <= 0 {
@@ -284,7 +284,7 @@ func ParseChannelMonitorID(c *gin.Context) (int64, bool) {
 	return id, true
 }
 
-// parseListEnabled ?? enabled query ???true/false ?? *bool???????? nil?
+// parseListEnabled 解析 enabled query 参数：true/false 转为 *bool，空或非法则返回 nil。
 func parseListEnabled(raw string) *bool {
 	switch strings.ToLower(strings.TrimSpace(raw)) {
 	case "true", "1", "yes":
@@ -388,7 +388,7 @@ func (h *ChannelMonitorHandler) EnsureInternalKeys(c *gin.Context) {
 	})
 }
 
-// batchSummaryFor ???? latest + 7d ???????? 2 ? SQL??? N+1??
+// batchSummaryFor 批量聚合 latest + 7d 可用率，避免每行 2 次 SQL（消除 N+1）。
 func (h *ChannelMonitorHandler) batchSummaryFor(c *gin.Context, items []*service.ChannelMonitor) map[int64]service.MonitorStatusSummary {
 	ids := make([]int64, 0, len(items))
 	primaryByID := make(map[int64]string, len(items))
@@ -401,7 +401,7 @@ func (h *ChannelMonitorHandler) batchSummaryFor(c *gin.Context, items []*service
 	return h.monitorService.BatchMonitorStatusSummary(c.Request.Context(), ids, primaryByID, extrasByID)
 }
 
-// buildListItemResponse ? monitor + summary ?? admin list ?????
+// buildListItemResponse 把 monitor + summary 装成 admin list 的响应行。
 func buildListItemResponse(m *service.ChannelMonitor, summary service.MonitorStatusSummary) *channelMonitorResponse {
 	resp := channelMonitorToResponse(m)
 	resp.PrimaryStatus = summary.PrimaryStatus
@@ -660,8 +660,8 @@ func (h *ChannelMonitorHandler) Image(c *gin.Context) {
 	c.Data(http.StatusOK, image.ContentType, image.Data)
 }
 
-// parseHistoryLimit ?? history ??? limit query?
-// ?? service ????????????? handler ??????????
+// parseHistoryLimit 解析 history 接口的 limit query。
+// 使用 service 包的统一上下限常量，避免在 handler 重复定义同名魔法值。
 func parseHistoryLimit(raw string) int {
 	if strings.TrimSpace(raw) == "" {
 		return service.MonitorHistoryDefaultLimit

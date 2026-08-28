@@ -17,18 +17,18 @@ import (
 	"entgo.io/ent/dialect/sql/sqljson"
 )
 
-// channelMonitorRepository ?? service.ChannelMonitorRepository?
+// channelMonitorRepository 实现 service.ChannelMonitorRepository。
 //
-// ?????
-//   - CRUD ? ent?????????????
-//   - ?????latest per model / availability???? SQL??? ent ? GROUP BY ?
-//     ???????????????
+// 选型说明：
+//   - CRUD 走 ent，复用项目的事务上下文支持
+//   - 聚合查询（latest per model / availability）走原生 SQL，避免 ent 在 GROUP BY 上
+//     的样板代码，并保证索引能被命中
 type channelMonitorRepository struct {
 	client *dbent.Client
 	db     *sql.DB
 }
 
-// NewChannelMonitorRepository ???????
+// NewChannelMonitorRepository 创建仓储实例。
 func NewChannelMonitorRepository(client *dbent.Client, db *sql.DB) service.ChannelMonitorRepository {
 	return &channelMonitorRepository{client: client, db: db}
 }
@@ -43,7 +43,7 @@ func (r *channelMonitorRepository) Create(ctx context.Context, m *service.Channe
 		SetAPIMode(defaultAPIModeRepo(m.APIMode)).
 		SetEndpoint(m.Endpoint).
 		SetSourceMode(m.SourceMode).
-		SetAPIKeyEncrypted(m.APIKey). // ??????????
+		SetAPIKeyEncrypted(m.APIKey). // 调用方传入的已是密文
 		SetPrimaryModel(m.PrimaryModel).
 		SetExtraModels(emptySliceIfNil(m.ExtraModels)).
 		SetGroupName(m.GroupName).
@@ -261,7 +261,7 @@ func (r *channelMonitorRepository) List(ctx context.Context, params service.Chan
 	return out, int64(total), nil
 }
 
-// ---------- ????? ----------
+// ---------- 调度器辅助 ----------
 
 func (r *channelMonitorRepository) ListEnabled(ctx context.Context) ([]*service.ChannelMonitor, error) {
 	rows, err := r.client.ChannelMonitor.Query().
@@ -379,14 +379,14 @@ func (r *channelMonitorRepository) InsertCostEvents(ctx context.Context, events 
 	return nil
 }
 
-// DeleteHistoryBefore ??? checked_at < before ?????? channelMonitorPruneBatchSize ????
-// ????????????/WAL ????? (checked_at) ?????? id??? id ??
+// DeleteHistoryBefore 物理删 checked_at < before 的明细，分批 channelMonitorPruneBatchSize 行一批，
+// 避免单事务删除过多引起锁/WAL 压力。借助 (checked_at) 索引定位小批 id，再按 id 删。
 func (r *channelMonitorRepository) DeleteHistoryBefore(ctx context.Context, before time.Time) (int64, error) {
 	return deleteChannelMonitorBatched(ctx, r.db, channelMonitorPruneHistorySQL, before)
 }
 
-// ListHistory ? checked_at ??????????? N ??????
-// model ????????????????????
+// ListHistory 按 checked_at 倒序返回某个监控的最近 N 条历史记录。
+// model 为空时不过滤；非空时只返回该模型的记录。
 func (r *channelMonitorRepository) ListHistory(ctx context.Context, monitorID int64, model string, limit int) ([]*service.ChannelMonitorHistoryEntry, error) {
 	q := r.client.ChannelMonitorHistory.Query().
 		Where(channelmonitorhistory.MonitorIDEQ(monitorID))
@@ -554,10 +554,10 @@ func (r *channelMonitorRepository) ClearAccountProbeStates(ctx context.Context, 
 	return nil
 }
 
-// ---------- ????????? SQL? ----------
+// ---------- 用户视图聚合（原生 SQL） ----------
 
-// ListLatestPerModel ? DISTINCT ON ??? (monitor_id, model) ????????
-// ?? (monitor_id, model, checked_at DESC) ???? Index Scan?
+// ListLatestPerModel 用 DISTINCT ON 取每个 (monitor_id, model) 的最近一条记录。
+// 借助 (monitor_id, model, checked_at DESC) 索引可走 Index Scan。
 func (r *channelMonitorRepository) ListLatestPerModel(ctx context.Context, monitorID int64) ([]*service.ChannelMonitorLatest, error) {
 	const q = `
 		SELECT DISTINCT ON (model)
@@ -593,8 +593,8 @@ func (r *channelMonitorRepository) ListLatestPerModel(ctx context.Context, monit
 	return out, rows.Err()
 }
 
-// assignNullInt ? sql.NullInt64 ??? *int ?????valid ???? int??
-// ?????? latency / ping ???? if latency.Valid { v := int(...) ... } ???
+// assignNullInt 把 sql.NullInt64 解包到 *int 指针目标（valid 才分配新 int）。
+// 集中实现避免 latency / ping 两处重复 if latency.Valid { v := int(...) ... } 模板。
 func assignNullInt(dst **int, n sql.NullInt64) {
 	if !n.Valid {
 		return
@@ -611,12 +611,12 @@ func assignNullInt64(dst **int64, n sql.NullInt64) {
 	*dst = &v
 }
 
-// ComputeAvailability ?????????????????????
-// "??" = status IN (operational, degraded)?
+// ComputeAvailability 计算指定窗口内每个模型的可用率与平均延迟。
+// "可用" = status IN (operational, degraded)。
 //
-// ??????????? 1 ??????????????
-// ???? 30 ??monitorHistoryRetentionDays???? <= 30 ????? histories?
-// ??????????? UNION ??? UTC ???????
+// 数据来源：明细表只保留 1 天；窗口前其余天数走聚合表。
+// 明细保留 30 天（monitorHistoryRetentionDays），窗口 <= 30 天时直接扫 histories，
+// 精度到秒，避免与聚合表 UNION 带来的 UTC 日切精度损失。
 func (r *channelMonitorRepository) ComputeAvailability(ctx context.Context, monitorID int64, windowDays int) ([]*service.ChannelMonitorAvailability, error) {
 	if windowDays <= 0 {
 		windowDays = 7
@@ -650,8 +650,8 @@ func (r *channelMonitorRepository) ComputeAvailability(ctx context.Context, moni
 	return out, rows.Err()
 }
 
-// scanAvailabilityRow ??? (model, total, ok, avg_latency) ??? ChannelMonitorAvailability?
-// ???? ComputeAvailability?4 ???????????? monitor_id ?? inline ? finalizeAvailabilityRow?
+// scanAvailabilityRow 把单行 (model, total, ok, avg_latency) 扫描为 ChannelMonitorAvailability。
+// 仅服务于 ComputeAvailability（4 列）；批量版本因为多一列 monitor_id 直接 inline 调 finalizeAvailabilityRow。
 func scanAvailabilityRow(rows interface{ Scan(...any) error }, windowDays int) (*service.ChannelMonitorAvailability, error) {
 	row := &service.ChannelMonitorAvailability{WindowDays: windowDays}
 	var avgLatency sql.NullFloat64
@@ -662,8 +662,8 @@ func scanAvailabilityRow(rows interface{ Scan(...any) error }, windowDays int) (
 	return row, nil
 }
 
-// finalizeAvailabilityRow ?? OperationalChecks/TotalChecks ??????
-// ?? sql.NullFloat64 ???????? *int????????????
+// finalizeAvailabilityRow 根据 OperationalChecks/TotalChecks 算出可用率，
+// 并把 sql.NullFloat64 的平均延迟解包为 *int。两处复用避免维护漂移。
 func finalizeAvailabilityRow(row *service.ChannelMonitorAvailability, avgLatency sql.NullFloat64) {
 	if row.TotalChecks > 0 {
 		row.AvailabilityPct = float64(row.OperationalChecks) * 100.0 / float64(row.TotalChecks)
@@ -674,8 +674,8 @@ func finalizeAvailabilityRow(row *service.ChannelMonitorAvailability, avgLatency
 	}
 }
 
-// ListLatestForMonitorIDs ??????????"?? (monitor_id, model) ????"???
-// ?? PG ? DISTINCT ON ????? (monitor_id, model, checked_at DESC) ???? Index Scan?
+// ListLatestForMonitorIDs 一次性查询多个监控的"每个 (monitor_id, model) 最近一条"记录。
+// 利用 PG 的 DISTINCT ON 特性，借助 (monitor_id, model, checked_at DESC) 索引可走 Index Scan。
 func (r *channelMonitorRepository) ListLatestForMonitorIDs(ctx context.Context, ids []int64) (map[int64][]*service.ChannelMonitorLatest, error) {
 	out := make(map[int64][]*service.ChannelMonitorLatest, len(ids))
 	if len(ids) == 0 {
@@ -718,13 +718,13 @@ func (r *channelMonitorRepository) ListLatestForMonitorIDs(ctx context.Context, 
 	return out, nil
 }
 
-// ListRecentHistoryForMonitors ??? monitor ?????"????"?? N ????? checked_at DESC???????
-// primaryModels[monitorID] ?????????????monitor ?? primaryModels ????????
-// ?? CTE + unnest(?? int8/text ??) ?? (monitor_id, model) ????
-// ?? ROW_NUMBER() OVER (PARTITION BY monitor_id) ???? N ??
+// ListRecentHistoryForMonitors 为多个 monitor 批量取各自"指定模型"最近 N 条历史（按 checked_at DESC，最新在前）。
+// primaryModels[monitorID] 指定该监控要过滤的模型名；monitor 不在 primaryModels 中的记录不返回。
+// 通过 CTE + unnest(两个 int8/text 数组) 构造 (monitor_id, model) 白名单，
+// 再用 ROW_NUMBER() OVER (PARTITION BY monitor_id) 取各自前 N 条。
 //
-// ????map[monitorID] -> []*ChannelMonitorHistoryEntry??? message?????????
-// ? ids / ? primaryModels ??? map?????
+// 返回值：map[monitorID] -> []*ChannelMonitorHistoryEntry（不含 message，减少网络开销）。
+// 空 ids / 空 primaryModels 返回空 map，不报错。
 func (r *channelMonitorRepository) ListRecentHistoryForMonitors(
 	ctx context.Context,
 	ids []int64,
@@ -782,8 +782,8 @@ func (r *channelMonitorRepository) ListRecentHistoryForMonitors(
 	return out, nil
 }
 
-// buildMonitorModelPairs ?? ids ?????? (monitor_id, model) ??model ??????
-// ????????????????? unnest ???
+// buildMonitorModelPairs 基于 ids 过滤出有效的 (monitor_id, model) 对，model 为空时跳过。
+// 保证两个数组长度一致且一一对应，供 unnest 展开。
 func buildMonitorModelPairs(ids []int64, primaryModels map[int64]string) ([]int64, []string) {
 	if len(ids) == 0 || len(primaryModels) == 0 {
 		return nil, nil
@@ -801,14 +801,14 @@ func buildMonitorModelPairs(ids []int64, primaryModels map[int64]string) ([]int6
 	return pairIDs, pairModels
 }
 
-// timelineLimit* ?? timeline ??? perMonitorLimit ?????
-// ?? 1 ????????????? 200 ???????? SQL ?????ROW_NUMBER ??????
+// timelineLimit* 批量 timeline 查询的 perMonitorLimit 夹紧范围。
+// 下限 1 表示至少返回最近一条；上限 200 控制单次响应体与 SQL 内存占用（ROW_NUMBER 窗口上限）。
 const (
 	timelineLimitMin = 1
 	timelineLimitMax = 200
 )
 
-// clampTimelineLimit ? perMonitorLimit ??? [timelineLimitMin, timelineLimitMax]????????????
+// clampTimelineLimit 把 perMonitorLimit 夹紧到 [timelineLimitMin, timelineLimitMax]，避免非法值或超大查询。
 func clampTimelineLimit(n int) int {
 	if n < timelineLimitMin {
 		return timelineLimitMin
@@ -819,8 +819,8 @@ func clampTimelineLimit(n int) int {
 	return n
 }
 
-// ComputeAvailabilityForMonitors ????????????????????????????
-// ???? 30 ????? histories??? <= 30 ????????
+// ComputeAvailabilityForMonitors 一次性计算多个监控在某个窗口内的每模型可用率与平均延迟。
+// 明细保留 30 天，直接扫 histories（窗口 <= 30 天时无需聚合）。
 func (r *channelMonitorRepository) ComputeAvailabilityForMonitors(ctx context.Context, ids []int64, windowDays int) (map[int64][]*service.ChannelMonitorAvailability, error) {
 	out := make(map[int64][]*service.ChannelMonitorAvailability, len(ids))
 	if len(ids) == 0 {
@@ -855,8 +855,8 @@ func (r *channelMonitorRepository) ComputeAvailabilityForMonitors(ctx context.Co
 		if err := rows.Scan(&monitorID, &row.Model, &row.TotalChecks, &row.OperationalChecks, &avgLatency); err != nil {
 			return nil, fmt.Errorf("scan availability batch row: %w", err)
 		}
-		// ???????? monitor_id?????????/???????? monitor ?????
-		// ?? finalizeAvailabilityRow ?????????????? NullFloat ???
+		// 批量查询多了首列 monitor_id；其余字段的可用率/平均延迟换算与单 monitor 版本一致，
+		// 抽出 finalizeAvailabilityRow 复用，避免两处分别维护除法与 NullFloat 解包。
 		finalizeAvailabilityRow(row, avgLatency)
 		out[monitorID] = append(out[monitorID], row)
 	}
@@ -866,13 +866,13 @@ func (r *channelMonitorRepository) ComputeAvailabilityForMonitors(ctx context.Co
 	return out, nil
 }
 
-// ---------- ???? ----------
+// ---------- 聚合维护 ----------
 
-// UpsertDailyRollupsFor ? targetDate ???[targetDate, targetDate+1d)????
-// ? (monitor_id, model, bucket_date) ???? channel_monitor_daily_rollups?
-//   - ? ON CONFLICT (monitor_id, model, bucket_date) DO UPDATE ???????
-//     ??????????????
-//   - $1::date ? PG ????? truncate ? UTC ???????????? targetDate?
+// UpsertDailyRollupsFor 把 targetDate 当天（[targetDate, targetDate+1d)）的明细
+// 按 (monitor_id, model, bucket_date) 聚合写入 channel_monitor_daily_rollups。
+//   - 用 ON CONFLICT (monitor_id, model, bucket_date) DO UPDATE 实现幂等回填，
+//     重复执行只会用最新统计覆盖；
+//   - $1::date 让 PG 自动把入参 truncate 到 UTC 日期，调用方不需要预处理 targetDate。
 func (r *channelMonitorRepository) UpsertDailyRollupsFor(ctx context.Context, targetDate time.Time) (int64, error) {
 	const q = `
 		INSERT INTO channel_monitor_daily_rollups (
@@ -926,16 +926,16 @@ func (r *channelMonitorRepository) UpsertDailyRollupsFor(ctx context.Context, ta
 	return n, nil
 }
 
-// DeleteRollupsBefore ??? bucket_date < beforeDate ??????????
+// DeleteRollupsBefore 物理删 bucket_date < beforeDate 的聚合行，同样分批。
 func (r *channelMonitorRepository) DeleteRollupsBefore(ctx context.Context, beforeDate time.Time) (int64, error) {
 	return deleteChannelMonitorBatched(ctx, r.db, channelMonitorPruneRollupSQL, beforeDate)
 }
 
-// channelMonitorPruneBatchSize ???????? ops_cleanup_service ????? 5000?
-// ????? id ??????????? WAL ???
+// channelMonitorPruneBatchSize 单批删除上限。与 ops_cleanup_service 保持一致的 5000，
+// 在大表上按 id 小批删可以避免长事务和 WAL 堆积。
 const channelMonitorPruneBatchSize = 5000
 
-// channelMonitorPruneHistorySQL ????????????
+// channelMonitorPruneHistorySQL 分批物理删明细表过期行。
 const channelMonitorPruneHistorySQL = `
 WITH batch AS (
     SELECT id FROM channel_monitor_histories
@@ -947,8 +947,8 @@ DELETE FROM channel_monitor_histories
 WHERE id IN (SELECT id FROM batch)
 `
 
-// channelMonitorPruneRollupSQL ????? rollup ?????bucket_date ?? ::date ??
-// ??? DATE ??????
+// channelMonitorPruneRollupSQL 分批物理删 rollup 表过期行。bucket_date 需要 ::date 转型
+// 保证与 DATE 列一致比较。
 const channelMonitorPruneRollupSQL = `
 WITH batch AS (
     SELECT id FROM channel_monitor_daily_rollups
@@ -960,8 +960,8 @@ DELETE FROM channel_monitor_daily_rollups
 WHERE id IN (SELECT id FROM batch)
 `
 
-// deleteChannelMonitorBatched ?????? DELETE??????? 0??????????
-// cutoff ?????????????? time.Time ? TIMESTAMPTZ?rollup ? time.Time SQL ? ::date ????
+// deleteChannelMonitorBatched 循环执行分批 DELETE，直到影响行为 0。返回累计删除行数。
+// cutoff 由调用方按列类型传入（明细用 time.Time 对 TIMESTAMPTZ，rollup 用 time.Time SQL 侧 ::date 转型）。
 func deleteChannelMonitorBatched(ctx context.Context, db *sql.DB, query string, cutoff time.Time) (int64, error) {
 	var total int64
 	for {
@@ -981,9 +981,9 @@ func deleteChannelMonitorBatched(ctx context.Context, db *sql.DB, query string, 
 	return total, nil
 }
 
-// LoadAggregationWatermark ? watermark ??id=1??
-// watermark ??? ent schema???????????? SQL?
-//   - ????? last_aggregated_date IS NULL??? (nil, nil)?????????????
+// LoadAggregationWatermark 读 watermark 表（id=1）。
+// watermark 表不是 ent schema（只有一行），直接走原生 SQL。
+//   - 行不存在或 last_aggregated_date IS NULL：返回 (nil, nil)，由调用方决定首次回填策略
 func (r *channelMonitorRepository) LoadAggregationWatermark(ctx context.Context) (*time.Time, error) {
 	const q = `SELECT last_aggregated_date FROM channel_monitor_aggregation_watermark WHERE id = 1`
 	var t sql.NullTime
@@ -999,8 +999,8 @@ func (r *channelMonitorRepository) LoadAggregationWatermark(ctx context.Context)
 	return &t.Time, nil
 }
 
-// UpdateAggregationWatermark ?? watermark?UPSERT ? id=1??
-// $1::date ? PG ??? truncate ? UTC ???? last_aggregated_date ?? DATE ?????
+// UpdateAggregationWatermark 更新 watermark（UPSERT 到 id=1）。
+// $1::date 让 PG 把入参 truncate 到 UTC 日期，与 last_aggregated_date 列的 DATE 类型一致。
 func (r *channelMonitorRepository) UpdateAggregationWatermark(ctx context.Context, date time.Time) error {
 	const q = `
 		INSERT INTO channel_monitor_aggregation_watermark (id, last_aggregated_date, updated_at)
@@ -1037,7 +1037,7 @@ func entToServiceMonitor(row *dbent.ChannelMonitor) *service.ChannelMonitor {
 		Provider:              string(row.Provider),
 		APIMode:               defaultAPIModeRepo(row.APIMode),
 		Endpoint:              row.Endpoint,
-		APIKey:                row.APIKeyEncrypted, // ?????service ?????
+		APIKey:                row.APIKeyEncrypted, // 仍为密文，service 层负责解密
 		SourceMode:            service.NormalizeMonitorSourceModeForAPI(row.SourceMode),
 		InternalAPIKeyID:      row.InternalAPIKeyID,
 		InternalGroupID:       row.InternalGroupID,
@@ -1082,8 +1082,8 @@ func channelMonitorHeadersForPersistence(m *service.ChannelMonitor) map[string]s
 	return headers
 }
 
-// emptyHeadersIfNilRepo ? service.emptyHeadersIfNil ?????
-// repo ?????? import ???
+// emptyHeadersIfNilRepo 与 service.emptyHeadersIfNil 功能一致，
+// repo 独立一份避免 import 循环。
 func emptyHeadersIfNilRepo(h map[string]string) map[string]string {
 	if h == nil {
 		return map[string]string{}
@@ -1091,7 +1091,7 @@ func emptyHeadersIfNilRepo(h map[string]string) map[string]string {
 	return h
 }
 
-// defaultBodyModeRepo ????? off????????
+// defaultBodyModeRepo 空串归一为 off（同上不循环）。
 func defaultBodyModeRepo(mode string) string {
 	if mode == "" {
 		return "off"

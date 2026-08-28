@@ -36,7 +36,7 @@ func newAPIKeyRepositoryWithSQL(client *dbent.Client, sqlq sqlExecutor) *apiKeyR
 }
 
 func (r *apiKeyRepository) activeQuery() *dbent.APIKeyQuery {
-	// ??????????????????????
+	// 默认过滤已软删除记录，避免删除后仍被查询到。
 	return r.client.APIKey.Query().Where(apikey.DeletedAtIsNil())
 }
 
@@ -87,11 +87,11 @@ func (r *apiKeyRepository) GetByID(ctx context.Context, id int64) (*service.APIK
 	return apiKeyEntityToService(m), nil
 }
 
-// GetKeyAndOwnerID ?? API Key ID ??? key ????????ID?
-// ?? GetByID????????????
-//   - ?? Select() ???????????????
-//   - ?????? API Key ?????????User?Group ??
-//   - ???????? key ??? ID ???
+// GetKeyAndOwnerID 根据 API Key ID 获取其 key 与所有者（用户）ID。
+// 相比 GetByID，此方法性能更优，因为：
+//   - 使用 Select() 只查询必要字段，减少数据传输量
+//   - 不加载完整的 API Key 实体及其关联数据（User、Group 等）
+//   - 适用于删除等只需 key 与用户 ID 的场景
 func (r *apiKeyRepository) GetKeyAndOwnerID(ctx context.Context, id int64) (string, int64, error) {
 	m, err := r.activeQuery().
 		Where(apikey.IDEQ(id)).
@@ -225,11 +225,11 @@ func (r *apiKeyRepository) GetByKeyForAuth(ctx context.Context, key string) (*se
 }
 
 func (r *apiKeyRepository) Update(ctx context.Context, key *service.APIKey) error {
-	// ???????????????????????????????
-	// ???????? Exist ? UpdateOneID?????????????
-	// ???????????
-	// ???? Update().Where()????????????????
-	// ?????? updated_at??????????????????
+	// 使用原子操作：将软删除检查与更新合并到同一语句，避免竞态条件。
+	// 之前的实现先检查 Exist 再 UpdateOneID，若在两步之间发生软删除，
+	// 则会更新已删除的记录。
+	// 这里选择 Update().Where()，确保只有未软删除记录能被更新。
+	// 同时显式设置 updated_at，避免二次查询带来的并发可见性问题。
 	client := clientFromContext(ctx, r.client)
 	now := time.Now()
 	builder := client.APIKey.Update().
@@ -275,7 +275,7 @@ func (r *apiKeyRepository) Update(ctx context.Context, key *service.APIKey) erro
 		builder.ClearWindow7dStart()
 	}
 
-	// IP ????
+	// IP 限制字段
 	if len(key.IPWhitelist) > 0 {
 		builder.SetIPWhitelist(key.IPWhitelist)
 	} else {
@@ -292,19 +292,19 @@ func (r *apiKeyRepository) Update(ctx context.Context, key *service.APIKey) erro
 		return err
 	}
 	if affected == 0 {
-		// ??????? 0???????????????
+		// 更新影响行数为 0，说明记录不存在或已被软删除。
 		return service.ErrAPIKeyNotFound
 	}
 
-	// ?????????????????????????
+	// 使用同一时间戳回填，避免并发删除导致二次查询失败。
 	key.UpdatedAt = now
 	return nil
 }
 
 func (r *apiKeyRepository) Delete(ctx context.Context, id int64) error {
-	// ??????? ??tombstone key ?????key?????? 128??? schema ??
+	// 存在唯一键约束 生成tombstone key 用来释放原key，长度远小于 128，满足 schema 限制
 	tombstoneKey := fmt.Sprintf("__deleted__%d__%d", id, time.Now().UnixNano())
-	// ?????????? Hook ????? deleted_at ??????
+	// 显式软删除：避免依赖 Hook 行为，确保 deleted_at 一定被设置。
 	affected, err := r.client.APIKey.Update().
 		Where(apikey.IDEQ(id), apikey.DeletedAtIsNil()).
 		SetKey(tombstoneKey).
@@ -374,7 +374,7 @@ func (r *apiKeyRepository) deleteWithTombstone(ctx context.Context, exec *dbent.
 		return err
 	}
 	if affected == 0 {
-		// ??/????:?????(???)????? nil(defer ?????),?? NotFound?
+		// 并发/重复删除:记录已存在(已软删)则幂等返回 nil(defer 回滚空事务),否则 NotFound。
 		exists, existErr := r.client.APIKey.Query().
 			Where(apikey.IDEQ(id)).
 			Exist(mixins.SkipSoftDelete(ctx))
@@ -664,7 +664,7 @@ func (r *apiKeyRepository) SearchAPIKeys(ctx context.Context, userID int64, keyw
 	return outKeys, nil
 }
 
-// ClearGroupIDByGroupID ???????? API Key ? group_id ?? nil
+// ClearGroupIDByGroupID 将指定分组的所有 API Key 的 group_id 设为 nil
 func (r *apiKeyRepository) ClearGroupIDByGroupID(ctx context.Context, groupID int64) (int64, error) {
 	n, err := r.client.APIKey.Update().
 		Where(apikey.GroupIDEQ(groupID), apikey.DeletedAtIsNil()).
@@ -673,7 +673,7 @@ func (r *apiKeyRepository) ClearGroupIDByGroupID(ctx context.Context, groupID in
 	return int64(n), err
 }
 
-// UpdateGroupIDByUserAndGroup ?????? oldGroupID ??? Key ??? newGroupID
+// UpdateGroupIDByUserAndGroup 将用户下绑定 oldGroupID 的所有 Key 迁移到 newGroupID
 func (r *apiKeyRepository) UpdateGroupIDByUserAndGroup(ctx context.Context, userID, oldGroupID, newGroupID int64) (int64, error) {
 	client := clientFromContext(ctx, r.client)
 	n, err := client.APIKey.Update().
@@ -683,7 +683,7 @@ func (r *apiKeyRepository) UpdateGroupIDByUserAndGroup(ctx context.Context, user
 	return int64(n), err
 }
 
-// CountByGroupID ????? API Key ??
+// CountByGroupID 获取分组的 API Key 数量
 func (r *apiKeyRepository) CountByGroupID(ctx context.Context, groupID int64) (int64, error) {
 	count, err := r.activeQuery().Where(apikey.GroupIDEQ(groupID)).Count(ctx)
 	return int64(count), err
@@ -711,7 +711,7 @@ func (r *apiKeyRepository) ListKeysByGroupID(ctx context.Context, groupID int64)
 	return keys, nil
 }
 
-// IncrementQuotaUsed ?? Ent ???? quota_used ???????
+// IncrementQuotaUsed 使用 Ent 原子递增 quota_used 字段并返回新值
 func (r *apiKeyRepository) IncrementQuotaUsed(ctx context.Context, id int64, amount float64) (float64, error) {
 	updated, err := r.client.APIKey.UpdateOneID(id).
 		Where(apikey.DeletedAtIsNil()).

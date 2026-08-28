@@ -54,7 +54,7 @@ export interface ChannelMonitor {
   account_group_id?: number | null
   enabled: boolean
   interval_seconds: number
-  /** ????? interval ??? ? [0, jitter] ?????????0 = ???? */
+  /** 每次调度在 interval 基础上 ± [0, jitter] 的随机偏移（秒），0 = 固定间隔 */
   jitter_seconds: number
   /** One upstream check's maximum wait time. Images can use a longer value. */
   request_timeout_seconds: number
@@ -78,7 +78,7 @@ export interface ChannelMonitor {
   availability_7d: number
   /** Latest status per extra model (used for hover tooltip) */
   extra_models_status: ExtraModelStatus[]
-  /** ??????????????? */
+  /** 请求自定义快照字段（高级设置） */
   template_id: number | null
   extra_headers: Record<string, string>
   body_override_mode: BodyOverrideMode
@@ -132,7 +132,7 @@ export interface CreateParams {
   body_override?: Record<string, unknown> | null
 }
 
-// Update request: api_key ?? = ????clear_template=true ?? template_id ??
+// Update request: api_key 空串 = 不修改；clear_template=true 时把 template_id 置空
 export type UpdateParams = Partial<CreateParams> & {
   clear_template?: boolean
   clear_account_group?: boolean
