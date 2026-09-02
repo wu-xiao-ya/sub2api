@@ -1052,6 +1052,10 @@ export default {
         fallbackHint: '非 Claude Code 请求将使用此分组，留空则直接拒绝',
         noFallback: '不降级（直接拒绝）'
       },
+      openaiFast: {
+        force: '强制本分组使用 Fast（priority）',
+        free: 'Fast 请求按 Standard 价格计费'
+      },
       openaiMessages: {
         title: 'OpenAI Messages 调度配置',
         allowDispatch: '允许 /v1/messages 调度',
