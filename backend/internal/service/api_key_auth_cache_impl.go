@@ -14,7 +14,7 @@ import (
 	"github.com/dgraph-io/ristretto"
 )
 
-const apiKeyAuthSnapshotVersion = 16 // v16: include contributor reward multiplier
+const apiKeyAuthSnapshotVersion = 17 // v17: include OpenAI Fast group policy
 
 type apiKeyAuthCacheConfig struct {
 	l1Size        int
