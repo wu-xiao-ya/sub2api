@@ -1,5 +1,5 @@
 -- Publish GPT Astra and Gemini 3.8 Flash without overwriting administrator
--- pricing. Astra inherits GPT-5.6 Sol pricing; Gemini 3.8 Flash inherits the
+-- pricing. Astra uses 2x GPT-5.6 Sol pricing; Gemini 3.8 Flash inherits the
 -- existing Gemini 3.7 Flash channel price and falls back to the current
 -- production defaults when a channel has no 3.7 row.
 
@@ -50,10 +50,10 @@ source_prices AS (
     SELECT DISTINCT ON (cmp.channel_id)
         cmp.channel_id,
         cmp.billing_mode,
-        cmp.input_price,
-        cmp.output_price,
-        cmp.cache_write_price,
-        cmp.cache_read_price,
+        cmp.input_price * 2 AS input_price,
+        cmp.output_price * 2 AS output_price,
+        cmp.cache_write_price * 2 AS cache_write_price,
+        cmp.cache_read_price * 2 AS cache_read_price,
         cmp.image_input_price,
         cmp.image_output_price,
         cmp.per_request_price
@@ -82,10 +82,10 @@ SELECT
     'openai',
     '["gpt-6-astra"]'::jsonb,
     COALESCE(source.billing_mode, 'token'),
-    COALESCE(source.input_price, 0.000005000000),
-    COALESCE(source.output_price, 0.000030000000),
-    COALESCE(source.cache_write_price, 0.000006250000),
-    COALESCE(source.cache_read_price, 0.000000500000),
+    COALESCE(source.input_price, 0.000010000000),
+    COALESCE(source.output_price, 0.000060000000),
+    COALESCE(source.cache_write_price, 0.000012500000),
+    COALESCE(source.cache_read_price, 0.000001000000),
     COALESCE(source.image_input_price, 0),
     COALESCE(source.image_output_price, 0),
     source.per_request_price,
