@@ -8,6 +8,10 @@ import (
 
 func TestNormalizeKnownOpenAICodexModel_BareGPT56RoutesToSol(t *testing.T) {
 	tests := map[string]string{
+		"gpt-6-astra":        "gpt-6-astra",
+		"gpt-astra":          "gpt-6-astra",
+		"gpt-6-astra-max":    "gpt-6-astra",
+		"gpt-astra-xhigh":    "gpt-6-astra",
 		"gpt-5.6":            "gpt-5.6-sol",
 		"openai/gpt-5.6":     "gpt-5.6-sol",
 		"gpt5.6":             "gpt-5.6-sol",

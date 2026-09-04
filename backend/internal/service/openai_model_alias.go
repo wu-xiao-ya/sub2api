@@ -37,6 +37,7 @@ func canonicalizeOpenAIModelAliasSpelling(model string) string {
 		from string
 		to   string
 	}{
+		{"gpt-astra", "gpt-6-astra"},
 		{"gpt-5.4mini", "gpt-5.4-mini"},
 		{"gpt-5.4nano", "gpt-5.4-nano"},
 		{"gpt-5.3-codexspark", "gpt-5.3-codex-spark"},
@@ -65,6 +66,14 @@ func normalizeKnownOpenAICodexModel(model string) string {
 	}
 
 	switch {
+	case normalized == "gpt-6-astra":
+		return "gpt-6-astra"
+	case strings.HasPrefix(normalized, "gpt-6-astra-"):
+		suffix := strings.TrimPrefix(normalized, "gpt-6-astra-")
+		if suffix == "max" || isKnownCodexModelSuffix(suffix) {
+			return "gpt-6-astra"
+		}
+		return ""
 	case strings.Contains(normalized, "gpt-5.6-sol"):
 		return "gpt-5.6-sol"
 	case strings.Contains(normalized, "gpt-5.6-terra"):
@@ -122,6 +131,11 @@ func isOpenAIGPT56Model(model string) bool {
 		}
 	}
 	return false
+}
+
+func supportsOpenAIMaxReasoningEffort(model string) bool {
+	normalized := normalizeKnownOpenAICodexModel(model)
+	return normalized == "gpt-6-astra" || isOpenAIGPT56Model(model)
 }
 
 func appendUsageBillingModelCandidate(candidates []string, seen map[string]struct{}, model string) []string {

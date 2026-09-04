@@ -1010,6 +1010,11 @@ func (s *PricingService) matchOpenAIModel(model string) *LiteLLMModelPricing {
 			Info(fmt.Sprintf("[Pricing] OpenAI fallback matched %s -> %s", model, "gpt-5.6-sol(static)"))
 		return openAIGPT56SolFallbackPricing
 	}
+	if model == "gpt-6-astra" || strings.HasPrefix(model, "gpt-6-astra-") {
+		logger.With(zap.String("component", "service.pricing")).
+			Info(fmt.Sprintf("[Pricing] OpenAI fallback matched %s -> %s", model, "gpt-5.6-sol(static)"))
+		return openAIGPT56SolFallbackPricing
+	}
 	if strings.HasPrefix(model, "gpt-5.6-terra") {
 		logger.With(zap.String("component", "service.pricing")).
 			Info(fmt.Sprintf("[Pricing] OpenAI fallback matched %s -> %s", model, "gpt-5.6-terra(static)"))

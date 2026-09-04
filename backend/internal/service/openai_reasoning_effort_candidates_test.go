@@ -37,6 +37,12 @@ func TestExtractOpenAIReasoningEffortFromBodyModelCandidates(t *testing.T) {
 			want:       "max",
 		},
 		{
+			name:       "Astra 后缀 max 经原始模型推导保留",
+			body:       bodyWithoutEffort,
+			candidates: []string{"gpt-6-astra", "gpt-6-astra-max"},
+			want:       "max",
+		},
+		{
 			name:       "显式 max 用第一个非空候选（映射后模型）判定",
 			body:       bodyWithMax,
 			candidates: []string{"gpt-5.6-sol", "sol"},
