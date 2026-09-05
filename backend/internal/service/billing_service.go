@@ -305,8 +305,8 @@ func (s *BillingService) initFallbackPricing() {
 	s.fallbackPrices["gpt-6-astra"] = &ModelPricing{
 		InputPricePerToken:                 10e-6,
 		InputPricePerTokenPriority:         20e-6,
-		OutputPricePerToken:                60e-6,
-		OutputPricePerTokenPriority:        120e-6,
+		OutputPricePerToken:                50e-6,
+		OutputPricePerTokenPriority:        100e-6,
 		CacheCreationPricePerToken:         12.5e-6,
 		CacheCreationPricePerTokenPriority: 25e-6,
 		CacheReadPricePerToken:             1e-6,

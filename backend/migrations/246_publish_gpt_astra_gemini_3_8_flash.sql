@@ -83,7 +83,7 @@ SELECT
     '["gpt-6-astra"]'::jsonb,
     COALESCE(source.billing_mode, 'token'),
     COALESCE(source.input_price, 0.000010000000),
-    COALESCE(source.output_price, 0.000060000000),
+    COALESCE(source.output_price, 0.000050000000),
     COALESCE(source.cache_write_price, 0.000012500000),
     COALESCE(source.cache_read_price, 0.000001000000),
     COALESCE(source.image_input_price, 0),

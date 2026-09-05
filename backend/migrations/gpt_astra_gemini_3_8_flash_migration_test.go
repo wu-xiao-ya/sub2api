@@ -18,7 +18,7 @@ func TestPublishGPTAstraAndGemini38FlashMigration(t *testing.T) {
 	require.Contains(t, sql, "gpt-5.6-sol")
 	require.Contains(t, sql, "0.0400000000")
 	require.Contains(t, sql, "0.000010000000")
-	require.Contains(t, sql, "0.000060000000")
+	require.Contains(t, sql, "0.000050000000")
 	require.Contains(t, sql, "0.000012500000")
 	require.Contains(t, sql, "0.000001000000")
 	require.Contains(t, sql, "cmp.input_price * 2")
