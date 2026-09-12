@@ -454,7 +454,7 @@ func TestUsageLogRepositoryGetModelStatsWithFiltersRequestTypePriority(t *testin
 	requestType := int16(service.RequestTypeWSV2)
 	stream := false
 
-	mock.ExpectQuery("AND \\(request_type = \\$3 OR \\(request_type = 0 AND openai_ws_mode = TRUE\\)\\)").
+	mock.ExpectQuery("AND \\(ul\\.request_type = \\$3 OR \\(ul\\.request_type = 0 AND ul\\.openai_ws_mode = TRUE\\)\\)").
 		WithArgs(start, end, requestType).
 		WillReturnRows(sqlmock.NewRows([]string{"model", "requests", "input_tokens", "output_tokens", "cache_creation_tokens", "cache_read_tokens", "total_tokens", "cost", "actual_cost", "account_cost"}))
 
@@ -471,7 +471,7 @@ func TestUsageLogRepositoryGetUserModelStatsUsesRequestedModel(t *testing.T) {
 	start := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
 	end := start.Add(24 * time.Hour)
 
-	mock.ExpectQuery("(?s)SELECT\\s+COALESCE\\(NULLIF\\(TRIM\\(requested_model\\), ''\\), model\\) as model,.*WHERE created_at >= \\$1 AND created_at < \\$2\\s+AND user_id = \\$3.*GROUP BY COALESCE\\(NULLIF\\(TRIM\\(requested_model\\), ''\\), model\\) ORDER BY total_tokens DESC").
+	mock.ExpectQuery("(?s)WITH runtime_settings.*usage_by_model_account_bucket.*COALESCE\\(NULLIF\\(TRIM\\(ul\\.requested_model\\), ''\\), ul\\.model\\) AS model.*WHERE ul\\.created_at >= \\$1 AND ul\\.created_at < \\$2\\s+AND ul\\.user_id = \\$3.*GROUP BY 1, ul\\.group_id, ul\\.account_id, rate_bucket").
 		WithArgs(start, end, int64(7)).
 		WillReturnRows(sqlmock.NewRows([]string{
 			"model", "requests", "input_tokens", "output_tokens",
@@ -598,6 +598,31 @@ func TestUsageLogRepositoryGetModelStatsAccountCostColumn(t *testing.T) {
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestUsageLogRepositoryGetModelStatsUsesTimeAwareUpstreamRateSnapshots(t *testing.T) {
+	db, mock := newSQLMock(t)
+	repo := &usageLogRepository{sql: db}
+
+	start := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
+	end := start.Add(time.Hour)
+	accountID := int64(157)
+
+	mock.ExpectQuery(`(?s)WITH runtime_settings.*usage_by_model_account_bucket.*account_upstream_rate_snapshots.*s\.observed_at <= ub\.rate_bucket.*COALESCE\(SUM\(account_cost\), 0\) as actual_cost`).
+		WithArgs(start, end, accountID).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"model", "requests", "input_tokens", "output_tokens",
+			"cache_creation_tokens", "cache_read_tokens", "total_tokens",
+			"cost", "actual_cost", "account_cost",
+		}).AddRow("deepseek-v4-flash", int64(2), int64(100), int64(50), int64(0), int64(0), int64(150), 1.0, 0.2, 0.2))
+
+	results, err := repo.GetModelStatsWithFilters(context.Background(), start, end, 0, 0, accountID, 0, nil, nil, nil)
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+	require.Equal(t, "deepseek-v4-flash", results[0].Model)
+	require.InDelta(t, 0.2, results[0].ActualCost, 1e-12)
+	require.InDelta(t, 0.2, results[0].AccountCost, 1e-12)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestUsageLogRepositoryGetModelStatsWithUsageFiltersAppliesRequestedModelFilter(t *testing.T) {
 	db, mock := newSQLMock(t)
 	repo := &usageLogRepository{sql: db}
@@ -606,7 +631,7 @@ func TestUsageLogRepositoryGetModelStatsWithUsageFiltersAppliesRequestedModelFil
 	end := start.Add(24 * time.Hour)
 	filters := usagestats.UsageLogFilters{Model: "gpt-5"}
 
-	mock.ExpectQuery("AND COALESCE\\(NULLIF\\(TRIM\\(requested_model\\), ''\\), model\\) = \\$3").
+	mock.ExpectQuery("AND COALESCE\\(NULLIF\\(TRIM\\(ul\\.requested_model\\), ''\\), ul\\.model\\) = \\$3").
 		WithArgs(start, end, "gpt-5").
 		WillReturnRows(sqlmock.NewRows([]string{
 			"model", "requests", "input_tokens", "output_tokens",
