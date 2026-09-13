@@ -17,6 +17,7 @@ from urllib.parse import parse_qs, urlparse
 
 HOST = os.environ.get("MONITOR_HOST", "127.0.0.1")
 TOKEN = os.environ.get("SERVER_MONITOR_TOKEN", "")
+SERVICE_NAME = os.environ.get("MONITOR_SERVICE_NAME", "server-monitor")
 ACTIVE_RELEASE_FILE = os.environ.get("MONITOR_ACTIVE_RELEASE_FILE", "/opt/server-monitor/active-release.json")
 POSTGRES_CONTAINER = os.environ.get("POSTGRES_CONTAINER", "sub2api-hk-postgres")
 REDIS_CONTAINER = os.environ.get("REDIS_CONTAINER", "sub2api-hk-redis")
@@ -273,7 +274,7 @@ def collect_summary(include_samples=True):
             container_state(release["container"]) if release else {"name": "sub2api", "ok": False, "active": "active release not configured"},
             container_state(EDGE_CONTAINER),
             service_state("docker"),
-            service_state("server-monitor"),
+            service_state(SERVICE_NAME),
         ],
         "probes": [
             local_probe("sub2api 应用", release["health_url"]) if release else {"name": "sub2api", "ok": False, "status": 0, "ms": 0, "body": "active release not configured"},
@@ -352,7 +353,7 @@ def logs_for(service, lines):
     elif service == "caddy":
         cmd = ["docker", "logs", "--tail", str(lines), EDGE_CONTAINER]
     elif service == "server-monitor":
-        cmd = ["journalctl", "-u", "server-monitor", "-n", str(lines), "--no-pager", "-o", "short-iso"]
+        cmd = ["journalctl", "-u", SERVICE_NAME, "-n", str(lines), "--no-pager", "-o", "short-iso"]
     else:
         return {"service": service, "lines": "", "error": "unsupported service"}
     result = run(cmd, timeout=5)

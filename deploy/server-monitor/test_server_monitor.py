@@ -29,6 +29,11 @@ class CollectorTests(unittest.TestCase):
             m.logs_for("sub2api", 10000)
             self.assertEqual(["docker", "logs", "--tail", "200", "new-app"], run.call_args.args[0])
 
+    def test_native_unit_log_target(self):
+        with patch.object(m, "SERVICE_NAME", "server-monitor-native"), patch.object(m, "run", return_value={"stdout": "ok", "stderr": "", "ok": True, "code": 0}) as run:
+            m.logs_for("server-monitor", 20)
+            self.assertEqual("server-monitor-native", run.call_args.args[0][2])
+
     def test_token_required_and_summary_is_cached(self):
         server = ThreadingHTTPServer(("127.0.0.1", 0), m.Handler)
         thread = Thread(target=server.serve_forever, daemon=True)

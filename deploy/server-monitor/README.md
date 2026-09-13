@@ -17,6 +17,7 @@ Collector environment:
     SERVER_MONITOR_TOKEN=<shared-random-secret>
     MONITOR_HOST=<private-host-bridge-address>
     MONITOR_PORT=18787
+    MONITOR_SERVICE_NAME=server-monitor
     MONITOR_ACTIVE_RELEASE_FILE=/opt/server-monitor/active-release.json
     POSTGRES_CONTAINER=sub2api-hk-postgres
     REDIS_CONTAINER=sub2api-hk-redis
