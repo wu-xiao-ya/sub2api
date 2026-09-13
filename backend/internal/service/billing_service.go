@@ -311,9 +311,6 @@ func (s *BillingService) initFallbackPricing() {
 		CacheCreationPricePerTokenPriority: 25e-6,
 		CacheReadPricePerToken:             1e-6,
 		CacheReadPricePerTokenPriority:     2e-6,
-		LongContextInputThreshold:          openAIGPT54LongContextInputThreshold,
-		LongContextInputMultiplier:         openAIGPT54LongContextInputMultiplier,
-		LongContextOutputMultiplier:        openAIGPT54LongContextOutputMultiplier,
 	}
 	s.fallbackPrices["gpt-5.6-terra"] = &ModelPricing{
 		InputPricePerToken:                 2e-6,
@@ -1279,8 +1276,25 @@ func (s *BillingService) applyModelSpecificPricingPolicy(model string, pricing *
 		return nil
 	}
 	normalized := normalizeKnownOpenAICodexModel(model)
+	// Site policy disables Astra's surcharge, including in older remote/local files.
+	// Normalize a copy so cached pricing and explicit service-tier prices stay intact.
+	if normalized == "gpt-6-astra" {
+		cloned := *pricing
+		cloned.LongContextInputThreshold = 0
+		cloned.LongContextInputMultiplier = 0
+		cloned.LongContextOutputMultiplier = 0
+		if !cloned.CacheCreationPriceExplicit {
+			if cloned.CacheCreationPricePerToken <= 0 {
+				cloned.CacheCreationPricePerToken = cloned.InputPricePerToken * 1.25
+			}
+			if cloned.CacheCreationPricePerTokenPriority <= 0 {
+				cloned.CacheCreationPricePerTokenPriority = cloned.InputPricePerTokenPriority * 1.25
+			}
+		}
+		return &cloned
+	}
 	isGPT56 := isOpenAIGPT56Model(normalized)
-	usesGPT56PricingPolicy := isGPT56 || normalized == "gpt-6-astra"
+	usesGPT56PricingPolicy := isGPT56
 	usesLegacyLongContextPricing := usesOpenAILegacyLongContextPricing(normalized)
 	if !usesGPT56PricingPolicy && !usesLegacyLongContextPricing {
 		return pricing

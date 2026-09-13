@@ -20,6 +20,7 @@ import (
 type SystemHandler struct {
 	updateSvc systemUpdateService
 	lockSvc   *service.SystemOperationLockService
+	monitor   *serverMonitorProxy
 }
 
 // systemUpdateTimeout bounds a full in-place update or rollback: the release
@@ -56,6 +57,7 @@ func NewSystemHandler(updateSvc systemUpdateService, lockSvc *service.SystemOper
 	return &SystemHandler{
 		updateSvc: updateSvc,
 		lockSvc:   lockSvc,
+		monitor:   newServerMonitorProxyFromEnv(),
 	}
 }
 

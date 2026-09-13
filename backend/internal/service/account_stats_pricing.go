@@ -72,6 +72,9 @@ func tryModelFilePricing(billingService *BillingService, model string, tokens Us
 		}
 		return &breakdown.TotalCost
 	}
+	// The fallback cost basis must use the same time-of-day policy as billing.
+	// Custom account rules and explicit channel prices are resolved before this path.
+	pricing = applyDomesticTimePricingAt(model, pricing, billingService.currentTime())
 	cost := float64(tokens.InputTokens)*pricing.InputPricePerToken +
 		float64(tokens.OutputTokens)*pricing.OutputPricePerToken +
 		float64(tokens.CacheCreationTokens)*pricing.CacheCreationPricePerToken +

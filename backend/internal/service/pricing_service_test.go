@@ -135,9 +135,13 @@ func TestBillingService_GPT56CacheWritePricingUsesOfficialMultiplier(t *testing.
 			require.NoError(t, err)
 			require.InDelta(t, tt.input*1.25, pricing.CacheCreationPricePerToken, 1e-12)
 			require.InDelta(t, tt.inputPriority*1.25, pricing.CacheCreationPricePerTokenPriority, 1e-12)
-			require.Equal(t, 272000, pricing.LongContextInputThreshold)
-			require.InDelta(t, 2.0, pricing.LongContextInputMultiplier, 1e-12)
-			require.InDelta(t, 1.5, pricing.LongContextOutputMultiplier, 1e-12)
+			if tt.model == "gpt-6-astra" {
+				require.Zero(t, pricing.LongContextInputThreshold)
+			} else {
+				require.Equal(t, 272000, pricing.LongContextInputThreshold)
+				require.InDelta(t, 2.0, pricing.LongContextInputMultiplier, 1e-12)
+				require.InDelta(t, 1.5, pricing.LongContextOutputMultiplier, 1e-12)
+			}
 
 			tokens := UsageTokens{InputTokens: 700, OutputTokens: 50, CacheCreationTokens: 200, CacheReadTokens: 100}
 			standard, err := svc.CalculateCostWithServiceTier(tt.model, tokens, 1, "")
@@ -161,7 +165,6 @@ func TestBillingService_GPT56UsesLongContextPricingAcrossModelsAndTiers(t *testi
 		input, cached      float64
 		cacheWrite, output float64
 	}{
-		{name: "gpt-6-astra", input: 10e-6, cached: 1e-6, cacheWrite: 12.5e-6, output: 50e-6},
 		{name: "gpt-5.6-sol", input: 5e-6, cached: 0.5e-6, cacheWrite: 6.25e-6, output: 30e-6},
 		{name: "gpt-5.6-terra", input: 2e-6, cached: 0.2e-6, cacheWrite: 2.5e-6, output: 12e-6},
 		{name: "gpt-5.6-luna", input: 0.2e-6, cached: 0.02e-6, cacheWrite: 0.25e-6, output: 1.2e-6},
@@ -279,9 +282,15 @@ func TestDefaultPricingIncludesOfficialGPT56Rates(t *testing.T) {
 			require.InDelta(t, tt.cachedPriority, pricing.CacheReadPricePerTokenPriority, 1e-12)
 			require.InDelta(t, tt.cacheWritePriority, pricing.CacheCreationPricePerTokenPriority, 1e-12)
 			require.InDelta(t, tt.outputPriority, pricing.OutputPricePerTokenPriority, 1e-12)
-			require.Equal(t, 272000, pricing.LongContextInputThreshold)
-			require.InDelta(t, 2.0, pricing.LongContextInputMultiplier, 1e-12)
-			require.InDelta(t, 1.5, pricing.LongContextOutputMultiplier, 1e-12)
+			if tt.model == "gpt-6-astra" {
+				require.Zero(t, pricing.LongContextInputThreshold)
+				require.Zero(t, pricing.LongContextInputMultiplier)
+				require.Zero(t, pricing.LongContextOutputMultiplier)
+			} else {
+				require.Equal(t, 272000, pricing.LongContextInputThreshold)
+				require.InDelta(t, 2.0, pricing.LongContextInputMultiplier, 1e-12)
+				require.InDelta(t, 1.5, pricing.LongContextOutputMultiplier, 1e-12)
+			}
 		})
 	}
 }
@@ -325,24 +334,30 @@ func TestGPT56DedicatedFallbacksUseOfficialRates(t *testing.T) {
 			svc := NewBillingService(&config.Config{}, pricingSvc)
 			pricing, err := svc.GetModelPricing(tt.model + "-preview")
 			require.NoError(t, err)
-			assertGPT56FallbackPricing(t, pricing, tt.input, tt.cached, tt.cacheWrite, tt.output)
+			assertGPT56FallbackPricing(t, tt.model, pricing, tt.input, tt.cached, tt.cacheWrite, tt.output)
 		})
 
 		t.Run(tt.model+"/billing_service", func(t *testing.T) {
 			svc := NewBillingService(&config.Config{}, nil)
 			pricing, err := svc.GetModelPricing(tt.model)
 			require.NoError(t, err)
-			assertGPT56FallbackPricing(t, pricing, tt.input, tt.cached, tt.cacheWrite, tt.output)
+			assertGPT56FallbackPricing(t, tt.model, pricing, tt.input, tt.cached, tt.cacheWrite, tt.output)
 		})
 	}
 }
 
-func assertGPT56FallbackPricing(t *testing.T, pricing *ModelPricing, input, cached, cacheWrite, output float64) {
+func assertGPT56FallbackPricing(t *testing.T, model string, pricing *ModelPricing, input, cached, cacheWrite, output float64) {
 	t.Helper()
 	require.InDelta(t, input, pricing.InputPricePerToken, 1e-12)
 	require.InDelta(t, cached, pricing.CacheReadPricePerToken, 1e-12)
 	require.InDelta(t, cacheWrite, pricing.CacheCreationPricePerToken, 1e-12)
 	require.InDelta(t, output, pricing.OutputPricePerToken, 1e-12)
+	if model == "gpt-6-astra" {
+		require.Zero(t, pricing.LongContextInputThreshold)
+		require.Zero(t, pricing.LongContextInputMultiplier)
+		require.Zero(t, pricing.LongContextOutputMultiplier)
+		return
+	}
 	require.Equal(t, 272000, pricing.LongContextInputThreshold)
 	require.InDelta(t, 2.0, pricing.LongContextInputMultiplier, 1e-12)
 	require.InDelta(t, 1.5, pricing.LongContextOutputMultiplier, 1e-12)

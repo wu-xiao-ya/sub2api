@@ -447,6 +447,12 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/admin/server-monitor',
+    name: 'AdminServerMonitor',
+    component: () => import('@/views/admin/ServerMonitorView.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true, title: 'Server Performance', titleKey: 'serverMonitor.title' }
+  },
+  {
     path: '/admin/audit-logs',
     name: 'AdminAuditLogs',
     component: () => import('@/views/admin/AuditLogView.vue'),

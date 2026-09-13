@@ -657,6 +657,8 @@ func registerBackupRoutes(admin *gin.RouterGroup, h *handler.Handlers, stepUpAut
 }
 
 func registerSystemRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
+	admin.GET("/server-monitor/summary", h.Admin.System.GetServerMonitorSummary)
+	admin.GET("/server-monitor/logs", h.Admin.System.GetServerMonitorLogs)
 	system := admin.Group("/system")
 	{
 		system.GET("/version", h.Admin.System.GetVersion)

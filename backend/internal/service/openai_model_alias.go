@@ -70,7 +70,7 @@ func normalizeKnownOpenAICodexModel(model string) string {
 		return "gpt-6-astra"
 	case strings.HasPrefix(normalized, "gpt-6-astra-"):
 		suffix := strings.TrimPrefix(normalized, "gpt-6-astra-")
-		if suffix == "max" || isKnownCodexModelSuffix(suffix) {
+		if suffix == "max" || suffix == "preview" || isKnownCodexModelSuffix(suffix) {
 			return "gpt-6-astra"
 		}
 		return ""
