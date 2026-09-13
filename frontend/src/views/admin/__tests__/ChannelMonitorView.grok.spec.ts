@@ -108,7 +108,7 @@ describe('channel monitor provider options', () => {
     expect(providerButtons[0].element.parentElement?.className).toContain('sm:grid-cols-4')
 
     const grokButton = wrapper.get('[data-testid="monitor-provider-grok"]')
-    expect(grokButton.find('svg').exists()).toBe(true)
+    expect(grokButton.find('[data-brand="grok"] img').exists()).toBe(true)
     expect(grokButton.text()).toContain('monitorCommon.providers.grok')
     await grokButton.trigger('click')
     expect(grokButton.classes().join(' ')).toContain('zinc')
@@ -167,7 +167,7 @@ describe('channel monitor provider options', () => {
 
       expect(PROVIDERS).toContain(provider)
       const providerButton = wrapper.get(`[data-testid="monitor-provider-${provider}"]`)
-      expect(providerButton.find('svg').exists()).toBe(true)
+      expect(providerButton.find('[data-brand] img').exists()).toBe(true)
       expect(providerButton.text()).toContain(`monitorCommon.providers.${providerName}`)
 
       await wrapper.get('[data-testid="monitor-provider-openai"]').trigger('click')

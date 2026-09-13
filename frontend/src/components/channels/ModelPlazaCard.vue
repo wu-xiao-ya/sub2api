@@ -1,6 +1,6 @@
 <template>
   <article
-    class="flex min-h-[20rem] flex-col rounded-lg border border-gray-200 bg-white p-4 shadow-sm transition-shadow hover:shadow-md dark:border-dark-700 dark:bg-dark-800"
+class="flex min-w-0 flex-col rounded-lg border border-gray-200 bg-white p-4 dark:border-dark-700 dark:bg-dark-800"
   >
     <header class="flex items-start gap-3">
       <span
@@ -9,11 +9,11 @@
           platformBadgeClass(item.platform),
         ]"
       >
-        <PlatformIcon :platform="item.platform as GroupPlatform" size="lg" />
+        <ModelIcon :model="item.model.name" :size="22" />
       </span>
 
       <div class="min-w-0 flex-1">
-        <h2 class="truncate font-mono text-sm font-semibold text-gray-900 dark:text-white">
+        <h2 class="break-words font-mono text-sm font-semibold text-gray-900 dark:text-white">
           {{ item.model.name }}
         </h2>
         <div class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px]">
@@ -48,7 +48,7 @@
     </p>
 
     <section
-      class="mt-3 min-h-[5.5rem] rounded-md bg-gray-50 px-3 py-2.5 dark:bg-dark-900/45"
+      class="mt-3 min-h-[5.5rem] border-y border-gray-100 py-2.5 dark:border-dark-700"
       :aria-label="t('availableChannels.pricing.billingMode')"
     >
       <template v-if="item.model.pricing">
@@ -161,6 +161,7 @@ import { computed, defineComponent, h } from 'vue'
 import { useI18n } from 'vue-i18n'
 import GroupBadge from '@/components/common/GroupBadge.vue'
 import PlatformIcon from '@/components/common/PlatformIcon.vue'
+import ModelIcon from '@/components/common/ModelIcon.vue'
 import type { GroupPlatform, SubscriptionType } from '@/types'
 import {
   BILLING_MODE_IMAGE,
@@ -179,9 +180,9 @@ const PriceMetric = defineComponent({
   },
   setup(props) {
     return () =>
-      h('div', { class: 'flex items-baseline justify-between gap-2' }, [
+      h('div', { class: 'flex min-w-0 flex-wrap items-baseline justify-between gap-x-2 gap-y-1' }, [
         h('span', { class: 'truncate text-xs text-gray-500 dark:text-dark-400' }, props.label),
-        h('span', { class: 'font-mono text-xs font-semibold text-gray-800 dark:text-dark-100' }, props.value),
+        h('span', { class: 'min-w-0 break-all font-mono text-xs font-semibold text-gray-800 dark:text-dark-100' }, props.value),
       ])
   },
 })

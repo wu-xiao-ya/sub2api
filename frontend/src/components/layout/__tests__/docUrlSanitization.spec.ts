@@ -30,7 +30,8 @@ describe('doc_url sanitization', () => {
     expect(keyUsageViewSource).toContain("import { sanitizeUrl } from '@/utils/url'")
   })
 
-  it('KeyUsageView applies sanitizeUrl to docUrl', () => {
-    expect(keyUsageViewSource).toContain('sanitizeUrl(appStore.cachedPublicSettings?.doc_url || appStore.docUrl')
+  it('KeyUsageView no longer renders an unsanitized documentation URL', () => {
+    const template = keyUsageViewSource.split('<script')[0]
+    expect(template).not.toMatch(/:href="[^"]*(?:docUrl|doc_url)/)
   })
 })

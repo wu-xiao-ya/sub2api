@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { defineComponent, h, nextTick } from 'vue'
 import { mount } from '@vue/test-utils'
+import { createI18n } from 'vue-i18n'
 
 const replace = vi.fn()
 const route = { query: {} as Record<string, string> }
@@ -35,6 +36,7 @@ describe('ChannelStatusView mode switch', () => {
   function mountView() {
     return mount(ChannelStatusView, {
       global: {
+        plugins: [createI18n({ legacy: false, locale: 'en', messages: { en: {} }, missingWarn: false, fallbackWarn: false })],
         stubs: {
           AppLayout: defineComponent({ template: '<main><slot /></main>' }),
         },

@@ -1,6 +1,6 @@
 <template>
   <AppLayout>
-    <div class="mx-auto flex w-full max-w-[1800px] flex-col gap-5">
+    <div class="console-page flex flex-col gap-5">
       <section class="flex flex-col gap-1">
         <h1 class="text-xl font-semibold text-gray-900 dark:text-white">{{ t('availableChannels.title') }}</h1>
         <p class="text-sm text-gray-500 dark:text-dark-400">{{ t('availableChannels.description') }}</p>
@@ -79,9 +79,9 @@
         </div>
       </section>
 
-      <div class="grid items-start gap-5 xl:grid-cols-[15.5rem_minmax(0,1fr)]">
-        <aside class="xl:sticky xl:top-6">
-          <div class="rounded-lg border border-gray-200 bg-white p-4 dark:border-dark-700 dark:bg-dark-800">
+      <div class="grid items-start gap-6 xl:grid-cols-[13rem_minmax(0,1fr)]">
+        <aside class="min-w-0 xl:sticky xl:top-20">
+          <div class="border-b border-gray-200 pb-4 dark:border-dark-700 xl:border-b-0 xl:border-r xl:pr-5">
             <div class="flex items-center justify-between gap-3">
               <span class="text-sm font-semibold text-gray-900 dark:text-white">
                 {{ t('availableChannels.filtersTitle') }}
@@ -97,7 +97,7 @@
             </div>
 
             <section class="mt-5">
-              <h2 class="text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-dark-500">
+              <h2 class="text-xs font-medium text-gray-400 dark:text-dark-500">
                 {{ t('availableChannels.providersTitle') }}
               </h2>
               <div class="mt-2 space-y-1">
@@ -120,7 +120,7 @@
             </section>
 
             <section v-if="groupOptions.length > 0" class="mt-5 border-t border-gray-100 pt-5 dark:border-dark-700">
-              <h2 class="text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-dark-500">
+              <h2 class="text-xs font-medium text-gray-400 dark:text-dark-500">
                 {{ t('availableChannels.groupsFilterTitle') }}
               </h2>
               <div class="mt-2 max-h-72 space-y-1 overflow-y-auto pr-1">
@@ -142,7 +142,7 @@
             </section>
 
             <section v-if="billingOptions.length > 0" class="mt-5 border-t border-gray-100 pt-5 dark:border-dark-700">
-              <h2 class="text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-dark-500">
+              <h2 class="text-xs font-medium text-gray-400 dark:text-dark-500">
                 {{ t('availableChannels.billingFilterTitle') }}
               </h2>
               <div class="mt-2 space-y-1">

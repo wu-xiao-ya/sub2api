@@ -1,6 +1,6 @@
 <template>
   <AppLayout>
-    <TablePageLayout>
+    <TablePageLayout class="console-page console-table-page">
       <template #filters>
         <div class="flex flex-col gap-3">
           <div class="flex flex-wrap items-center gap-3">
@@ -12,13 +12,13 @@
             />
             <Select
               :model-value="filterGroupId"
-              class="w-40"
+              class="w-full sm:w-40"
               :options="groupFilterOptions"
               @update:model-value="onGroupFilterChange"
             />
             <Select
               :model-value="filterStatus"
-              class="w-40"
+              class="w-full sm:w-40"
               :options="statusFilterOptions"
               @update:model-value="onStatusFilterChange"
             />
@@ -33,7 +33,7 @@
       </template>
 
       <template #actions>
-        <div class="flex justify-end gap-3">
+        <div class="flex flex-wrap justify-end gap-2">
           <button
             @click="loadApiKeys"
             :disabled="loading"
@@ -910,7 +910,7 @@
         </div>
       </form>
       <template #footer>
-        <div class="flex justify-end gap-3">
+        <div class="flex flex-wrap justify-end gap-2">
           <button @click="closeModals" type="button" class="btn btn-secondary">
             {{ t('common.cancel') }}
           </button>
