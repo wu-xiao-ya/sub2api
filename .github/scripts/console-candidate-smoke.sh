@@ -9,9 +9,11 @@ cleanup() {
   docker logs console-web > "$out/nginx.log" 2>&1 || true
   docker rm -f console-web console-app console-db console-redis >/dev/null 2>&1 || true
   docker network rm console-ci >/dev/null 2>&1 || true
+  docker network rm console-ui >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
 docker network create --internal console-ci
+docker network create console-ui
 docker run -d --name console-db --network console-ci --network-alias postgres   -e POSTGRES_PASSWORD=isolated-ci-only -e POSTGRES_USER=sub2api -e POSTGRES_DB=sub2api postgres:18-alpine
 docker run -d --name console-redis --network console-ci --network-alias redis redis:8-alpine
 for i in $(seq 1 60); do
@@ -42,7 +44,10 @@ http {
   }
 }
 NGINX
-docker run -d --name console-web --network console-ci -p 127.0.0.1:18091:80   -v "$out/nginx.conf:/etc/nginx/nginx.conf:ro" nginx:alpine
+# Only the proxy has a published host port; backend services remain isolated.
+docker create --name console-web --network console-ui -p 127.0.0.1:18091:80   -v "$out/nginx.conf:/etc/nginx/nginx.conf:ro" nginx:alpine
+docker network connect console-ci console-web
+docker start console-web
 deadline=$((SECONDS + 60))
 until curl --connect-timeout 2 --max-time 5 -fsS http://127.0.0.1:18091/health > "$out/health.json"; do
   if [ "$(docker inspect --format '{{.State.Running}}' console-web)" != true ] || (( SECONDS >= deadline )); then
