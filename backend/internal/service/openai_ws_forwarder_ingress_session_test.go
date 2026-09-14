@@ -74,10 +74,12 @@ func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_KeepLeaseAcrossT
 
 	serverErrCh := make(chan error, 1)
 	turnTerminalCh := make(chan string, 2)
+	turnLatencyCh := make(chan *UsageLatencyBreakdown, 2)
 	hooks := &OpenAIWSIngressHooks{
 		AfterTurn: func(_ int, result *OpenAIForwardResult, turnErr error) {
 			if turnErr == nil && result != nil {
 				turnTerminalCh <- result.UpstreamTerminalEvent
+				turnLatencyCh <- result.LatencyBreakdown
 			}
 		},
 	}
@@ -112,7 +114,7 @@ func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_KeepLeaseAcrossT
 			return
 		}
 
-		serverErrCh <- svc.ProxyResponsesWebSocketFromClient(r.Context(), ginCtx, conn, account, "sk-test", firstMessage, hooks)
+		serverErrCh <- svc.ProxyResponsesWebSocketFromClient(WithWebSocketFirstTurnReceived(r.Context(), time.Now().Add(-time.Second)), ginCtx, conn, account, "sk-test", firstMessage, hooks)
 	}))
 	defer wsServer.Close()
 
@@ -153,6 +155,18 @@ func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_KeepLeaseAcrossT
 	require.Equal(t, "resp_ingress_turn_2", gjson.GetBytes(secondTurnEvent, "response.id").String())
 	require.Equal(t, "response.completed", <-turnTerminalCh, "首轮 turn 应保留成功终态")
 	require.Equal(t, "response.completed", <-turnTerminalCh, "第二轮 turn 应保留成功终态")
+
+	firstLatency, secondLatency := <-turnLatencyCh, <-turnLatencyCh
+	require.NotNil(t, firstLatency)
+	require.NotNil(t, secondLatency)
+	require.Equal(t, 2, firstLatency.Version)
+	require.Equal(t, 2, secondLatency.Version)
+	require.GreaterOrEqual(t, *firstLatency.FirstEventMs, 1000, "first turn includes scheduling wait")
+	require.Nil(t, firstLatency.FirstResponseMs, "WebSocket events are not HTTP headers")
+	require.Nil(t, secondLatency.FirstResponseMs, "reused connection cannot inherit handshake timing")
+	require.Equal(t, 1, secondLatency.AttemptCount)
+	require.NotSame(t, firstLatency, secondLatency)
+	require.Nil(t, firstLatency.FirstCharacterMs, "image-only output has no visible text milestone")
 
 	_ = clientConn.Close(coderws.StatusNormalClosure, "done")
 

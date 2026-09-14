@@ -152,3 +152,64 @@ func TestPerformanceDatabaseLateUsageAndNoBillingTriggers(t *testing.T) {
 	require.NoError(t, db.QueryRow("SELECT count(*) FROM pg_trigger WHERE tgrelid='usage_logs'::regclass AND NOT tgisinternal").Scan(&triggers))
 	require.Zero(t, triggers, "statistics must not add billing-write triggers")
 }
+
+func TestPerformanceDatabaseEarlierWitnessInvalidatesBothHours(t *testing.T) {
+	db := performanceTestDatabase(t)
+	r := NewChannelPerformanceRepository(db)
+	ctx := context.Background()
+	earlier := time.Now().UTC().Truncate(time.Hour).Add(-4 * time.Hour)
+	later := earlier.Add(time.Hour)
+	fact := service.ChannelPerformanceFact{APIKeyID: 1, RequestID: "local:moved", GroupID: 1, Model: "model",
+		Outcome: service.PerformanceSuccess, StartedAt: later, CompletedAt: later.Add(time.Second)}
+	require.NoError(t, r.RecordFacts(ctx, []service.ChannelPerformanceFact{fact}))
+	require.NoError(t, r.Recompute(ctx, later, later.Add(time.Hour)))
+	var count int
+	require.NoError(t, db.QueryRow("SELECT count(*) FROM channel_performance_dirty_hours WHERE hour_start=$1", later).Scan(&count))
+	require.Zero(t, count)
+	// A delayed witness can move a previously aggregated request backwards.
+	fact.StartedAt = earlier
+	fact.Outcome = service.PerformanceFailure
+	require.NoError(t, r.RecordFacts(ctx, []service.ChannelPerformanceFact{fact}))
+	require.NoError(t, db.QueryRow("SELECT count(*) FROM channel_performance_dirty_hours WHERE hour_start IN ($1,$2)", earlier, later).Scan(&count))
+	require.Equal(t, 2, count, "both old and new buckets must be invalidated")
+	require.NoError(t, r.Recompute(ctx, earlier, earlier.Add(time.Hour)))
+	require.NoError(t, r.Recompute(ctx, later, later.Add(time.Hour)))
+	rows, _, err := r.Query(ctx, service.ChannelPerformanceFilter{Range: "24h", Start: earlier, End: later.Add(time.Hour), Model: "model", Bucket: time.Hour}, []int64{1})
+	require.NoError(t, err)
+	require.Len(t, rows, 1)
+	require.True(t, rows[0].At.Equal(earlier))
+	require.EqualValues(t, 1, rows[0].Success, "a late failure cannot replace success")
+	require.Zero(t, rows[0].Failure)
+}
+
+func TestPerformanceDatabaseRollingSweepRecoversLowerUsageID(t *testing.T) {
+	db := performanceTestDatabase(t)
+	r := NewChannelPerformanceRepository(db)
+	ctx := context.Background()
+	now := time.Now().UTC()
+	at := now.Truncate(time.Hour).Add(-4 * time.Hour)
+	// Model a transaction which reserved ID 1 but committed after ID 2.
+	_, err := db.Exec("INSERT INTO usage_logs(id,api_key_id,request_id,group_id,model,created_at) VALUES(2,1,'later-id',1,'model',$1)", at)
+	require.NoError(t, err)
+	require.NoError(t, r.ProcessPending(ctx, now))
+	var cursor int64
+	require.NoError(t, db.QueryRow("SELECT usage_cursor FROM channel_performance_watermark WHERE id=1").Scan(&cursor))
+	require.EqualValues(t, 2, cursor)
+	_, err = db.Exec("INSERT INTO usage_logs(id,api_key_id,request_id,group_id,model,created_at) VALUES(1,1,'late-commit',1,'model',$1)", at)
+	require.NoError(t, err)
+	// Completed initial backfill must start a new durable sweep.
+	_, err = db.Exec("UPDATE channel_performance_watermark SET backfill_cursor=$1 WHERE id=1", now.Add(-31*24*time.Hour))
+	require.NoError(t, err)
+	require.NoError(t, r.ProcessPending(ctx, now))
+	var sweep time.Time
+	require.NoError(t, db.QueryRow("SELECT backfill_cursor FROM channel_performance_watermark WHERE id=1").Scan(&sweep))
+	require.True(t, sweep.Equal(now.Truncate(time.Hour)))
+	// Fast-forward that bounded sweep to the affected historical hour.
+	_, err = db.Exec("UPDATE channel_performance_watermark SET backfill_cursor=$1 WHERE id=1", at.Add(time.Hour))
+	require.NoError(t, err)
+	require.NoError(t, r.ProcessPending(ctx, now))
+	rows, _, err := r.Query(ctx, service.ChannelPerformanceFilter{Range: "24h", Start: at, End: at.Add(time.Hour), Model: "model", Bucket: time.Hour}, []int64{1})
+	require.NoError(t, err)
+	require.Len(t, rows, 1)
+	require.EqualValues(t, 2, rows[0].Unknown, "late lower IDs must not be lost permanently")
+}

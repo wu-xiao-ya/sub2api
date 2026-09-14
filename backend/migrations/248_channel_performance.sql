@@ -43,6 +43,29 @@ CREATE TABLE IF NOT EXISTS channel_performance_dirty_hours (
     hour_start TIMESTAMPTZ PRIMARY KEY,
     revision BIGINT NOT NULL DEFAULT 1
 );
+
+-- Journal both locations atomically when an earlier terminal witness moves a
+-- logical request. This trigger belongs only to telemetry, never usage_logs.
+CREATE OR REPLACE FUNCTION channel_performance_mark_fact_hours() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+    INSERT INTO channel_performance_dirty_hours(hour_start)
+    VALUES (date_trunc('hour', NEW.started_at))
+    ON CONFLICT(hour_start) DO UPDATE
+        SET revision=channel_performance_dirty_hours.revision+1;
+    IF TG_OP = 'UPDATE' AND date_trunc('hour', OLD.started_at) <> date_trunc('hour', NEW.started_at) THEN
+        INSERT INTO channel_performance_dirty_hours(hour_start)
+        VALUES (date_trunc('hour', OLD.started_at))
+        ON CONFLICT(hour_start) DO UPDATE
+            SET revision=channel_performance_dirty_hours.revision+1;
+    END IF;
+    RETURN NEW;
+END;
+$$;
+DROP TRIGGER IF EXISTS channel_performance_fact_hours ON channel_performance_facts;
+CREATE TRIGGER channel_performance_fact_hours
+    AFTER INSERT OR UPDATE ON channel_performance_facts
+    FOR EACH ROW EXECUTE FUNCTION channel_performance_mark_fact_hours();
 CREATE TABLE IF NOT EXISTS channel_performance_watermark (
     id INTEGER PRIMARY KEY CHECK (id = 1),
     coverage_start TIMESTAMPTZ,

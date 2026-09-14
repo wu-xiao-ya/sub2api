@@ -308,6 +308,7 @@ func (s *OpenAIGatewayService) proxyOpenAIWSHTTPBridgeTurn(
 			ResponseHeaders:       cloneHeader(resp.Header),
 			Duration:              time.Since(turnStart),
 			FirstTokenMs:          firstTokenMs,
+			LatencyBreakdown:      FinalRequestLatencySnapshot(ctx),
 		}
 		if replayInput := replayCollector.Items(); len(replayInput) > 0 {
 			result.wsReplayInput = replayInput

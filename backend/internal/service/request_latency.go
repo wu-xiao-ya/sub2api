@@ -11,6 +11,22 @@ import (
 
 type requestLatencyKey struct{}
 type frozenLatencyKey struct{}
+type webSocketFirstTurnReceivedKey struct{}
+
+// The dedicated key retains only the first logical turn across account retries.
+// It is not a session-wide active tracker: subsequent turns get their own tracker
+// and asynchronous billing receives an immutable result snapshot.
+func WithWebSocketFirstTurnReceived(ctx context.Context, at time.Time) context.Context {
+	return context.WithValue(ctx, webSocketFirstTurnReceivedKey{}, &requestLatency{start: at})
+}
+
+func firstWebSocketTurnLatencyContext(ctx context.Context) context.Context {
+	tracker, ok := ctx.Value(webSocketFirstTurnReceivedKey{}).(*requestLatency)
+	if !ok || tracker == nil {
+		return ctx
+	}
+	return context.WithValue(ctx, requestLatencyKey{}, tracker)
+}
 
 func WithFrozenRequestLatency(ctx context.Context, snapshot *UsageLatencyBreakdown) context.Context {
 	return context.WithValue(ctx, frozenLatencyKey{}, snapshot.Clone())
@@ -42,7 +58,11 @@ type requestLatency struct {
 }
 
 func WithRequestLatency(ctx context.Context) context.Context {
-	return context.WithValue(ctx, requestLatencyKey{}, &requestLatency{start: time.Now()})
+	return withRequestLatencyAt(ctx, time.Now())
+}
+
+func withRequestLatencyAt(ctx context.Context, at time.Time) context.Context {
+	return context.WithValue(ctx, requestLatencyKey{}, &requestLatency{start: at})
 }
 
 func BeginRequestLatencyAttempt(ctx context.Context) *UsageLatencyAttempt {

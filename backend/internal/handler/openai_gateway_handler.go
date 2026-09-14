@@ -1715,6 +1715,8 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 		coderws.StatusPolicyViolation,
 		"missing first response.create message",
 	)
+	ctx = service.WithWebSocketFirstTurnReceived(ctx, time.Now())
+	c.Request = c.Request.WithContext(ctx)
 	if err != nil {
 		if errors.Is(context.Cause(ctx), service.ErrOpenAIWSIngressLeaseLost) {
 			reqLog.Warn("openai.websocket_ingress_lease_lost_before_first_message", zap.Error(err))

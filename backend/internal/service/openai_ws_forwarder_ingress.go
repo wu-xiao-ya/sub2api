@@ -381,6 +381,7 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 		return clientConn.Write(writeCtx, coderws.MessageText, message)
 	}
 
+	turnCtx := firstWebSocketTurnLatencyContext(ctx)
 	readClientMessage := func() ([]byte, error) {
 		idleTimeout := s.openAIWSIngressInterTurnIdleTimeout()
 		msgType, payload, readErr := ReadOpenAIWSClientMessage(
@@ -390,6 +391,7 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 			coderws.StatusNormalClosure,
 			"websocket idle timeout",
 		)
+		receivedAt := time.Now()
 		if readErr != nil {
 			var closeErr *OpenAIWSClientCloseError
 			if errors.As(readErr, &closeErr) && closeErr.StatusCode() == coderws.StatusNormalClosure {
@@ -404,6 +406,7 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 				nil,
 			)
 		}
+		turnCtx = withRequestLatencyAt(ctx, receivedAt)
 		return payload, nil
 	}
 
@@ -514,7 +517,7 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 				}
 			}
 			result, bridgeErr := s.proxyOpenAIWSHTTPBridgeTurn(
-				ctx,
+				turnCtx,
 				c,
 				account,
 				token,
@@ -749,6 +752,7 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 		}
 		turnStart := time.Now()
 		wroteDownstream := false
+		latencyAttempt := BeginRequestLatencyAttempt(turnCtx)
 		if err := lease.WriteJSONWithContextTimeout(ctx, json.RawMessage(payload), s.openAIWSWriteTimeout()); err != nil {
 			return nil, wrapOpenAIWSIngressTurnError(
 				"write_upstream",
@@ -808,6 +812,7 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 			}
 
 			eventType, eventResponseID, _ := parseOpenAIWSEventEnvelope(upstreamMessage)
+			latencyAttempt.ObserveProtocolEvent(string(upstreamMessage), eventType)
 			if responseID == "" && eventResponseID != "" {
 				responseID = eventResponseID
 			}
@@ -994,6 +999,7 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 					ResponseHeaders:       lease.HandshakeHeaders(),
 					Duration:              time.Since(turnStart),
 					FirstTokenMs:          firstTokenMs,
+					LatencyBreakdown:      FinalRequestLatencySnapshot(turnCtx),
 				}
 				if replayInput := replayCollector.Items(); len(replayInput) > 0 {
 					result.wsReplayInput = replayInput

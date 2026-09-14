@@ -20,6 +20,9 @@ no React source or runtime is included.
 - Transparent bounded HTTP/TLS body observer with Responses, Chat Completions,
   Anthropic, Gemini and Antigravity protocol parsing. HTTP-to-WebSocket event
   observations and Bedrock decoded-event observations are also connected.
+- Persistent WebSocket turns now receive independent ingress clocks in pooled,
+  passthrough and HTTP bridge paths. The first turn survives account retries and
+  concurrency-context refresh; reused connections never invent response headers.
 - Model-card batch performance summary and permission-scoped detail endpoints.
   Reuse active channel/platform/model/group visibility before queries; cache keys
   include scopes and filters. Public DTOs contain no account, user or key details
@@ -31,6 +34,16 @@ no React source or runtime is included.
   and watermark. No billing-table trigger, historical billing mutation, extra
   usage log or active probe is added. A singleton background worker batches
   writes, bounds backfill and recomputation, and journals late usage by ID.
+- Telemetry-only fact triggers invalidate both previous and new hours when a
+  delayed witness changes start time. Retention deletes at most 2,000 rows per
+  table/granularity per tick. The historical sweep repeats after initial backfill
+  to recover lower usage IDs committed after the fast cursor passed them.
+  This is eventual reconciliation, not immediate commit-order tracking: a full
+  30-day sweep takes about six hours at one historical hour per 30-second tick,
+  longer if database work is deferred. This freshness limit remains under review.
+- Graceful shutdown persists the earliest observed telemetry gap after its final
+  drain, including failures which occur after the last aggregation tick. Abrupt
+  process loss still needs durable runtime coverage detection.
 - Nullable weighted metrics, separate unknown dimensions, sparse trends, four
   ranges, model-exact grouping (not icon aliases), successful streaming-text TPS.
 - Performance detail with group comparison, three Chart.js trends, point tooltips,
@@ -44,11 +57,15 @@ no React source or runtime is included.
 - 81 focused frontend tests passed, including refresh suspension, stale-response
   handling, existing model plaza, latency table and brand registry.
 - Frontend vue-tsc passed after performance panel integration.
-- Focused backend service/handler/repository/routes/server tests passed before
-  the final HTTP-to-WebSocket/Bedrock additions; rerun after those additions.
+- Broad candidate frontend regression passed: 28 files, 179 tests, including the
+  corrected CSV assertion for six new latency columns.
+- Expanded service/handler/repository regression passed locally, including full
+  WebSocket session, bridge and lifecycle tests. The final rerun after preserving
+  the first-turn tracker through handler context refresh/account failover could
+  not link: Windows C: ran out of disk space. CI must validate that final delta.
 - 16 performance screenshots at 375/768/1440/1920px, light/dark: no page errors,
-  no document overflow, all three charts painted. Final shortened chart tick
-  labels need a refreshed screenshot pass. Preview uses synthetic data only.
+  no document overflow, all three charts painted. Shortened chart tick labels
+  were rechecked. Preview uses synthetic data only.
 - Real PostgreSQL integration tests are prepared: migration repeatability,
   free success vs paid interrupted stream, unknown legacy outcomes, probe
   exclusion, API-key-scoped IDs, cross-hour retry replacement, late usage,
@@ -56,12 +73,19 @@ no React source or runtime is included.
 - Local Docker engine is unavailable. Database tests have NOT yet executed locally.
   `.github/workflows/channel-performance-validation.yml` supplies isolated
   PostgreSQL 18 and must pass before accepting a candidate.
+- Checkpoint 9a2cea0 candidate run 34860203493 passed the isolated PostgreSQL and
+  focused frontend jobs. Its broad frontend CSV assertion failed and prevented
+  image building; the assertion is now corrected. New database tests cover an
+  earlier cross-hour witness and lower-ID late-commit reconciliation. The next
+  CI must validate these additions; prior results do not cover them.
+- The CI selection now includes full WebSocket session/bridge/lifecycle tests
+  and a race-detection pass, not just latency helpers.
 
 ## Remaining Release Blockers
 
-1. Persistent WebSocket sessions still need per-client-turn ingress clocks and
-   terminal-fact attribution, including retries, HTTP bridge and passthrough
-   modes. Never label handshake/connection age as a new turn's first response.
+1. Persistent WebSocket terminal-fact attribution is still missing, including
+   failures without response IDs and retry deduplication across bridge and
+   passthrough modes. Turn timing alone does not complete availability metrics.
 2. Complete credential/transport integration coverage (OAuth refresh, proxy/TLS,
    image, intermediate errors and disconnects) and validate all gateway variants.
 3. Run real PostgreSQL tests and review query plans, retention/backfill bounds,

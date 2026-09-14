@@ -48,13 +48,13 @@ func (s *ChannelPerformanceService) RecordFact(f ChannelPerformanceFact) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	if r.stopping {
-		r.gap.CompareAndSwap(0, f.StartedAt.Unix())
+		r.noteGap(f.StartedAt)
 		return
 	}
 	select {
 	case r.queue <- f:
 	default:
-		r.gap.CompareAndSwap(0, f.StartedAt.Unix())
+		r.noteGap(f.StartedAt)
 	}
 }
 
@@ -74,7 +74,9 @@ func (r *channelPerformanceRuntime) flush(batch []ChannelPerformanceFact) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	if err := r.repo.RecordFacts(ctx, batch); err != nil {
-		r.gap.CompareAndSwap(0, batch[0].StartedAt.Unix())
+		for _, fact := range batch {
+			r.noteGap(fact.StartedAt)
+		}
 		slog.Warn("channel performance fact batch failed", "error", err)
 	}
 }
@@ -84,7 +86,15 @@ func (r *channelPerformanceRuntime) run() {
 	ctx, cancel := context.WithCancel(context.Background())
 	aggregateDone := make(chan struct{})
 	go func() { defer close(aggregateDone); r.aggregate(ctx) }()
-	defer func() { cancel(); <-aggregateDone }()
+	defer func() {
+		cancel()
+		<-aggregateDone
+		// A failed final drain must survive graceful restart even if no regular
+		// aggregation tick followed it. Use a fresh bounded shutdown context.
+		flushCtx, flushCancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer flushCancel()
+		r.persistGap(flushCtx)
+	}()
 	ticker := time.NewTicker(250 * time.Millisecond)
 	defer ticker.Stop()
 	batch := make([]ChannelPerformanceFact, 0, 64)
@@ -116,8 +126,17 @@ func (r *channelPerformanceRuntime) run() {
 					batch = batch[:0]
 				}
 			}
-			r.gap.CompareAndSwap(0, time.Now().Unix())
-			return
+			for _, fact := range batch {
+				r.noteGap(fact.StartedAt)
+			}
+			for {
+				select {
+				case fact := <-r.queue:
+					r.noteGap(fact.StartedAt)
+				default:
+					return
+				}
+			}
 		}
 	}
 }
@@ -127,14 +146,7 @@ func (r *channelPerformanceRuntime) aggregate(ctx context.Context) {
 	defer ticker.Stop()
 	for {
 		runCtx, cancel := context.WithTimeout(ctx, 55*time.Second)
-		if gap := r.gap.Load(); gap != 0 {
-			// Loss is explicit and sticky; a future healthy batch must not
-			// restore a falsely complete historical coverage claim.
-			_, err := r.db.ExecContext(runCtx, "UPDATE channel_performance_watermark SET incomplete_since=LEAST(COALESCE(incomplete_since,$1),$1) WHERE id=1", time.Unix(gap, 0))
-			if err != nil {
-				slog.Warn("channel performance coverage marker failed", "error", err)
-			}
-		}
+		r.persistGap(runCtx)
 		release, acquired := tryAcquireSingletonLeaderLock(runCtx, nil, r.db, "channel-performance-aggregator", r.instance, 2*time.Minute)
 		if acquired {
 			if err := r.repo.ProcessPending(runCtx, time.Now().UTC()); err != nil && ctx.Err() == nil {
@@ -147,6 +159,28 @@ func (r *channelPerformanceRuntime) aggregate(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
+		}
+	}
+}
+
+func (r *channelPerformanceRuntime) noteGap(at time.Time) {
+	for {
+		old := r.gap.Load()
+		if old != 0 && old <= at.Unix() {
+			return
+		}
+		if r.gap.CompareAndSwap(old, at.Unix()) {
+			return
+		}
+	}
+}
+
+func (r *channelPerformanceRuntime) persistGap(ctx context.Context) {
+	if gap := r.gap.Load(); gap != 0 {
+		// Sticky loss cannot be cleared by a later healthy batch.
+		_, err := r.db.ExecContext(ctx, "UPDATE channel_performance_watermark SET incomplete_since=LEAST(COALESCE(incomplete_since,$1),$1) WHERE id=1", time.Unix(gap, 0))
+		if err != nil {
+			slog.Warn("channel performance coverage marker failed", "error", err)
 		}
 	}
 }

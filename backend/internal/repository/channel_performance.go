@@ -245,7 +245,9 @@ func (r *channelPerformanceRepository) Recompute(ctx context.Context, start, end
 }
 
 // ProcessPending is bounded independently of the amount of retained history.
-// Late usage is journaled with a durable ID cursor, without triggers on billing.
+// Late usage is journaled with an ID cursor and a bounded rolling history sweep.
+// Sequence IDs are not commit order: the sweep also catches lower IDs committed
+// after the cursor passed them, without triggers on billing tables.
 func (r *channelPerformanceRepository) ProcessPending(ctx context.Context, now time.Time) error {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -297,15 +299,21 @@ func (r *channelPerformanceRepository) ProcessPending(ctx context.Context, now t
 		if _, err = r.db.ExecContext(ctx, "UPDATE channel_performance_watermark SET backfill_cursor=$1 WHERE id=1", start); err != nil {
 			return err
 		}
+	} else {
+		// Never permanently stop reconciliation after the initial backfill.
+		// One historical hour per tick keeps work bounded and survives restarts.
+		if _, err = r.db.ExecContext(ctx, "UPDATE channel_performance_watermark SET backfill_cursor=$1 WHERE id=1", now.Truncate(time.Hour)); err != nil {
+			return err
+		}
 	}
 	for _, prune := range []struct {
 		query  string
 		cutoff time.Time
 	}{
-		{"DELETE FROM channel_performance_buckets WHERE bucket_seconds=60 AND bucket_start < $1", now.Add(-48 * time.Hour)},
-		{"DELETE FROM channel_performance_buckets WHERE bucket_seconds=3600 AND bucket_start < $1", now.Add(-30 * 24 * time.Hour)},
-		{"DELETE FROM channel_performance_facts WHERE started_at < $1", now.Add(-30 * 24 * time.Hour)},
-		{"DELETE FROM channel_performance_dirty_hours WHERE hour_start < $1", now.Add(-30 * 24 * time.Hour)},
+		{"DELETE FROM channel_performance_buckets WHERE ctid IN (SELECT ctid FROM channel_performance_buckets WHERE bucket_seconds=60 AND bucket_start < $1 ORDER BY bucket_start LIMIT 2000)", now.Add(-48 * time.Hour)},
+		{"DELETE FROM channel_performance_buckets WHERE ctid IN (SELECT ctid FROM channel_performance_buckets WHERE bucket_seconds=3600 AND bucket_start < $1 ORDER BY bucket_start LIMIT 2000)", now.Add(-30 * 24 * time.Hour)},
+		{"DELETE FROM channel_performance_facts WHERE ctid IN (SELECT ctid FROM channel_performance_facts WHERE started_at < $1 ORDER BY started_at LIMIT 2000)", now.Add(-30 * 24 * time.Hour)},
+		{"DELETE FROM channel_performance_dirty_hours WHERE hour_start IN (SELECT hour_start FROM channel_performance_dirty_hours WHERE hour_start < $1 ORDER BY hour_start LIMIT 2000)", now.Add(-30 * 24 * time.Hour)},
 	} {
 		if _, err = r.db.ExecContext(ctx, prune.query, prune.cutoff); err != nil {
 			return err
