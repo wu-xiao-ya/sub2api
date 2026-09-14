@@ -233,6 +233,7 @@ import { getPersistedPageSize } from '@/composables/usePersistedPageSize'
 import { formatReasoningEffort } from '@/utils/format'
 import { getBillingModeLabel, getDisplayBillingMode as resolveDisplayBillingMode, isImageUsage } from '@/utils/billingMode'
 import { calculateLatencyMetrics, formatOutputSpeed } from '@/utils/latencyMetrics'
+import { latencyCSVValues } from '@/utils/usageLatencyStages'
 import { resolveUsageRequestType, requestTypeToLegacyStream } from '@/utils/usageRequestType'
 import type {
   ApiKey,
@@ -668,6 +669,7 @@ const exportToCSV = async () => {
       'Rate Multiplier',
       'Billed Cost',
       'Original Cost',
+      'Latency version', 'First response (ms)', 'First event (ms)', 'First output (ms)', 'First text (ms)', 'Stage total (ms)',
       'First Token (ms)',
       'Duration (ms)',
       'Generation (ms)',
@@ -694,6 +696,7 @@ const exportToCSV = async () => {
       log.rate_multiplier,
       log.actual_cost.toFixed(8),
       log.total_cost.toFixed(8),
+      ...latencyCSVValues(log.latency_breakdown, log.duration_ms),
       log.first_token_ms ?? '',
       log.duration_ms ?? '',
       usageLatencyExport(log).generationMs ?? '',

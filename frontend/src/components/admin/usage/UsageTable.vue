@@ -236,6 +236,7 @@
             role="button"
             :aria-label="t('usage.latencyAnalysis')"
             :aria-expanded="latencyTooltipVisible && latencyTooltipData === row"
+            :aria-describedby="latencyTooltipVisible && latencyTooltipData === row ? 'usage-latency-details' : undefined"
             @mouseenter="showLatencyTooltip($event, row)"
             @mouseleave="hideLatencyTooltip"
             @focus="showLatencyTooltip($event, row)"
@@ -243,6 +244,7 @@
             @click.stop="toggleLatencyTooltip($event, row)"
             @keydown.enter.prevent="toggleLatencyTooltip($event, row)"
             @keydown.space.prevent="toggleLatencyTooltip($event, row)"
+            @keydown.esc.prevent="closeLatencyTooltip"
           >
             <span
               class="w-1 shrink-0 rounded-full"
@@ -252,15 +254,10 @@
               aria-hidden="true"
             ></span>
             <div class="grid grid-cols-[max-content_max-content] items-baseline gap-x-2 gap-y-0.5 text-xs">
-              <span class="text-gray-400 dark:text-gray-500">{{ t('usage.latencyFirstToken') }}</span>
-              <span v-if="row.first_token_ms != null" class="font-medium tabular-nums" :class="LATENCY_TEXT_CLASSES[firstTokenSeverity(row.first_token_ms)]">{{ formatDuration(row.first_token_ms) }}</span>
-              <span v-else class="text-gray-400 dark:text-gray-500">-</span>
-              <span class="text-gray-400 dark:text-gray-500">{{ t('usage.latencyDuration') }}</span>
-              <span class="font-medium tabular-nums" :class="LATENCY_TEXT_CLASSES[durationSeverity(row.duration_ms ?? 0)]">{{ formatDuration(row.duration_ms) }}</span>
-              <span class="text-gray-400 dark:text-gray-500">{{ t('usage.latencyGeneration') }}</span>
-              <span class="font-medium tabular-nums text-gray-700 dark:text-gray-300">{{ formatDuration(getLatencyMetrics(row).generationMs) }}</span>
-              <span class="text-gray-400 dark:text-gray-500">{{ t('usage.latencyOutputSpeed') }}</span>
-              <span class="font-medium tabular-nums text-blue-600 dark:text-blue-400">{{ formatOutputSpeed(getLatencyMetrics(row).outputSpeed) }}</span>
+              <template v-for="stage in usageLatencyStages(row.latency_breakdown, row.duration_ms)" :key="stage.key">
+                <span class="text-gray-400 dark:text-gray-500">{{ t('usage.' + stage.label) }}</span>
+                <span class="font-medium tabular-nums text-gray-700 dark:text-gray-300">{{ stage.value == null ? '—' : formatDuration(stage.value) }}</span>
+              </template>
             </div>
           </div>
         </template>
@@ -291,13 +288,17 @@
   <Teleport to="body">
     <div
       v-if="latencyTooltipVisible"
-      class="fixed z-[9999] pointer-events-none -translate-y-1/2"
+      id="usage-latency-details"
+      ref="latencyTooltipElement"
+      role="tooltip"
+      class="fixed z-[9999] -translate-y-1/2"
+      :class="latencyTooltipPinned ? 'pointer-events-auto' : 'pointer-events-none'"
       :style="{
         left: latencyTooltipPosition.x + 'px',
         top: latencyTooltipPosition.y + 'px'
       }"
     >
-      <div class="min-w-[220px] rounded-lg border border-gray-700 bg-gray-900 px-3 py-2.5 text-xs text-white shadow-xl dark:border-gray-600 dark:bg-gray-800">
+<div class="w-[320px] max-w-[calc(100vw-16px)] max-h-[calc(100vh-16px)] overflow-y-auto rounded-lg border border-gray-700 bg-gray-900 px-3 py-2.5 text-xs text-white shadow-xl dark:border-gray-600 dark:bg-gray-800">
         <div class="mb-2 border-b border-gray-700 pb-1.5 text-xs font-semibold text-gray-300">
           {{ t('usage.latencyAnalysis') }}
         </div>
@@ -311,30 +312,23 @@
               {{ latencyStatusLabel(latencyTooltipData ? getLatencyMetrics(latencyTooltipData).severity : null) }}
             </span>
           </div>
-          <div class="flex items-center justify-between gap-6">
-            <span class="text-gray-400">{{ t('usage.latencyFirstToken') }}</span>
-            <span class="font-medium text-white">{{ formatDuration(latencyTooltipData ? getLatencyMetrics(latencyTooltipData).firstTokenMs : null) }}</span>
+          <div class="max-w-[280px] text-gray-400">{{ t('usage.' + latencyTimingOrigin(latencyTooltipData?.latency_breakdown, latencyTooltipData?.duration_ms)) }}</div>
+          <template v-for="stage in usageLatencyStages(latencyTooltipData?.latency_breakdown, latencyTooltipData?.duration_ms)" :key="stage.key">
+            <div class="flex items-center justify-between gap-6">
+              <span class="text-gray-400">{{ t('usage.' + stage.label) }}</span>
+              <span class="font-medium tabular-nums">{{ stage.value == null ? '—' : formatDuration(stage.value) }}</span>
+            </div>
+            <div v-if="stage.delta != null && stage.fromLabel" class="text-[11px] text-gray-400">
+              {{ t('usage.' + stage.fromLabel) }} → {{ t('usage.' + stage.label) }}: +{{ formatDuration(stage.delta) }}
+            </div>
+          </template>
+          <div v-if="latencyTooltipData?.latency_breakdown?.forward_start_ms != null" class="border-t border-gray-700 pt-1.5 text-gray-400">
+            {{ t('usage.latencyBeforeForward') }}: {{ formatDuration(latencyTooltipData.latency_breakdown.forward_start_ms) }}
           </div>
-          <div class="flex items-center justify-between gap-6">
-            <span class="text-gray-400">{{ t('usage.latencyDuration') }}</span>
-            <span class="font-medium text-white">{{ formatDuration(latencyTooltipData ? getLatencyMetrics(latencyTooltipData).durationMs : null) }}</span>
+          <div v-if="latencyTooltipData?.latency_breakdown?.attempt_count" class="text-gray-400">
+            {{ t('usage.latencyAttempts') }}: {{ latencyTooltipData.latency_breakdown.attempt_count }}
           </div>
-          <div class="flex items-center justify-between gap-6">
-            <span class="text-gray-400">{{ t('usage.latencyGeneration') }}</span>
-            <span class="font-medium text-white">{{ formatDuration(latencyTooltipData ? getLatencyMetrics(latencyTooltipData).generationMs : null) }}</span>
-          </div>
-          <div class="flex items-center justify-between gap-6">
-            <span class="text-gray-400">{{ t('usage.latencyOutputSpeed') }}</span>
-            <span class="font-medium text-blue-300">{{ formatOutputSpeed(latencyTooltipData ? getLatencyMetrics(latencyTooltipData).outputSpeed : null) }}</span>
-          </div>
-          <div class="flex items-center justify-between gap-6 border-t border-gray-700 pt-1.5">
-            <span class="text-gray-400">{{ t('usage.latencyWaitingFirstToken') }}</span>
-            <span class="font-medium text-white">{{ formatLatencyRatio(latencyTooltipData ? getLatencyMetrics(latencyTooltipData).firstTokenRatio : null) }}</span>
-          </div>
-          <div class="flex items-center justify-between gap-6">
-            <span class="text-gray-400">{{ t('usage.latencyGenerationRatio') }}</span>
-            <span class="font-medium text-white">{{ formatLatencyRatio(latencyTooltipData ? getLatencyMetrics(latencyTooltipData).generationRatio : null) }}</span>
-          </div>
+          <div class="max-w-[280px] border-t border-gray-700 pt-1.5 text-gray-400">{{ t('usage.latencyObservedOnly') }}</div>
         </div>
         <div class="absolute right-full top-1/2 h-0 w-0 -translate-y-1/2 border-b-[6px] border-r-[6px] border-t-[6px] border-b-transparent border-r-gray-900 border-t-transparent dark:border-r-gray-800"></div>
       </div>
@@ -576,7 +570,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, onMounted, onBeforeUnmount, watch } from 'vue'
+import { usageLatencyStages, latencyTimingOrigin } from '@/utils/usageLatencyStages'
 import { useI18n } from 'vue-i18n'
 import { formatDateTime, formatReasoningEffort } from '@/utils/format'
 import { formatCacheTokens, formatMultiplier } from '@/utils/formatters'
@@ -587,14 +582,11 @@ import {
   LATENCY_BAR_CLASSES,
   LATENCY_BAR_FROM_CLASSES,
   LATENCY_BAR_TO_CLASSES,
-  LATENCY_TEXT_CLASSES,
   durationSeverity,
   firstTokenSeverity,
 } from '@/utils/latencyHealth'
 import {
   calculateLatencyMetrics,
-  formatLatencyRatio,
-  formatOutputSpeed,
   type LatencyMetrics,
 } from '@/utils/latencyMetrics'
 import {
@@ -719,6 +711,8 @@ const latencyTooltipVisible = ref(false)
 const latencyTooltipPosition = ref({ x: 0, y: 0 })
 const latencyTooltipData = ref<AdminUsageLog | null>(null)
 const latencyTooltipPinned = ref(false)
+const latencyTooltipElement = ref<HTMLElement | null>(null)
+const latencyTriggerElement = ref<HTMLElement | null>(null)
 
 const getRequestTypeLabel = (row: AdminUsageLog): string => {
   const requestType = resolveUsageRequestType(row)
@@ -779,10 +773,13 @@ const latencyStatusClass = (severity: LatencyMetrics['severity']): string => {
 
 const showLatencyTooltip = (event: Event, row: AdminUsageLog) => {
   const target = event.currentTarget as HTMLElement
+  latencyTriggerElement.value = target
   const rect = target.getBoundingClientRect()
   latencyTooltipData.value = row
-  latencyTooltipPosition.value.x = rect.right + 8
-  latencyTooltipPosition.value.y = rect.top + rect.height / 2
+  const width = Math.min(320, window.innerWidth - 16)
+  const height = Math.min(420, window.innerHeight - 16)
+  latencyTooltipPosition.value.x = Math.max(8, Math.min(rect.right + 8, window.innerWidth - width - 8))
+  latencyTooltipPosition.value.y = Math.max(height / 2 + 8, Math.min(rect.top + rect.height / 2, window.innerHeight - height / 2 - 8))
   latencyTooltipVisible.value = true
 }
 
@@ -793,6 +790,7 @@ const hideLatencyTooltip = () => {
 }
 
 const closeLatencyTooltip = () => {
+  latencyTriggerElement.value = null
   latencyTooltipPinned.value = false
   latencyTooltipVisible.value = false
   latencyTooltipData.value = null
@@ -806,6 +804,24 @@ const toggleLatencyTooltip = (event: MouseEvent | KeyboardEvent, row: AdminUsage
   latencyTooltipPinned.value = true
   showLatencyTooltip(event, row)
 }
+
+const dismissLatencyOnOutsidePointer = (event: PointerEvent) => {
+  if (!(event.target instanceof Node)) return
+  if (latencyTriggerElement.value?.contains(event.target) || latencyTooltipElement.value?.contains(event.target)) return
+  closeLatencyTooltip()
+}
+const dismissLatencyOnEscape = (event: KeyboardEvent) => {
+  if (event.key === 'Escape') closeLatencyTooltip()
+}
+watch(() => props.data, closeLatencyTooltip)
+onMounted(() => {
+  document.addEventListener('pointerdown', dismissLatencyOnOutsidePointer, true)
+  document.addEventListener('keydown', dismissLatencyOnEscape)
+})
+onBeforeUnmount(() => {
+  document.removeEventListener('pointerdown', dismissLatencyOnOutsidePointer, true)
+  document.removeEventListener('keydown', dismissLatencyOnEscape)
+})
 
 // Cost tooltip functions
 const showTooltip = (event: MouseEvent, row: AdminUsageLog) => {

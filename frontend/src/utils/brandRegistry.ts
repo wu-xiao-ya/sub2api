@@ -44,10 +44,10 @@ export function resolveModelBrand(model: string): BrandKey | null {
   const name = (model || '').trim().toLowerCase().split('/').pop() || ''
   const families: [RegExp, BrandKey][] = [
     [/^(gpt(?:-|$)|chatgpt|o[134](?:-|$)|dall-e|whisper|tts-1|text-embedding|text-moderation|babbage|davinci|curie|ada(?:-|$))/, 'openai'],
-    [/^claude/, 'anthropic'], [/^(gemini|gemma|learnlm|imagen|veo)/, 'gemini'],
+    [/^(claude|(?:opus|sonnet|haiku|fable)(?:[-_. ]|$))/, 'anthropic'], [/^(gemini|gemma|learnlm|imagen|veo)/, 'gemini'],
     [/^deepseek/, 'deepseek'], [/^(kimi|moonshot|k3(?:-|$))/, 'kimi'],
     [/^(glm|chatglm|cogview|cogvideo)/, 'glm'], [/^(qwen|qwq|qvq)/, 'qwen'],
-    [/^(minimax|abab)/, 'minimax'], [/^(mimo|xiaomi-mimo)/, 'mimo'], [/^hunyuan/, 'hunyuan'],
+    [/^(minimax|abab)/, 'minimax'], [/^(mimo|xiaomi-mimo)/, 'mimo'], [/^(hunyuan|hy-?\d+(?:[.-]\d+)*(?:[-_. ]|$))/, 'hunyuan'],
     [/^grok/, 'grok'], [/^(mistral|mixtral|codestral|pixtral|voxtral|magistral)/, 'mistral'],
     [/^(meta-)?llama/, 'meta'], [/^(command|c4ai-|embed-)/, 'cohere'], [/^yi[- ]/, 'yi'],
     [/^doubao/, 'doubao'], [/^(ernie|wenxin)/, 'wenxin'], [/^spark/, 'spark'],

@@ -312,6 +312,7 @@ func (s *OpenAIGatewayService) forwardOpenAIWSV2(
 		return nil, err
 	}
 
+	latencyAttempt := BeginRequestLatencyAttempt(ctx)
 	if err := lease.WriteJSONWithContextTimeout(ctx, payload, s.openAIWSWriteTimeout()); err != nil {
 		lease.MarkBroken()
 		logOpenAIWSModeInfo(
@@ -509,6 +510,7 @@ func (s *OpenAIGatewayService) forwardOpenAIWSV2(
 		}
 
 		eventType, eventResponseID, responseField := parseOpenAIWSEventEnvelope(message)
+		latencyAttempt.ObserveProtocolEvent(string(message), eventType)
 		if eventType == "" {
 			continue
 		}
@@ -762,6 +764,7 @@ func (s *OpenAIGatewayService) forwardOpenAIWSV2(
 		ResponseHeaders:       lease.HandshakeHeaders(),
 		Duration:              time.Since(startTime),
 		FirstTokenMs:          firstTokenMs,
+		LatencyBreakdown:      FinalRequestLatencySnapshot(ctx),
 	}, nil
 }
 

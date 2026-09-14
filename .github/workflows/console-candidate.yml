@@ -5,6 +5,8 @@ on:
     branches: [codex/upstream-v020-selective]
     paths:
       - 'frontend/**'
+      - 'backend/**'
+      - '.github/workflows/channel-performance-validation.yml'
       - '.github/workflows/console-candidate.yml'
       - '.github/scripts/console-candidate-smoke.sh'
   workflow_dispatch:
@@ -18,6 +20,8 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  performance-validation:
+    uses: ./.github/workflows/channel-performance-validation.yml
   frontend:
     runs-on: ubuntu-latest
     defaults:
@@ -36,7 +40,7 @@ jobs:
       - run: pnpm run typecheck
       - run: pnpm exec vitest run src/utils/__tests__/brandRegistry.spec.ts src/components/user/dashboard/__tests__ src/views/user/__tests__ src/components/layout/__tests__ src/components/channels/__tests__ src/features/channel-monitor-v2/__tests__ src/components/common/__tests__/PlatformTypeBadge.grok.spec.ts src/views/admin/__tests__/ChannelMonitorView.grok.spec.ts --maxWorkers=2 --minWorkers=1
   image:
-    needs: frontend
+    needs: [frontend, performance-validation]
     runs-on: ubuntu-latest
     timeout-minutes: 50
     steps:

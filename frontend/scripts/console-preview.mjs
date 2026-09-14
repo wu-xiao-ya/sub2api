@@ -12,7 +12,7 @@ const channels = [{ name:'星光精选', description:'', platforms:groups.map((g
 let keys = groups.slice(0,7).map((g,i)=>({id:i+1,name:names[i]+' 开发环境',key:'sk-preview-not-valid-'+String(i).repeat(32),status:'active',group_id:g.id,group:g,user_id:999,created_at:new Date().toISOString(),quota:0,quota_used:0,ip_whitelist:[],ip_blacklist:[],expires_at:null}))
 let subscriptions = [{id:1,name:'星光 Pro 月卡',tier_code:'pro',status:'active',starts_at:'2026-09-01T00:00:00Z',expires_at:'2026-10-01T00:00:00Z',concurrency_entitlement:20,lifetime_quota_usd:250,daily_quota_usd:30,weekly_quota_usd:100,monthly_quota_usd:250,lifetime_usage_usd:68.35,daily_usage_usd:8.92,weekly_usage_usd:38.41,monthly_usage_usd:68.35,balance_topup_enabled:false,billing_priority:'subscription',groups:groups.slice(0,4)}]
 let preferences = { balance_topup_enabled:true }
-const usage = modelNames.slice(0,7).map((model,i)=>({id:i+1,api_key_id:i+1,api_key:keys[i],group_id:i+1,group:groups[i],model,requested_model:model,billing_type:i===0?1:0,subscription_purchase_id:i===0?1:null,billing_source:i===0?'subscription':'balance',request_type:2,stream:true,input_tokens:8200+i*123,output_tokens:1380,cache_read_tokens:32000,cache_creation_tokens:0,input_cost:.0312,output_cost:.0414,cache_read_cost:.0021,total_cost:.08,actual_cost:.024,rate_multiplier:.3,duration_ms:8320,first_token_ms:826,created_at:new Date(Date.now()-i*600000).toISOString(),service_tier:i===0?'priority':'standard',reasoning_effort:'high'}))
+const usage = modelNames.slice(0,7).map((model,i)=>({id:i+1,api_key_id:i+1,api_key:keys[i],group_id:i+1,group:groups[i],model,requested_model:model,billing_type:i===0?1:0,subscription_purchase_id:i===0?1:null,billing_source:i===0?'subscription':'balance',request_type:2,stream:true,input_tokens:8200+i*123,output_tokens:1380,cache_read_tokens:32000,cache_creation_tokens:0,input_cost:.0312,output_cost:.0414,cache_read_cost:.0021,total_cost:.08,actual_cost:.024,rate_multiplier:.3,duration_ms:8320,first_token_ms:826,latency_breakdown:i%3===0?{version:2,attempt_count:2,forward_start_ms:180,first_response_ms:450,first_event_ms:710,first_output_ms:740,first_character_ms:826,total_duration_ms:8320}:i%3===1?{first_response_ms:250,first_output_ms:600,first_character_ms:826,total_duration_ms:8320}:null,created_at:new Date(Date.now()-i*600000).toISOString(),service_tier:i===0?'priority':'standard',reasoning_effort:'high'}))
 const stats = { total_api_keys:7,active_api_keys:7,total_requests:28340,total_input_tokens:8200000,total_output_tokens:630000,total_cache_read_tokens:34800000,total_cache_creation_tokens:82000,total_tokens:43712000,total_cost:543.821,total_actual_cost:163.1463,today_requests:1340,today_input_tokens:820000,today_output_tokens:63000,today_cache_read_tokens:3480000,today_cache_creation_tokens:8200,today_tokens:4371200,today_cost:54.3821,today_actual_cost:16.31463,average_duration_ms:8450,rpm:23,tpm:238000,by_platform:groups.slice(0,4).map(g=>({platform:g.platform,total_requests:7000,total_tokens:1200000,total_actual_cost:40.786575,today_actual_cost:4.0786575,today_requests:335,today_tokens:300000})) }
 const trend = Array.from({length:10},(_,i)=>({date:new Date(Date.now()-(9-i)*86400000).toISOString().slice(0,10),requests:800+i*53,input_tokens:100000+i*20000,output_tokens:10000+i*1234,cache_read_tokens:500000+i*4567,cache_creation_tokens:1000,total_tokens:611000+i*30000,cost:25+i,actual_cost:7.5+i*.3}))
 const models = modelNames.slice(0,5).map((model,i)=>({model,requests:800+i*53,total_tokens:611000+i*30000,input_tokens:100000,output_tokens:10000,cache_read_tokens:500000,cost:25+i,actual_cost:7.5+i*.3}))
@@ -21,13 +21,22 @@ const health = {overall:'healthy',error_rate:'healthy',ttft:'healthy',cache:'hea
 const coverage = {requested_start:trend[0].date,coverage_start:trend[0].date,data_through:new Date().toISOString(),computed_at:new Date().toISOString(),aggregation_lag_seconds:3,coverage_complete:true,bucket_seconds:600}
 const monitors = groups.slice(0,8).map((g,i)=>({id:i+1,name:g.name,provider:g.platform,api_mode:'chat_completions',group_name:g.name,account_group_id:g.id,primary_model:modelNames[i],primary_status:i===3?'degraded':'operational',primary_latency_ms:826+i*250,primary_ping_latency_ms:28,primary_source:i%2?'probe':'traffic',availability_7d:99.82,extra_models:[],timeline:Array.from({length:10},(_,n)=>({status:n===3&&i===3?'degraded':'operational',latency_ms:820+n*123,ping_latency_ms:28,checked_at:new Date(Date.now()-(9-n)*3600000).toISOString()}))}))
 const paginated = items => ({items,total:items.length,page:1,page_size:20,pages:1})
-function dataFor(path, method, body) {
+function dataFor(path, method, body, params = new URLSearchParams()) {
   if(path==='/settings/public')return {site_name:'星光 AI · 本地预览',site_logo:'/logo.svg',version:'preview',registration_enabled:true,purchase_subscription_enabled:true,channel_monitor_enabled:true,channel_monitor_v2_enabled:true,api_base_url:'https://api.example.invalid',custom_endpoints:[],api_endpoint_probe_interval_seconds:0,feature_flags:{},backend_mode_enabled:false}
   if(path==='/auth/me'||path==='/user/profile')return user
   if(path==='/user/platform-quotas')return {platform_quotas:[]}
   if(path==='/groups/available')return groups
   if(path==='/groups/rates')return {}
   if(path==='/channels/available')return channels
+  if(path==='/channels/performance'||path==='/channels/performance/detail') {
+    const end = Date.now(), count = 24
+    const performanceMetric = { first_character_ms: 826, duration_ms: 8320, output_tps: 48.6, success_rate: 98.4, sample_quality: 'adequate', coverage_status: 'complete' }
+    const points = Array.from({length:count},(_,i)=>({at:new Date(end-(count-i)*3600000).toISOString(),...performanceMetric,first_character_ms:i===4?null:650+i*20,output_tps:i===4?null:44+i*.3,success_rate:i===4?null:96+i%5}))
+    let items = channels.flatMap(ch=>ch.platforms.flatMap(p=>p.supported_models.map(m=>({key:ch.name+'\0'+p.platform+'\0'+m.name,model:m.name,platform:p.platform,...performanceMetric,groups:p.groups.map(g=>({id:g.id,name:g.name,...performanceMetric,trend:points})),trend:points}))))
+    if(params.get('key')) items=items.filter(item=>item.key===params.get('key'))
+    if(params.get('group_id')) items=items.map(item=>({...item,groups:item.groups.filter(group=>group.id===Number(params.get('group_id')))}))
+    return {items,version:2,source:'user_requests',start:points[0].at,end:new Date(end).toISOString(),updated_at:new Date(end).toISOString(),coverage_start:points[0].at,coverage_end:new Date(end).toISOString(),incomplete_since:null}
+  }
   if(path==='/subscriptions/shared')return subscriptions
   if(path==='/subscriptions/preferences')return preferences
   if(path==='/subscriptions/preferences/balance-topup'){preferences={balance_topup_enabled:body.enabled};return preferences}
@@ -62,7 +71,7 @@ const mock = http.createServer(async(req,res)=>{
   let body={};try{body=JSON.parse(raw||'{}')}catch{res.writeHead(400);res.end();return}
   res.setHeader('Content-Type','application/json');res.setHeader('Cache-Control','no-store')
   if(req.url.startsWith('/v1/')){res.writeHead(403);res.end(JSON.stringify({error:'Preview has no upstream access'}));return}
-  res.end(JSON.stringify({code:0,data:dataFor(path,req.method,body)}))
+  res.end(JSON.stringify({code:0,data:dataFor(path,req.method,body,new URL(req.url,'http://127.0.0.1').searchParams)}))
 })
 await new Promise((resolve,reject)=>{mock.once('error',reject);mock.listen(5195,'127.0.0.1',resolve)})
 process.env.VITE_DEV_PROXY_TARGET='http://127.0.0.1:5195'

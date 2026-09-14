@@ -53,7 +53,13 @@ const messages: Record<string, string> = {
   'admin.usage.billingModeImage': 'Image',
   'admin.usage.billingTypeBalance': 'Balance',
   'admin.usage.billingTypeSubscription': 'Subscription',
-  'usage.latencyFirstToken': 'First response',
+  'usage.latencyFirstToken': 'Legacy first token',
+  'usage.latencyFirstResponse': 'First response',
+  'usage.latencyFirstEvent': 'First event',
+  'usage.latencyFirstOutput': 'First output',
+  'usage.latencyFirstCharacter': 'First text',
+  'usage.latencyOriginIngress': 'V2 gateway ingress',
+  'usage.latencyOriginUnknown': 'No measured stages',
   'usage.latencyDuration': 'Total',
   'usage.latencyGeneration': 'Generation',
   'usage.latencyOutputSpeed': 'Output speed',
@@ -145,6 +151,7 @@ describe('admin UsageTable tooltip', () => {
       duration_ms: 1800,
       first_token_ms: 1600,
       output_tokens: 31,
+      latency_breakdown: { version: 2, first_response_ms: 800, first_event_ms: 900, first_output_ms: 1200, first_character_ms: 1600, total_duration_ms: 1800 },
     }
     const wrapper = mount(UsageTable, {
       props: { data: [row], loading: false, columns: [] },
@@ -160,14 +167,20 @@ describe('admin UsageTable tooltip', () => {
 
     expect(wrapper.text()).toContain('First response')
     expect(wrapper.text()).toContain('1.60s')
-    expect(wrapper.text()).toContain('200ms')
-    expect(wrapper.text()).toContain('155 Token/s')
+    expect(wrapper.text()).toContain('800ms')
+    expect(wrapper.text()).toContain('First event')
+    expect(wrapper.text()).toContain('First output')
+    expect(wrapper.text()).toContain('First text')
+    expect(wrapper.text()).not.toContain('155 Token/s')
 
     const trigger = wrapper.find('[role="button"]')
     expect(trigger.attributes('tabindex')).toBe('0')
     await trigger.trigger('keydown', { key: 'Enter' })
     expect(wrapper.text()).toContain('Latency analysis')
-    expect(wrapper.text()).toContain('Generation ratio')
+    expect(wrapper.text()).toContain('V2 gateway ingress')
+    expect(wrapper.text()).toContain('+200ms')
+    await trigger.trigger('keydown', { key: 'Escape' })
+    expect(wrapper.text()).not.toContain('Latency analysis')
   })
 
   it('marks only usage rows that actually applied long-context billing', () => {

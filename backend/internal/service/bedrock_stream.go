@@ -70,6 +70,7 @@ func (s *GatewayService) handleBedrockStreamingResponse(
 	}
 	var lastReadAt atomic.Int64
 	lastReadAt.Store(time.Now().UnixNano())
+	latencyAttempt := CurrentRequestLatencyAttempt(ctx)
 
 	go func() {
 		defer close(events)
@@ -83,6 +84,9 @@ func (s *GatewayService) handleBedrockStreamingResponse(
 				return
 			}
 			lastReadAt.Store(time.Now().UnixNano())
+			if chunk := extractBedrockChunkData(payload); len(chunk) > 0 {
+				latencyAttempt.ObserveProtocolEvent(string(chunk), "")
+			}
 			if !sendEvent(decodeEvent{payload: payload}) {
 				return
 			}

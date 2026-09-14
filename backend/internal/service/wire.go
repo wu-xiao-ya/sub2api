@@ -809,6 +809,7 @@ var ProviderSet = wire.NewSet(
 	ProvideChannelMonitorRunner,
 	ProvideChannelMonitorV2Service,
 	ProvideChannelMonitorV2Aggregator,
+	ProvideChannelPerformanceService,
 	NewChannelMonitorRequestTemplateService,
 	ProvideUserPlatformQuotaUsageFlusher,
 )
@@ -897,6 +898,14 @@ func ProvideChannelMonitorRunner(svc *ChannelMonitorService, settingService *Set
 
 // ProvideChannelMonitorV2Service wires V2 privacy/runtime settings while
 // keeping it independent from the existing active monitor service.
+func ProvideChannelPerformanceService(repo ChannelPerformanceRepository, db *sql.DB) *ChannelPerformanceService {
+	svc := NewChannelPerformanceService(repo)
+	if os.Getenv("CHANNEL_PERFORMANCE_DISABLE_WORKER") != "1" {
+		svc.startRuntime(db)
+	}
+	return svc
+}
+
 func ProvideChannelMonitorV2Service(repo ChannelMonitorV2Repository, settingService *SettingService) *ChannelMonitorV2Service {
 	svc := NewChannelMonitorV2Service(repo)
 	svc.SetRuntimeReader(settingService)

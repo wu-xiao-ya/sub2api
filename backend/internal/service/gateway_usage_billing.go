@@ -1056,7 +1056,7 @@ func (s *GatewayService) buildRecordUsageLog(
 		Stream:                 result.Stream,
 		DurationMs:             &durationMs,
 		FirstTokenMs:           result.FirstTokenMs,
-		LatencyBreakdown:       result.LatencyBreakdown.Clone(),
+		LatencyBreakdown:       RequestLatencySnapshot(ctx, result.LatencyBreakdown),
 		ImageCount:             result.ImageCount,
 		ImageSize:              optionalTrimmedStringPtr(result.ImageSize),
 		ImageInputSize:         optionalTrimmedStringPtr(result.ImageInputSize),

@@ -439,13 +439,16 @@ func opsErrorLogConfig() (workerCount int, queueSize int) {
 	return workerCount, queueSize
 }
 
-func setOpsRequestContext(c *gin.Context, model string, stream bool) {
+func setOpsRequestContext(c *gin.Context, model string, stream bool, body ...[]byte) {
 	if c == nil {
 		return
 	}
 	model = strings.TrimSpace(model)
 	c.Set(opsModelKey, model)
 	c.Set(opsStreamKey, stream)
+	if len(body) > 0 {
+		setPerformanceDimensions(c, body[0])
+	}
 	if c.Request != nil && model != "" {
 		ctx := context.WithValue(c.Request.Context(), ctxkey.Model, model)
 		c.Request = c.Request.WithContext(ctx)
@@ -519,9 +522,12 @@ func isOpsNoAvailableAccountError(err error) bool {
 
 type opsCaptureWriter struct {
 	gin.ResponseWriter
-	limit int
-	buf   bytes.Buffer
-	ctx   *gin.Context
+	limit                  int
+	buf                    bytes.Buffer
+	ctx                    *gin.Context
+	performanceWitness     service.PerformanceStreamWitness
+	performanceEnabled     bool
+	performanceWriteFailed bool
 }
 
 const opsCaptureWriterLimit = service.OpsErrorLogQueueBodyMaxBytes
@@ -542,6 +548,9 @@ func acquireOpsCaptureWriter(rw gin.ResponseWriter) *opsCaptureWriter {
 	w.ResponseWriter = rw
 	w.limit = opsCaptureWriterLimit
 	w.buf.Reset()
+	w.performanceWitness = service.PerformanceStreamWitness{}
+	w.performanceEnabled = false
+	w.performanceWriteFailed = false
 	return w
 }
 
@@ -551,6 +560,7 @@ func releaseOpsCaptureWriter(w *opsCaptureWriter) {
 	}
 	w.ResponseWriter = nil
 	w.ctx = nil
+	w.performanceWitness = service.PerformanceStreamWitness{}
 	w.limit = opsCaptureWriterLimit
 	if !shouldPoolOpsCaptureWriter(w) {
 		return
@@ -647,7 +657,18 @@ func (w *opsCaptureWriter) Write(b []byte) (int, error) {
 			_, _ = w.buf.Write(b)
 		}
 	}
-	return w.ResponseWriter.Write(b)
+	n, err := w.ResponseWriter.Write(b)
+	if w.performanceEnabled {
+		if strings.Contains(strings.ToLower(w.Header().Get("Content-Type")), "text/event-stream") {
+			w.performanceWitness.Write(b[:n])
+		} else if strings.Contains(strings.ToLower(w.Header().Get("Content-Type")), "application/json") {
+			w.performanceWitness.WriteJSON(b[:n])
+		}
+		if err != nil {
+			w.performanceWriteFailed = true
+		}
+	}
+	return n, err
 }
 
 func (w *opsCaptureWriter) WriteString(s string) (int, error) {
@@ -662,7 +683,18 @@ func (w *opsCaptureWriter) WriteString(s string) (int, error) {
 			_, _ = w.buf.WriteString(s)
 		}
 	}
-	return w.ResponseWriter.WriteString(s)
+	n, err := w.ResponseWriter.WriteString(s)
+	if w.performanceEnabled {
+		if strings.Contains(strings.ToLower(w.Header().Get("Content-Type")), "text/event-stream") {
+			w.performanceWitness.Write([]byte(s[:n]))
+		} else if strings.Contains(strings.ToLower(w.Header().Get("Content-Type")), "application/json") {
+			w.performanceWitness.WriteJSON([]byte(s[:n]))
+		}
+		if err != nil {
+			w.performanceWriteFailed = true
+		}
+	}
+	return n, err
 }
 
 func (w *opsCaptureWriter) shouldCapture() bool {
@@ -678,11 +710,22 @@ func (w *opsCaptureWriter) shouldCapture() bool {
 // Notes:
 // - It buffers response bodies only when status >= 400 to avoid overhead for successful traffic.
 // - Streaming errors after the response has started (SSE) may still need explicit logging.
-func OpsErrorLoggerMiddleware(ops *service.OpsService) gin.HandlerFunc {
+func OpsErrorLoggerMiddleware(ops *service.OpsService, performance ...*service.ChannelPerformanceService) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		started := time.Now()
+		var recorder *service.ChannelPerformanceService
+		if len(performance) > 0 {
+			recorder = performance[0]
+		}
+		// A persistent WebSocket is not a single logical request. Its turn-level
+		// adapter must supply a clock; never label connection age as V2 latency.
+		if !strings.EqualFold(c.GetHeader("Upgrade"), "websocket") {
+			c.Request = c.Request.WithContext(service.WithRequestLatency(c.Request.Context()))
+		}
 		originalWriter := c.Writer
 		w := acquireOpsCaptureWriter(originalWriter)
 		w.ctx = c
+		w.performanceEnabled = recorder != nil
 		defer func() {
 			// Restore the original writer before returning so outer middlewares
 			// don't observe a pooled wrapper that has been released.
@@ -693,6 +736,7 @@ func OpsErrorLoggerMiddleware(ops *service.OpsService) gin.HandlerFunc {
 		}()
 		c.Writer = w
 		c.Next()
+		collectPerformanceFact(c, recorder, w, started)
 
 		if _, rejected := middleware2.GetIngressRejectReason(c); rejected {
 			return

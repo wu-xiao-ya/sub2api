@@ -309,10 +309,20 @@ func buildTrafficObservationResult(
 }
 
 func medianTrafficLatencyBreakdown(samples []ChannelMonitorTrafficSample) *UsageLatencyBreakdown {
+	version := 1
+	for _, sample := range samples {
+		if sample.LatencyBreakdown != nil && sample.LatencyBreakdown.Version == 2 && !sample.LatencyBreakdown.Empty() {
+			version = 2
+			break
+		}
+	}
 	median := func(selectValue func(*UsageLatencyBreakdown) *int) *int {
 		values := make([]int, 0, len(samples))
 		for _, sample := range samples {
 			if sample.LatencyBreakdown == nil {
+				continue
+			}
+			if (sample.LatencyBreakdown.Version == 2) != (version == 2) {
 				continue
 			}
 			if value := selectValue(sample.LatencyBreakdown); value != nil && *value >= 0 {
@@ -327,6 +337,7 @@ func medianTrafficLatencyBreakdown(samples []ChannelMonitorTrafficSample) *Usage
 		return &value
 	}
 	result := &UsageLatencyBreakdown{
+		Version:          version,
 		FirstResponseMs:  median(func(value *UsageLatencyBreakdown) *int { return value.FirstResponseMs }),
 		FirstEventMs:     median(func(value *UsageLatencyBreakdown) *int { return value.FirstEventMs }),
 		FirstOutputMs:    median(func(value *UsageLatencyBreakdown) *int { return value.FirstOutputMs }),

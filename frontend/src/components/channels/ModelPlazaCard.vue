@@ -121,6 +121,19 @@ class="flex min-w-0 flex-col rounded-lg border border-gray-200 bg-white p-4 dark
       </div>
     </section>
 
+    <section class="mt-3 border-b border-gray-100 pb-3 dark:border-dark-700">
+      <div class="mb-2 flex items-center justify-between gap-2 text-[11px]">
+        <span class="text-gray-500 dark:text-dark-400">{{ t('availableChannels.performance.source') }}</span>
+        <button type="button" class="inline-flex items-center gap-1 rounded text-primary-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary-500 dark:text-primary-300" @click="emit('performance', item)">
+          <Icon name="chart" size="xs" />{{ t('availableChannels.performance.title') }}
+        </button>
+      </div>
+      <PerformanceMetrics :metric="performance" />
+      <p class="mt-2 min-h-4 text-[10px] text-gray-500 dark:text-dark-400">
+        {{ performanceError ? t('availableChannels.performance.error') : performance?.coverage_status === 'partial' ? t('availableChannels.performance.partial') : performance?.sample_quality === 'low' ? t('availableChannels.performance.low') : !performance || performance.sample_quality === 'empty' ? t('availableChannels.performance.empty') : '' }}
+      </p>
+    </section>
+
     <section class="mt-4">
       <div class="mb-2 flex items-center justify-between gap-3">
         <span class="text-[11px] font-semibold uppercase tracking-wide text-gray-400 dark:text-dark-500">
@@ -162,6 +175,9 @@ import { useI18n } from 'vue-i18n'
 import GroupBadge from '@/components/common/GroupBadge.vue'
 import PlatformIcon from '@/components/common/PlatformIcon.vue'
 import ModelIcon from '@/components/common/ModelIcon.vue'
+import Icon from '@/components/icons/Icon.vue'
+import PerformanceMetrics from './PerformanceMetrics.vue'
+import type { PerformanceMetric } from '@/api/channelPerformance'
 import type { GroupPlatform, SubscriptionType } from '@/types'
 import {
   BILLING_MODE_IMAGE,
@@ -191,10 +207,13 @@ const props = defineProps<{
   item: ModelPlazaItem
   userGroupRates: Record<number, number>
   tokenScale: number
+  performance?: PerformanceMetric
+  performanceError?: boolean
 }>()
 
 const emit = defineEmits<{
   toggleGroup: [groupID: number]
+  performance: [item: ModelPlazaItem]
 }>()
 
 const { t } = useI18n()

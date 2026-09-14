@@ -43,6 +43,24 @@ describe('shared brand resources', () => {
     expect(resolvePlatformBrand('constructor')).toBeNull()
     expect(resolveModelBrand('deepseek-chat')).not.toBe('openai')
   })
+  it.each([
+    ['opus-4.8', 'anthropic'], ['opus-5', 'anthropic'],
+    ['sonnet-4.6', 'anthropic'], ['sonnet-5', 'anthropic'],
+    ['haiku-4.5', 'anthropic'], ['fable-5.1', 'anthropic'],
+    ['vendor/OPUS-5', 'anthropic'], [' Sonnet-5 ', 'anthropic'],
+    ['hy3', 'hunyuan'], ['vendor/HY3', 'hunyuan'],
+    ['hy3-preview', 'hunyuan'], ['hy3.0', 'hunyuan'],
+    ['hy-3', 'hunyuan'], ['hunyuan-hy3', 'hunyuan'],
+  ])('renders the correct bundled image for short model alias %s', (model, brand) => {
+    expect(resolveModelBrand(model)).toBe(brand)
+    const icon = mount(ModelIcon, { props: { model } })
+    const platform = mount(PlatformIcon, { props: { platform: brand } })
+    expect(icon.attributes('data-brand')).toBe(brand)
+    expect(icon.get('img').attributes('src')).toBe(platform.get('img').attributes('src'))
+  })
+  it.each(['hybrid-chat', 'hyper-model', 'hy', 'hy3custom', 'opuslike', 'sonnetizer', 'my-opus-5'])('does not guess a brand for unrelated model %s', (model) => {
+    expect(resolveModelBrand(model)).toBeNull()
+  })
   it('preserves legacy CSS string sizes and numeric sizes', () => {
     expect(mount(ModelIcon, { props: { model:'kimi-k3', size:'16px' } }).attributes('style')).toContain('16px')
     expect(mount(ModelIcon, { props: { model:'mimo-v2', size:24 } }).attributes('style')).toContain('24px')

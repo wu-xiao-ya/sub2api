@@ -126,6 +126,10 @@ CLAUDE.md
 scripts
 !backend/scripts/
 !backend/scripts/resolve-version.sh
+!frontend/scripts/
+frontend/scripts/*
+!frontend/scripts/latency-qa.mjs
+!frontend/scripts/performance-qa.mjs
 .code-review-state
 #openspec/
 code-reviews/
@@ -139,6 +143,7 @@ docs/*
 !docs/PAYMENT_CN.md
 !docs/ADMIN_PAYMENT_INTEGRATION_API.md
 !docs/ASYNC_IMAGE_TASKS.md
+!docs/CHANNEL_PERFORMANCE_IMPLEMENTATION.md
 !docs/legal/
 !docs/legal/*.md
 .serena/
@@ -146,6 +151,8 @@ docs/*
 frontend/coverage/
 aicodex
 output/
+outputs/latency-qa/
+outputs/performance-qa/
 
 # ===================
 # 当前实例的构建与部署产物

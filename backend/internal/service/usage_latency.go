@@ -1,9 +1,12 @@
 package service
 
-// UsageLatencyBreakdown records request milestones measured from the gateway
-// forwarding start. Nil fields mean the protocol did not expose an exact
-// milestone; callers must not infer missing stages from another metric.
+// UsageLatencyBreakdown version 2 starts at logical request ingress. Legacy
+// records (absent version or version 1) start at forwarding. Never merge these
+// origins or infer unknown milestones from the old first-token field.
 type UsageLatencyBreakdown struct {
+	Version          int  `json:"version,omitempty"`
+	AttemptCount     int  `json:"attempt_count,omitempty"`
+	ForwardStartMs   *int `json:"forward_start_ms,omitempty"`
 	FirstResponseMs  *int `json:"first_response_ms,omitempty"`
 	FirstEventMs     *int `json:"first_event_ms,omitempty"`
 	FirstOutputMs    *int `json:"first_output_ms,omitempty"`
@@ -23,6 +26,9 @@ func (b *UsageLatencyBreakdown) Clone() *UsageLatencyBreakdown {
 		return &copied
 	}
 	return &UsageLatencyBreakdown{
+		Version:          b.Version,
+		AttemptCount:     b.AttemptCount,
+		ForwardStartMs:   cloneInt(b.ForwardStartMs),
 		FirstResponseMs:  cloneInt(b.FirstResponseMs),
 		FirstEventMs:     cloneInt(b.FirstEventMs),
 		FirstOutputMs:    cloneInt(b.FirstOutputMs),
@@ -45,6 +51,15 @@ func (b *UsageLatencyBreakdown) Map() map[string]int {
 		return nil
 	}
 	out := make(map[string]int, 5)
+	if b.Version > 0 {
+		out["version"] = b.Version
+	}
+	if b.AttemptCount > 0 {
+		out["attempt_count"] = b.AttemptCount
+	}
+	if b.ForwardStartMs != nil {
+		out["forward_start_ms"] = *b.ForwardStartMs
+	}
 	if b.FirstResponseMs != nil {
 		out["first_response_ms"] = *b.FirstResponseMs
 	}
@@ -75,6 +90,9 @@ func UsageLatencyBreakdownFromMap(values map[string]int) *UsageLatencyBreakdown 
 		return &value
 	}
 	out := &UsageLatencyBreakdown{
+		Version:          values["version"],
+		AttemptCount:     values["attempt_count"],
+		ForwardStartMs:   ptr("forward_start_ms"),
 		FirstResponseMs:  ptr("first_response_ms"),
 		FirstEventMs:     ptr("first_event_ms"),
 		FirstOutputMs:    ptr("first_output_ms"),

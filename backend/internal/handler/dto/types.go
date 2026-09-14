@@ -526,12 +526,13 @@ type UsageLog struct {
 	BaseRateMultiplier        *float64 `json:"base_rate_multiplier,omitempty"`
 	LongContextBillingApplied bool     `json:"long_context_billing_applied"`
 
-	BillingType  int8   `json:"billing_type"`
-	RequestType  string `json:"request_type"`
-	Stream       bool   `json:"stream"`
-	OpenAIWSMode bool   `json:"openai_ws_mode"`
-	DurationMs   *int   `json:"duration_ms"`
-	FirstTokenMs *int   `json:"first_token_ms"`
+	BillingType      int8           `json:"billing_type"`
+	RequestType      string         `json:"request_type"`
+	Stream           bool           `json:"stream"`
+	OpenAIWSMode     bool           `json:"openai_ws_mode"`
+	DurationMs       *int           `json:"duration_ms"`
+	FirstTokenMs     *int           `json:"first_token_ms"`
+	LatencyBreakdown map[string]int `json:"latency_breakdown"`
 
 	// 图片生成字段
 	ImageCount         int            `json:"image_count"`
