@@ -80,6 +80,14 @@ no React source or runtime is included.
   CI must validate these additions; prior results do not cover them.
 - The CI selection now includes full WebSocket session/bridge/lifecycle tests
   and a race-detection pass, not just latency helpers.
+- Checkpoint 1a8a94468 passed CI, security scan, both frontend jobs, expanded
+  backend tests, real PostgreSQL aggregation tests and the race detector. Its
+  candidate image built successfully but the smoke script stopped before app
+  startup: socket readiness matched PostgreSQL's temporary init server. The
+  script now checks TCP readiness; candidate startup/publication must be rerun.
+- Browser interaction checks passed for combined filters, off/5-second refresh,
+  no detail requests after closing, and a visible chart tooltip with its actual
+  timestamp/value. Synthetic test data only; these are not production probes.
 
 ## Remaining Release Blockers
 

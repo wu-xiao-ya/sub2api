@@ -17,10 +17,12 @@ docker network create console-ui
 docker run -d --name console-db --network console-ci --network-alias postgres   -e POSTGRES_PASSWORD=isolated-ci-only -e POSTGRES_USER=sub2api -e POSTGRES_DB=sub2api postgres:18-alpine
 docker run -d --name console-redis --network console-ci --network-alias redis redis:8-alpine
 for i in $(seq 1 60); do
-  if docker exec console-db pg_isready -U sub2api -d sub2api; then break; fi
+  # The image initializes using a temporary socket-only server which stops
+  # again. TCP becomes available only after initialization has completed.
+  if docker exec console-db pg_isready -h 127.0.0.1 -U sub2api -d sub2api; then break; fi
   sleep 2
 done
-docker exec console-db pg_isready -U sub2api -d sub2api
+docker exec console-db pg_isready -h 127.0.0.1 -U sub2api -d sub2api
 docker run -d --name console-app --network console-ci --memory=1536m --cpus=2   -e AUTO_SETUP=true -e DATABASE_HOST=postgres -e DATABASE_PORT=5432   -e DATABASE_USER=sub2api -e DATABASE_PASSWORD=isolated-ci-only -e DATABASE_DBNAME=sub2api -e DATABASE_SSLMODE=disable   -e REDIS_HOST=redis -e REDIS_PORT=6379 -e REDIS_POOL_SIZE=20 -e REDIS_MIN_IDLE_CONNS=2   -e ADMIN_EMAIL=ci@example.invalid -e ADMIN_PASSWORD=Isolated-CI-Password-39   -e JWT_SECRET=isolated-ci-only-secret-no-production-access   sub2api-console-candidate:local
 deadline=$((SECONDS + 180))
 until docker exec console-app wget -q -T 5 -O /dev/null http://127.0.0.1:8080/health; do
