@@ -7,13 +7,16 @@ cleanup() {
   docker logs console-app > "$out/app.log" 2>&1 || true
   docker logs console-db > "$out/database.log" 2>&1 || true
   docker logs console-web > "$out/nginx.log" 2>&1 || true
-  docker rm -f console-web console-app console-db console-redis >/dev/null 2>&1 || true
+  docker logs console-upstream > "$out/upstream.log" 2>&1 || true
+  docker rm -f console-web console-app console-db console-redis console-upstream >/dev/null 2>&1 || true
   docker network rm console-ci >/dev/null 2>&1 || true
   docker network rm console-ui >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
 docker network create --internal console-ci
 docker network create console-ui
+docker run -d --name console-upstream --network console-ci --network-alias console-upstream \
+  -v "$PWD/.github/scripts/performance-upstream.mjs:/fixture.mjs:ro" node:24-alpine node /fixture.mjs
 docker run -d --name console-db --network console-ci --network-alias postgres   -e POSTGRES_PASSWORD=isolated-ci-only -e POSTGRES_USER=sub2api -e POSTGRES_DB=sub2api postgres:18-alpine
 docker run -d --name console-redis --network console-ci --network-alias redis redis:8-alpine
 for i in $(seq 1 60); do
@@ -64,6 +67,7 @@ curl --connect-timeout 2 --max-time 5 -fsS http://127.0.0.1:18091/api/v1/setting
 node --input-type=module <<'NODE'
 import assert from 'node:assert/strict'
 import { writeFile } from 'node:fs/promises'
+import { verifyPerformanceRequests } from './.github/scripts/performance-candidate-e2e.mjs'
 const base = 'http://127.0.0.1:18091'
 const checks = []
 for (const path of ['/', '/starlightai/', '/login', '/starlightai/login']) {
@@ -113,7 +117,7 @@ await api('/api/v1/admin/compliance/accept', { token: admin.access_token, method
 } })
 const settings = await api('/api/v1/admin/settings', { token: admin.access_token })
 await api('/api/v1/admin/settings', { token: admin.access_token, method: 'PUT', body: { ...settings, available_channels_enabled: true } })
-await api('/api/v1/admin/users', { token: admin.access_token, method: 'POST', body: {
+const createdUser = await api('/api/v1/admin/users', { token: admin.access_token, method: 'POST', body: {
   email: 'performance-user@example.invalid', password: 'Isolated-User-Password-39', role: 'user', concurrency: 1, balance: 0
 } })
 const user = await api('/starlightai/api/v1/auth/login', { method: 'POST', body: {
@@ -134,6 +138,7 @@ for (const prefix of ['', '/starlightai']) {
   await api(prefix + '/api/v1/channels/performance?stream=invalid', { token: user.access_token, status: 400 })
 }
 await api('/api/v1/admin/users', { token: user.access_token, status: 403 })
+await verifyPerformanceRequests({ api, admin, user, userId: createdUser.id, base })
 await writeFile('/tmp/console-candidate-smoke/performance-api.json', JSON.stringify(apiChecks, null, 2))
 console.log('Authenticated performance and permission checks passed: ' + apiChecks.length)
 NODE

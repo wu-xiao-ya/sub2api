@@ -45,9 +45,15 @@ no React source or runtime is included.
   delayed witness changes start time. Retention deletes at most 2,000 rows per
   table/granularity per tick. The historical sweep repeats after initial backfill
   to recover lower usage IDs committed after the fast cursor passed them.
-  This is eventual reconciliation, not immediate commit-order tracking: a full
-  30-day sweep takes about six hours at one historical hour per 30-second tick,
-  longer if database work is deferred. This freshness limit remains under review.
+  Historical usage without a success witness remains eventual reconciliation:
+  a full 30-day sweep takes about six hours at one historical hour per 30-second
+  tick, longer if database work is deferred. Migration 251 additionally tracks
+  unresolved successful witnesses by indexed native usage identity, independent
+  of sequence IDs. It checks at most 2,000 per tick, backs off from 30 seconds to
+  five minutes when no usage exists, and prioritizes resolved live-witness hours
+  over historical backlog. Retry bookkeeping does not invalidate metric buckets.
+  These intervals exclude worker/database backlog and are not an instant-refresh
+  guarantee. No billing-table trigger or write-path callback is added.
 - Graceful shutdown persists the earliest observed telemetry gap after its final
   drain, including failures which occur after the last aggregation tick.
   Migration 250 adds independent runtime liveness: startup registration, 15-second
@@ -109,6 +115,15 @@ no React source or runtime is included.
   unchanged billing identity, API-key isolation, runtime crashes, graceful close,
   stale-instance recovery and overlapping healthy instances. Migrations 248,
   249 and 250 execute twice in every isolated database fixture.
+- Checkpoint 5f31a0729 passed candidate 34982628732, main CI 34982628089 and
+  security 34982628031. The candidate included authenticated empty-scope queries
+  and permission checks through both entry paths. No production cutover occurred.
+- The next candidate adds runner-local mock upstream requests through actual
+  account/group/key routing, streaming/non-streaming/failure aggregation, real
+  cross-user group restrictions and filter checks. Its isolated network cannot
+  forward to real upstreams. New PostgreSQL cases hold a real uncommitted lower
+  usage ID while a larger ID commits, and assert bounded reconciliation and no
+  metric invalidation for unchanged missing usage. Migration 251 is repeated too.
 
 ## Remaining Release Blockers
 

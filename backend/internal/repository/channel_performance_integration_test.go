@@ -39,7 +39,7 @@ func performanceTestDatabase(t *testing.T) *sql.DB {
     )`)
 	require.NoError(t, err)
 	for i := 0; i < 2; i++ {
-		for _, name := range []string{"248_channel_performance.sql", "249_websocket_performance_identity.sql", "250_performance_runtime_coverage.sql"} {
+		for _, name := range []string{"248_channel_performance.sql", "249_websocket_performance_identity.sql", "250_performance_runtime_coverage.sql", "251_performance_usage_reconciliation.sql"} {
 			migration, err := os.ReadFile("../../migrations/" + name)
 			require.NoError(t, err)
 			_, err = db.Exec(string(migration))
@@ -286,4 +286,81 @@ func TestPerformanceDatabaseRuntimeCrashCoverage(t *testing.T) {
 	require.True(t, started.Equal(*coverage.IncompleteSince))
 	require.NoError(t, db.QueryRow("SELECT closed_at IS NOT NULL FROM channel_performance_runtimes WHERE instance_id='healthy'").Scan(&closed))
 	require.False(t, closed, "rolling deployment must not retire another healthy instance")
+}
+
+func TestPerformanceDatabasePendingUsageSurvivesOutOfOrderCommit(t *testing.T) {
+	db := performanceTestDatabase(t)
+	r := NewChannelPerformanceRepository(db)
+	ctx := context.Background()
+	now := time.Now().UTC()
+	at := now.Truncate(time.Hour).Add(-4 * time.Hour)
+	start, done := 100, 1100
+	stream := true
+	fact := service.ChannelPerformanceFact{APIKeyID: 1, RequestID: "ws:late:1", UsageRequestID: "resp_late", GroupID: 1, Model: "model",
+		Outcome: service.PerformanceSuccess, Stream: &stream, StartedAt: at, CompletedAt: at.Add(time.Second),
+		Latency: &service.UsageLatencyBreakdown{Version: 2, FirstOutputMs: &start, FirstCharacterMs: &start, TotalDurationMs: &done}}
+	require.NoError(t, r.RecordFacts(ctx, []service.ChannelPerformanceFact{fact}))
+	require.NoError(t, r.Recompute(ctx, at, at.Add(time.Hour)))
+	var schema string
+	require.NoError(t, db.QueryRow("SELECT current_schema()").Scan(&schema))
+	writer, err := sql.Open("postgres", os.Getenv("PERFORMANCE_TEST_DATABASE_URL"))
+	require.NoError(t, err)
+	writer.SetMaxOpenConns(1)
+	defer writer.Close()
+	_, err = writer.Exec("SET search_path TO " + pq.QuoteIdentifier(schema))
+	require.NoError(t, err)
+	tx, err := writer.BeginTx(ctx, nil)
+	require.NoError(t, err)
+	defer tx.Rollback()
+	_, err = tx.Exec(`INSERT INTO usage_logs(id,api_key_id,request_id,group_id,model,created_at,output_tokens,stream)
+        VALUES(1,1,'resp_late',1,'model',$1,100,true)`, at)
+	require.NoError(t, err)
+	_, err = db.Exec(`INSERT INTO usage_logs(id,api_key_id,request_id,group_id,model,created_at)
+        VALUES(2,2,'already-committed',2,'other',$1)`, now)
+	require.NoError(t, err)
+	require.NoError(t, r.ProcessPending(ctx, now.Add(time.Second)))
+	var cursor int64
+	require.NoError(t, db.QueryRow("SELECT usage_cursor FROM channel_performance_watermark WHERE id=1").Scan(&cursor))
+	require.EqualValues(t, 2, cursor)
+	require.NoError(t, tx.Commit())
+	// A historical backlog must not delay this already-observed logical request.
+	_, err = db.Exec("INSERT INTO channel_performance_dirty_hours(hour_start) VALUES($1) ON CONFLICT DO NOTHING", at.Add(-time.Hour))
+	require.NoError(t, err)
+	require.NoError(t, r.ProcessPending(ctx, now.Add(35*time.Second)))
+	rows, _, err := r.Query(ctx, service.ChannelPerformanceFilter{Range: "24h", Start: at, End: at.Add(time.Hour), Model: "model", Bucket: time.Hour}, []int64{1})
+	require.NoError(t, err)
+	require.Len(t, rows, 1)
+	require.EqualValues(t, 1, rows[0].Success)
+	require.Zero(t, rows[0].Unknown)
+	require.EqualValues(t, 100, rows[0].OutputTokens)
+	require.InDelta(t, 100, *rows[0].Metric().OutputTPS, 0.001)
+	var resolved bool
+	require.NoError(t, db.QueryRow("SELECT usage_resolved FROM channel_performance_facts WHERE request_id=$1", fact.RequestID).Scan(&resolved))
+	require.True(t, resolved)
+}
+
+func TestPerformanceDatabasePendingUsageBoundedAndNoEmptyInvalidation(t *testing.T) {
+	db := performanceTestDatabase(t)
+	r := NewChannelPerformanceRepository(db)
+	now := time.Now().UTC().Add(time.Second)
+	_, err := db.Exec(`INSERT INTO channel_performance_facts(api_key_id,request_id,group_id,model,outcome,started_at,completed_at)
+        SELECT 1,'pending:'||i,1,'model','success',now()-INTERVAL '1 minute',now() FROM generate_series(1,2001) i`)
+	require.NoError(t, err)
+	_, err = db.Exec("DELETE FROM channel_performance_dirty_hours")
+	require.NoError(t, err)
+	now = time.Now().UTC().Add(time.Second)
+	require.NoError(t, r.reconcilePendingUsage(context.Background(), now))
+	var checked, dirty int
+	require.NoError(t, db.QueryRow("SELECT count(*) FROM channel_performance_facts WHERE usage_check_attempts=1").Scan(&checked))
+	require.Equal(t, 2000, checked)
+	require.NoError(t, db.QueryRow("SELECT count(*) FROM channel_performance_dirty_hours").Scan(&dirty))
+	require.Zero(t, dirty, "missing usage does not change any performance metric")
+	var delay float64
+	require.NoError(t, db.QueryRow("SELECT max(extract(epoch FROM usage_next_check_at-$1)) FROM channel_performance_facts WHERE usage_check_attempts=1", now).Scan(&delay))
+	require.InDelta(t, 30, delay, 0.001)
+	_, err = db.Exec("UPDATE channel_performance_facts SET usage_check_attempts=100,usage_next_check_at=$1", now)
+	require.NoError(t, err)
+	require.NoError(t, r.reconcilePendingUsage(context.Background(), now))
+	require.NoError(t, db.QueryRow("SELECT max(extract(epoch FROM usage_next_check_at-$1)) FROM channel_performance_facts", now).Scan(&delay))
+	require.InDelta(t, 300, delay, 0.001)
 }

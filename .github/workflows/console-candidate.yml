@@ -9,6 +9,7 @@ on:
       - '.github/workflows/channel-performance-validation.yml'
       - '.github/workflows/console-candidate.yml'
       - '.github/scripts/console-candidate-smoke.sh'
+      - '.github/scripts/performance-*.mjs'
   workflow_dispatch:
 
 permissions:

@@ -160,17 +160,20 @@ func (r *channelPerformanceRepository) RecordFacts(ctx context.Context, facts []
                     reasoning_effort = CASE WHEN existing.outcome = 'success' THEN existing.reasoning_effort ELSE EXCLUDED.reasoning_effort END,
                     stream = CASE WHEN existing.outcome = 'success' THEN existing.stream ELSE EXCLUDED.stream END,
                     usage_request_id = CASE WHEN existing.outcome = 'success' THEN existing.usage_request_id ELSE EXCLUDED.usage_request_id END,
+                    usage_resolved = CASE WHEN existing.outcome = 'success' THEN existing.usage_resolved ELSE false END,
+                    usage_next_check_at = CASE WHEN existing.outcome = 'success' THEN existing.usage_next_check_at ELSE now() END,
+                    usage_check_attempts = CASE WHEN existing.outcome = 'success' THEN existing.usage_check_attempts ELSE 0 END,
                     latency_breakdown = CASE WHEN existing.outcome = 'success' THEN existing.latency_breakdown ELSE EXCLUDED.latency_breakdown END
                 RETURNING started_at
             )
-            INSERT INTO channel_performance_dirty_hours(hour_start)
-            SELECT DISTINCT h FROM (
+            INSERT INTO channel_performance_dirty_hours(hour_start,priority)
+            SELECT DISTINCT h,1 FROM (
                 SELECT date_trunc('hour', started_at) AS h FROM saved
                 UNION SELECT date_trunc('hour', $9::timestamptz)
                 UNION SELECT date_trunc('hour', created_at) FROM usage_logs
                     WHERE api_key_id=$1 AND request_id=COALESCE(NULLIF($12,''),$2)
             ) hours
-            ON CONFLICT (hour_start) DO UPDATE SET revision=channel_performance_dirty_hours.revision+1`,
+            ON CONFLICT (hour_start) DO UPDATE SET revision=channel_performance_dirty_hours.revision+1,priority=1`,
 			f.APIKeyID, f.RequestID, f.GroupID, f.Model, f.ServiceTier, f.ReasoningEffort,
 			f.Stream, string(f.Outcome), f.StartedAt.UTC(), f.CompletedAt.UTC(), string(latency), f.UsageRequestID)
 		if err != nil {
@@ -285,6 +288,9 @@ func (r *channelPerformanceRepository) Recompute(ctx context.Context, start, end
 // Sequence IDs are not commit order: the sweep also catches lower IDs committed
 // after the cursor passed them, without triggers on billing tables.
 func (r *channelPerformanceRepository) ProcessPending(ctx context.Context, now time.Time) error {
+	if err := r.reconcilePendingUsage(ctx, now); err != nil {
+		return err
+	}
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -315,7 +321,7 @@ func (r *channelPerformanceRepository) ProcessPending(ctx context.Context, now t
 		return err
 	}
 	var dirty time.Time
-	err = r.db.QueryRowContext(ctx, "SELECT hour_start FROM channel_performance_dirty_hours WHERE hour_start >= $1 AND hour_start < $2 ORDER BY hour_start LIMIT 1", now.Add(-30*24*time.Hour), now.Truncate(time.Hour)).Scan(&dirty)
+	err = r.db.QueryRowContext(ctx, "SELECT hour_start FROM channel_performance_dirty_hours WHERE hour_start >= $1 AND hour_start < $2 ORDER BY priority DESC,hour_start LIMIT 1", now.Add(-30*24*time.Hour), now.Truncate(time.Hour)).Scan(&dirty)
 	if err == nil {
 		if err = r.Recompute(ctx, dirty, dirty.Add(time.Hour)); err != nil {
 			return err
@@ -357,4 +363,36 @@ func (r *channelPerformanceRepository) ProcessPending(ctx context.Context, now t
 		}
 	}
 	return nil
+}
+
+// A success witness may precede the usage transaction's commit, even when a
+// later usage ID was already observed. Probe bounded indexed identities, not
+// billing-table scans or triggers. Missing/free usage backs off to five minutes.
+func (r *channelPerformanceRepository) reconcilePendingUsage(ctx context.Context, now time.Time) error {
+	_, err := r.db.ExecContext(ctx, `WITH pending AS MATERIALIZED (
+        SELECT api_key_id,request_id,usage_request_id,started_at,usage_check_attempts
+        FROM channel_performance_facts
+        WHERE outcome='success' AND NOT usage_resolved
+          AND usage_next_check_at <= $1 AND started_at >= $1 - INTERVAL '30 days'
+        ORDER BY usage_next_check_at,started_at LIMIT 2000 FOR UPDATE SKIP LOCKED
+    ), observed AS MATERIALIZED (
+        SELECT p.*,u.created_at FROM pending p LEFT JOIN LATERAL (
+            SELECT created_at FROM usage_logs WHERE api_key_id=p.api_key_id
+              AND request_id=COALESCE(NULLIF(p.usage_request_id,''),p.request_id)
+              AND usage_source IS DISTINCT FROM 'channel_monitor' LIMIT 1
+        ) u ON true
+    ), updated AS (
+        UPDATE channel_performance_facts f
+        SET usage_resolved=o.created_at IS NOT NULL,
+            usage_next_check_at=$1 + LEAST(300,30*power(2,LEAST(o.usage_check_attempts,4))) * INTERVAL '1 second',
+            usage_check_attempts=LEAST(o.usage_check_attempts+1,128)
+        FROM observed o WHERE f.api_key_id=o.api_key_id AND f.request_id=o.request_id
+        RETURNING f.request_id
+    ) INSERT INTO channel_performance_dirty_hours(hour_start,priority)
+      SELECT DISTINCT h,1 FROM (
+        SELECT date_trunc('hour',started_at) h FROM observed WHERE created_at IS NOT NULL
+        UNION SELECT date_trunc('hour',created_at) FROM observed WHERE created_at IS NOT NULL
+      ) hours
+      ON CONFLICT(hour_start) DO UPDATE SET revision=channel_performance_dirty_hours.revision+1,priority=1`, now.UTC())
+	return err
 }
