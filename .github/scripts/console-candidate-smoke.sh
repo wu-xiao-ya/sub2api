@@ -13,6 +13,7 @@ cleanup() {
   docker network rm console-ui >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
+node --test .github/scripts/performance-upstream.test.mjs
 docker network create --internal console-ci
 docker network create console-ui
 docker run -d --name console-upstream --network console-ci --network-alias console-upstream \

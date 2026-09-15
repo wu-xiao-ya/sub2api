@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 )
 
 func TestHTTPUpstreamLatencyKeepsAuthenticationProxyAndDecodedBody(t *testing.T) {
@@ -57,6 +58,79 @@ func TestHTTPUpstreamLatencyKeepsAuthenticationProxyAndDecodedBody(t *testing.T)
 			require.NotNil(t, b.FirstCharacterMs)
 			require.GreaterOrEqual(t, *b.FirstEventMs, *b.FirstResponseMs)
 			require.GreaterOrEqual(t, *b.TotalDurationMs, *b.FirstCharacterMs)
+		})
+	}
+}
+
+func TestHTTPUpstreamLatencyRetryAndInterruptedStream(t *testing.T) {
+	var calls atomic.Int64
+	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if calls.Add(1) == 1 {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_, _ = io.WriteString(w, `{"error":{"message":"retry"}}`)
+			return
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.Header().Set("Content-Length", "10000")
+		_, _ = io.WriteString(w, "data: {\"choices\":[{\"delta\":{\"content\":\"hello\"}}]}\n\n")
+		w.(http.Flusher).Flush()
+		// Closing before Content-Length simulates a real upstream interruption.
+	}))
+	defer up.Close()
+	ctx := service.WithRequestLatency(t.Context())
+	client := NewHTTPUpstream(nil)
+	for i := 0; i < 2; i++ {
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, up.URL, strings.NewReader("{}"))
+		require.NoError(t, err)
+		resp, err := client.Do(req, "", 1, 1)
+		require.NoError(t, err)
+		body, readErr := io.ReadAll(resp.Body)
+		require.NoError(t, resp.Body.Close())
+		if i == 0 {
+			require.NoError(t, readErr)
+			require.Equal(t, http.StatusServiceUnavailable, resp.StatusCode)
+			require.Nil(t, service.FinalRequestLatencySnapshot(ctx).FirstOutputMs)
+			time.Sleep(30 * time.Millisecond)
+		} else {
+			require.ErrorIs(t, readErr, io.ErrUnexpectedEOF, "telemetry must not swallow stream failure")
+			require.Contains(t, string(body), "hello")
+		}
+	}
+	b := service.FinalRequestLatencySnapshot(ctx)
+	require.Equal(t, 2, b.AttemptCount)
+	require.GreaterOrEqual(t, *b.ForwardStartMs, 30)
+	require.GreaterOrEqual(t, *b.FirstResponseMs, *b.ForwardStartMs)
+	require.GreaterOrEqual(t, *b.FirstCharacterMs, *b.FirstResponseMs)
+	require.GreaterOrEqual(t, *b.TotalDurationMs, *b.FirstCharacterMs)
+}
+
+func TestHTTPUpstreamLatencyNonTextDoesNotInventVisibleOutput(t *testing.T) {
+	for _, tc := range []struct{ name, body string }{
+		{"responses-image", `{"output":[{"type":"image_generation_call","result":"aGVsbG8="}]}`},
+		{"gemini-image", `{"candidates":[{"content":{"parts":[{"inlineData":{"data":"aGVsbG8="}}]}}]}`},
+		{"anthropic-tool", `{"type":"message","content":[{"type":"tool_use","name":"lookup","input":{}}]}`},
+		{"compatible-tool", `{"choices":[{"message":{"tool_calls":[{"function":{"name":"lookup","arguments":"{}"}}]}}]}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = io.WriteString(w, tc.body)
+			}))
+			defer up.Close()
+			ctx := service.WithRequestLatency(t.Context())
+			req, err := http.NewRequestWithContext(ctx, http.MethodPost, up.URL, strings.NewReader("{}"))
+			require.NoError(t, err)
+			resp, err := NewHTTPUpstream(nil).Do(req, "", 1, 1)
+			require.NoError(t, err)
+			body, err := io.ReadAll(resp.Body)
+			require.NoError(t, err)
+			require.NoError(t, resp.Body.Close())
+			require.Equal(t, tc.body, string(body))
+			b := service.FinalRequestLatencySnapshot(ctx)
+			require.NotNil(t, b.FirstResponseMs)
+			require.NotNil(t, b.FirstOutputMs)
+			require.Nil(t, b.FirstEventMs)
+			require.Nil(t, b.FirstCharacterMs)
 		})
 	}
 }

@@ -155,6 +155,50 @@ func TestPerformanceDatabaseLateUsageAndNoBillingTriggers(t *testing.T) {
 	require.Zero(t, triggers, "statistics must not add billing-write triggers")
 }
 
+func TestPerformanceDatabaseTPSExcludesImagesNonStreamAndMissingStages(t *testing.T) {
+	db := performanceTestDatabase(t)
+	r := NewChannelPerformanceRepository(db)
+	ctx := context.Background()
+	at := time.Now().UTC().Truncate(time.Hour).Add(-time.Hour)
+	for _, tc := range []struct {
+		id       string
+		stream   bool
+		images   int
+		endpoint string
+		stages   bool
+	}{
+		{"text", true, 0, "/v1/responses", true},
+		{"image-count", true, 1, "/v1/responses", true},
+		{"image-endpoint", true, 0, "/v1/images/generations", true},
+		{"non-stream", false, 0, "/v1/responses", true},
+		{"missing-stages", true, 0, "/v1/responses", false},
+	} {
+		_, err := db.Exec(`INSERT INTO usage_logs(api_key_id,request_id,group_id,model,created_at,output_tokens,stream,image_count,inbound_endpoint)
+			VALUES(1,$1,1,'model',$2,90,$3,$4,$5)`, tc.id, at, tc.stream, tc.images, tc.endpoint)
+		require.NoError(t, err)
+		fact := service.ChannelPerformanceFact{APIKeyID: 1, RequestID: tc.id, GroupID: 1, Model: "model",
+			Outcome: service.PerformanceSuccess, Stream: &tc.stream, StartedAt: at, CompletedAt: at.Add(10 * time.Second)}
+		if tc.stages {
+			start, done := 1000, 10000
+			fact.Latency = &service.UsageLatencyBreakdown{Version: 2, FirstOutputMs: &start, TotalDurationMs: &done}
+		}
+		require.NoError(t, r.RecordFacts(ctx, []service.ChannelPerformanceFact{fact}))
+	}
+	require.NoError(t, r.Recompute(ctx, at, at.Add(time.Hour)))
+	rows, _, err := r.Query(ctx, service.ChannelPerformanceFilter{Range: "24h", Start: at, End: at.Add(time.Hour), Model: "model", Bucket: time.Hour}, []int64{1})
+	require.NoError(t, err)
+	var total service.ChannelPerformanceCounts
+	for _, row := range rows {
+		total.Add(row.ChannelPerformanceCounts)
+	}
+	require.EqualValues(t, 5, total.Success)
+	require.EqualValues(t, 1, total.OutputCount)
+	require.EqualValues(t, 90, total.OutputTokens)
+	require.EqualValues(t, 9000, total.OutputMs)
+	require.InDelta(t, 10, *total.Metric().OutputTPS, 0.001)
+	require.Nil(t, total.Metric().FirstCharacterMs, "missing visible-text milestones must not be substituted")
+}
+
 func TestPerformanceDatabaseEarlierWitnessInvalidatesBothHours(t *testing.T) {
 	db := performanceTestDatabase(t)
 	r := NewChannelPerformanceRepository(db)

@@ -1,9 +1,10 @@
 import http from 'node:http'
 import { randomUUID } from 'node:crypto'
 import { setTimeout as delay } from 'node:timers/promises'
+import { pathToFileURL } from 'node:url'
 
 // Runner-local protocol fixture. No forwarding and no real upstream credentials.
-http.createServer(async (req, res) => {
+export const server = http.createServer(async (req, res) => {
   if (req.method === 'GET' && req.url === '/health') {
     res.end('ok')
     return
@@ -28,6 +29,13 @@ http.createServer(async (req, res) => {
   const response = { id, object: 'response', status: 'completed', model: body.model, output: [item],
     service_tier: body.service_tier ?? 'default', usage: { input_tokens: 10, output_tokens: 3, total_tokens: 13,
       input_tokens_details: { cached_tokens: 0 }, output_tokens_details: { reasoning_tokens: 0 } } }
+  // Account creation checks Responses tool support before choosing a protocol.
+  if (body.tool_choice === 'required' && body.tools?.some(tool => tool.name === 'probe_ping')) {
+    response.output = [{ id: 'fc_' + id, type: 'function_call', status: 'completed', call_id: 'call_' + id,
+      name: 'probe_ping', arguments: JSON.stringify({ ok: true }) }]
+    res.writeHead(200, { 'Content-Type': 'application/json', 'x-request-id': id }).end(JSON.stringify(response))
+    return
+  }
   if (!body.stream) {
     await delay(25)
     res.writeHead(200, { 'Content-Type': 'application/json', 'x-request-id': id }).end(JSON.stringify(response))
@@ -48,4 +56,5 @@ http.createServer(async (req, res) => {
   event('response.output_item.done', { output_index: 0, item })
   event('response.completed', { response })
   res.end()
-}).listen(8080, '0.0.0.0')
+})
+if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) server.listen(8080, '0.0.0.0')
