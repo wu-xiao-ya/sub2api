@@ -17,7 +17,7 @@ export async function verifyPerformanceRequests({ api, admin, user, userId, base
   }
   const channelName = 'CI performance'
   await api('/api/v1/admin/channels', { ...adminOptions, body: {
-    name: channelName, group_ids: [visible.id, hidden.id], model_pricing: [{ platform: 'openai', models: [model], billing_mode: 'token', input_price: 1, output_price: 2 }]
+    name: channelName, group_ids: [visible.id, hidden.id], model_pricing: [{ platform: 'openai', models: [model], billing_mode: 'token', input_price: 0.000001, output_price: 0.000002 }]
   } })
   await api('/api/v1/admin/users/' + userId, { token: admin.access_token, method: 'PUT', body: { allowed_groups: [visible.id] } })
   const funded = await api('/api/v1/admin/users/' + userId + '/balance', { ...adminOptions, body: { balance: 10, operation: 'set', notes: 'Isolated performance fixture funding' } })
@@ -34,7 +34,10 @@ export async function verifyPerformanceRequests({ api, admin, user, userId, base
       body: JSON.stringify({ model, input, stream, service_tier: 'priority', reasoning: { effort: 'high' }, max_output_tokens: 16 }), signal: AbortSignal.timeout(45000) })
     const text = await result.text()
     let errorCode
-    try { errorCode = JSON.parse(text)?.error?.code } catch {}
+    try {
+      const error = JSON.parse(text)?.error
+      errorCode = error?.code ?? error?.type
+    } catch {}
     const safeCode = typeof errorCode === 'string' && /^[a-zA-Z0-9_]{1,80}$/.test(errorCode) ? errorCode : 'unavailable'
     if (failure) assert(result.status >= 500, 'Expected provider failure; status=' + result.status + ', code=' + safeCode)
     else {
@@ -59,6 +62,7 @@ export async function verifyPerformanceRequests({ api, admin, user, userId, base
     if (a?.output_tps > 0 && Math.abs(a.success_rate - 200 / 3) < 0.001 && b?.success_rate === 100) break
     await delay(5000)
   }
+  await writeFile('/tmp/console-candidate-smoke/performance-observed.json', JSON.stringify({ visible: metrics, hidden: otherMetrics }, null, 2))
   const visibleMetric = metrics.items[0], hiddenMetric = otherMetrics.items[0]
   assert(Math.abs(visibleMetric.success_rate - 200 / 3) < 0.001, 'Two successes plus one failed logical request must count once each')
   assert.equal(hiddenMetric.success_rate, 100)
@@ -79,6 +83,7 @@ export async function verifyPerformanceRequests({ api, admin, user, userId, base
   assert.equal(usage.items.length, 2, 'Only the two successful billable requests should have usage records')
   for (const row of usage.items) {
     assert.equal(row.group_id, visible.id)
+    assert(row.actual_cost > 0 && row.actual_cost < 0.001, 'Fixture token prices must not exhaust the funded balance')
     const stages = row.latency_breakdown
     assert.equal(stages?.version, 2, 'Real usage must retain ingress-based milestones')
     for (const field of ['first_response_ms', 'first_output_ms', 'first_character_ms', 'total_duration_ms']) {
