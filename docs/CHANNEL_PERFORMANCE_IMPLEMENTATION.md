@@ -118,27 +118,49 @@ no React source or runtime is included.
 - Checkpoint 5f31a0729 passed candidate 34982628732, main CI 34982628089 and
   security 34982628031. The candidate included authenticated empty-scope queries
   and permission checks through both entry paths. No production cutover occurred.
-- The next candidate adds runner-local mock upstream requests through actual
+- Candidate validation adds runner-local mock upstream requests through actual
   account/group/key routing, streaming/non-streaming/failure aggregation, real
   cross-user group restrictions and filter checks. Its isolated network cannot
   forward to real upstreams. New PostgreSQL cases hold a real uncommitted lower
   usage ID while a larger ID commits, and assert bounded reconciliation and no
   metric invalidation for unchanged missing usage. Migration 251 is repeated too.
+- Checkpoint 0e92234ef377dfe7c6a50288a789245459784695 passed candidate run
+  34997188318, main CI 34997187679 and security 34997187718. Its published image
+  is ghcr.io/wu-xiao-ya/sub2api:console-0e92234ef377dfe7c6a50288a789245459784695.
+  All 52 authenticated/permission/API checks passed through the isolated proxy.
+  Two successful requests and one final upstream failure produced 66.6667%
+  availability; the other user's exclusive group remained 100%. Non-stream TPS
+  stayed null. Real user usage DTOs retained version-2 response/event/output/text
+  milestones with no fabricated non-stream event and small positive billed cost.
+  Root, /starlightai/, both login paths and embedded assets passed as well.
+- Earlier routed-smoke failures were fixture defects: profile updates cannot fund
+  balances, Responses capability probing requires a function_call response, and
+  channel API prices are per token rather than per million tokens. The fixture
+  now uses the dedicated balance endpoint, responds to the capability probe and
+  checks billed cost. Its protocol self-test runs before candidate startup.
+- Additional transport regressions passed locally and in candidate CI: a real
+  HTTP retry preserves the ingress clock, interrupted streams retain their read
+  error and received bytes, and non-stream images/tool calls do not invent visible
+  text. Real PostgreSQL tests confirm images (count or endpoint), non-streaming
+  requests and absent stages cannot inflate text TPS. These do not constitute a
+  routed OAuth/TLS-fingerprint matrix or a production-scale load test.
 
 ## Remaining Release Blockers
 
-1. Validate the new WebSocket terminal attribution and runtime crash-coverage
-   delta in CI, including the real PostgreSQL tests and concurrent race checks.
-2. Complete credential/transport integration coverage (OAuth refresh, proxy/TLS,
-   image, intermediate errors and disconnects) and validate all gateway variants.
-3. Run real PostgreSQL tests and review query plans, retention/backfill bounds,
-   transaction-out-of-order usage commits, late facts in both timestamp orders,
-   and telemetry gap persistence across shutdown/restart.
-4. Confirm coverage reflects the visible requested scope, not unrelated groups;
-   verify per-metric low-sample indicators and all empty/error/unknown states.
-5. Finish component interaction and keyboard/tooltip checks, final visual pass,
-   broader business regression, GitHub candidate image and isolated full-entry
-   validation. An image build alone is not authorization to bypass these blockers.
+1. Complete routed credential/transport coverage for the remaining gateway
+   variants, including OAuth and actual TLS-fingerprint transport. Existing
+   credential-refresh, protocol, WebSocket and race regressions pass, but shared
+   HTTP fixture coverage is not an end-to-end test of every account type.
+2. Review production-scale PostgreSQL query plans and retention/backfill load.
+   Isolated correctness tests now pass for out-of-order commits, late facts,
+   bounded reconciliation, repeated migrations and crash/gap persistence.
+3. Finish the populated-candidate browser/accessibility pass and verify all
+   empty/error/unknown and per-metric low-sample states. Synthetic visual and
+   interaction checks do not replace this last packaged-candidate check.
+4. Validate the exact image on an isolated production-host candidate, including
+   normal balance, subscription, streaming and image requests, before entry
+   switching. Preserve old connections and a proven rollback target. The CI
+   image has not been deployed; no production migration or cutover has occurred.
 
 ## Publication Boundary
 
