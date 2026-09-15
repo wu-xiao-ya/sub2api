@@ -86,4 +86,47 @@ for (const path of ['/', '/starlightai/', '/login', '/starlightai/login']) {
 }
 await writeFile('/tmp/console-candidate-smoke/pages.json', JSON.stringify(checks, null, 2))
 console.log(JSON.stringify(checks, null, 2))
+const apiChecks = []
+async function api(path, { token, method = 'GET', body, status = 200 } = {}) {
+  const response = await fetch(base + path, {
+    method,
+    headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) },
+    body: body === undefined ? undefined : JSON.stringify(body),
+    signal: AbortSignal.timeout(10000)
+  })
+  assert.equal(response.status, status, method + ' ' + path)
+  const result = await response.json()
+  apiChecks.push({ method, path, status: response.status })
+  return result.data
+}
+// Disposable CI-only identities. Never persist tokens or authentication bodies.
+const admin = await api('/api/v1/auth/login', { method: 'POST', body: {
+  email: 'ci@example.invalid', password: 'Isolated-CI-Password-39'
+} })
+assert(admin?.access_token, 'Candidate admin login failed')
+const settings = await api('/api/v1/admin/settings', { token: admin.access_token })
+await api('/api/v1/admin/settings', { token: admin.access_token, method: 'PUT', body: { ...settings, available_channels_enabled: true } })
+await api('/api/v1/admin/users', { token: admin.access_token, method: 'POST', body: {
+  email: 'performance-user@example.invalid', password: 'Isolated-User-Password-39', role: 'user', concurrency: 1, balance: 0
+} })
+const user = await api('/starlightai/api/v1/auth/login', { method: 'POST', body: {
+  email: 'performance-user@example.invalid', password: 'Isolated-User-Password-39'
+} })
+assert(user?.access_token, 'Candidate user login through subpath failed')
+for (const prefix of ['', '/starlightai']) {
+  await api(prefix + '/api/v1/channels/performance', { status: 401 })
+  for (const range of ['90m', '24h', '7d', '30d']) {
+    const data = await api(prefix + '/api/v1/channels/performance?range=' + range, { token: user.access_token })
+    assert.equal(data.version, 2)
+    assert.equal(data.source, 'user_requests')
+    assert.deepEqual(data.items, [], 'A user without available channels must receive no other group data')
+    assert(Date.parse(data.start) < Date.parse(data.end))
+  }
+  await api(prefix + '/api/v1/channels/performance?group_id=999999', { token: user.access_token, status: 404 })
+  await api(prefix + '/api/v1/channels/performance/detail?key=unavailable', { token: user.access_token, status: 404 })
+  await api(prefix + '/api/v1/channels/performance?stream=invalid', { token: user.access_token, status: 400 })
+}
+await api('/api/v1/admin/users', { token: user.access_token, status: 403 })
+await writeFile('/tmp/console-candidate-smoke/performance-api.json', JSON.stringify(apiChecks, null, 2))
+console.log('Authenticated performance and permission checks passed: ' + apiChecks.length)
 NODE
