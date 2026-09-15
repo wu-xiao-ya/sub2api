@@ -104,6 +104,13 @@ const admin = await api('/api/v1/auth/login', { method: 'POST', body: {
   email: 'ci@example.invalid', password: 'Isolated-CI-Password-39'
 } })
 assert(admin?.access_token, 'Candidate admin login failed')
+// Exercise the first-login gate only for this disposable, runner-local admin.
+await api('/api/v1/admin/settings', { token: admin.access_token, status: 423 })
+const compliance = await api('/api/v1/admin/compliance', { token: admin.access_token })
+assert(compliance?.ack_phrase_en, 'Missing first-login confirmation challenge')
+await api('/api/v1/admin/compliance/accept', { token: admin.access_token, method: 'POST', body: {
+  phrase: compliance.ack_phrase_en, language: 'en'
+} })
 const settings = await api('/api/v1/admin/settings', { token: admin.access_token })
 await api('/api/v1/admin/settings', { token: admin.access_token, method: 'PUT', body: { ...settings, available_channels_enabled: true } })
 await api('/api/v1/admin/users', { token: admin.access_token, method: 'POST', body: {
