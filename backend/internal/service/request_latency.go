@@ -66,6 +66,9 @@ func withRequestLatencyAt(ctx context.Context, at time.Time) context.Context {
 }
 
 func BeginRequestLatencyAttempt(ctx context.Context) *UsageLatencyAttempt {
+	if session, _ := ctx.Value(websocketPerformanceKey{}).(*WebSocketPerformanceSession); session != nil {
+		session.beforeAttempt(ctx)
+	}
 	t, _ := ctx.Value(requestLatencyKey{}).(*requestLatency)
 	if t == nil {
 		return nil

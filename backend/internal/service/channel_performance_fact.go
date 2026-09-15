@@ -9,8 +9,10 @@ import (
 
 // A minimal terminal witness, never a billing record or an upstream attempt log.
 type ChannelPerformanceFact struct {
-	APIKeyID        int64
-	RequestID       string
+	APIKeyID  int64
+	RequestID string
+	// UsageRequestID links native WS response IDs without changing billing IDs.
+	UsageRequestID  string
 	GroupID         int64
 	Model           string
 	ServiceTier     string
@@ -28,6 +30,9 @@ func (f *ChannelPerformanceFact) Validate() error {
 	}
 	if f.StartedAt.IsZero() || f.CompletedAt.Before(f.StartedAt) {
 		return fmt.Errorf("invalid performance timestamps")
+	}
+	if len(f.UsageRequestID) > 512 {
+		return fmt.Errorf("invalid performance usage identity")
 	}
 	switch f.Outcome {
 	case PerformanceSuccess, PerformanceFailure, PerformanceExcluded, PerformanceUnknown:
@@ -49,4 +54,6 @@ func (f *ChannelPerformanceFact) Validate() error {
 type ChannelPerformanceFactRepository interface {
 	RecordFacts(context.Context, []ChannelPerformanceFact) error
 	ProcessPending(context.Context, time.Time) error
+	HeartbeatRuntime(context.Context, string, time.Time) error
+	CloseRuntime(context.Context, string) error
 }

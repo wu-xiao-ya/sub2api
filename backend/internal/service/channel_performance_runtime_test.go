@@ -26,10 +26,10 @@ func TestPerformanceRuntimePersistsEarliestGap(t *testing.T) {
 	require.Equal(t, at.Unix(), r.gap.Load())
 	// A transient write failure must leave the marker available to shutdown.
 	mock.ExpectExec("UPDATE channel_performance_watermark").WithArgs(at).WillReturnError(errors.New("unavailable"))
-	r.persistGap(context.Background())
+	require.False(t, r.persistGap(context.Background()), "failed gap persistence must prevent a clean runtime close")
 	require.Equal(t, at.Unix(), r.gap.Load())
 	mock.ExpectExec("UPDATE channel_performance_watermark").WithArgs(at).WillReturnResult(sqlmock.NewResult(0, 1))
-	r.persistGap(context.Background())
+	require.True(t, r.persistGap(context.Background()))
 	require.NoError(t, mock.ExpectationsWereMet())
 	require.Equal(t, at.Unix(), r.gap.Load(), "a healthy write must not clear historic telemetry loss")
 }

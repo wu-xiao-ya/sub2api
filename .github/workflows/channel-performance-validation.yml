@@ -40,9 +40,12 @@ jobs:
       - name: Isolated schema and real PostgreSQL aggregation tests
         working-directory: backend
         run: go test ./internal/repository -run '^TestPerformanceDatabase' -count=1 -v
+      - name: Billing identity, images, subscriptions and credential refresh regressions
+        working-directory: backend
+        run: go test -p 2 ./internal/service -run 'TestOpenAIGatewayServiceRecordUsage|TestGatewayServiceRecordUsage|TestPostUsageBillingPurchaseFallback|TestGeminiOAuthService_Refresh|TestOAuthService_Refresh|TestOpenAIOAuthService.*Refresh|TestGrokOAuthServiceRefresh' -count=1 -v
       - name: Concurrent turn timing and telemetry race checks
         working-directory: backend
-        run: go test -race -p 2 ./internal/service -run 'TestLatency|TestPerformanceRuntime|TestOpenAIWSPassthroughTurnLifecycle|TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_(KeepLeaseAcrossTurns|PassthroughModeRelaysByCaddyAdapter|HTTPBridgeModeRelaysHTTPStream)' -count=1
+        run: go test -race -p 2 ./internal/service -run 'TestLatency|TestPerformanceRuntime|TestPerformanceWebSocket|TestOpenAIWSPassthroughTurnLifecycle|TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_(KeepLeaseAcrossTurns|PassthroughModeRelaysByCaddyAdapter|HTTPBridgeModeRelaysHTTPStream)' -count=1
   frontend:
     runs-on: ubuntu-latest
     timeout-minutes: 15

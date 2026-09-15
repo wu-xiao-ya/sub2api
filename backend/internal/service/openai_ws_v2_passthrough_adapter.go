@@ -854,6 +854,9 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 				return payload, nil, nil
 			}
 			eventType := strings.TrimSpace(gjson.GetBytes(payload, "type").String())
+			if eventType == "response.cancel" && hooks != nil && hooks.ClientCancelled != nil {
+				hooks.ClientCancelled()
+			}
 			isResponseCreate := eventType == "response.create"
 			acceptedTurn := false
 			if isResponseCreate {
@@ -866,6 +869,9 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 						turnLifecycle.cancelResponseCreate()
 					}
 				}()
+				if hooks != nil && hooks.RequestReceived != nil {
+					hooks.RequestReceived(payload, usageMeta.requestModelForFrame(payload), receivedAt)
+				}
 			}
 			if isResponseCreate {
 				if account.IsOpenAIOAuth() && isOpenAIResponsesLiteWebSocketPayload(payload) {
@@ -1046,11 +1052,20 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 				}
 			},
 			AfterClientWrite: func(msgType coderws.MessageType, payload []byte, writeErr error) {
+				if msgType == coderws.MessageText && hooks != nil && hooks.PerformanceResult != nil &&
+					(openAIWSPassthroughIsTerminalOutput(payload) || gjson.GetBytes(payload, "type").String() == "error") {
+					if factResult := websocketPerformanceResult(payload, turnLatencySnapshot(), usageMeta.serviceTier.Load(), usageMeta.reasoningEffort.Load()); factResult != nil {
+						hooks.PerformanceResult(factResult, writeErr)
+					}
+				}
 				if msgType == coderws.MessageText && openAIWSPassthroughIsTerminalOutput(payload) {
 					turnLifecycle.finishTerminalWrite(writeErr == nil, clientFrameConn.markTurnCompleted)
 				}
 			},
 			BeforeRelayCancel: func(exit openaiwsv2.RelayExit) {
+				if exit.Stage == "read_client" && isPerformanceVoluntaryDisconnect(exit.Err) && hooks != nil && hooks.ClientCancelled != nil {
+					hooks.ClientCancelled()
+				}
 				if context.Cause(ctx) != nil {
 					return
 				}

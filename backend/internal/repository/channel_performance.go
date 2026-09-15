@@ -77,12 +77,46 @@ func (r *channelPerformanceRepository) Query(ctx context.Context, f service.Chan
 
 func (r *channelPerformanceRepository) Coverage(ctx context.Context) (service.ChannelPerformanceCoverage, error) {
 	var c service.ChannelPerformanceCoverage
-	err := r.db.QueryRowContext(ctx, `SELECT coverage_start, coverage_end, updated_at, incomplete_since
+	err := r.db.QueryRowContext(ctx, `SELECT coverage_start, coverage_end, updated_at,
+        LEAST(incomplete_since, (SELECT MIN(started_at) FROM channel_performance_runtimes
+            WHERE closed_at IS NULL AND last_seen_at < now() - INTERVAL '90 seconds'))
 		FROM channel_performance_watermark WHERE id = 1`).Scan(&c.Start, &c.End, &c.UpdatedAt, &c.IncompleteSince)
 	if err == sql.ErrNoRows {
 		err = nil
 	}
 	return c, err
+}
+
+// A stale runtime is conservatively incomplete from startup, not its last
+// heartbeat: an in-flight logical request may have started much earlier.
+const persistStalePerformanceRuntimes = `WITH stale AS (
+    UPDATE channel_performance_runtimes SET closed_at=now()
+    WHERE closed_at IS NULL AND last_seen_at < now() - INTERVAL '90 seconds'
+    RETURNING started_at
+) UPDATE channel_performance_watermark
+  SET incomplete_since=LEAST(incomplete_since,(SELECT MIN(started_at) FROM stale))
+  WHERE id=1 AND EXISTS(SELECT 1 FROM stale)`
+
+func (r *channelPerformanceRepository) HeartbeatRuntime(ctx context.Context, id string, started time.Time) error {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err = tx.ExecContext(ctx, persistStalePerformanceRuntimes); err != nil {
+		return err
+	}
+	_, err = tx.ExecContext(ctx, `INSERT INTO channel_performance_runtimes(instance_id,started_at)
+        VALUES($1,$2) ON CONFLICT(instance_id) DO UPDATE SET last_seen_at=now(),closed_at=NULL`, id, started)
+	if err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func (r *channelPerformanceRepository) CloseRuntime(ctx context.Context, id string) error {
+	_, err := r.db.ExecContext(ctx, "UPDATE channel_performance_runtimes SET closed_at=now() WHERE instance_id=$1", id)
+	return err
 }
 
 func (r *channelPerformanceRepository) RecordFacts(ctx context.Context, facts []service.ChannelPerformanceFact) error {
@@ -114,8 +148,8 @@ func (r *channelPerformanceRepository) RecordFacts(ctx context.Context, facts []
             WITH saved AS (
                 INSERT INTO channel_performance_facts AS existing
                     (api_key_id, request_id, group_id, model, service_tier, reasoning_effort,
-                     stream, outcome, started_at, completed_at, latency_breakdown)
-                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb)
+                     stream, outcome, started_at, completed_at, latency_breakdown, usage_request_id)
+                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,NULLIF($12,''))
                 ON CONFLICT (api_key_id, request_id) DO UPDATE SET
                     started_at = LEAST(existing.started_at, EXCLUDED.started_at),
                     completed_at = GREATEST(existing.completed_at, EXCLUDED.completed_at),
@@ -125,6 +159,7 @@ func (r *channelPerformanceRepository) RecordFacts(ctx context.Context, facts []
                     service_tier = CASE WHEN existing.outcome = 'success' THEN existing.service_tier ELSE EXCLUDED.service_tier END,
                     reasoning_effort = CASE WHEN existing.outcome = 'success' THEN existing.reasoning_effort ELSE EXCLUDED.reasoning_effort END,
                     stream = CASE WHEN existing.outcome = 'success' THEN existing.stream ELSE EXCLUDED.stream END,
+                    usage_request_id = CASE WHEN existing.outcome = 'success' THEN existing.usage_request_id ELSE EXCLUDED.usage_request_id END,
                     latency_breakdown = CASE WHEN existing.outcome = 'success' THEN existing.latency_breakdown ELSE EXCLUDED.latency_breakdown END
                 RETURNING started_at
             )
@@ -132,11 +167,12 @@ func (r *channelPerformanceRepository) RecordFacts(ctx context.Context, facts []
             SELECT DISTINCT h FROM (
                 SELECT date_trunc('hour', started_at) AS h FROM saved
                 UNION SELECT date_trunc('hour', $9::timestamptz)
-                UNION SELECT date_trunc('hour', created_at) FROM usage_logs WHERE api_key_id=$1 AND request_id=$2
+                UNION SELECT date_trunc('hour', created_at) FROM usage_logs
+                    WHERE api_key_id=$1 AND request_id=COALESCE(NULLIF($12,''),$2)
             ) hours
             ON CONFLICT (hour_start) DO UPDATE SET revision=channel_performance_dirty_hours.revision+1`,
 			f.APIKeyID, f.RequestID, f.GroupID, f.Model, f.ServiceTier, f.ReasoningEffort,
-			f.Stream, string(f.Outcome), f.StartedAt.UTC(), f.CompletedAt.UTC(), string(latency))
+			f.Stream, string(f.Outcome), f.StartedAt.UTC(), f.CompletedAt.UTC(), string(latency), f.UsageRequestID)
 		if err != nil {
 			return err
 		}
@@ -157,7 +193,7 @@ WITH source AS (
           COALESCE(ul.inbound_endpoint,'') NOT LIKE '%/images/%' AS text_request
     FROM channel_performance_facts f
     LEFT JOIN LATERAL (
-        SELECT * FROM usage_logs u WHERE u.api_key_id=f.api_key_id AND u.request_id=f.request_id
+        SELECT * FROM usage_logs u WHERE u.api_key_id=f.api_key_id AND u.request_id=COALESCE(NULLIF(f.usage_request_id,''),f.request_id)
           AND u.usage_source IS DISTINCT FROM 'channel_monitor' ORDER BY u.id DESC LIMIT 1
     ) ul ON true
     WHERE f.started_at >= $1 AND f.started_at < $2
@@ -169,7 +205,7 @@ WITH source AS (
     FROM usage_logs ul
     WHERE ul.created_at >= $1 AND ul.created_at < $2 AND ul.group_id IS NOT NULL
       AND ul.usage_source IS DISTINCT FROM 'channel_monitor'
-      AND NOT EXISTS (SELECT 1 FROM channel_performance_facts f WHERE f.api_key_id=ul.api_key_id AND f.request_id=ul.request_id)
+      AND NOT EXISTS (SELECT 1 FROM channel_performance_facts f WHERE f.api_key_id=ul.api_key_id AND COALESCE(NULLIF(f.usage_request_id,''),f.request_id)=ul.request_id)
 ), measured AS (
     SELECT *,
       CASE WHEN outcome='success' AND latency->>'version'='2' THEN (latency->>'first_character_ms')::bigint END AS first_character,
@@ -264,7 +300,7 @@ func (r *channelPerformanceRepository) ProcessPending(ctx context.Context, now t
             SELECT DISTINCT h FROM (
                 SELECT date_trunc('hour',created_at) h FROM batch WHERE usage_source IS DISTINCT FROM 'channel_monitor'
                 UNION SELECT date_trunc('hour',f.started_at) FROM batch b JOIN channel_performance_facts f
-                    ON f.api_key_id=b.api_key_id AND f.request_id=b.request_id
+                    ON f.api_key_id=b.api_key_id AND COALESCE(NULLIF(f.usage_request_id,''),f.request_id)=b.request_id
             ) hours WHERE h >= $1
             ON CONFLICT(hour_start) DO UPDATE SET revision=channel_performance_dirty_hours.revision+1
         ) UPDATE channel_performance_watermark SET usage_cursor=COALESCE((SELECT MAX(id) FROM batch),usage_cursor) WHERE id=1`, now.Add(-30*24*time.Hour))
@@ -314,6 +350,7 @@ func (r *channelPerformanceRepository) ProcessPending(ctx context.Context, now t
 		{"DELETE FROM channel_performance_buckets WHERE ctid IN (SELECT ctid FROM channel_performance_buckets WHERE bucket_seconds=3600 AND bucket_start < $1 ORDER BY bucket_start LIMIT 2000)", now.Add(-30 * 24 * time.Hour)},
 		{"DELETE FROM channel_performance_facts WHERE ctid IN (SELECT ctid FROM channel_performance_facts WHERE started_at < $1 ORDER BY started_at LIMIT 2000)", now.Add(-30 * 24 * time.Hour)},
 		{"DELETE FROM channel_performance_dirty_hours WHERE hour_start IN (SELECT hour_start FROM channel_performance_dirty_hours WHERE hour_start < $1 ORDER BY hour_start LIMIT 2000)", now.Add(-30 * 24 * time.Hour)},
+		{"DELETE FROM channel_performance_runtimes WHERE instance_id IN (SELECT instance_id FROM channel_performance_runtimes WHERE closed_at < $1 ORDER BY closed_at LIMIT 2000)", now.Add(-30 * 24 * time.Hour)},
 	} {
 		if _, err = r.db.ExecContext(ctx, prune.query, prune.cutoff); err != nil {
 			return err

@@ -717,6 +717,9 @@ func OpsErrorLoggerMiddleware(ops *service.OpsService, performance ...*service.C
 		if len(performance) > 0 {
 			recorder = performance[0]
 		}
+		if recorder != nil {
+			c.Set(performanceRecorderKey, recorder)
+		}
 		// A persistent WebSocket is not a single logical request. Its turn-level
 		// adapter must supply a clock; never label connection age as V2 latency.
 		if !strings.EqualFold(c.GetHeader("Upgrade"), "websocket") {

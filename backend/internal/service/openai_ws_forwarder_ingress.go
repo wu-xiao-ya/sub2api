@@ -407,6 +407,9 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 			)
 		}
 		turnCtx = withRequestLatencyAt(ctx, receivedAt)
+		if hooks != nil && hooks.RequestReceived != nil {
+			hooks.RequestReceived(payload, "", receivedAt)
+		}
 		return payload, nil
 	}
 
@@ -531,6 +534,9 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 				turn,
 				writeClientMessage,
 			)
+			if hooks != nil && hooks.PerformanceResult != nil {
+				hooks.PerformanceResult(result, bridgeErr)
+			}
 			if hooks != nil && hooks.AfterTurn != nil {
 				hooks.AfterTurn(turn, result, bridgeErr)
 			}
@@ -788,6 +794,7 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 		lastEventType := ""
 		needModelReplace := false
 		clientDisconnected := false
+		performanceClientCancelled := false
 		mappedModel := ""
 		var mappedModelBytes []byte
 		if originalModel != "" {
@@ -937,6 +944,7 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 				if err := writeClientMessage(upstreamMessage); err != nil {
 					if isOpenAIWSClientDisconnectError(err) {
 						clientDisconnected = true
+						performanceClientCancelled = isPerformanceVoluntaryDisconnect(err)
 						closeStatus, closeReason := summarizeOpenAIWSReadCloseError(err)
 						logOpenAIWSModeInfo(
 							"ingress_ws_client_disconnected_drain account_id=%d turn=%d conn_id=%s close_status=%s close_reason=%s",
@@ -987,19 +995,21 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 				}
 				imageCount := imageCounter.Count()
 				result := &OpenAIForwardResult{
-					RequestID:             responseID,
-					Usage:                 usage,
-					Model:                 originalModel,
-					UpstreamModel:         mappedModel,
-					ServiceTier:           extractOpenAIServiceTierFromBody(payload),
-					ReasoningEffort:       ApplyThinkingEnabledFallback(extractOpenAIReasoningEffortFromBody(payload, mappedModel, originalModel), payload, mappedModel),
-					Stream:                reqStream,
-					OpenAIWSMode:          true,
-					UpstreamTerminalEvent: terminalEvent,
-					ResponseHeaders:       lease.HandshakeHeaders(),
-					Duration:              time.Since(turnStart),
-					FirstTokenMs:          firstTokenMs,
-					LatencyBreakdown:      FinalRequestLatencySnapshot(turnCtx),
+					RequestID:                  responseID,
+					Usage:                      usage,
+					Model:                      originalModel,
+					UpstreamModel:              mappedModel,
+					ServiceTier:                extractOpenAIServiceTierFromBody(payload),
+					ReasoningEffort:            ApplyThinkingEnabledFallback(extractOpenAIReasoningEffortFromBody(payload, mappedModel, originalModel), payload, mappedModel),
+					Stream:                     reqStream,
+					OpenAIWSMode:               true,
+					UpstreamTerminalEvent:      terminalEvent,
+					ResponseHeaders:            lease.HandshakeHeaders(),
+					Duration:                   time.Since(turnStart),
+					FirstTokenMs:               firstTokenMs,
+					LatencyBreakdown:           FinalRequestLatencySnapshot(turnCtx),
+					performanceDeliveryFailed:  clientDisconnected,
+					performanceClientCancelled: performanceClientCancelled,
 				}
 				if replayInput := replayCollector.Items(); len(replayInput) > 0 {
 					result.wsReplayInput = replayInput
@@ -1523,6 +1533,9 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 			if unwrapped := errors.Unwrap(relayErr); unwrapped != nil {
 				finalErr = unwrapped
 			}
+			if hooks != nil && hooks.PerformanceResult != nil {
+				hooks.PerformanceResult(nil, finalErr)
+			}
 			if hooks != nil && hooks.AfterTurn != nil {
 				hooks.AfterTurn(turn, nil, finalErr)
 			}
@@ -1533,6 +1546,9 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 		turnPrevRecoveryTried = false
 		lastTurnFinishedAt = time.Now()
 		lastTurnClean = true
+		if hooks != nil && hooks.PerformanceResult != nil {
+			hooks.PerformanceResult(result, nil)
+		}
 		if hooks != nil && hooks.AfterTurn != nil {
 			hooks.AfterTurn(turn, result, nil)
 		}

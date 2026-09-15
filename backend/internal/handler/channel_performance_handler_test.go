@@ -1,14 +1,53 @@
 package handler
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/usagesource"
+	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )
+
+func TestPerformanceWebSocketCollectorScope(t *testing.T) {
+	require.Nil(t, newWebSocketPerformanceSession(nil, nil, time.Now()))
+	for _, tc := range []struct {
+		name     string
+		key      *service.APIKey
+		recorder bool
+		probe    bool
+		want     bool
+	}{
+		{name: "missing authentication", recorder: true},
+		{name: "missing group", key: &service.APIKey{ID: 7}, recorder: true},
+		{name: "missing recorder", key: &service.APIKey{ID: 7, GroupID: new(int64(8))}},
+		{name: "internal monitor", key: &service.APIKey{ID: 7, GroupID: new(int64(8))}, recorder: true, probe: true},
+		{name: "real request", key: &service.APIKey{ID: 7, GroupID: new(int64(8))}, recorder: true, want: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c, _ := gin.CreateTestContext(httptest.NewRecorder())
+			c.Request = httptest.NewRequest(http.MethodGet, "/v1/responses", nil)
+			if tc.probe {
+				c.Request = c.Request.WithContext(context.WithValue(c.Request.Context(), ctxkey.UsageSource, usagesource.ChannelMonitor))
+			}
+			if tc.key != nil {
+				c.Set(string(middleware.ContextKeyAPIKey), tc.key)
+			}
+			if tc.recorder {
+				c.Set(performanceRecorderKey, &service.ChannelPerformanceService{})
+			}
+			session := newWebSocketPerformanceSession(c, []byte(`{"model":"m"}`), time.Now())
+			require.Equal(t, tc.want, session != nil)
+			session.Close(nil)
+		})
+	}
+}
 
 func TestPerformanceHandlerAuthentication(t *testing.T) {
 	gin.SetMode(gin.TestMode)

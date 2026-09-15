@@ -1715,7 +1715,8 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 		coderws.StatusPolicyViolation,
 		"missing first response.create message",
 	)
-	ctx = service.WithWebSocketFirstTurnReceived(ctx, time.Now())
+	firstMessageReceivedAt := time.Now()
+	ctx = service.WithWebSocketFirstTurnReceived(ctx, firstMessageReceivedAt)
 	c.Request = c.Request.WithContext(ctx)
 	if err != nil {
 		if errors.Is(context.Cause(ctx), service.ErrOpenAIWSIngressLeaseLost) {
@@ -1748,6 +1749,10 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 		closeOpenAIClientWS(wsConn, coderws.StatusPolicyViolation, "model is required in first response.create payload")
 		return
 	}
+	performance := newWebSocketPerformanceSession(c, firstMessage, firstMessageReceivedAt)
+	ctx = service.WithWebSocketPerformance(ctx, performance)
+	c.Request = c.Request.WithContext(ctx)
+	defer func() { performance.Close(context.Cause(ctx)) }()
 	previousResponseID := strings.TrimSpace(gjson.GetBytes(firstMessage, "previous_response_id").String())
 	previousResponseIDKind := service.ClassifyOpenAIPreviousResponseIDKind(previousResponseID)
 	if previousResponseID != "" && previousResponseIDKind == service.OpenAIPreviousResponseIDKindMessageID {
@@ -1853,6 +1858,7 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 		closeOpenAIClientWS(wsConn, coderws.StatusPolicyViolation, "billing check failed")
 		return
 	}
+	performance.SetOutcome(service.PerformanceFailure)
 
 	sessionHash := h.gatewayService.GenerateSessionHashWithFallback(
 		c,
@@ -2046,8 +2052,10 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 					return service.NewOpenAIWSClientCloseError(coderws.StatusInternalError, "failed to acquire user concurrency slot", err)
 				}
 				if !userAcquired {
+					performance.SetOutcome(service.PerformanceExcluded)
 					return service.NewOpenAIWSClientCloseError(coderws.StatusTryAgainLater, "too many concurrent requests, please retry later", nil)
 				}
+				performance.SetOutcome(service.PerformanceFailure)
 				ctx = c.Request.Context()
 				subscription, _ = middleware2.GetSubscriptionFromContext(c)
 				accountReleaseFunc, accountAcquired, err := h.concurrencyHelper.TryAcquireAccountSlot(ctx, account.ID, accountMaxConcurrency)
@@ -2133,6 +2141,12 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 			},
 		}
 
+		if performance != nil {
+			hooks.RequestReceived = performance.Next
+			hooks.ClientCancelled = performance.ClientCancelled
+			hooks.PerformanceResult = performance.ObserveResult
+		}
+
 		// 应用渠道模型映射到 WebSocket 首条消息
 		wsFirstMessage := firstMessage
 		if channelMappingWS.Mapped {
@@ -2154,6 +2168,7 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 		requestPayloadHash = service.HashUsageRequestPayload(wsFirstMessage)
 
 		if err := h.gatewayService.ProxyResponsesWebSocketFromClient(ctx, c, wsConn, account, token, wsFirstMessage, hooks); err != nil {
+			performance.ObserveError(err)
 			var failoverErr *service.UpstreamFailoverError
 			if errors.As(err, &failoverErr) {
 				if handleWSFailover(account, failoverErr) {

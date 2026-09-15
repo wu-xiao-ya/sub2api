@@ -15,6 +15,7 @@ type channelPerformanceRuntime struct {
 	repo     ChannelPerformanceFactRepository
 	db       *sql.DB
 	instance string
+	started  time.Time
 	queue    chan ChannelPerformanceFact
 	stop     chan struct{}
 	done     chan struct{}
@@ -29,9 +30,20 @@ func (s *ChannelPerformanceService) startRuntime(db *sql.DB) {
 	if !ok || db == nil {
 		return
 	}
-	r := &channelPerformanceRuntime{repo: repo, db: db, instance: uuid.NewString(), queue: make(chan ChannelPerformanceFact, 1024), stop: make(chan struct{}), done: make(chan struct{})}
+	r := &channelPerformanceRuntime{repo: repo, db: db, instance: uuid.NewString(), started: time.Now().UTC(), queue: make(chan ChannelPerformanceFact, 1024), stop: make(chan struct{}), done: make(chan struct{})}
 	s.runtime = r
+	// Register before serving requests so SIGKILL/OOM leaves durable evidence.
+	r.heartbeat()
 	go r.run()
+}
+
+func (r *channelPerformanceRuntime) heartbeat() {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	if err := r.repo.HeartbeatRuntime(ctx, r.instance, r.started); err != nil {
+		r.noteGap(r.started)
+		slog.Warn("channel performance runtime heartbeat failed", "error", err)
+	}
 }
 
 // Requests never block on performance telemetry or enqueue request bodies.
@@ -93,10 +105,16 @@ func (r *channelPerformanceRuntime) run() {
 		// aggregation tick followed it. Use a fresh bounded shutdown context.
 		flushCtx, flushCancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer flushCancel()
-		r.persistGap(flushCtx)
+		if r.persistGap(flushCtx) {
+			if err := r.repo.CloseRuntime(flushCtx, r.instance); err != nil {
+				slog.Warn("channel performance runtime close failed", "error", err)
+			}
+		}
 	}()
 	ticker := time.NewTicker(250 * time.Millisecond)
 	defer ticker.Stop()
+	heartbeat := time.NewTicker(15 * time.Second)
+	defer heartbeat.Stop()
 	batch := make([]ChannelPerformanceFact, 0, 64)
 	for {
 		select {
@@ -109,6 +127,8 @@ func (r *channelPerformanceRuntime) run() {
 		case <-ticker.C:
 			r.flush(batch)
 			batch = batch[:0]
+		case <-heartbeat.C:
+			r.heartbeat()
 		case <-r.stop:
 			// Stop ingress first. Drain bounded pending telemetry while database
 			// dependencies remain alive; never hang shutdown indefinitely.
@@ -175,12 +195,14 @@ func (r *channelPerformanceRuntime) noteGap(at time.Time) {
 	}
 }
 
-func (r *channelPerformanceRuntime) persistGap(ctx context.Context) {
+func (r *channelPerformanceRuntime) persistGap(ctx context.Context) bool {
 	if gap := r.gap.Load(); gap != 0 {
 		// Sticky loss cannot be cleared by a later healthy batch.
 		_, err := r.db.ExecContext(ctx, "UPDATE channel_performance_watermark SET incomplete_since=LEAST(COALESCE(incomplete_since,$1),$1) WHERE id=1", time.Unix(gap, 0))
 		if err != nil {
 			slog.Warn("channel performance coverage marker failed", "error", err)
+			return false
 		}
 	}
+	return true
 }

@@ -121,3 +121,23 @@ func TestPerformanceWindowsAndEmptyBuckets(t *testing.T) {
 	f := ChannelPerformanceFilter{Range: "1y"}
 	require.Error(t, f.Normalize(time.Now()))
 }
+
+func TestPerformanceCoverageUsesVisibleModelSamples(t *testing.T) {
+	now := time.Date(2026, 9, 15, 12, 0, 0, 0, time.UTC)
+	f := ChannelPerformanceFilter{Range: "24h"}
+	require.NoError(t, f.Normalize(now))
+	r := &performanceRepoStub{rows: []ChannelPerformanceRow{
+		{GroupID: 2, Model: "visible", At: now.Add(-20 * time.Hour), ChannelPerformanceCounts: ChannelPerformanceCounts{Success: 10}},
+		{GroupID: 1, Model: "hidden-model", At: now.Add(-10 * time.Hour), ChannelPerformanceCounts: ChannelPerformanceCounts{Success: 10}},
+		{GroupID: 1, Model: "visible", At: now.Add(-time.Hour), ChannelPerformanceCounts: ChannelPerformanceCounts{Success: 2, CharacterCount: 1, CharacterSum: 100}},
+	}}
+	s := NewChannelPerformanceService(r)
+	scope := []ChannelPerformanceScope{{Key: "card", Model: "visible", Groups: map[int64]string{1: "visible-group"}}}
+	result, err := s.Query(context.Background(), f, scope, true)
+	require.NoError(t, err)
+	require.NotNil(t, result.CoverageStart)
+	require.Equal(t, now.Add(-time.Hour), *result.CoverageStart)
+	require.Equal(t, now, *result.CoverageEnd)
+	require.Equal(t, "low", result.Items[0].SampleQuality)
+	require.InDelta(t, 100, *result.Items[0].FirstCharacterMs, 0.001)
+}

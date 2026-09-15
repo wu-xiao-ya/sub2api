@@ -1,6 +1,6 @@
 # Channel Performance And Request Milestones
 
-Status: implementation and validation in progress (2026-09-14). Not approved for production cutover.
+Status: implementation and validation in progress (2026-09-15). Not approved for production cutover.
 
 ## Reference
 
@@ -23,6 +23,13 @@ no React source or runtime is included.
 - Persistent WebSocket turns now receive independent ingress clocks in pooled,
   passthrough and HTTP bridge paths. The first turn survives account retries and
   concurrency-context refresh; reused connections never invent response headers.
+- Terminal WebSocket facts use a connection/turn identity independent of native
+  billing response IDs. Migration 249 provides the optional native-ID join;
+  no usage identity is rewritten. Failed retries remain pending, eventual success
+  counts once, and failures without response IDs are retained. Passthrough facts
+  are finalized after client delivery, independently of the earlier billing hook.
+  Local concurrency limits are structurally excluded, while upstream saturation
+  remains a failure even when both use the same WebSocket close code.
 - Model-card batch performance summary and permission-scoped detail endpoints.
   Reuse active channel/platform/model/group visibility before queries; cache keys
   include scopes and filters. Public DTOs contain no account, user or key details
@@ -42,8 +49,14 @@ no React source or runtime is included.
   30-day sweep takes about six hours at one historical hour per 30-second tick,
   longer if database work is deferred. This freshness limit remains under review.
 - Graceful shutdown persists the earliest observed telemetry gap after its final
-  drain, including failures which occur after the last aggregation tick. Abrupt
-  process loss still needs durable runtime coverage detection.
+  drain, including failures which occur after the last aggregation tick.
+  Migration 250 adds independent runtime liveness: startup registration, 15-second
+  heartbeats and clean-close markers after the final drain. A runtime stale for
+  90 seconds conservatively marks coverage incomplete from its startup, covering
+  lost long-running requests rather than guessing when loss began. The marker
+  survives a replacement instance and never retires a healthy parallel candidate.
+  This detects possible telemetry loss; it does not recover lost samples or
+  provide exactly-once durable telemetry during a total database outage.
 - Nullable weighted metrics, separate unknown dimensions, sparse trends, four
   ranges, model-exact grouping (not icon aliases), successful streaming-text TPS.
 - Performance detail with group comparison, three Chart.js trends, point tooltips,
@@ -60,9 +73,9 @@ no React source or runtime is included.
 - Broad candidate frontend regression passed: 28 files, 179 tests, including the
   corrected CSV assertion for six new latency columns.
 - Expanded service/handler/repository regression passed locally, including full
-  WebSocket session, bridge and lifecycle tests. The final rerun after preserving
-  the first-turn tracker through handler context refresh/account failover could
-  not link: Windows C: ran out of disk space. CI must validate that final delta.
+  WebSocket session, bridge and lifecycle tests. The September 15 rerun includes
+  terminal attribution, concurrency ownership, monitor-probe exclusion and
+  runtime liveness changes. PostgreSQL-specific tests skip locally; CI is required.
 - 16 performance screenshots at 375/768/1440/1920px, light/dark: no page errors,
   no document overflow, all three charts painted. Shortened chart tick labels
   were rechecked. Preview uses synthetic data only.
@@ -88,12 +101,19 @@ no React source or runtime is included.
 - Browser interaction checks passed for combined filters, off/5-second refresh,
   no detail requests after closing, and a visible chart tooltip with its actual
   timestamp/value. Synthetic test data only; these are not production probes.
+- Checkpoint 67e775d6435f6a6f5c209ff8271855a3a1a6dbe6 passed candidate run
+  34865601184, main CI 34865600923 and security 34865600927. Its candidate
+  startup, root and /starlightai/ HTML, login and embedded assets passed.
+  This evidence predates migrations 249/250 and must not validate the new delta.
+- New real PostgreSQL tests cover native WebSocket usage joins across hours,
+  unchanged billing identity, API-key isolation, runtime crashes, graceful close,
+  stale-instance recovery and overlapping healthy instances. Migrations 248,
+  249 and 250 execute twice in every isolated database fixture.
 
 ## Remaining Release Blockers
 
-1. Persistent WebSocket terminal-fact attribution is still missing, including
-   failures without response IDs and retry deduplication across bridge and
-   passthrough modes. Turn timing alone does not complete availability metrics.
+1. Validate the new WebSocket terminal attribution and runtime crash-coverage
+   delta in CI, including the real PostgreSQL tests and concurrent race checks.
 2. Complete credential/transport integration coverage (OAuth refresh, proxy/TLS,
    image, intermediate errors and disconnects) and validate all gateway variants.
 3. Run real PostgreSQL tests and review query plans, retention/backfill bounds,

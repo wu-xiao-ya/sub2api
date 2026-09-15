@@ -16,6 +16,20 @@ import (
 
 const performanceTierKey = "performance_service_tier"
 const performanceEffortKey = "performance_reasoning_effort"
+const performanceRecorderKey = "channel_performance_recorder"
+
+func newWebSocketPerformanceSession(c *gin.Context, payload []byte, at time.Time) *service.WebSocketPerformanceSession {
+	if c == nil || opsUsageSourceFromRequest(c) == usagesource.ChannelMonitor {
+		return nil
+	}
+	value, _ := c.Get(performanceRecorderKey)
+	recorder, _ := value.(*service.ChannelPerformanceService)
+	key, ok := middleware.GetAPIKeyFromContext(c)
+	if recorder == nil || !ok || key == nil || key.GroupID == nil {
+		return nil
+	}
+	return service.NewWebSocketPerformanceSession(key.ID, *key.GroupID, payload, at, recorder.RecordFact)
+}
 
 func (h *AvailableChannelHandler) PerformanceRecorder() *service.ChannelPerformanceService {
 	if h == nil {

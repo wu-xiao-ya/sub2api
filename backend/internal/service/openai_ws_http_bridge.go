@@ -282,6 +282,7 @@ func (s *OpenAIGatewayService) proxyOpenAIWSHTTPBridgeTurn(
 	sawDone := false
 	wroteDownstream := false
 	clientDisconnected := false
+	performanceClientCancelled := false
 	mappedModel := ""
 	needModelReplace := false
 	var mappedModelBytes []byte
@@ -296,19 +297,21 @@ func (s *OpenAIGatewayService) proxyOpenAIWSHTTPBridgeTurn(
 	resultWithUsage := func() *OpenAIForwardResult {
 		imageCount := imageCounter.Count()
 		result := &OpenAIForwardResult{
-			RequestID:             responseID,
-			Usage:                 usage,
-			Model:                 originalModel,
-			UpstreamModel:         mappedModel,
-			ServiceTier:           extractOpenAIServiceTierFromBody(body),
-			ReasoningEffort:       ApplyThinkingEnabledFallback(extractOpenAIReasoningEffortFromBody(body, mappedModel, originalModel), body, mappedModel),
-			Stream:                reqStream,
-			OpenAIWSMode:          true,
-			UpstreamTerminalEvent: upstreamTerminalEvent,
-			ResponseHeaders:       cloneHeader(resp.Header),
-			Duration:              time.Since(turnStart),
-			FirstTokenMs:          firstTokenMs,
-			LatencyBreakdown:      FinalRequestLatencySnapshot(ctx),
+			RequestID:                  responseID,
+			Usage:                      usage,
+			Model:                      originalModel,
+			UpstreamModel:              mappedModel,
+			ServiceTier:                extractOpenAIServiceTierFromBody(body),
+			ReasoningEffort:            ApplyThinkingEnabledFallback(extractOpenAIReasoningEffortFromBody(body, mappedModel, originalModel), body, mappedModel),
+			Stream:                     reqStream,
+			OpenAIWSMode:               true,
+			UpstreamTerminalEvent:      upstreamTerminalEvent,
+			ResponseHeaders:            cloneHeader(resp.Header),
+			Duration:                   time.Since(turnStart),
+			FirstTokenMs:               firstTokenMs,
+			LatencyBreakdown:           FinalRequestLatencySnapshot(ctx),
+			performanceDeliveryFailed:  clientDisconnected,
+			performanceClientCancelled: performanceClientCancelled,
 		}
 		if replayInput := replayCollector.Items(); len(replayInput) > 0 {
 			result.wsReplayInput = replayInput
@@ -414,6 +417,7 @@ func (s *OpenAIGatewayService) proxyOpenAIWSHTTPBridgeTurn(
 			if err := writeClientMessage(upstreamMessage); err != nil {
 				if isOpenAIWSClientDisconnectError(err) {
 					clientDisconnected = true
+					performanceClientCancelled = isPerformanceVoluntaryDisconnect(err)
 					closeStatus, closeReason := summarizeOpenAIWSReadCloseError(err)
 					logOpenAIWSModeInfo(
 						"ingress_ws_http_bridge_client_disconnected_drain account_id=%d turn=%d close_status=%s close_reason=%s",

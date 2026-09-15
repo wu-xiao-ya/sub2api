@@ -38,11 +38,13 @@ func performanceTestDatabase(t *testing.T) *sql.DB {
         UNIQUE(api_key_id,request_id)
     )`)
 	require.NoError(t, err)
-	migration, err := os.ReadFile("../../migrations/248_channel_performance.sql")
-	require.NoError(t, err)
 	for i := 0; i < 2; i++ {
-		_, err = db.Exec(string(migration))
-		require.NoError(t, err, "migration must be repeatable")
+		for _, name := range []string{"248_channel_performance.sql", "249_websocket_performance_identity.sql", "250_performance_runtime_coverage.sql"} {
+			migration, err := os.ReadFile("../../migrations/" + name)
+			require.NoError(t, err)
+			_, err = db.Exec(string(migration))
+			require.NoError(t, err, "migration must be repeatable")
+		}
 	}
 	return db
 }
@@ -212,4 +214,76 @@ func TestPerformanceDatabaseRollingSweepRecoversLowerUsageID(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, rows, 1)
 	require.EqualValues(t, 2, rows[0].Unknown, "late lower IDs must not be lost permanently")
+}
+
+func TestPerformanceDatabaseWebSocketNativeUsageJoin(t *testing.T) {
+	db := performanceTestDatabase(t)
+	r := NewChannelPerformanceRepository(db)
+	ctx := context.Background()
+	now := time.Now().UTC().Truncate(time.Hour)
+	at := now.Add(-time.Hour)
+	_, err := db.Exec(`INSERT INTO usage_logs(api_key_id,request_id,group_id,model,created_at,output_tokens,stream)
+		VALUES(9,'resp_native',5,'mapped-model',$1,90,true),(10,'resp_native',6,'other-model',$1,900,true)`, now)
+	require.NoError(t, err)
+	require.NoError(t, r.Recompute(ctx, now, now.Add(time.Hour)))
+	start, done := 1000, 10000
+	stream := true
+	f := service.ChannelPerformanceFact{APIKeyID: 9, RequestID: "ws:connection:1", UsageRequestID: "resp_native", GroupID: 5, Model: "public-model",
+		Outcome: service.PerformanceSuccess, Stream: &stream, StartedAt: at, CompletedAt: at.Add(10 * time.Second),
+		Latency: &service.UsageLatencyBreakdown{Version: 2, FirstOutputMs: &start, FirstCharacterMs: &start, TotalDurationMs: &done}}
+	require.NoError(t, r.RecordFacts(ctx, []service.ChannelPerformanceFact{f}))
+	var dirty int
+	require.NoError(t, db.QueryRow("SELECT count(*) FROM channel_performance_dirty_hours WHERE hour_start IN ($1,$2)", at, now).Scan(&dirty))
+	require.Equal(t, 2, dirty, "a late witness must remove the formerly unknown usage bucket")
+	failed := f
+	failed.RequestID = "ws:connection:2"
+	failed.UsageRequestID = ""
+	failed.Outcome = service.PerformanceFailure
+	failed.Latency = nil
+	require.NoError(t, r.RecordFacts(ctx, []service.ChannelPerformanceFact{failed}))
+	require.NoError(t, r.Recompute(ctx, at, now.Add(time.Hour)))
+	rows, _, err := r.Query(ctx, service.ChannelPerformanceFilter{Range: "24h", Start: at, End: now.Add(time.Hour), Bucket: time.Hour}, []int64{5})
+	require.NoError(t, err)
+	require.Len(t, rows, 1, "native usage must not remain as a second unknown request")
+	require.Equal(t, "public-model", rows[0].Model)
+	require.EqualValues(t, 1, rows[0].Success)
+	require.EqualValues(t, 1, rows[0].Failure)
+	require.Zero(t, rows[0].Unknown)
+	require.EqualValues(t, 90, rows[0].OutputTokens, "other API keys with the same response ID remain isolated")
+	require.InDelta(t, 10, *rows[0].Metric().OutputTPS, 0.001)
+	var requestID string
+	require.NoError(t, db.QueryRow("SELECT request_id FROM usage_logs WHERE api_key_id=9").Scan(&requestID))
+	require.Equal(t, "resp_native", requestID, "telemetry must not rewrite billing identities")
+}
+
+func TestPerformanceDatabaseRuntimeCrashCoverage(t *testing.T) {
+	db := performanceTestDatabase(t)
+	r := NewChannelPerformanceRepository(db)
+	ctx := context.Background()
+	started := time.Now().UTC().Add(-time.Hour).Truncate(time.Second)
+	require.NoError(t, r.HeartbeatRuntime(ctx, "crashed", started))
+	require.NoError(t, r.HeartbeatRuntime(ctx, "healthy", started.Add(time.Minute)))
+	require.NoError(t, r.HeartbeatRuntime(ctx, "clean", started.Add(-time.Minute)))
+	require.NoError(t, r.CloseRuntime(ctx, "clean"))
+	coverage, err := r.Coverage(ctx)
+	require.NoError(t, err)
+	require.Nil(t, coverage.IncompleteSince, "live and cleanly drained runtimes must not imply loss")
+	_, err = db.Exec("UPDATE channel_performance_runtimes SET last_seen_at=now()-INTERVAL '2 minutes' WHERE instance_id='crashed'")
+	require.NoError(t, err)
+	coverage, err = r.Coverage(ctx)
+	require.NoError(t, err)
+	require.NotNil(t, coverage.IncompleteSince, "queries detect a crash even before the next heartbeat sweep")
+	require.True(t, started.Equal(*coverage.IncompleteSince))
+	require.NoError(t, r.HeartbeatRuntime(ctx, "candidate", time.Now().UTC()))
+	var closed bool
+	require.NoError(t, db.QueryRow("SELECT closed_at IS NOT NULL FROM channel_performance_runtimes WHERE instance_id='crashed'").Scan(&closed))
+	require.True(t, closed)
+	// Recovery of a paused instance cannot erase the already persisted gap.
+	require.NoError(t, r.HeartbeatRuntime(ctx, "crashed", started))
+	coverage, err = r.Coverage(ctx)
+	require.NoError(t, err)
+	require.NotNil(t, coverage.IncompleteSince)
+	require.True(t, started.Equal(*coverage.IncompleteSince))
+	require.NoError(t, db.QueryRow("SELECT closed_at IS NOT NULL FROM channel_performance_runtimes WHERE instance_id='healthy'").Scan(&closed))
+	require.False(t, closed, "rolling deployment must not retire another healthy instance")
 }
