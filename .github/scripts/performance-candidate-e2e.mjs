@@ -19,7 +19,9 @@ export async function verifyPerformanceRequests({ api, admin, user, userId, base
   await api('/api/v1/admin/channels', { ...adminOptions, body: {
     name: channelName, group_ids: [visible.id, hidden.id], model_pricing: [{ platform: 'openai', models: [model], billing_mode: 'token', input_price: 1, output_price: 2 }]
   } })
-  await api('/api/v1/admin/users/' + userId, { token: admin.access_token, method: 'PUT', body: { balance: 10, allowed_groups: [visible.id] } })
+  await api('/api/v1/admin/users/' + userId, { token: admin.access_token, method: 'PUT', body: { allowed_groups: [visible.id] } })
+  const funded = await api('/api/v1/admin/users/' + userId + '/balance', { ...adminOptions, body: { balance: 10, operation: 'set', notes: 'Isolated performance fixture funding' } })
+  assert.equal(funded.balance, 10, 'Fixture user must have spendable balance before gateway requests')
   await api('/api/v1/admin/users', { ...adminOptions, body: {
     email: 'hidden-user@example.invalid', password: 'Isolated-Hidden-Password-39', role: 'user', concurrency: 1, balance: 10, allowed_groups: [hidden.id]
   } })
@@ -31,9 +33,12 @@ export async function verifyPerformanceRequests({ api, admin, user, userId, base
     const result = await fetch(base + '/v1/responses', { method: 'POST', headers: { Authorization: 'Bearer ' + apiKey, 'Content-Type': 'application/json' },
       body: JSON.stringify({ model, input, stream, service_tier: 'priority', reasoning: { effort: 'high' }, max_output_tokens: 16 }), signal: AbortSignal.timeout(45000) })
     const text = await result.text()
-    if (failure) assert(result.status >= 500, 'Provider failure must not become a successful request')
+    let errorCode
+    try { errorCode = JSON.parse(text)?.error?.code } catch {}
+    const safeCode = typeof errorCode === 'string' && /^[a-zA-Z0-9_]{1,80}$/.test(errorCode) ? errorCode : 'unavailable'
+    if (failure) assert(result.status >= 500, 'Expected provider failure; status=' + result.status + ', code=' + safeCode)
     else {
-      assert.equal(result.status, 200, 'Isolated gateway request failed')
+      assert.equal(result.status, 200, 'Isolated gateway request failed; code=' + safeCode)
       if (stream) assert(text.includes('response.completed') && text.includes('hello'))
       else assert.equal(JSON.parse(text).status, 'completed')
     }
@@ -70,6 +75,19 @@ export async function verifyPerformanceRequests({ api, admin, user, userId, base
   assert.equal(unknown.items[0].success_rate, null, 'Known request tiers must not be relabeled as unknown')
   const encoded = JSON.stringify(metrics)
   for (const privateValue of ['CI hidden', 'CI account', 'api_key', 'user_id', key.key, otherKey.key]) assert(!encoded.includes(privateValue), 'Performance response exposed private data')
+  const usage = await api('/api/v1/usage?page_size=20', { token: user.access_token })
+  assert.equal(usage.items.length, 2, 'Only the two successful billable requests should have usage records')
+  for (const row of usage.items) {
+    assert.equal(row.group_id, visible.id)
+    const stages = row.latency_breakdown
+    assert.equal(stages?.version, 2, 'Real usage must retain ingress-based milestones')
+    for (const field of ['first_response_ms', 'first_output_ms', 'first_character_ms', 'total_duration_ms']) {
+      assert(Number.isFinite(stages[field]) && stages[field] >= 0, 'Missing usage milestone: ' + field)
+      assert(stages[field] <= stages.total_duration_ms)
+    }
+    if (row.stream) assert(Number.isFinite(stages.first_event_ms))
+    else assert(stages.first_event_ms == null, 'Non-streaming usage must not invent a protocol event')
+  }
   await writeFile('/tmp/console-candidate-smoke/performance-requests.json', JSON.stringify({ visible: visibleMetric, hidden: hiddenMetric, non_stream: nonStream.items[0] }, null, 2))
   console.log('Isolated real-request performance aggregation and cross-user permissions passed')
 }
