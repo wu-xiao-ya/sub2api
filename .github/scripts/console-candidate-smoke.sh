@@ -22,7 +22,7 @@ openssl req -x509 -newkey rsa:2048 -nodes -days 1 -keyout "$tlsdir/server.key" -
 # The private fixture key is outside the uploaded evidence directory.
 docker run -d --name console-upstream --network console-ci --network-alias console-upstream \
   --network-alias chatgpt.com --network-alias cloudcode-pa.googleapis.com --network-alias daily-cloudcode-pa.googleapis.com \
-  -v "$PWD/.github/scripts:/fixture:ro" -v "$tlsdir:/fixture/tls:ro" node:24-alpine node /fixture/performance-upstream-tls.mjs
+  -v "$PWD/.github/scripts:/fixture:ro" -v "$tlsdir:/fixture-tls:ro" node:24-alpine node /fixture/performance-upstream-tls.mjs
 docker run -d --name console-db --network console-ci --network-alias postgres   -e POSTGRES_PASSWORD=isolated-ci-only -e POSTGRES_USER=sub2api -e POSTGRES_DB=sub2api postgres:18-alpine
 docker run -d --name console-redis --network console-ci --network-alias redis redis:8-alpine
 for i in $(seq 1 60); do
