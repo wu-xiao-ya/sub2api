@@ -50,6 +50,15 @@ test('isolated upstream supports capability probe, text, streaming and failure',
     const unmapped = await request({ model: 'public-model', input: 'ci-matrix' })
     assert.equal(unmapped.status, 400)
     await unmapped.text()
+    for (const stream of [false, true]) {
+      const wrapped = await fetch(new URL('/v1internal:' + (stream ? 'streamGenerateContent?alt=sse' : 'generateContent'), url), {
+        method: 'POST', headers: { Authorization: 'Bearer ci-oauth-fixture-only', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: 'gemini-ci-mapped', project: 'ci-fixture-project', request: { contents: [{ parts: [{ text: 'ci-matrix' }] }] } })
+      })
+      assert.equal(wrapped.status, 200)
+      if (stream) assert((await wrapped.text()).includes('"response":{"candidates"'))
+      else assert.equal((await wrapped.json()).response.candidates[0].content.parts[0].text, 'hello')
+    }
   } finally {
     await new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve()))
   }

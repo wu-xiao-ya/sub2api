@@ -16,8 +16,13 @@ trap cleanup EXIT
 node --test .github/scripts/performance-upstream.test.mjs
 docker network create --internal console-ci
 docker network create console-ui
+tlsdir=$(mktemp -d)
+openssl req -x509 -newkey rsa:2048 -nodes -days 1 -keyout "$tlsdir/server.key" -out "$tlsdir/server.crt" \
+  -subj '/CN=chatgpt.com' -addext 'subjectAltName=DNS:chatgpt.com,DNS:cloudcode-pa.googleapis.com,DNS:daily-cloudcode-pa.googleapis.com'
+# The private fixture key is outside the uploaded evidence directory.
 docker run -d --name console-upstream --network console-ci --network-alias console-upstream \
-  -v "$PWD/.github/scripts/performance-upstream.mjs:/fixture.mjs:ro" node:24-alpine node /fixture.mjs
+  --network-alias chatgpt.com --network-alias cloudcode-pa.googleapis.com --network-alias daily-cloudcode-pa.googleapis.com \
+  -v "$PWD/.github/scripts:/fixture:ro" -v "$tlsdir:/fixture/tls:ro" node:24-alpine node /fixture/performance-upstream-tls.mjs
 docker run -d --name console-db --network console-ci --network-alias postgres   -e POSTGRES_PASSWORD=isolated-ci-only -e POSTGRES_USER=sub2api -e POSTGRES_DB=sub2api postgres:18-alpine
 docker run -d --name console-redis --network console-ci --network-alias redis redis:8-alpine
 for i in $(seq 1 60); do
@@ -27,7 +32,9 @@ for i in $(seq 1 60); do
   sleep 2
 done
 docker exec console-db pg_isready -h 127.0.0.1 -U sub2api -d sub2api
-docker run -d --name console-app --network console-ci --memory=1536m --cpus=2   -e AUTO_SETUP=true -e DATABASE_HOST=postgres -e DATABASE_PORT=5432   -e DATABASE_USER=sub2api -e DATABASE_PASSWORD=isolated-ci-only -e DATABASE_DBNAME=sub2api -e DATABASE_SSLMODE=disable   -e REDIS_HOST=redis -e REDIS_PORT=6379 -e REDIS_POOL_SIZE=20 -e REDIS_MIN_IDLE_CONNS=2   -e ADMIN_EMAIL=ci@example.invalid -e ADMIN_PASSWORD=Isolated-CI-Password-39   -e JWT_SECRET=isolated-ci-only-secret-no-production-access   sub2api-console-candidate:local
+docker run -d --name console-app --network console-ci --memory=1536m --cpus=2 \
+  -v "$tlsdir/server.crt:/fixture-ca.crt:ro" -e SSL_CERT_FILE=/fixture-ca.crt \
+  -e AUTO_SETUP=true -e DATABASE_HOST=postgres -e DATABASE_PORT=5432   -e DATABASE_USER=sub2api -e DATABASE_PASSWORD=isolated-ci-only -e DATABASE_DBNAME=sub2api -e DATABASE_SSLMODE=disable   -e REDIS_HOST=redis -e REDIS_PORT=6379 -e REDIS_POOL_SIZE=20 -e REDIS_MIN_IDLE_CONNS=2   -e ADMIN_EMAIL=ci@example.invalid -e ADMIN_PASSWORD=Isolated-CI-Password-39   -e JWT_SECRET=isolated-ci-only-secret-no-production-access   sub2api-console-candidate:local
 deadline=$((SECONDS + 180))
 until docker exec console-app wget -q -T 5 -O /dev/null http://127.0.0.1:8080/health; do
   if [ "$(docker inspect --format '{{.State.Running}}' console-app)" != true ]; then

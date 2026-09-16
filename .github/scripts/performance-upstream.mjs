@@ -11,7 +11,7 @@ export const server = http.createServer(async (req, res) => {
   }
   const path = new URL(req.url, 'http://fixture.invalid').pathname
   const protocol = path.endsWith('/responses') ? 'responses' : path.endsWith('/chat/completions') ? 'chat'
-    : path.endsWith('/messages') ? 'anthropic' : /\/models\/[^/]+:(streamGenerateContent|generateContent)$/.test(path) ? 'gemini' : null
+    : path.endsWith('/messages') ? 'anthropic' : /(?:\/models\/[^/]+|\/v1internal):(streamGenerateContent|generateContent)$/.test(path) ? 'gemini' : null
   if (req.method !== 'POST' || !protocol) {
     res.writeHead(404).end()
     return
@@ -27,7 +27,7 @@ export const server = http.createServer(async (req, res) => {
   let raw = ''
   for await (const part of req) raw += part
   const body = JSON.parse(raw)
-  const mappedModel = protocol === 'gemini' ? path.split('/models/')[1].split(':')[0] : body.model
+  const mappedModel = protocol === 'gemini' && path.includes('/models/') ? path.split('/models/')[1].split(':')[0] : body.model
   // Matrix requests must reach the mapped upstream model, not its public alias.
   if (JSON.stringify(body).includes('ci-matrix') && !mappedModel.endsWith('-ci-mapped')) {
     res.writeHead(400, { 'Content-Type': 'application/json' }).end(JSON.stringify({ error: { type: 'mapping_missing' } }))
@@ -84,9 +84,10 @@ async function serveNativeProtocol({ res, body, protocol, mappedModel, path }) {
     stop_reason: 'end_turn', stop_sequence: null, usage: { input_tokens: 10, output_tokens: 3 } }
   const gemini = { candidates: [{ index: 0, content: { role: 'model', parts: [{ text: 'hello' }] }, finishReason: 'STOP' }],
     usageMetadata: { promptTokenCount: 10, candidatesTokenCount: 3, totalTokenCount: 13 }, modelVersion: mappedModel, responseId: id }
+  const wrap = data => path.startsWith('/v1internal:') ? { response: data } : data
   if (!stream) {
     await delay(25)
-    res.writeHead(200, { 'Content-Type': 'application/json', 'x-request-id': id }).end(JSON.stringify({ chat, anthropic, gemini }[protocol]))
+    res.writeHead(200, { 'Content-Type': 'application/json', 'x-request-id': id }).end(JSON.stringify(wrap({ chat, anthropic, gemini }[protocol])))
     return
   }
   res.writeHead(200, { 'Content-Type': 'text/event-stream', 'x-request-id': id })
@@ -105,7 +106,7 @@ async function serveNativeProtocol({ res, body, protocol, mappedModel, path }) {
   await delay(25)
   if (protocol === 'anthropic') claude('content_block_delta', { index: 0, delta: { type: 'text_delta', text: 'hello' } })
   else if (protocol === 'chat') event(chunk({ content: 'hello' }))
-  else event({ ...gemini, candidates: [{ index: 0, content: { role: 'model', parts: [{ text: 'hello' }] } }], usageMetadata: undefined })
+  else event(wrap({ ...gemini, candidates: [{ index: 0, content: { role: 'model', parts: [{ text: 'hello' }] } }], usageMetadata: undefined }))
   await delay(40)
   if (protocol === 'anthropic') {
     claude('content_block_stop', { index: 0 })
@@ -114,7 +115,7 @@ async function serveNativeProtocol({ res, body, protocol, mappedModel, path }) {
   } else if (protocol === 'chat') {
     event({ ...chunk({}, 'stop'), usage: chat.usage })
     res.write('data: [DONE]\n\n')
-  } else event({ ...gemini, candidates: [{ index: 0, content: { role: 'model', parts: [] }, finishReason: 'STOP' }] })
+  } else event(wrap({ ...gemini, candidates: [{ index: 0, content: { role: 'model', parts: [] }, finishReason: 'STOP' }] }))
   res.end()
 }
 if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) server.listen(8080, '0.0.0.0')

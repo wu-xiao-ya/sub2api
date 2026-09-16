@@ -12,16 +12,21 @@ export async function verifyPlatformMatrix({ api, admin, base }) {
     ['kimi', 'kimi-k2', 'chat'], ['glm', 'glm-4.5', 'chat'], ['qwen', 'qwen-plus', 'chat'],
     ['minimax', 'MiniMax-M2', 'chat'], ['mimo', 'mimo-v2-flash', 'chat'], ['hunyuan', 'hunyuan-turbos-latest', 'chat'],
     ['anthropic', 'claude-sonnet-4-5', 'messages', 'oauth'],
-    ['gemini', 'gemini-2.5-flash', 'gemini', 'oauth'], ['grok', 'grok-4', 'responses', 'oauth']
+    ['gemini', 'gemini-2.5-flash', 'gemini', 'oauth'], ['grok', 'grok-4', 'responses', 'oauth'],
+    ['openai', 'gpt-5.1', 'responses', 'oauth', 'codex'],
+    ['gemini', 'gemini-2.5-flash', 'gemini', 'oauth', 'codeassist'],
+    ['antigravity', 'gemini-2.5-flash', 'gemini', 'oauth', 'codeassist']
   ]
   const cases = []
-  for (const [platform, model, protocol, type = 'apikey'] of specs) {
-    const name = 'CI matrix ' + platform + ' ' + type
+  for (const [platform, model, protocol, type = 'apikey', variant = 'direct'] of specs) {
+    const name = 'CI matrix ' + platform + ' ' + type + ' ' + variant
     const group = await api('/api/v1/admin/groups', { ...post, body: { name, platform, rate_multiplier: 1, is_exclusive: true } })
     const credentials = { base_url: 'http://console-upstream:8080', model_mapping: { [model]: model + '-ci-mapped' },
       ...(type === 'apikey' ? { api_key: 'sk-ci-fixture-only' } : {
         access_token: 'ci-oauth-fixture-only', refresh_token: 'ci-refresh-fixture-only',
-        expires_at: new Date(Date.now() + 86400000).toISOString()
+        expires_at: new Date(Date.now() + 86400000).toISOString(),
+        ...(variant === 'codeassist' ? { project_id: 'ci-fixture-project' } : {}),
+        ...(variant === 'codex' ? { chatgpt_account_id: 'ci-fixture-account' } : {})
       }) }
     await api('/api/v1/admin/accounts', { ...post, body: { name, platform, type, credentials,
       extra: type === 'oauth' && platform === 'anthropic' ? { custom_base_url_enabled: true, custom_base_url: credentials.base_url } : {},
@@ -29,14 +34,16 @@ export async function verifyPlatformMatrix({ api, admin, base }) {
     await api('/api/v1/admin/channels', { ...post, body: { name, group_ids: [group.id], model_pricing: [{
       platform, models: [model, model + '-ci-mapped'], billing_mode: 'token', input_price: 0.000001, output_price: 0.000002
     }] } })
-    cases.push({ platform, model, protocol, type, name, groupId: group.id })
+    // Codex and Code Assist force streaming upstream even for non-stream clients;
+    // this matrix checks their actual streaming contract, without inventing non-stream milestones.
+    cases.push({ platform, model, protocol, type, variant, name, groupId: group.id, streams: variant === 'direct' ? [true, false] : [true] })
   }
   await api('/api/v1/admin/users', { ...post, body: { email: 'matrix-user@example.invalid', password: 'Isolated-Matrix-Password-39',
     role: 'user', concurrency: 2, balance: 10, allowed_groups: cases.map(c => c.groupId) } })
   const user = await api('/api/v1/auth/login', { method: 'POST', body: { email: 'matrix-user@example.invalid', password: 'Isolated-Matrix-Password-39' } })
   for (const c of cases) {
     const key = await api('/api/v1/keys', { token: user.access_token, method: 'POST', body: { name: c.name, group_id: c.groupId } })
-    for (const stream of [true, false]) {
+    for (const stream of c.streams) {
       const path = c.protocol === 'gemini' ? '/v1beta/models/' + c.model + ':' + (stream ? 'streamGenerateContent?alt=sse' : 'generateContent')
         : '/v1/' + (c.protocol === 'chat' ? 'chat/completions' : c.protocol)
       const body = c.protocol === 'gemini' ? { contents: [{ role: 'user', parts: [{ text: 'ci-matrix' }] }], generationConfig: { maxOutputTokens: 16 } }
@@ -54,13 +61,13 @@ export async function verifyPlatformMatrix({ api, admin, base }) {
   const usageDeadline = Date.now() + 30000
   do {
     usage = await api('/api/v1/usage?page_size=100', { token: user.access_token })
-    if (usage.items.length === cases.length * 2) break
+    if (usage.items.length === cases.reduce((n, c) => n + c.streams.length, 0)) break
     await delay(1000)
   } while (Date.now() < usageDeadline)
-  assert.equal(usage.items.length, cases.length * 2, 'Each successful request must create exactly one usage row')
+  assert.equal(usage.items.length, cases.reduce((n, c) => n + c.streams.length, 0), 'Each successful request must create exactly one usage row')
   for (const c of cases) {
     const rows = usage.items.filter(row => row.group_id === c.groupId)
-    assert.equal(rows.length, 2, c.name)
+    assert.equal(rows.length, c.streams.length, c.name)
     for (const row of rows) {
       const label = c.name + ' stream=' + row.stream
       assert(row.actual_cost > 0 && row.actual_cost < 0.001, label + ' must bill mapped token prices')
