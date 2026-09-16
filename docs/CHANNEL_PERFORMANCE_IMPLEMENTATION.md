@@ -144,23 +144,43 @@ no React source or runtime is included.
   text. Real PostgreSQL tests confirm images (count or endpoint), non-streaming
   requests and absent stages cannot inflate text TPS. These do not constitute a
   routed OAuth/TLS-fingerprint matrix or a production-scale load test.
+- Checkpoint a60c765e2529ef9d87390970c8316e2e20c71aef passed candidate run
+  35051965873, main CI 35051965141 and security 35051965110. Its verified image
+  is ghcr.io/wu-xiao-ya/sub2api:console-a60c765e2529ef9d87390970c8316e2e20c71aef.
+- The packaged candidate now has a mandatory Chromium gate after real routed
+  requests finish. It logs in through the UI and checks 375/768/1440/1920px in
+  both themes and entry paths, actual model performance, visible groups, empty
+  and unknown states, non-stream TPS, 5-second/off refresh, close-time polling
+  cancellation, injected 503 recovery, painted charts, a real point tooltip and
+  five usage milestones. Only the error-state case injects an API response;
+  successful data is served by the actual isolated application and database.
+  The run produced 19 screenshots. Dialog Tab wrapping and entry-focus restoration
+  were corrected with four common-dialog regression tests, retaining reopen scroll
+  reset coverage. Screenshot capture precedes keyboard-induced horizontal scrolling.
+- Query-plan tests execute the runtime SQL against 100,000 usage rows, 100,000
+  terminal facts and 72,000 hourly buckets. Selective recomputation and visible-
+  group queries use indexes without sequential history scans. The latest run
+  observed 3.42-3.47ms recomputation and about 0.57ms scoped lookup, with raw
+  EXPLAIN ANALYZE/BUFFERS JSON retained in the performance-query-plans artifact.
+  This synthetic, lightly loaded CI dataset is not a production latency promise
+  or a substitute for representative production distribution and contention checks.
+- Real Linux TLS-fingerprint transport passes through direct and HTTP CONNECT
+  paths. The test server observes 17 offered ciphers, unchanged Bearer/API-key
+  headers and version-2 milestones. A fresh child test process receives the local
+  fixture CA through SSL_CERT_FILE; certificate verification remains enabled and host trust is not
+  modified. Windows skips this Linux-specific case; the Linux CI executes it.
 
 ## Remaining Release Blockers
 
-1. Complete routed credential/transport coverage for the remaining gateway
-   variants, including OAuth and actual TLS-fingerprint transport. Existing
-   credential-refresh, protocol, WebSocket and race regressions pass, but shared
-   HTTP fixture coverage is not an end-to-end test of every account type.
-2. Review production-scale PostgreSQL query plans and retention/backfill load.
-   Isolated correctness tests now pass for out-of-order commits, late facts,
-   bounded reconciliation, repeated migrations and crash/gap persistence.
-3. Finish the populated-candidate browser/accessibility pass and verify all
-   empty/error/unknown and per-metric low-sample states. Synthetic visual and
-   interaction checks do not replace this last packaged-candidate check.
-4. Validate the exact image on an isolated production-host candidate, including
-   normal balance, subscription, streaming and image requests, before entry
-   switching. Preserve old connections and a proven rollback target. The CI
-   image has not been deployed; no production migration or cutover has occurred.
+1. Complete routed credential/platform coverage for the remaining gateway
+   variants, particularly OAuth/native-provider paths. Credential-refresh,
+   protocol, WebSocket, race and real TLS regressions pass, but shared transport
+   fixture coverage is not an end-to-end test of every account type.
+2. Validate the exact image on an isolated production-host candidate, including
+   representative data distribution/retention load, normal balance, subscription,
+   streaming and image requests. Check both public entry paths before switching,
+   preserve old connections and prove the rollback target. No production migration
+   or cutover has occurred. Passing isolated CI does not bypass this final gate.
 
 ## Publication Boundary
 
