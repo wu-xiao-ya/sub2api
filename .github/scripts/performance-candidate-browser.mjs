@@ -53,11 +53,6 @@ try {
       await dialog.getByLabel('刷新间隔', { exact: true }).selectOption('0')
       const close = dialog.getByRole('button', { name: 'Close modal', exact: true })
       const last = dialog.locator('span[tabindex="0"]').last()
-      await close.focus()
-      await page.keyboard.press('Shift+Tab')
-      assert(await last.evaluate(el => el === document.activeElement), 'Keyboard focus must stay inside the panel')
-      await page.keyboard.press('Tab')
-      assert(await close.evaluate(el => el === document.activeElement))
       const pixels = await dialog.locator('canvas').evaluateAll(nodes => nodes.map(canvas => {
         const data = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data
         let painted = 0
@@ -69,6 +64,13 @@ try {
       await page.screenshot({ path: path.join(out, 'panel-' + theme + '-' + width + '.png'), fullPage: true })
       const box = await dialog.locator('.modal-content').boundingBox()
       assert(box && box.x >= 0 && box.x + box.width <= width, 'Panel must fit the viewport')
+      // Capture the initial table position before keyboard focus scrolls the
+      // rightmost status cells into view on narrow screens.
+      await close.focus()
+      await page.keyboard.press('Shift+Tab')
+      assert(await last.evaluate(el => el === document.activeElement), 'Keyboard focus must stay inside the panel')
+      await page.keyboard.press('Tab')
+      assert(await close.evaluate(el => el === document.activeElement))
       if (width === 1440 && theme === 'light') {
         const detailResponse = () => page.waitForResponse(r => new URL(r.url()).pathname.endsWith('/channels/performance/detail') && r.status() === 200)
         let pending = detailResponse()
