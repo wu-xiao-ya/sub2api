@@ -9,17 +9,34 @@ export const server = http.createServer(async (req, res) => {
     res.end('ok')
     return
   }
-  if (req.method !== 'POST' || !req.url.endsWith('/responses')) {
+  const path = new URL(req.url, 'http://fixture.invalid').pathname
+  const protocol = path.endsWith('/responses') ? 'responses' : path.endsWith('/chat/completions') ? 'chat'
+    : path.endsWith('/messages') ? 'anthropic' : /\/models\/[^/]+:(streamGenerateContent|generateContent)$/.test(path) ? 'gemini' : null
+  if (req.method !== 'POST' || !protocol) {
     res.writeHead(404).end()
     return
   }
-  if (req.headers.authorization !== 'Bearer sk-ci-fixture-only') {
+  const oauth = req.headers.authorization === 'Bearer ci-oauth-fixture-only'
+  const authorized = protocol === 'anthropic' ? req.headers['x-api-key'] === 'sk-ci-fixture-only' || oauth
+    : protocol === 'gemini' ? req.headers['x-goog-api-key'] === 'sk-ci-fixture-only' || oauth
+      : req.headers.authorization === 'Bearer sk-ci-fixture-only' || oauth
+  if (!authorized) {
     res.writeHead(401, { 'Content-Type': 'application/json' }).end(JSON.stringify({ error: { type: 'authentication_error' } }))
     return
   }
   let raw = ''
   for await (const part of req) raw += part
   const body = JSON.parse(raw)
+  const mappedModel = protocol === 'gemini' ? path.split('/models/')[1].split(':')[0] : body.model
+  // Matrix requests must reach the mapped upstream model, not its public alias.
+  if (JSON.stringify(body).includes('ci-matrix') && !mappedModel.endsWith('-ci-mapped')) {
+    res.writeHead(400, { 'Content-Type': 'application/json' }).end(JSON.stringify({ error: { type: 'mapping_missing' } }))
+    return
+  }
+  if (protocol !== 'responses') {
+    await serveNativeProtocol({ req, res, body, protocol, mappedModel, path })
+    return
+  }
   if (JSON.stringify(body.input).includes('ci-fail')) {
     res.writeHead(503, { 'Content-Type': 'application/json' }).end(JSON.stringify({ error: { type: 'server_error', code: 'upstream_unavailable', message: 'CI fixture unavailable' } }))
     return
@@ -57,4 +74,47 @@ export const server = http.createServer(async (req, res) => {
   event('response.completed', { response })
   res.end()
 })
+
+async function serveNativeProtocol({ res, body, protocol, mappedModel, path }) {
+  const id = 'ci_' + randomUUID()
+  const stream = protocol === 'gemini' ? path.endsWith(':streamGenerateContent') : body.stream
+  const chat = { id, object: 'chat.completion', model: mappedModel, choices: [{ index: 0, message: { role: 'assistant', content: 'hello' }, finish_reason: 'stop' }],
+    usage: { prompt_tokens: 10, completion_tokens: 3, total_tokens: 13 } }
+  const anthropic = { id, type: 'message', role: 'assistant', model: mappedModel, content: [{ type: 'text', text: 'hello' }],
+    stop_reason: 'end_turn', stop_sequence: null, usage: { input_tokens: 10, output_tokens: 3 } }
+  const gemini = { candidates: [{ index: 0, content: { role: 'model', parts: [{ text: 'hello' }] }, finishReason: 'STOP' }],
+    usageMetadata: { promptTokenCount: 10, candidatesTokenCount: 3, totalTokenCount: 13 }, modelVersion: mappedModel, responseId: id }
+  if (!stream) {
+    await delay(25)
+    res.writeHead(200, { 'Content-Type': 'application/json', 'x-request-id': id }).end(JSON.stringify({ chat, anthropic, gemini }[protocol]))
+    return
+  }
+  res.writeHead(200, { 'Content-Type': 'text/event-stream', 'x-request-id': id })
+  res.flushHeaders()
+  const event = (data, name) => res.write((name ? 'event: ' + name + '\n' : '') + 'data: ' + JSON.stringify(data) + '\n\n')
+  const claude = (type, fields) => event({ type, ...fields }, type)
+  const chunk = (delta, finish_reason = null) => ({ id, object: 'chat.completion.chunk', model: mappedModel,
+    choices: [{ index: 0, delta, finish_reason }] })
+  await delay(20)
+  if (protocol === 'anthropic') {
+    claude('message_start', { message: { ...anthropic, content: [], stop_reason: null, usage: { input_tokens: 10, output_tokens: 0 } } })
+    claude('ping', {})
+    claude('content_block_start', { index: 0, content_block: { type: 'text', text: '' } })
+  } else if (protocol === 'chat') event(chunk({ role: 'assistant', content: '' }))
+  else res.write(': heartbeat\n\n')
+  await delay(25)
+  if (protocol === 'anthropic') claude('content_block_delta', { index: 0, delta: { type: 'text_delta', text: 'hello' } })
+  else if (protocol === 'chat') event(chunk({ content: 'hello' }))
+  else event({ ...gemini, candidates: [{ index: 0, content: { role: 'model', parts: [{ text: 'hello' }] } }], usageMetadata: undefined })
+  await delay(40)
+  if (protocol === 'anthropic') {
+    claude('content_block_stop', { index: 0 })
+    claude('message_delta', { delta: { stop_reason: 'end_turn', stop_sequence: null }, usage: { output_tokens: 3 } })
+    claude('message_stop', {})
+  } else if (protocol === 'chat') {
+    event({ ...chunk({}, 'stop'), usage: chat.usage })
+    res.write('data: [DONE]\n\n')
+  } else event({ ...gemini, candidates: [{ index: 0, content: { role: 'model', parts: [] }, finishReason: 'STOP' }] })
+  res.end()
+}
 if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) server.listen(8080, '0.0.0.0')

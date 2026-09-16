@@ -25,6 +25,31 @@ test('isolated upstream supports capability probe, text, streaming and failure',
     const failure = await request({ input: 'ci-fail', stream: true })
     assert.equal(failure.status, 503)
     await failure.text()
+    for (const protocol of ['chat', 'anthropic', 'gemini']) {
+      for (const oauth of [false, true]) {
+        for (const stream of [false, true]) {
+          const path = protocol === 'chat' ? '/v1/chat/completions' : protocol === 'anthropic' ? '/v1/messages?beta=true'
+            : '/v1beta/models/gemini-ci-mapped:' + (stream ? 'streamGenerateContent?alt=sse' : 'generateContent')
+          const headers = { 'Content-Type': 'application/json' }
+          if (oauth) headers.Authorization = 'Bearer ci-oauth-fixture-only'
+          else if (protocol === 'anthropic') headers['x-api-key'] = 'sk-ci-fixture-only'
+          else if (protocol === 'gemini') headers['x-goog-api-key'] = 'sk-ci-fixture-only'
+          else headers.Authorization = 'Bearer sk-ci-fixture-only'
+          const body = { model: 'test-ci-mapped', messages: [{ role: 'user', content: 'ci-matrix' }], stream }
+          const response = await fetch(new URL(path, url), { method: 'POST', headers, body: JSON.stringify(body) })
+          assert.equal(response.status, 200, protocol + ' oauth=' + oauth + ' stream=' + stream)
+          const text = await response.text()
+          assert(text.includes('hello'))
+          if (!stream) assert(JSON.parse(text))
+          const unauthorized = await fetch(new URL(path, url), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+          assert.equal(unauthorized.status, 401)
+          await unauthorized.text()
+        }
+      }
+    }
+    const unmapped = await request({ model: 'public-model', input: 'ci-matrix' })
+    assert.equal(unmapped.status, 400)
+    await unmapped.text()
   } finally {
     await new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve()))
   }

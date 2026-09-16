@@ -69,6 +69,7 @@ node --input-type=module <<'NODE'
 import assert from 'node:assert/strict'
 import { writeFile } from 'node:fs/promises'
 import { verifyPerformanceRequests } from './.github/scripts/performance-candidate-e2e.mjs'
+import { verifyPlatformMatrix } from './.github/scripts/performance-platform-matrix.mjs'
 const base = 'http://127.0.0.1:18091'
 const checks = []
 for (const path of ['/', '/starlightai/', '/login', '/starlightai/login']) {
@@ -140,6 +141,7 @@ for (const prefix of ['', '/starlightai']) {
 }
 await api('/api/v1/admin/users', { token: user.access_token, status: 403 })
 await verifyPerformanceRequests({ api, admin, user, userId: createdUser.id, base })
+await verifyPlatformMatrix({ api, admin, base })
 await writeFile('/tmp/console-candidate-smoke/performance-api.json', JSON.stringify(apiChecks, null, 2))
 console.log('Authenticated performance and permission checks passed: ' + apiChecks.length)
 NODE
