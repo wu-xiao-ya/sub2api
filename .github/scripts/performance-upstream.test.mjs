@@ -50,6 +50,11 @@ test('isolated upstream supports capability probe, text, streaming and failure',
     const unmapped = await request({ model: 'public-model', input: 'ci-matrix' })
     assert.equal(unmapped.status, 400)
     await unmapped.text()
+    const canonicalClaude = await fetch(new URL('/v1/messages', url), { method: 'POST', headers: {
+      Authorization: 'Bearer ci-oauth-fixture-only', 'Content-Type': 'application/json'
+    }, body: JSON.stringify({ model: 'claude-sonnet-4-5-20250929', messages: [{ role: 'user', content: 'ci-matrix' }] }) })
+    assert.equal(canonicalClaude.status, 200)
+    assert.equal((await canonicalClaude.json()).content[0].text, 'hello')
     for (const stream of [false, true]) {
       const wrapped = await fetch(new URL('/v1internal:' + (stream ? 'streamGenerateContent?alt=sse' : 'generateContent'), url), {
         method: 'POST', headers: { Authorization: 'Bearer ci-oauth-fixture-only', 'Content-Type': 'application/json' },

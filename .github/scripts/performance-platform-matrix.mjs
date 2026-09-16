@@ -21,6 +21,7 @@ export async function verifyPlatformMatrix({ api, admin, base }) {
   for (const [platform, model, protocol, type = 'apikey', variant = 'direct'] of specs) {
     const name = 'CI matrix ' + platform + ' ' + type + ' ' + variant
     const group = await api('/api/v1/admin/groups', { ...post, body: { name, platform, rate_multiplier: 1, is_exclusive: true } })
+    const mappedModel = platform === 'anthropic' && type === 'oauth' ? 'claude-sonnet-4-5-20250929' : model + '-ci-mapped'
     const credentials = { base_url: 'http://console-upstream:8080', model_mapping: { [model]: model + '-ci-mapped' },
       ...(type === 'apikey' ? { api_key: 'sk-ci-fixture-only' } : {
         access_token: 'ci-oauth-fixture-only', refresh_token: 'ci-refresh-fixture-only',
@@ -28,11 +29,12 @@ export async function verifyPlatformMatrix({ api, admin, base }) {
         ...(variant === 'codeassist' ? { project_id: 'ci-fixture-project' } : {}),
         ...(variant === 'codex' ? { chatgpt_account_id: 'ci-fixture-account' } : {})
       }) }
+    if (platform === 'anthropic' && type === 'oauth') credentials.model_mapping = { [model]: mappedModel, [mappedModel]: mappedModel }
     await api('/api/v1/admin/accounts', { ...post, body: { name, platform, type, credentials,
       extra: type === 'oauth' && platform === 'anthropic' ? { custom_base_url_enabled: true, custom_base_url: credentials.base_url } : {},
       concurrency: 2, priority: 1, group_ids: [group.id], upstream_billing_probe_enabled: false } })
     await api('/api/v1/admin/channels', { ...post, body: { name, group_ids: [group.id], model_pricing: [{
-      platform, models: [model, model + '-ci-mapped'], billing_mode: 'token', input_price: 0.000001, output_price: 0.000002
+      platform, models: [model, mappedModel], billing_mode: 'token', input_price: 0.000001, output_price: 0.000002
     }] } })
     // Codex and Code Assist force streaming upstream even for non-stream clients;
     // this matrix checks their actual streaming contract, without inventing non-stream milestones.
@@ -41,6 +43,7 @@ export async function verifyPlatformMatrix({ api, admin, base }) {
   await api('/api/v1/admin/users', { ...post, body: { email: 'matrix-user@example.invalid', password: 'Isolated-Matrix-Password-39',
     role: 'user', concurrency: 2, balance: 10, allowed_groups: cases.map(c => c.groupId) } })
   const user = await api('/api/v1/auth/login', { method: 'POST', body: { email: 'matrix-user@example.invalid', password: 'Isolated-Matrix-Password-39' } })
+  const requests = []
   for (const c of cases) {
     const key = await api('/api/v1/keys', { token: user.access_token, method: 'POST', body: { name: c.name, group_id: c.groupId } })
     for (const stream of c.streams) {
@@ -49,14 +52,22 @@ export async function verifyPlatformMatrix({ api, admin, base }) {
       const body = c.protocol === 'gemini' ? { contents: [{ role: 'user', parts: [{ text: 'ci-matrix' }] }], generationConfig: { maxOutputTokens: 16 } }
         : { model: c.model, stream, ...(c.protocol === 'responses' ? { input: 'ci-matrix', max_output_tokens: 16 }
           : { messages: [{ role: 'user', content: 'ci-matrix' }], max_tokens: 16 }) }
-      const response = await fetch(base + path, { method: 'POST', headers: { Authorization: 'Bearer ' + key.key,
-        'Content-Type': 'application/json', 'anthropic-version': '2023-06-01' }, body: JSON.stringify(body), signal: AbortSignal.timeout(45000) })
-      const text = await response.text()
-      assert.equal(response.status, 200, c.name + ' stream=' + stream + ' gateway status=' + response.status)
-      assert(text.includes('hello'), c.name + ' missing actual text')
-      console.log('Platform gateway passed: ' + c.name + ' stream=' + stream)
+      const result = { name: c.name, stream, status: null, text_received: false }
+      try {
+        const response = await fetch(base + path, { method: 'POST', headers: { Authorization: 'Bearer ' + key.key,
+          'Content-Type': 'application/json', 'anthropic-version': '2023-06-01' }, body: JSON.stringify(body), signal: AbortSignal.timeout(45000) })
+        result.status = response.status
+        result.text_received = (await response.text()).includes('hello')
+      } catch (error) {
+        result.error = error.name
+      }
+      requests.push(result)
+      console.log('Platform gateway result: ' + JSON.stringify(result))
     }
   }
+  await writeFile('/tmp/console-candidate-smoke/performance-platform-requests.json', JSON.stringify(requests, null, 2))
+  const failed = requests.filter(r => r.status !== 200 || !r.text_received)
+  assert.equal(failed.length, 0, 'Routed gateway failures: ' + JSON.stringify(failed))
   let usage
   const usageDeadline = Date.now() + 30000
   do {
