@@ -18,9 +18,12 @@ func TestSharedSubscriptionConcurrencyPlanUsesGlobalBalanceTopupPreference(t *te
 		purchaseEnabled bool
 		wantAllowTopup  bool
 		wantEntitlement bool
+		exhausted       bool
 	}{
 		{name: "closed globally even when legacy purchase flag is true", globalEnabled: false, purchaseEnabled: true, wantAllowTopup: false, wantEntitlement: false},
 		{name: "enabled globally", globalEnabled: true, purchaseEnabled: false, wantAllowTopup: true, wantEntitlement: true},
+		{name: "exactly exhausted with global fallback", globalEnabled: true, exhausted: true, wantAllowTopup: true},
+		{name: "exactly exhausted without global fallback", purchaseEnabled: true, exhausted: true},
 	}
 
 	for _, tt := range tests {
@@ -31,6 +34,10 @@ func TestSharedSubscriptionConcurrencyPlanUsesGlobalBalanceTopupPreference(t *te
 
 			startsAt := time.Now().Add(-time.Hour)
 			expiresAt := time.Now().Add(time.Hour)
+			dailyUsage := 1.0
+			if tt.exhausted {
+				dailyUsage = 10
+			}
 			mock.ExpectExec(`UPDATE subscription_purchases`).
 				WithArgs(int64(42), sqlmock.AnyArg()).
 				WillReturnResult(sqlmock.NewResult(0, 0))
@@ -44,7 +51,7 @@ func TestSharedSubscriptionConcurrencyPlanUsesGlobalBalanceTopupPreference(t *te
 					"balance_topup_enabled", "billing_priority",
 				}).AddRow(
 					int64(101), int64(42), "Weekly", "standard", startsAt, expiresAt, "active",
-					5, 100.0, 10.0, 20.0, 40.0, 1.0, 1.0, 1.0, 1.0,
+					5, 100.0, 10.0, 20.0, 40.0, 1.0, dailyUsage, 1.0, 1.0,
 					tt.purchaseEnabled, "subscription",
 				))
 			mock.ExpectQuery(regexp.QuoteMeta(`
@@ -59,8 +66,15 @@ func TestSharedSubscriptionConcurrencyPlanUsesGlobalBalanceTopupPreference(t *te
 			plan, err := sharedSubscriptionConcurrencyPlan(context.Background(), svc, 42, 9, 10)
 			require.NoError(t, err)
 			require.Equal(t, tt.wantAllowTopup, plan.AllowBalanceTopup)
-			require.Len(t, plan.Entitlements, 1)
-			require.Equal(t, tt.wantEntitlement, plan.Entitlements[0].BalanceTopupEnabled)
+			if tt.exhausted {
+				require.Empty(t, plan.Entitlements)
+				if tt.wantAllowTopup {
+					require.Equal(t, int64(101), plan.BalanceTopupPurchaseID)
+				}
+			} else {
+				require.Len(t, plan.Entitlements, 1)
+				require.Equal(t, tt.wantEntitlement, plan.Entitlements[0].BalanceTopupEnabled)
+			}
 			require.NoError(t, mock.ExpectationsWereMet())
 		})
 	}

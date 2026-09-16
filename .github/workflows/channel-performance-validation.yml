@@ -46,6 +46,9 @@ jobs:
         run: go test -p 2 ./internal/service -run 'TestOpenAIGatewayServiceRecordUsage|TestGatewayServiceRecordUsage|TestPostUsageBillingPurchaseFallback|TestGeminiOAuthService_Refresh|TestOAuthService_Refresh|TestOpenAIOAuthService.*Refresh|TestGrokOAuthServiceRefresh' -count=1 -v
       - name: Concurrent turn timing and telemetry race checks
         working-directory: backend
+        run: go test -p 2 ./internal/service ./internal/server/middleware -run 'TestValidateSharedPurchaseQuotaBoundary|TestSharedSubscriptionConcurrencyPlanUsesGlobalBalanceTopupPreference' -count=1 -v
+      - name: Concurrent turn telemetry race checks
+        working-directory: backend
         run: go test -race -p 2 ./internal/service -run 'TestLatency|TestPerformanceRuntime|TestPerformanceWebSocket|TestOpenAIWSPassthroughTurnLifecycle|TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_(KeepLeaseAcrossTurns|PassthroughModeRelaysByCaddyAdapter|HTTPBridgeModeRelaysHTTPStream)' -count=1
       - name: Upload isolated query plans
         if: always()
