@@ -20,6 +20,18 @@ func NewChannelPerformanceRepository(db *sql.DB) *channelPerformanceRepository {
 var _ service.ChannelPerformanceRepository = (*channelPerformanceRepository)(nil)
 var _ service.ChannelPerformanceFactRepository = (*channelPerformanceRepository)(nil)
 
+const performanceQuerySQL = `
+        SELECT group_id, model, to_timestamp(floor(extract(epoch FROM bucket_start)/$9)*$9) AS at,
+            SUM(success_count), SUM(failure_count), SUM(unknown_count),
+            SUM(character_count), SUM(character_sum), SUM(duration_count), SUM(duration_sum),
+            SUM(output_tokens), SUM(output_ms), SUM(output_count)
+        FROM channel_performance_buckets
+        WHERE bucket_seconds = $1 AND bucket_start >= $2 AND bucket_start < $3
+          AND group_id = ANY($4::bigint[])
+          AND ($5 = '' OR model = $5) AND ($6 = '' OR service_tier = $6)
+          AND ($7 = '' OR reasoning_effort = $7) AND ($8::smallint IS NULL OR stream = $8)
+        GROUP BY group_id, model, at ORDER BY at, group_id, model`
+
 func (r *channelPerformanceRepository) Query(ctx context.Context, f service.ChannelPerformanceFilter, groups []int64) ([]service.ChannelPerformanceRow, service.ChannelPerformanceCoverage, error) {
 	result := []service.ChannelPerformanceRow{}
 	if len(groups) == 0 {
@@ -40,17 +52,7 @@ func (r *channelPerformanceRepository) Query(ctx context.Context, f service.Chan
 			stream = 1
 		}
 	}
-	rows, err := r.db.QueryContext(ctx, `
-        SELECT group_id, model, to_timestamp(floor(extract(epoch FROM bucket_start)/$9)*$9) AS at,
-            SUM(success_count), SUM(failure_count), SUM(unknown_count),
-            SUM(character_count), SUM(character_sum), SUM(duration_count), SUM(duration_sum),
-            SUM(output_tokens), SUM(output_ms), SUM(output_count)
-        FROM channel_performance_buckets
-        WHERE bucket_seconds = $1 AND bucket_start >= $2 AND bucket_start < $3
-          AND group_id = ANY($4::bigint[])
-          AND ($5 = '' OR model = $5) AND ($6 = '' OR service_tier = $6)
-          AND ($7 = '' OR reasoning_effort = $7) AND ($8::smallint IS NULL OR stream = $8)
-        GROUP BY group_id, model, at ORDER BY at, group_id, model`,
+	rows, err := r.db.QueryContext(ctx, performanceQuerySQL,
 		seconds, f.Start, f.End, pq.Array(groups), f.Model, f.ServiceTier, f.ReasoningEffort, stream, bucket)
 	if err != nil {
 		return nil, service.ChannelPerformanceCoverage{}, err

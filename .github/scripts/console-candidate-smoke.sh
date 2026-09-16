@@ -143,3 +143,4 @@ await verifyPerformanceRequests({ api, admin, user, userId: createdUser.id, base
 await writeFile('/tmp/console-candidate-smoke/performance-api.json', JSON.stringify(apiChecks, null, 2))
 console.log('Authenticated performance and permission checks passed: ' + apiChecks.length)
 NODE
+node .github/scripts/performance-candidate-browser.mjs
