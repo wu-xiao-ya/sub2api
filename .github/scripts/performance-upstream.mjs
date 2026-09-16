@@ -30,7 +30,9 @@ export const server = http.createServer(async (req, res) => {
   const mappedModel = protocol === 'gemini' && path.includes('/models/') ? path.split('/models/')[1].split(':')[0] : body.model
   // Matrix requests must reach the mapped upstream model, not its public alias.
   const standardClaudeOAuth = protocol === 'anthropic' && oauth && mappedModel === 'claude-sonnet-4-5-20250929'
-  if (JSON.stringify(body).includes('ci-matrix') && !mappedModel.endsWith('-ci-mapped') && !standardClaudeOAuth) {
+  const standardNativeOAuth = oauth && ((protocol === 'gemini' && mappedModel === 'gemini-2.5-flash') ||
+    (protocol === 'responses' && mappedModel === 'gpt-5.4'))
+  if (JSON.stringify(body).includes('ci-matrix') && !mappedModel.endsWith('-ci-mapped') && !standardClaudeOAuth && !standardNativeOAuth) {
     res.writeHead(400, { 'Content-Type': 'application/json' }).end(JSON.stringify({ error: { type: 'mapping_missing' } }))
     return
   }

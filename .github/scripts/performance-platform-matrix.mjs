@@ -13,7 +13,7 @@ export async function verifyPlatformMatrix({ api, admin, base }) {
     ['minimax', 'MiniMax-M2', 'chat'], ['mimo', 'mimo-v2-flash', 'chat'], ['hunyuan', 'hunyuan-turbos-latest', 'chat'],
     ['anthropic', 'claude-sonnet-4-5', 'messages', 'oauth'],
     ['gemini', 'gemini-2.5-flash', 'gemini', 'oauth'], ['grok', 'grok-4', 'responses', 'oauth'],
-    ['openai', 'gpt-5.1', 'responses', 'oauth', 'codex'],
+    ['openai', 'gpt-5.4', 'responses', 'oauth', 'codex'],
     ['gemini', 'gemini-2.5-flash', 'gemini', 'oauth', 'codeassist'],
     ['antigravity', 'gemini-2.5-flash', 'gemini', 'oauth', 'codeassist']
   ]
@@ -21,8 +21,9 @@ export async function verifyPlatformMatrix({ api, admin, base }) {
   for (const [platform, model, protocol, type = 'apikey', variant = 'direct'] of specs) {
     const name = 'CI matrix ' + platform + ' ' + type + ' ' + variant
     const group = await api('/api/v1/admin/groups', { ...post, body: { name, platform, rate_multiplier: 1, is_exclusive: true } })
-    const mappedModel = platform === 'anthropic' && type === 'oauth' ? 'claude-sonnet-4-5-20250929' : model + '-ci-mapped'
-    const credentials = { base_url: 'http://console-upstream:8080', model_mapping: { [model]: model + '-ci-mapped' },
+    const mappedModel = platform === 'anthropic' && type === 'oauth' ? 'claude-sonnet-4-5-20250929'
+      : type === 'oauth' && ['openai', 'gemini'].includes(platform) ? model : model + '-ci-mapped'
+    const credentials = { base_url: 'http://console-upstream:8080', model_mapping: { [model]: mappedModel },
       ...(type === 'apikey' ? { api_key: 'sk-ci-fixture-only' } : {
         access_token: 'ci-oauth-fixture-only', refresh_token: 'ci-refresh-fixture-only',
         expires_at: new Date(Date.now() + 86400000).toISOString(),
@@ -34,7 +35,7 @@ export async function verifyPlatformMatrix({ api, admin, base }) {
       extra: type === 'oauth' && platform === 'anthropic' ? { custom_base_url_enabled: true, custom_base_url: credentials.base_url } : {},
       concurrency: 2, priority: 1, group_ids: [group.id], upstream_billing_probe_enabled: false } })
     await api('/api/v1/admin/channels', { ...post, body: { name, group_ids: [group.id], model_pricing: [{
-      platform, models: [model, mappedModel], billing_mode: 'token', input_price: 0.000001, output_price: 0.000002
+      platform, models: [...new Set([model, mappedModel])], billing_mode: 'token', input_price: 0.000001, output_price: 0.000002
     }] } })
     // Codex and Code Assist force streaming upstream even for non-stream clients;
     // this matrix checks their actual streaming contract, without inventing non-stream milestones.
@@ -47,7 +48,7 @@ export async function verifyPlatformMatrix({ api, admin, base }) {
   for (const c of cases) {
     const key = await api('/api/v1/keys', { token: user.access_token, method: 'POST', body: { name: c.name, group_id: c.groupId } })
     for (const stream of c.streams) {
-      const path = c.protocol === 'gemini' ? '/v1beta/models/' + c.model + ':' + (stream ? 'streamGenerateContent?alt=sse' : 'generateContent')
+      const path = c.protocol === 'gemini' ? (c.platform === 'antigravity' ? '/antigravity' : '') + '/v1beta/models/' + c.model + ':' + (stream ? 'streamGenerateContent?alt=sse' : 'generateContent')
         : '/v1/' + (c.protocol === 'chat' ? 'chat/completions' : c.protocol)
       const body = c.protocol === 'gemini' ? { contents: [{ role: 'user', parts: [{ text: 'ci-matrix' }] }], generationConfig: { maxOutputTokens: 16 } }
         : { model: c.model, stream, ...(c.protocol === 'responses' ? { input: 'ci-matrix', max_output_tokens: 16 }
@@ -75,13 +76,16 @@ export async function verifyPlatformMatrix({ api, admin, base }) {
     if (usage.items.length === cases.reduce((n, c) => n + c.streams.length, 0)) break
     await delay(1000)
   } while (Date.now() < usageDeadline)
+  await writeFile('/tmp/console-candidate-smoke/performance-platform-usage.json', JSON.stringify(usage.items.map(row => ({
+    group_id: row.group_id, model: row.model, requested_model: row.requested_model, stream: row.stream, actual_cost: row.actual_cost, latency_breakdown: row.latency_breakdown
+  })), null, 2))
   assert.equal(usage.items.length, cases.reduce((n, c) => n + c.streams.length, 0), 'Each successful request must create exactly one usage row')
   for (const c of cases) {
     const rows = usage.items.filter(row => row.group_id === c.groupId)
     assert.equal(rows.length, c.streams.length, c.name)
     for (const row of rows) {
       const label = c.name + ' stream=' + row.stream
-      assert(row.actual_cost > 0 && row.actual_cost < 0.001, label + ' must bill mapped token prices')
+      assert(Math.abs(row.actual_cost - 0.000016) < 0.0000000001, label + ' must bill 10 input + 3 output tokens at channel prices; actual=' + row.actual_cost)
       const stages = row.latency_breakdown
       assert.equal(stages?.version, 2, label + ' ingress milestones')
       for (const field of ['first_response_ms', 'first_output_ms', 'first_character_ms', 'total_duration_ms']) {
