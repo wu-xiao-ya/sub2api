@@ -41,8 +41,9 @@ type AvailableChannel struct {
 // ListAvailable 返回所有渠道的可用视图：每个渠道附带关联分组信息与支持模型列表。
 //
 // 支持模型通过 (*Channel).SupportedModels() 计算（mapping ∪ pricing 并联）。
+// 可用渠道以渠道定价/映射为唯一目录，不并入分组 models_list_config。
 // 对于渠道未配置定价的模型，进一步用 PricingService 的全局 LiteLLM 数据合成
-// 一份展示用定价，让用户看到默认价格而非"未配置"。
+// 一份展示用定价，让用户看到默认价格而非"未配置"；LiteLLM 只补价格，不额外发明模型。
 //
 // 关联分组信息通过 groupRepo.ListActive 查询后按 ID 映射；渠道 GroupIDs 中未在活跃列表中
 // 的分组（已停用或删除）会被忽略。

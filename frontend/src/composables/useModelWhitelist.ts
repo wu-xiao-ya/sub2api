@@ -100,7 +100,7 @@ const zhipuModels = [
 
 // 阿里 通义千问
 const qwenModels = [
-  'qwen3.8-max', 'qwen3.7-max', 'qwen3.7-plus'
+  'qwen3.8-flash', 'qwen3.8-max', 'qwen3.7-max', 'qwen3.7-plus'
 ]
 
 // DeepSeek

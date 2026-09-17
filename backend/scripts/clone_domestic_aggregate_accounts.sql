@@ -24,8 +24,8 @@ INSERT INTO domestic_account_seeds (
 )
 VALUES
     ('qwen', 'aggregate Qwen', 'Qwen',
-        '{"qwen3.8-max":"qwen3.8-max","qwen3.7-max":"qwen3.7-max","qwen3.7-plus":"qwen3.7-plus"}'::jsonb,
-        'qwen3.7-plus', '["qwen3.7-max","qwen3.8-max"]'::jsonb),
+        '{"qwen3.8-flash":"qwen3.8-flash","qwen3.8-max":"qwen3.8-max","qwen3.7-max":"qwen3.7-max","qwen3.7-plus":"qwen3.7-plus"}'::jsonb,
+        'qwen3.7-plus', '["qwen3.7-max","qwen3.8-max","qwen3.8-flash"]'::jsonb),
     ('minimax', 'aggregate MiniMax', 'MiniMax',
         '{"minimax-m3":"minimax-m3","minimax-m2.7":"minimax-m2.7","minimax-m2.7-highspeed":"minimax-m2.7-highspeed"}'::jsonb,
         'minimax-m3', '["minimax-m2.7","minimax-m2.7-highspeed"]'::jsonb),

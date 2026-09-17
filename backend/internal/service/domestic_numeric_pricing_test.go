@@ -34,6 +34,7 @@ func TestDomesticNumericPricing(t *testing.T) {
 		{"hy3", 1, 4, 0.25, 0, 0},
 		{"qwen3.7-plus", 2, 8, 0.4, 256000, 3},
 		{"qwen3.8-max", 12, 36, 1.2, 0, 0},
+		{"qwen3.8-flash", 0.8, 2.7, 0.1, 0, 0},
 	}
 
 	for _, tt := range tests {
@@ -152,4 +153,18 @@ func TestApplyDomesticNumericPricingPreservesNonPriceMetadata(t *testing.T) {
 	require.InDelta(t, 2e-6, got.CacheReadPricePerToken, 1e-12)
 	require.Equal(t, float64(7), got.ImageInputPricePerToken)
 	require.Equal(t, float64(99), base.InputPricePerToken)
+}
+
+func TestDomesticNumericPricingQwen38FlashCacheWrite(t *testing.T) {
+	pricing := domesticNumericPricing("qwen3.8-flash")
+	require.NotNil(t, pricing)
+	require.InDelta(t, 1.25e-6, pricing.CacheCreationPricePerToken, 1e-12)
+
+	existing := tokenPricing(9, 9, 9)
+	existing.CacheCreationPricePerToken = 9e-6
+	got := applyDomesticNumericPricing("qwen3.8-flash", existing)
+	require.InDelta(t, 0.8e-6, got.InputPricePerToken, 1e-12)
+	require.InDelta(t, 2.7e-6, got.OutputPricePerToken, 1e-12)
+	require.InDelta(t, 0.1e-6, got.CacheReadPricePerToken, 1e-12)
+	require.InDelta(t, 1.25e-6, got.CacheCreationPricePerToken, 1e-12)
 }

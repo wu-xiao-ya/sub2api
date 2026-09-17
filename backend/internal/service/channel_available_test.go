@@ -376,3 +376,60 @@ func TestFillGlobalPricingFallback_EnrichesCustomPriceWithLongContext(t *testing
 func newStubPricingServiceFromMap(data map[string]*LiteLLMModelPricing) *PricingService {
 	return &PricingService{pricingData: data}
 }
+
+func TestListAvailable_UsesChannelPricingNotGroupLists(t *testing.T) {
+	input := 3e-6
+	channels := []Channel{{
+		ID:       8,
+		Name:     "GLM",
+		Status:   StatusActive,
+		GroupIDs: []int64{33, 57, 99},
+		ModelMapping: map[string]map[string]string{
+			PlatformGLM: {"glm-5.3": "glm-5.3"},
+		},
+		ModelPricing: []ChannelModelPricing{{
+			Platform:   PlatformGLM,
+			Models:     []string{"glm-5.3"},
+			InputPrice: &input,
+		}},
+	}}
+	groupRepo := &stubGroupRepoForAvailable{
+		activeGroups: []Group{
+			{
+				ID:               33,
+				Name:             "GLM",
+				Platform:         PlatformGLM,
+				ModelsListConfig: GroupModelsListConfig{Enabled: true, Models: []string{"glm-5.3", "glm-5.2"}},
+			},
+			{
+				ID:               57,
+				Name:             "Qwen",
+				Platform:         PlatformQwen,
+				ModelsListConfig: GroupModelsListConfig{Enabled: true, Models: []string{"qwen3.8-max", "qwen3.8-flash"}},
+			},
+			{
+				ID:               99,
+				Name:             "disabled-list",
+				Platform:         PlatformOpenAI,
+				ModelsListConfig: GroupModelsListConfig{Enabled: false, Models: []string{"gpt-5.6"}},
+			},
+		},
+	}
+	svc := newAvailableChannelService(channels, groupRepo)
+	out, err := svc.ListAvailable(context.Background())
+	require.NoError(t, err)
+	require.Len(t, out, 1)
+
+	names := make([]string, 0, len(out[0].SupportedModels))
+	byName := make(map[string]SupportedModel, len(out[0].SupportedModels))
+	for _, model := range out[0].SupportedModels {
+		names = append(names, model.Platform+":"+model.Name)
+		byName[model.Platform+":"+model.Name] = model
+	}
+	require.Equal(t, []string{"glm:glm-5.3"}, names)
+	require.NotNil(t, byName["glm:glm-5.3"].Pricing)
+	require.NotContains(t, names, "glm:glm-5.2")
+	require.NotContains(t, names, "qwen:qwen3.8-flash")
+	require.NotContains(t, names, "qwen:qwen3.8-max")
+	require.NotContains(t, names, "openai:gpt-5.6")
+}

@@ -620,10 +620,10 @@ export default {
       "method": "Method v2 · First visible text measures the first visible body text. TPS is total output tokens / total output seconds, not visible text speed. Images and non-streaming requests are excluded from TPS."
     },
     title: 'Model Plaza',
-    description: 'Browse available models, current prices, and accessible groups',
+    description: 'Browse available models, current prices, accessible groups, and recent user-request performance',
     pricingPolicyTitle: 'All balances and charges are settled in USD',
     pricingPolicyDescription: 'For domestic models, the official CNY price number is carried over unchanged as the USD billing price; no foreign-exchange conversion is applied.',
-    deepSeekTimePricingDescription: 'DeepSeek displays peak pricing. From 12:00-14:00 and 18:00-09:00 Beijing time, billing is 50% of the displayed price.',
+    deepSeekTimePricingDescription: 'DeepSeek displays standard (off-peak) pricing. From 09:00-12:00 and 14:00-18:00 Beijing time, billing is 2x the displayed price.',
     searchPlaceholder: 'Search models, groups, or platforms...',
     allPlatforms: 'All platforms',
     platformFilter: 'Filter platform',

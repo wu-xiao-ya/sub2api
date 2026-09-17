@@ -168,4 +168,9 @@ describe('useModelWhitelist', () => {
       modelMappings: [{ from: 'gpt-latest', to: 'gpt-5.4' }]
     })
   })
+
+  it('qwen 模型列表包含 3.8 Flash', () => {
+    expect(getModelsByPlatform('qwen')).toContain('qwen3.8-flash')
+    expect(getModelsByPlatform('qwen')).toContain('qwen3.8-max')
+  })
 })

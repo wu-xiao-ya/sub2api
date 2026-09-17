@@ -178,9 +178,12 @@ export default {
         ruleModelPricing: 'Model Pricing',
          noGroupsInChannel: 'No groups selected in platform tabs above',
          unnamed: 'Unnamed',
+        unpricedGroupModels: 'In groups, not yet priced',
+        unpricedGroupModelsHint: 'Click a model to add channel pricing with the default rate card. The plaza only shows models in channel pricing; image models without a default price are not inserted as empty rows.',
+        addUnpricedGroupModel: 'Add pricing',
          syncLatestModels: 'Sync Latest Models',
          syncingModels: 'Syncing...',
-         syncModelsSuccess: 'Synced {count} new model(s)',
+         syncModelsSuccess: 'Added {count} model(s) to channel pricing with default rates',
          syncModelsAlreadyUpToDate: 'Models already up to date',
          syncModelsError: 'Failed to sync models'
        }

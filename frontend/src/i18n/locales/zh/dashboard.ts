@@ -625,10 +625,10 @@ export default {
       "method": "口径 v2 · 首吐字为首段可见正文；TPS 为输出 Token 总数 / 持续输出秒数，不等于可见文字速度。图片与非流式请求不参与 TPS。"
     },
     title: '模型广场',
-    description: '浏览全部可用模型、当前价格与可用分组',
+    description: '浏览全部可用模型、当前价格、可用分组与近期用户请求性能',
     pricingPolicyTitle: '本站统一使用美元余额结算',
     pricingPolicyDescription: '国产模型按官方人民币价格的数字等额设置美元计费价，不进行人民币兑美元汇率换算。',
-    deepSeekTimePricingDescription: 'DeepSeek 展示峰值价格；北京时间 12:00-14:00、18:00-次日 09:00 按展示价格的 50% 计费。',
+    deepSeekTimePricingDescription: 'DeepSeek 展示标准（非高峰）价格；北京时间 09:00-12:00、14:00-18:00 按展示价格的 2 倍计费。',
     searchPlaceholder: '搜索模型、分组或平台...',
     allPlatforms: '全部平台',
     platformFilter: '筛选平台',

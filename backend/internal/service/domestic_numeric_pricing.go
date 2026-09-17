@@ -55,6 +55,10 @@ func domesticNumericPricing(model string) *ModelPricing {
 		return tokenPricing(1, 4, 0.25)
 	case "qwen3.7-max", "qwen3.8-max":
 		return tokenPricing(12, 36, 1.2)
+	case "qwen3.8-flash":
+		pricing := tokenPricing(0.8, 2.7, 0.1)
+		pricing.CacheCreationPricePerToken = 1.25e-6
+		return pricing
 	case "qwen3.7-plus":
 		pricing := tokenPricing(2, 8, 0.4)
 		pricing.LongContextInputThreshold = 256000
@@ -144,6 +148,10 @@ func applyDomesticNumericPricing(model string, pricing *ModelPricing) *ModelPric
 	cloned.InputPricePerTokenPriority = 0
 	cloned.OutputPricePerTokenPriority = 0
 	cloned.CacheReadPricePerTokenPriority = 0
+	if override.CacheCreationPricePerToken > 0 {
+		cloned.CacheCreationPricePerToken = override.CacheCreationPricePerToken
+		cloned.CacheCreationPricePerTokenPriority = 0
+	}
 	cloned.LongContextInputThreshold = override.LongContextInputThreshold
 	cloned.LongContextInputMultiplier = override.LongContextInputMultiplier
 	cloned.LongContextOutputMultiplier = override.LongContextOutputMultiplier
