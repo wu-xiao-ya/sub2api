@@ -16,8 +16,12 @@ func TestDomesticNumericPricing(t *testing.T) {
 		threshold   int
 		longCtxRate float64
 	}{
-		{"deepseek-v4-flash-0731", 3, 9, 0.1, 0, 0},
-		{"provider/deepseek-v4-pro-0813", 9, 27, 0.3, 0, 0},
+		{"deepseek-flash", 1, 4, 0.02, 0, 0},
+		{"deepseek-v4.1-flash", 1, 4, 0.02, 0, 0},
+		{"deepseek-v4-flash-0731", 1, 4, 0.02, 0, 0},
+		{"deepseek-v4-flash-vision-exp", 1, 4, 0.02, 0, 0},
+		{"deepseek-chat", 1, 4, 0.02, 0, 0},
+		{"provider/deepseek-v4-pro-0813", 4.5, 13.5, 0.15, 0, 0},
 		{"glm-5.1", 8, 28, 2, 0, 0},
 		{"glm-5.3-flash", 0.8, 2.8, 0.23, 0, 0},
 		{"kimi-k3", 20, 100, 2, 0, 0},
@@ -49,8 +53,8 @@ func TestDomesticNumericPricing(t *testing.T) {
 }
 
 func TestApplyDomesticTimePricingAtDeepSeekPeakWindows(t *testing.T) {
-	base := tokenPricing(3, 9, 0.1)
-	base.CacheCreationPricePerToken = 3e-6
+	base := tokenPricing(1, 4, 0.02)
+	base.CacheCreationPricePerToken = 1e-6
 
 	tests := []struct {
 		name       string
@@ -58,22 +62,27 @@ func TestApplyDomesticTimePricingAtDeepSeekPeakWindows(t *testing.T) {
 		minute     int
 		multiplier float64
 	}{
-		{"before morning peak", 8, 59, 0.5},
-		{"morning peak starts", 9, 0, 1},
-		{"morning peak ends", 12, 0, 0.5},
-		{"afternoon peak starts", 14, 0, 1},
-		{"afternoon peak ends", 18, 0, 0.5},
-		{"night off peak", 23, 30, 0.5},
+		{"before morning peak", 8, 59, 1},
+		{"morning peak starts", 9, 0, 2},
+		{"morning peak ends", 12, 0, 1},
+		{"afternoon peak starts", 14, 0, 2},
+		{"afternoon peak ends", 18, 0, 1},
+		{"night off peak", 23, 30, 1},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			now := time.Date(2026, time.August, 28, tt.hour, tt.minute, 0, 0, chinaStandardTime)
-			got := applyDomesticTimePricingAt("deepseek-v4-flash", base, now)
+			got := applyDomesticTimePricingAt("deepseek-v4.1-flash", base, now)
 			require.InDelta(t, base.InputPricePerToken*tt.multiplier, got.InputPricePerToken, 1e-15)
 			require.InDelta(t, base.OutputPricePerToken*tt.multiplier, got.OutputPricePerToken, 1e-15)
 			require.InDelta(t, base.CacheReadPricePerToken*tt.multiplier, got.CacheReadPricePerToken, 1e-15)
 			require.InDelta(t, base.CacheCreationPricePerToken*tt.multiplier, got.CacheCreationPricePerToken, 1e-15)
+			if tt.multiplier == 1 {
+				require.Same(t, base, got)
+			} else {
+				require.NotSame(t, base, got)
+			}
 		})
 	}
 }
@@ -88,9 +97,9 @@ func TestApplyDomesticTimePricingAtDoesNotChangeOtherModels(t *testing.T) {
 func TestDeepSeekTimePricingAppliesToExplicitChannelPricing(t *testing.T) {
 	peak := time.Date(2026, time.August, 28, 10, 0, 0, 0, chinaStandardTime)
 	offPeak := time.Date(2026, time.August, 28, 13, 0, 0, 0, chinaStandardTime)
-	inputPrice := 3e-6
-	outputPrice := 9e-6
-	cacheReadPrice := 0.1e-6
+	inputPrice := 1e-6
+	outputPrice := 4e-6
+	cacheReadPrice := 0.02e-6
 	channelPricing := &ChannelModelPricing{
 		InputPrice:     &inputPrice,
 		OutputPrice:    &outputPrice,
@@ -105,7 +114,7 @@ func TestDeepSeekTimePricingAppliesToExplicitChannelPricing(t *testing.T) {
 	svc := NewBillingService(nil, nil)
 	svc.now = func() time.Time { return peak }
 	peakCost, err := svc.calculateCostInternalWithPolicy(
-		"deepseek-v4-flash",
+		"deepseek-v4.1-flash",
 		tokens,
 		1,
 		"",
@@ -113,11 +122,11 @@ func TestDeepSeekTimePricingAppliesToExplicitChannelPricing(t *testing.T) {
 		true,
 	)
 	require.NoError(t, err)
-	require.InDelta(t, 12.1, peakCost.ActualCost, 1e-12)
+	require.InDelta(t, 10.04, peakCost.ActualCost, 1e-12)
 
 	svc.now = func() time.Time { return offPeak }
 	offPeakCost, err := svc.calculateCostInternalWithPolicy(
-		"deepseek-v4-flash",
+		"deepseek-flash",
 		tokens,
 		1,
 		"",
@@ -125,7 +134,7 @@ func TestDeepSeekTimePricingAppliesToExplicitChannelPricing(t *testing.T) {
 		true,
 	)
 	require.NoError(t, err)
-	require.InDelta(t, 6.05, offPeakCost.ActualCost, 1e-12)
+	require.InDelta(t, 5.02, offPeakCost.ActualCost, 1e-12)
 }
 
 func TestApplyDomesticNumericPricingPreservesNonPriceMetadata(t *testing.T) {

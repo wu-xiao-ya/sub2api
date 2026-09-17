@@ -380,9 +380,9 @@ func (s *BillingService) initFallbackPricing() {
 	// 覆盖逻辑见同文件 getFallbackPricing()
 	// ============================================================
 
-	// ---- DeepSeek V4 系列 ----
+	// ---- DeepSeek V4 / V4.1 系列 ----
 	// Source: https://api-docs.deepseek.com/quick_start/pricing
-	// （deepseek-chat / deepseek-reasoner 为 deepseek-v4-flash 的兼容别名，2026/07/24 弃用）
+	// Official USD off-peak card. Site billing uses CNY-as-USD via domesticNumericPricing.
 	s.fallbackPrices["deepseek-v4-pro"] = &ModelPricing{
 		InputPricePerToken:     0.66e-6,  // $0.66 per MTok (cache miss, off-peak)
 		OutputPricePerToken:    1.98e-6,  // $1.98 per MTok (off-peak)
@@ -390,9 +390,9 @@ func (s *BillingService) initFallbackPricing() {
 		SupportsCacheBreakdown: false,
 	}
 	s.fallbackPrices["deepseek-v4-flash"] = &ModelPricing{
-		InputPricePerToken:     0.22e-6,  // $0.22 per MTok (cache miss, off-peak)
-		OutputPricePerToken:    0.66e-6,  // $0.66 per MTok (off-peak)
-		CacheReadPricePerToken: 0.007e-6, // $0.007 per MTok (cache hit, off-peak)
+		InputPricePerToken:     0.15e-6,  // $0.15 per MTok (cache miss, off-peak)
+		OutputPricePerToken:    0.60e-6,  // $0.60 per MTok (off-peak)
+		CacheReadPricePerToken: 0.003e-6, // $0.003 per MTok (cache hit, off-peak)
 		SupportsCacheBreakdown: false,
 	}
 
@@ -670,15 +670,16 @@ func (s *BillingService) getFallbackPricing(model string) *ModelPricing {
 		return s.fallbackPrices["gemini-3.1-pro"]
 	}
 
-	// DeepSeek V4 系列：仅匹配已知 V4 Pro/Flash 与官方兼容别名
-	// （deepseek-chat / deepseek-reasoner → V4 Flash），未知 deepseek-* 型号不回退，避免误计价。
-	if strings.Contains(modelLower, "deepseek-v4-flash") {
-		return s.fallbackPrices["deepseek-v4-flash"]
-	}
+	// DeepSeek：仅匹配已知 Pro/Flash 与官方兼容别名，未知 deepseek-* 型号不回退，避免误计价。
 	if strings.Contains(modelLower, "deepseek-v4-pro") {
 		return s.fallbackPrices["deepseek-v4-pro"]
 	}
-	if strings.Contains(modelLower, "deepseek-chat") || strings.Contains(modelLower, "deepseek-reasoner") {
+	if strings.Contains(modelLower, "deepseek-v4-flash") ||
+		strings.Contains(modelLower, "deepseek-v4.1-flash") ||
+		modelLower == "deepseek-flash" ||
+		strings.HasPrefix(modelLower, "deepseek-flash-") ||
+		strings.Contains(modelLower, "deepseek-chat") ||
+		strings.Contains(modelLower, "deepseek-reasoner") {
 		return s.fallbackPrices["deepseek-v4-flash"]
 	}
 

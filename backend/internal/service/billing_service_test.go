@@ -194,6 +194,25 @@ func TestGetModelPricing_GLM53FlashUsesDomesticNumericPrice(t *testing.T) {
 	require.InDelta(t, 0.23e-6, got.CacheReadPricePerToken, 1e-12)
 }
 
+func TestGetModelPricing_DeepSeekNewModelsUseDomesticNumericPrice(t *testing.T) {
+	svc := newTestBillingService()
+
+	for _, model := range []string{"deepseek-flash", "deepseek-v4.1-flash", "deepseek-v4-flash", "deepseek-v4-flash-vision-exp"} {
+		got, err := svc.GetModelPricing(model)
+		require.NoError(t, err, model)
+		require.NotNil(t, got, model)
+		require.InDelta(t, 1e-6, got.InputPricePerToken, 1e-12, model)
+		require.InDelta(t, 4e-6, got.OutputPricePerToken, 1e-12, model)
+		require.InDelta(t, 0.02e-6, got.CacheReadPricePerToken, 1e-12, model)
+	}
+
+	pro, err := svc.GetModelPricing("deepseek-v4-pro")
+	require.NoError(t, err)
+	require.InDelta(t, 4.5e-6, pro.InputPricePerToken, 1e-12)
+	require.InDelta(t, 13.5e-6, pro.OutputPricePerToken, 1e-12)
+	require.InDelta(t, 0.15e-6, pro.CacheReadPricePerToken, 1e-12)
+}
+
 func TestGetModelPricing_UnknownClaudeModelFallsBackToSonnet(t *testing.T) {
 	svc := newTestBillingService()
 
@@ -492,23 +511,37 @@ func TestGetFallbackPricing_FamilyMatching(t *testing.T) {
 		{
 			name:              "deepseek v4 flash",
 			model:             "deepseek-v4-flash",
-			expectedInput:     0.22e-6,
-			expectedOutput:    floatPtr(0.66e-6),
-			expectedCacheRead: floatPtr(0.007e-6),
+			expectedInput:     0.15e-6,
+			expectedOutput:    floatPtr(0.60e-6),
+			expectedCacheRead: floatPtr(0.003e-6),
+		},
+		{
+			name:              "deepseek v4.1 flash",
+			model:             "deepseek-v4.1-flash",
+			expectedInput:     0.15e-6,
+			expectedOutput:    floatPtr(0.60e-6),
+			expectedCacheRead: floatPtr(0.003e-6),
+		},
+		{
+			name:              "deepseek flash official name",
+			model:             "deepseek-flash",
+			expectedInput:     0.15e-6,
+			expectedOutput:    floatPtr(0.60e-6),
+			expectedCacheRead: floatPtr(0.003e-6),
 		},
 		{
 			name:              "deepseek chat alias → flash",
 			model:             "deepseek-chat",
-			expectedInput:     0.22e-6,
-			expectedOutput:    floatPtr(0.66e-6),
-			expectedCacheRead: floatPtr(0.007e-6),
+			expectedInput:     0.15e-6,
+			expectedOutput:    floatPtr(0.60e-6),
+			expectedCacheRead: floatPtr(0.003e-6),
 		},
 		{
 			name:              "deepseek reasoner alias → flash",
 			model:             "deepseek-reasoner",
-			expectedInput:     0.22e-6,
-			expectedOutput:    floatPtr(0.66e-6),
-			expectedCacheRead: floatPtr(0.007e-6),
+			expectedInput:     0.15e-6,
+			expectedOutput:    floatPtr(0.60e-6),
+			expectedCacheRead: floatPtr(0.003e-6),
 		},
 
 		// ---- 智谱 GLM（z.ai USD 口径）----

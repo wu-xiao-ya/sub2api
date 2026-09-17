@@ -131,6 +131,9 @@ func defaultOpenAICompatibleModelIDs(platform string) []string {
 	switch platform {
 	case PlatformDeepSeek:
 		return []string{
+			"deepseek-v4.1-flash",
+			"deepseek-flash",
+			"deepseek-v4-flash-vision-exp",
 			"deepseek-v4-pro",
 			"deepseek-v4-flash",
 			"deepseek-chat",
@@ -164,6 +167,7 @@ func defaultOpenAICompatibleModelIDs(platform string) []string {
 		}
 	case PlatformQwen:
 		return []string{
+			"qwen3.8-flash",
 			"qwen3.8-max",
 			"qwen3.7-max",
 			"qwen3.7-plus",

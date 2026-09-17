@@ -644,12 +644,12 @@ func applyOfficialDeepSeekPricingOverrides(data map[string]*LiteLLMModelPricing)
 	}
 
 	const (
-		flashInput  = 3e-6
-		flashCached = 0.1e-6
-		flashOutput = 9e-6
-		proInput    = 9e-6
-		proCached   = 0.3e-6
-		proOutput   = 27e-6
+		flashInput  = 1e-6
+		flashCached = 0.02e-6
+		flashOutput = 4e-6
+		proInput    = 4.5e-6
+		proCached   = 0.15e-6
+		proOutput   = 13.5e-6
 	)
 
 	apply := func(model string, input, cached, output float64) {
@@ -675,9 +675,12 @@ func applyOfficialDeepSeekPricingOverrides(data map[string]*LiteLLMModelPricing)
 		}
 	}
 
+	apply("deepseek-flash", flashInput, flashCached, flashOutput)
+	apply("deepseek-v4.1-flash", flashInput, flashCached, flashOutput)
 	apply("deepseek-v4-flash", flashInput, flashCached, flashOutput)
+	apply("deepseek-v4-flash-vision-exp", flashInput, flashCached, flashOutput)
 	apply("deepseek-v4-pro", proInput, proCached, proOutput)
-	// Keep legacy aliases usable while applying the current compatible V4 card.
+	// Keep legacy aliases usable while applying the current compatible Flash card.
 	apply("deepseek-chat", flashInput, flashCached, flashOutput)
 	apply("deepseek-reasoner", flashInput, flashCached, flashOutput)
 }

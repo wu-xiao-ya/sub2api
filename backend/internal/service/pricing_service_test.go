@@ -86,20 +86,20 @@ func TestApplyOfficialDeepSeekPricingOverrides(t *testing.T) {
 
 	applyOfficialDeepSeekPricingOverrides(data)
 
-	for _, model := range []string{"deepseek-v4-flash", "deepseek-chat", "deepseek-reasoner"} {
+	for _, model := range []string{"deepseek-flash", "deepseek-v4.1-flash", "deepseek-v4-flash", "deepseek-v4-flash-vision-exp", "deepseek-chat", "deepseek-reasoner"} {
 		pricing := data[model]
 		require.NotNil(t, pricing, model)
-		require.InDelta(t, 3e-6, pricing.InputCostPerToken, 1e-15, model)
-		require.InDelta(t, 9e-6, pricing.OutputCostPerToken, 1e-15, model)
-		require.InDelta(t, 0.1e-6, pricing.CacheReadInputTokenCost, 1e-15, model)
+		require.InDelta(t, 1e-6, pricing.InputCostPerToken, 1e-15, model)
+		require.InDelta(t, 4e-6, pricing.OutputCostPerToken, 1e-15, model)
+		require.InDelta(t, 0.02e-6, pricing.CacheReadInputTokenCost, 1e-15, model)
 		require.Equal(t, "deepseek", pricing.LiteLLMProvider, model)
 	}
 
 	pro := data["deepseek-v4-pro"]
 	require.NotNil(t, pro)
-	require.InDelta(t, 9e-6, pro.InputCostPerToken, 1e-15)
-	require.InDelta(t, 27e-6, pro.OutputCostPerToken, 1e-15)
-	require.InDelta(t, 0.3e-6, pro.CacheReadInputTokenCost, 1e-15)
+	require.InDelta(t, 4.5e-6, pro.InputCostPerToken, 1e-15)
+	require.InDelta(t, 13.5e-6, pro.OutputCostPerToken, 1e-15)
+	require.InDelta(t, 0.15e-6, pro.CacheReadInputTokenCost, 1e-15)
 }
 
 func TestBillingService_GPT56CacheWritePricingUsesOfficialMultiplier(t *testing.T) {

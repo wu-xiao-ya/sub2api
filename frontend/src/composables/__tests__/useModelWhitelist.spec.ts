@@ -57,6 +57,9 @@ describe('useModelWhitelist', () => {
 
   it('国产模型列表包含当前 DeepSeek、Kimi 和 GLM 型号', () => {
     expect(getModelsByPlatform('deepseek')).toContain('deepseek-v4-pro')
+    expect(getModelsByPlatform('deepseek')).toContain('deepseek-v4.1-flash')
+    expect(getModelsByPlatform('deepseek')).toContain('deepseek-flash')
+    expect(getModelsByPlatform('deepseek')).toContain('deepseek-v4-flash-vision-exp')
     expect(getModelsByPlatform('moonshot')).toContain('kimi-k3')
     expect(getModelsByPlatform('moonshot')).toContain('k3-256k')
     expect(getModelsByPlatform('zhipu')).toContain('glm-5.3')

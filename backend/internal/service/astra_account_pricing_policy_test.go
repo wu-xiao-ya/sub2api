@@ -87,9 +87,9 @@ func TestAccountStatsFallbackDeepSeekTimePricing(t *testing.T) {
 			svc.now = func() time.Time { return time.Date(2026, 9, 12, hour, 0, 0, 0, chinaStandardTime) }
 			tokens := UsageTokens{InputTokens: 1000, OutputTokens: 100, CacheReadTokens: 200, CacheCreationTokens: 20}
 			base := domesticNumericPricing(model)
-			scale := 0.5
+			scale := 1.0
 			if (hour >= 9 && hour < 12) || (hour >= 14 && hour < 18) {
-				scale = 1
+				scale = 2
 			}
 			want := (1000*base.InputPricePerToken + 100*base.OutputPricePerToken + 200*base.CacheReadPricePerToken + 20*base.CacheCreationPricePerToken) * scale
 			got := tryModelFilePricing(svc, model, tokens)

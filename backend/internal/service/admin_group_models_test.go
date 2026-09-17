@@ -9,6 +9,9 @@ import (
 func TestDefaultOpenAICompatibleModelIDs(t *testing.T) {
 	t.Run("deepseek", func(t *testing.T) {
 		require.Equal(t, []string{
+			"deepseek-v4.1-flash",
+			"deepseek-flash",
+			"deepseek-v4-flash-vision-exp",
 			"deepseek-v4-pro",
 			"deepseek-v4-flash",
 			"deepseek-chat",
@@ -47,7 +50,7 @@ func TestDefaultOpenAICompatibleModelIDs(t *testing.T) {
 	})
 
 	t.Run("new domestic aggregate platforms", func(t *testing.T) {
-		require.Equal(t, []string{"qwen3.8-max", "qwen3.7-max", "qwen3.7-plus"}, defaultOpenAICompatibleModelIDs(PlatformQwen))
+		require.Equal(t, []string{"qwen3.8-flash", "qwen3.8-max", "qwen3.7-max", "qwen3.7-plus"}, defaultOpenAICompatibleModelIDs(PlatformQwen))
 		require.Equal(t, []string{"minimax-m3", "minimax-m2.7", "minimax-m2.7-highspeed"}, defaultOpenAICompatibleModelIDs(PlatformMiniMax))
 		require.Equal(t, []string{"mimo-v2.5-pro", "mimo-v2.5"}, defaultOpenAICompatibleModelIDs(PlatformMiMo))
 		require.Equal(t, []string{"hy3", "hunyuan-hy3"}, defaultOpenAICompatibleModelIDs(PlatformHunyuan))
