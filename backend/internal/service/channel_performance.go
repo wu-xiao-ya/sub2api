@@ -4,6 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
+
+	"github.com/Wei-Shaw/sub2api/internal/pkg/xai"
 	"golang.org/x/sync/singleflight"
 	"sort"
 	"sync"
@@ -263,7 +266,7 @@ func (s *ChannelPerformanceService) query(ctx context.Context, f ChannelPerforma
 		}
 	}
 	for _, scope := range scopes {
-		if f.Model != "" && scope.Model != f.Model {
+		if f.Model != "" && !performanceModelsEqual(scope.Model, f.Model) {
 			continue
 		}
 		groups := map[int64]ChannelPerformanceCounts{}
@@ -271,7 +274,7 @@ func (s *ChannelPerformanceService) query(ctx context.Context, f ChannelPerforma
 		byGroup := map[int64]map[time.Time]ChannelPerformanceCounts{}
 		var total ChannelPerformanceCounts
 		for _, row := range rows {
-			if _, ok := scope.Groups[row.GroupID]; !ok || !ids[row.GroupID] || row.Model != scope.Model {
+			if _, ok := scope.Groups[row.GroupID]; !ok || !ids[row.GroupID] || !performanceModelsEqual(row.Model, scope.Model) {
 				continue
 			}
 			if row.At.Before(f.Start.Truncate(f.Bucket)) || !row.At.Before(f.End) {
@@ -326,4 +329,93 @@ func performanceTimeline(f ChannelPerformanceFilter, values map[time.Time]Channe
 		points = append(points, ChannelPerformancePoint{At: at, ChannelPerformanceMetric: values[at].Metric()})
 	}
 	return points
+}
+
+func PerformanceModelNames(model string) []string {
+	model = strings.TrimSpace(model)
+	if model == "" {
+		return []string{}
+	}
+	names := []string{model}
+	identity := performanceModelIdentity(model)
+	if identity != "" && !strings.EqualFold(identity, model) {
+		names = append(names, identity)
+	}
+	if hyphen := grokDottedVersionToHyphen(identity); hyphen != "" && !containsFold(names, hyphen) {
+		names = append(names, hyphen)
+	}
+	return names
+}
+
+func performanceModelsEqual(stored, card string) bool {
+	return strings.EqualFold(strings.TrimSpace(stored), strings.TrimSpace(card)) ||
+		performanceModelIdentity(stored) == performanceModelIdentity(card)
+}
+
+func performanceModelIdentity(model string) string {
+	trimmed := strings.TrimSpace(model)
+	if trimmed == "" {
+		return ""
+	}
+	stripped := strings.ToLower(xai.StripGrokProviderPrefix(trimmed))
+	if !xai.IsGrokModelID(stripped) {
+		return trimmed
+	}
+	for _, candidate := range []string{stripped, grokHyphenVersionToDotted(stripped)} {
+		if canonical := xai.ResolveGrokTextResponsesModelID(candidate); xai.IsGrokTextResponsesModelID(canonical) {
+			return canonical
+		}
+	}
+	return trimmed
+}
+
+func grokHyphenVersionToDotted(model string) string {
+	parts := strings.Split(model, "-")
+	if len(parts) < 3 || parts[0] != "grok" || !digitsOnly(parts[1]) || !digitsOnly(parts[2]) {
+		return model
+	}
+	out := parts[0] + "-" + parts[1] + "." + parts[2]
+	if len(parts) > 3 {
+		out += "-" + strings.Join(parts[3:], "-")
+	}
+	return out
+}
+
+func grokDottedVersionToHyphen(model string) string {
+	parts := strings.SplitN(model, ".", 2)
+	if len(parts) != 2 || !strings.HasPrefix(parts[0], "grok-") {
+		return ""
+	}
+	head := strings.TrimPrefix(parts[0], "grok-")
+	rest := parts[1]
+	version, suffix, _ := strings.Cut(rest, "-")
+	if !digitsOnly(head) || !digitsOnly(version) {
+		return ""
+	}
+	out := "grok-" + head + "-" + version
+	if suffix != "" {
+		out += "-" + suffix
+	}
+	return out
+}
+
+func digitsOnly(value string) bool {
+	if value == "" {
+		return false
+	}
+	for _, r := range value {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+func containsFold(values []string, want string) bool {
+	for _, value := range values {
+		if strings.EqualFold(value, want) {
+			return true
+		}
+	}
+	return false
 }

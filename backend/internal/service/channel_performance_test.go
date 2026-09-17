@@ -141,3 +141,27 @@ func TestPerformanceCoverageUsesVisibleModelSamples(t *testing.T) {
 	require.Equal(t, "low", result.Items[0].SampleQuality)
 	require.InDelta(t, 100, *result.Items[0].FirstCharacterMs, 0.001)
 }
+
+func TestPerformanceMatchesGrokHyphenCardToDottedUsage(t *testing.T) {
+	now := time.Date(2026, 9, 17, 12, 0, 0, 0, time.UTC)
+	f := ChannelPerformanceFilter{Range: "24h"}
+	require.NoError(t, f.Normalize(now))
+	r := &performanceRepoStub{rows: []ChannelPerformanceRow{
+		{GroupID: 1, Model: "grok-4.6", At: now.Add(-time.Hour), ChannelPerformanceCounts: ChannelPerformanceCounts{Success: 20, CharacterCount: 20, CharacterSum: 40000}},
+		{GroupID: 1, Model: "grok-4.5", At: now.Add(-time.Hour), ChannelPerformanceCounts: ChannelPerformanceCounts{Success: 8, CharacterCount: 8, CharacterSum: 8000}},
+		{GroupID: 1, Model: "grok-3-mini", At: now.Add(-time.Hour), ChannelPerformanceCounts: ChannelPerformanceCounts{Success: 3}},
+	}}
+	s := NewChannelPerformanceService(r)
+	result, err := s.Query(context.Background(), f, []ChannelPerformanceScope{{Key: "card", Model: "grok-4-6", Groups: map[int64]string{1: "Grok-heavy"}}}, true)
+	require.NoError(t, err)
+	require.Equal(t, 100.0, *result.Items[0].SuccessRate)
+	require.InDelta(t, 2000, *result.Items[0].FirstCharacterMs, 0.001)
+	require.Equal(t, []string{"grok-4-6", "grok-4.6"}, PerformanceModelNames("grok-4-6"))
+	other, err := s.Query(context.Background(), f, []ChannelPerformanceScope{{Key: "other", Model: "grok-4-5", Groups: map[int64]string{1: "Grok-heavy"}}}, true)
+	require.NoError(t, err)
+	require.InDelta(t, 1000, *other.Items[0].FirstCharacterMs, 0.001)
+	mini, err := s.Query(context.Background(), f, []ChannelPerformanceScope{{Key: "mini", Model: "grok-3-mini", Groups: map[int64]string{1: "Grok-heavy"}}}, true)
+	require.NoError(t, err)
+	require.Equal(t, 100.0, *mini.Items[0].SuccessRate)
+	require.Nil(t, mini.Items[0].FirstCharacterMs)
+}

@@ -82,5 +82,5 @@ func TestPerformanceDatabaseSelectiveQueryPlans(t *testing.T) {
 	_, err = db.Exec("ANALYZE channel_performance_buckets")
 	require.NoError(t, err)
 	explainPerformancePlan(t, db, "visible-groups-72k-buckets", performanceQuerySQL, 8*time.Second,
-		3600, now.Add(-7*24*time.Hour), now, pq.Array([]int64{1, 2}), "model-load", "", "", nil, 21600)
+		3600, now.Add(-7*24*time.Hour), now, pq.Array([]int64{1, 2}), pq.Array([]string{"model-load"}), "", "", nil, 21600)
 }

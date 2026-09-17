@@ -28,7 +28,7 @@ const performanceQuerySQL = `
         FROM channel_performance_buckets
         WHERE bucket_seconds = $1 AND bucket_start >= $2 AND bucket_start < $3
           AND group_id = ANY($4::bigint[])
-          AND ($5 = '' OR model = $5) AND ($6 = '' OR service_tier = $6)
+          AND (cardinality($5::text[]) = 0 OR model = ANY($5::text[])) AND ($6 = '' OR service_tier = $6)
           AND ($7 = '' OR reasoning_effort = $7) AND ($8::smallint IS NULL OR stream = $8)
         GROUP BY group_id, model, at ORDER BY at, group_id, model`
 
@@ -53,7 +53,7 @@ func (r *channelPerformanceRepository) Query(ctx context.Context, f service.Chan
 		}
 	}
 	rows, err := r.db.QueryContext(ctx, performanceQuerySQL,
-		seconds, f.Start, f.End, pq.Array(groups), f.Model, f.ServiceTier, f.ReasoningEffort, stream, bucket)
+		seconds, f.Start, f.End, pq.Array(groups), pq.Array(service.PerformanceModelNames(f.Model)), f.ServiceTier, f.ReasoningEffort, stream, bucket)
 	if err != nil {
 		return nil, service.ChannelPerformanceCoverage{}, err
 	}
