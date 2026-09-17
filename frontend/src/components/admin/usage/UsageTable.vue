@@ -322,10 +322,10 @@
             </div>
           </template>
           <div v-if="latencyTooltipData?.latency_breakdown?.forward_start_ms != null" class="border-t border-gray-700 pt-1.5 text-gray-400">
-            {{ t('usage.latencyBeforeForward') }}: {{ formatDuration(latencyTooltipData.latency_breakdown.forward_start_ms) }}
+            {{ t('usage.latencyBeforeForward') }}: {{ formatDuration(latencyTooltipData?.latency_breakdown?.forward_start_ms) }}
           </div>
           <div v-if="(latencyTooltipData?.latency_breakdown?.attempt_count ?? 0) > 1" class="text-gray-400">
-            {{ t('usage.latencyAttempts') }}: {{ latencyTooltipData.latency_breakdown.attempt_count }}
+            {{ t('usage.latencyAttempts') }}: {{ latencyTooltipData?.latency_breakdown?.attempt_count }}
           </div>
         </div>
         <div class="absolute right-full top-1/2 h-0 w-0 -translate-y-1/2 border-b-[6px] border-r-[6px] border-t-[6px] border-b-transparent border-r-gray-900 border-t-transparent dark:border-r-gray-800"></div>
