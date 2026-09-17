@@ -58,12 +58,13 @@ const messages: Record<string, string> = {
   'usage.latencyFirstEvent': 'First event',
   'usage.latencyFirstOutput': 'First output',
   'usage.latencyFirstCharacter': 'First text',
-  'usage.latencyOriginIngress': 'V2 gateway ingress',
   'usage.latencyOriginUnknown': 'No measured stages',
   'usage.latencyDuration': 'Total',
   'usage.latencyGeneration': 'Generation',
   'usage.latencyOutputSpeed': 'Output speed',
   'usage.latencyAnalysis': 'Latency analysis',
+  'usage.latencyAttempts': 'Attempts',
+  'usage.latencyBeforeForward': 'Before forward',
   'usage.latencyStatus': 'Status',
   'usage.latencyWaitingFirstToken': 'Waiting for first token',
   'usage.latencyGenerationRatio': 'Generation ratio',
@@ -177,7 +178,7 @@ describe('admin UsageTable tooltip', () => {
     expect(trigger.attributes('tabindex')).toBe('0')
     await trigger.trigger('keydown', { key: 'Enter' })
     expect(wrapper.text()).toContain('Latency analysis')
-    expect(wrapper.text()).toContain('V2 gateway ingress')
+    expect(wrapper.text()).not.toContain('V2 gateway ingress')
     expect(wrapper.text()).toContain('+200ms')
     await trigger.trigger('keydown', { key: 'Escape' })
     expect(wrapper.text()).not.toContain('Latency analysis')

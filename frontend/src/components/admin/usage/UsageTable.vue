@@ -298,7 +298,7 @@
         top: latencyTooltipPosition.y + 'px'
       }"
     >
-<div class="w-[320px] max-w-[calc(100vw-16px)] max-h-[calc(100vh-16px)] overflow-y-auto rounded-lg border border-gray-700 bg-gray-900 px-3 py-2.5 text-xs text-white shadow-xl dark:border-gray-600 dark:bg-gray-800">
+      <div class="w-[240px] max-w-[calc(100vw-16px)] max-h-[calc(100vh-16px)] overflow-y-auto rounded-lg border border-gray-700 bg-gray-900 px-3 py-2.5 text-xs text-white shadow-xl dark:border-gray-600 dark:bg-gray-800">
         <div class="mb-2 border-b border-gray-700 pb-1.5 text-xs font-semibold text-gray-300">
           {{ t('usage.latencyAnalysis') }}
         </div>
@@ -312,7 +312,6 @@
               {{ latencyStatusLabel(latencyTooltipData ? getLatencyMetrics(latencyTooltipData).severity : null) }}
             </span>
           </div>
-          <div class="max-w-[280px] text-gray-400">{{ t('usage.' + latencyTimingOrigin(latencyTooltipData?.latency_breakdown, latencyTooltipData?.duration_ms)) }}</div>
           <template v-for="stage in usageLatencyStages(latencyTooltipData?.latency_breakdown, latencyTooltipData?.duration_ms)" :key="stage.key">
             <div class="flex items-center justify-between gap-6">
               <span class="text-gray-400">{{ t('usage.' + stage.label) }}</span>
@@ -325,10 +324,9 @@
           <div v-if="latencyTooltipData?.latency_breakdown?.forward_start_ms != null" class="border-t border-gray-700 pt-1.5 text-gray-400">
             {{ t('usage.latencyBeforeForward') }}: {{ formatDuration(latencyTooltipData.latency_breakdown.forward_start_ms) }}
           </div>
-          <div v-if="latencyTooltipData?.latency_breakdown?.attempt_count" class="text-gray-400">
+          <div v-if="(latencyTooltipData?.latency_breakdown?.attempt_count ?? 0) > 1" class="text-gray-400">
             {{ t('usage.latencyAttempts') }}: {{ latencyTooltipData.latency_breakdown.attempt_count }}
           </div>
-          <div class="max-w-[280px] border-t border-gray-700 pt-1.5 text-gray-400">{{ t('usage.latencyObservedOnly') }}</div>
         </div>
         <div class="absolute right-full top-1/2 h-0 w-0 -translate-y-1/2 border-b-[6px] border-r-[6px] border-t-[6px] border-b-transparent border-r-gray-900 border-t-transparent dark:border-r-gray-800"></div>
       </div>
@@ -571,7 +569,7 @@
 
 <script setup lang="ts">
 import { computed, ref, onMounted, onBeforeUnmount, watch } from 'vue'
-import { usageLatencyStages, latencyTimingOrigin } from '@/utils/usageLatencyStages'
+import { usageLatencyStages } from '@/utils/usageLatencyStages'
 import { useI18n } from 'vue-i18n'
 import { formatDateTime, formatReasoningEffort } from '@/utils/format'
 import { formatCacheTokens, formatMultiplier } from '@/utils/formatters'
