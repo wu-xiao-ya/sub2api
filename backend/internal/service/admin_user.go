@@ -1283,8 +1283,8 @@ func (s *adminServiceImpl) GenerateRedeemCodes(ctx context.Context, input *Gener
 			}
 			for _, groupID := range groupIDs {
 				group, groupErr := s.groupRepo.GetByID(ctx, groupID)
-				if groupErr != nil || group == nil || !strings.EqualFold(group.Platform, PlatformOpenAI) {
-					return nil, infraerrors.BadRequest("SUBSCRIPTION_PLAN_PLATFORM_INVALID", "subscription plan groups must use openai platform")
+				if groupErr != nil || group == nil {
+					return nil, infraerrors.NotFound("PLAN_GROUP_NOT_FOUND", fmt.Sprintf("group %d not found", groupID))
 				}
 			}
 		} else {

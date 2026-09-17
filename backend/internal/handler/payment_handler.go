@@ -51,33 +51,34 @@ func (h *PaymentHandler) GetPlans(c *gin.Context) {
 	}
 	// Enrich plans with group platform for frontend color coding
 	type planWithPlatform struct {
-		ID                     int64    `json:"id"`
-		GroupID                int64    `json:"group_id"`
-		GroupIDs               []int64  `json:"group_ids"`
-		GroupPlatform          string   `json:"group_platform"`
-		GroupName              string   `json:"group_name"`
-		RateMultiplier         float64  `json:"rate_multiplier"`
-		PeakRateEnabled        bool     `json:"peak_rate_enabled"`
-		PeakStart              string   `json:"peak_start"`
-		PeakEnd                string   `json:"peak_end"`
-		PeakRateMultiplier     float64  `json:"peak_rate_multiplier"`
-		Name                   string   `json:"name"`
-		Description            string   `json:"description"`
-		Price                  float64  `json:"price"`
-		OriginalPrice          *float64 `json:"original_price,omitempty"`
-		Currency               string   `json:"currency,omitempty"`
-		ValidityDays           int      `json:"validity_days"`
-		ValidityUnit           string   `json:"validity_unit"`
-		Features               string   `json:"features"`
-		ProductName            string   `json:"product_name"`
-		ForSale                bool     `json:"for_sale"`
-		SortOrder              int      `json:"sort_order"`
-		TierCode               string   `json:"tier_code"`
-		ConcurrencyEntitlement int      `json:"concurrency_entitlement"`
-		LifetimeQuotaUSD       float64  `json:"lifetime_quota_usd"`
-		DailyQuotaUSD          float64  `json:"daily_quota_usd"`
-		WeeklyQuotaUSD         float64  `json:"weekly_quota_usd"`
-		MonthlyQuotaUSD        float64  `json:"monthly_quota_usd"`
+		ID                     int64                     `json:"id"`
+		GroupID                int64                     `json:"group_id"`
+		GroupIDs               []int64                   `json:"group_ids"`
+		Groups                 []service.PublicPlanGroup `json:"groups"`
+		GroupPlatform          string                    `json:"group_platform"`
+		GroupName              string                    `json:"group_name"`
+		RateMultiplier         float64                   `json:"rate_multiplier"`
+		PeakRateEnabled        bool                      `json:"peak_rate_enabled"`
+		PeakStart              string                    `json:"peak_start"`
+		PeakEnd                string                    `json:"peak_end"`
+		PeakRateMultiplier     float64                   `json:"peak_rate_multiplier"`
+		Name                   string                    `json:"name"`
+		Description            string                    `json:"description"`
+		Price                  float64                   `json:"price"`
+		OriginalPrice          *float64                  `json:"original_price,omitempty"`
+		Currency               string                    `json:"currency,omitempty"`
+		ValidityDays           int                       `json:"validity_days"`
+		ValidityUnit           string                    `json:"validity_unit"`
+		Features               string                    `json:"features"`
+		ProductName            string                    `json:"product_name"`
+		ForSale                bool                      `json:"for_sale"`
+		SortOrder              int                       `json:"sort_order"`
+		TierCode               string                    `json:"tier_code"`
+		ConcurrencyEntitlement int                       `json:"concurrency_entitlement"`
+		LifetimeQuotaUSD       float64                   `json:"lifetime_quota_usd"`
+		DailyQuotaUSD          float64                   `json:"daily_quota_usd"`
+		WeeklyQuotaUSD         float64                   `json:"weekly_quota_usd"`
+		MonthlyQuotaUSD        float64                   `json:"monthly_quota_usd"`
 	}
 	groupInfo := h.configService.GetGroupInfoMap(c.Request.Context(), plans)
 	result := make([]planWithPlatform, 0, len(plans))
@@ -86,6 +87,7 @@ func (h *PaymentHandler) GetPlans(c *gin.Context) {
 		groupIDs, _ := h.configService.ListPlanGroupIDs(c.Request.Context(), p)
 		result = append(result, planWithPlatform{
 			ID: int64(p.ID), GroupID: p.GroupID, GroupIDs: groupIDs,
+			Groups:        service.BuildPublicPlanGroups(groupIDs, groupInfo),
 			GroupPlatform: gi.Platform, GroupName: gi.Name,
 			RateMultiplier: gi.RateMultiplier, PeakRateEnabled: gi.PeakRateEnabled,
 			PeakStart: gi.PeakStart, PeakEnd: gi.PeakEnd, PeakRateMultiplier: gi.PeakRateMultiplier,
@@ -130,6 +132,7 @@ func (h *PaymentHandler) GetCheckoutInfo(c *gin.Context) {
 		groupIDs, _ := h.configService.ListPlanGroupIDs(ctx, p)
 		planList = append(planList, checkoutPlan{
 			ID: int64(p.ID), GroupID: p.GroupID, GroupIDs: groupIDs,
+			Groups:        service.BuildPublicPlanGroups(groupIDs, groupInfo),
 			GroupPlatform: gi.Platform, GroupName: gi.Name,
 			RateMultiplier:  gi.RateMultiplier,
 			PeakRateEnabled: gi.PeakRateEnabled, PeakStart: gi.PeakStart,
@@ -179,35 +182,36 @@ type checkoutInfoResponse struct {
 }
 
 type checkoutPlan struct {
-	ID                     int64    `json:"id"`
-	GroupID                int64    `json:"group_id"`
-	GroupIDs               []int64  `json:"group_ids"`
-	GroupPlatform          string   `json:"group_platform"`
-	GroupName              string   `json:"group_name"`
-	RateMultiplier         float64  `json:"rate_multiplier"`
-	PeakRateEnabled        bool     `json:"peak_rate_enabled"`
-	PeakStart              string   `json:"peak_start"`
-	PeakEnd                string   `json:"peak_end"`
-	PeakRateMultiplier     float64  `json:"peak_rate_multiplier"`
-	DailyLimitUSD          *float64 `json:"daily_limit_usd"`
-	WeeklyLimitUSD         *float64 `json:"weekly_limit_usd"`
-	MonthlyLimitUSD        *float64 `json:"monthly_limit_usd"`
-	ModelScopes            []string `json:"supported_model_scopes"`
-	Name                   string   `json:"name"`
-	Description            string   `json:"description"`
-	Price                  float64  `json:"price"`
-	OriginalPrice          *float64 `json:"original_price,omitempty"`
-	Currency               string   `json:"currency,omitempty"`
-	ValidityDays           int      `json:"validity_days"`
-	ValidityUnit           string   `json:"validity_unit"`
-	Features               []string `json:"features"`
-	ProductName            string   `json:"product_name"`
-	TierCode               string   `json:"tier_code"`
-	ConcurrencyEntitlement int      `json:"concurrency_entitlement"`
-	LifetimeQuotaUSD       float64  `json:"lifetime_quota_usd"`
-	DailyQuotaUSD          float64  `json:"daily_quota_usd"`
-	WeeklyQuotaUSD         float64  `json:"weekly_quota_usd"`
-	MonthlyQuotaUSD        float64  `json:"monthly_quota_usd"`
+	ID                     int64                     `json:"id"`
+	GroupID                int64                     `json:"group_id"`
+	GroupIDs               []int64                   `json:"group_ids"`
+	Groups                 []service.PublicPlanGroup `json:"groups"`
+	GroupPlatform          string                    `json:"group_platform"`
+	GroupName              string                    `json:"group_name"`
+	RateMultiplier         float64                   `json:"rate_multiplier"`
+	PeakRateEnabled        bool                      `json:"peak_rate_enabled"`
+	PeakStart              string                    `json:"peak_start"`
+	PeakEnd                string                    `json:"peak_end"`
+	PeakRateMultiplier     float64                   `json:"peak_rate_multiplier"`
+	DailyLimitUSD          *float64                  `json:"daily_limit_usd"`
+	WeeklyLimitUSD         *float64                  `json:"weekly_limit_usd"`
+	MonthlyLimitUSD        *float64                  `json:"monthly_limit_usd"`
+	ModelScopes            []string                  `json:"supported_model_scopes"`
+	Name                   string                    `json:"name"`
+	Description            string                    `json:"description"`
+	Price                  float64                   `json:"price"`
+	OriginalPrice          *float64                  `json:"original_price,omitempty"`
+	Currency               string                    `json:"currency,omitempty"`
+	ValidityDays           int                       `json:"validity_days"`
+	ValidityUnit           string                    `json:"validity_unit"`
+	Features               []string                  `json:"features"`
+	ProductName            string                    `json:"product_name"`
+	TierCode               string                    `json:"tier_code"`
+	ConcurrencyEntitlement int                       `json:"concurrency_entitlement"`
+	LifetimeQuotaUSD       float64                   `json:"lifetime_quota_usd"`
+	DailyQuotaUSD          float64                   `json:"daily_quota_usd"`
+	WeeklyQuotaUSD         float64                   `json:"weekly_quota_usd"`
+	MonthlyQuotaUSD        float64                   `json:"monthly_quota_usd"`
 }
 
 // parseFeatures splits a newline-separated features string into a string slice.

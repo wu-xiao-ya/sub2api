@@ -115,9 +115,19 @@
                 </p>
                 <!-- Shared purchase entitlements -->
                 <div class="mt-3 grid grid-cols-2 gap-3">
-                  <div>
+                  <div class="col-span-2">
                     <span class="text-xs text-gray-400 dark:text-gray-500">{{ t('payment.admin.includedGroups') }}</span>
-                    <div class="text-lg font-semibold text-gray-800 dark:text-gray-200">{{ selectedPlanGroupCount }}</div>
+                    <div v-if="selectedPlanGroups.length" class="mt-1 flex flex-wrap gap-1.5">
+                      <span
+                        v-for="group in selectedPlanGroups"
+                        :key="group.id"
+                        class="inline-flex max-w-full items-center gap-1 rounded-md border border-gray-200 px-2 py-0.5 text-xs text-gray-600 dark:border-dark-600 dark:text-dark-300"
+                      >
+                        <PlatformIcon :platform="group.platform" size="xs" />
+                        <span class="min-w-0 truncate">{{ group.name }}</span>
+                      </span>
+                    </div>
+                    <div v-else class="text-lg font-semibold text-gray-800 dark:text-gray-200">{{ selectedPlanGroupCount }}</div>
                   </div>
                   <div>
                     <span class="text-xs text-gray-400 dark:text-gray-500">{{ t('payment.admin.concurrency') }}</span>
@@ -260,6 +270,7 @@ import {
   writePaymentRecoverySnapshot,
 } from '@/components/payment/paymentFlow'
 import { platformAccentBarClass, platformBadgeClass, platformTextClass } from '@/utils/platformColors'
+import PlatformIcon from '@/components/common/PlatformIcon.vue'
 import SubscriptionPlanCard from '@/components/payment/SubscriptionPlanCard.vue'
 import PaymentStatusPanel from '@/components/payment/PaymentStatusPanel.vue'
 import Icon from '@/components/icons/Icon.vue'
@@ -698,6 +709,7 @@ const selectedPlanTierLabel = computed(() => {
 })
 
 const selectedPlanGroupCount = computed(() => selectedPlan.value ? new Set(planGroupIds(selectedPlan.value)).size : 0)
+const selectedPlanGroups = computed(() => (selectedPlan.value?.groups || []).filter((group) => group.id > 0))
 const selectedPlanQuotaRows = computed(() => {
   if (!selectedPlan.value) return []
   return [

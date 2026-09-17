@@ -106,10 +106,17 @@ export interface PaymentOrder {
 
 // ==================== Plans & Channels ====================
 
+export interface SubscriptionPlanGroup {
+  id: number
+  name: string
+  platform: string
+}
+
 export interface SubscriptionPlan {
   id: number
   group_id: number
   group_ids?: number[]
+  groups?: SubscriptionPlanGroup[]
   tier_code?: 'standard' | 'pro' | 'plus' | string
   group_platform?: string
   group_name?: string

@@ -166,67 +166,61 @@ func APIKeyAuthWithSubscriptionGoogle(apiKeyService *service.APIKeyService, subs
 		}
 
 		isSubscriptionType := apiKey.Group != nil && apiKey.Group.IsSubscriptionType()
-		useBalance := false
-		if isSubscriptionType {
-			if subscriptionService == nil {
-				abortWithGoogleError(c, 403, "No active subscription found for this group")
-				return
-			}
-			plan, planErr := sharedSubscriptionConcurrencyPlan(
+		var sharedPurchase *service.SharedSubscriptionEntitlement
+		var sharedConcurrencyPlan *service.SubscriptionConcurrencyPlan
+		planLoaded := false
+		if apiKey.Group != nil && subscriptionService != nil {
+			if plan, planErr := sharedSubscriptionConcurrencyPlan(
 				c.Request.Context(),
 				subscriptionService,
 				apiKey.User.ID,
 				apiKey.Group.ID,
 				apiKey.User.Concurrency,
-			)
-			if planErr == nil {
+			); planErr == nil {
+				planLoaded = true
+				sharedConcurrencyPlan = plan
 				c.Request = c.Request.WithContext(service.WithSubscriptionConcurrencyPlan(c.Request.Context(), plan))
-				if len(plan.Entitlements) > 0 {
-					sharedPurchase := plan.Entitlements[0].SharedSubscription
-					if sharedPurchase != nil {
+				for i := range plan.Entitlements {
+					entitlement := &plan.Entitlements[i]
+					if entitlement.SharedSubscription == nil {
+						continue
+					}
+					entitlement.Subscription = entitlement.SharedSubscription.AsLegacySubscription(apiKey.Group)
+					if sharedPurchase == nil {
+						sharedPurchase = entitlement.SharedSubscription
 						c.Set(string(ContextKeySharedSubscription), sharedPurchase)
-						c.Set(string(ContextKeySubscription), sharedPurchase.AsLegacySubscription(apiKey.Group))
+						c.Set(string(ContextKeySubscription), entitlement.Subscription)
 					}
 				}
-				// A valid subscription remains a fallback when balance is the
-				// preferred wallet. Only require balance at auth time when no
-				// usable subscription entitlement remains.
-				useBalance = len(plan.Entitlements) == 0 && (plan.AllowBalancePriority || plan.AllowBalanceTopup)
-				if len(plan.Entitlements) == 0 && !useBalance {
+				if sharedPurchase == nil && !plan.AllowBalanceTopup && !plan.AllowBalancePriority {
 					abortWithGoogleError(c, 429, "All active subscription quotas for this group are exhausted")
 					return
 				}
-			} else {
-				// Keep legacy repository-backed subscriptions working for older
-				// installations and isolated compatibility tests.
-				sharedPurchase, _, err := sharedSubscriptionForRequest(
-					c.Request.Context(),
-					subscriptionService,
-					apiKey.User.ID,
-					apiKey.Group.ID,
-				)
-				if err != nil {
-					abortWithGoogleError(c, 403, "No active subscription found for this group")
-					return
-				}
-				if validateErr := subscriptionService.ValidateSharedPurchase(sharedPurchase, 0); validateErr != nil {
-					if plan != nil && plan.AllowBalanceTopup && isSharedSubscriptionQuotaError(validateErr) {
-						useBalance = true
-					} else {
-						status := 403
-						if isSharedSubscriptionQuotaError(validateErr) {
-							status = 429
-						}
-						abortWithGoogleError(c, status, validateErr.Error())
-						return
-					}
+			}
+		}
+		if isSubscriptionType && !planLoaded {
+			abortWithGoogleError(c, 403, "No active subscription found for this group")
+			return
+		}
+		if sharedPurchase != nil {
+			if validateErr := subscriptionService.ValidateSharedPurchase(sharedPurchase, 0); validateErr != nil {
+				if sharedConcurrencyPlan != nil &&
+					sharedConcurrencyPlan.AllowBalanceTopup &&
+					isSharedSubscriptionQuotaError(validateErr) {
+					sharedPurchase = nil
+					c.Set(string(ContextKeySharedSubscription), nil)
+					c.Set(string(ContextKeySubscription), nil)
 				} else {
-					c.Set(string(ContextKeySharedSubscription), sharedPurchase)
-					c.Set(string(ContextKeySubscription), sharedPurchase.AsLegacySubscription(apiKey.Group))
+					status := 403
+					if isSharedSubscriptionQuotaError(validateErr) {
+						status = 429
+					}
+					abortWithGoogleError(c, status, validateErr.Error())
+					return
 				}
 			}
 		}
-		if !isSubscriptionType || useBalance {
+		if sharedPurchase == nil {
 			if apiKeyBalanceBelowAuthThreshold(apiKey.User.Balance, cfg) {
 				abortWithGoogleError(c, 403, "Insufficient account balance")
 				return

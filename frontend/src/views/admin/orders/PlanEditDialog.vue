@@ -14,25 +14,36 @@
 
       <div>
         <label class="input-label">{{ t('payment.admin.includedGroups') }} <span class="text-red-500">*</span></label>
-        <div class="grid max-h-40 gap-2 overflow-y-auto rounded-lg border border-gray-200 p-3 dark:border-dark-600 sm:grid-cols-2">
-          <label
-            v-for="group in openaiGroups"
-            :key="group.id"
-            class="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-gray-50 dark:hover:bg-dark-700"
-          >
-            <input
-              type="checkbox"
-              class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-              :checked="planForm.group_ids.includes(group.id)"
-              @change="toggleGroup(group.id)"
-            />
-            <span class="truncate" :class="platformTextClass(group.platform)">{{ group.name }}</span>
-            <span class="ml-auto text-xs text-gray-400">{{ group.rate_multiplier }}x</span>
-          </label>
-          <p v-if="openaiGroups.length === 0" class="text-xs text-gray-500 dark:text-dark-400">
-            {{ t('payment.admin.noOpenaiGroups') }}
+        <div class="max-h-56 space-y-3 overflow-y-auto rounded-lg border border-gray-200 p-3 dark:border-dark-600">
+          <div v-for="section in groupedPlanGroups" :key="section.platform" class="space-y-2">
+            <div class="flex items-center gap-1.5 text-xs font-medium text-gray-500 dark:text-dark-400">
+              <PlatformIcon :platform="section.platform" size="xs" />
+              <span>{{ section.label }}</span>
+            </div>
+            <div class="grid gap-1 sm:grid-cols-2">
+              <label
+                v-for="group in section.groups"
+                :key="group.id"
+                class="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-gray-50 dark:hover:bg-dark-700"
+              >
+                <input
+                  type="checkbox"
+                  class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                  :checked="planForm.group_ids.includes(group.id)"
+                  @change="toggleGroup(group.id)"
+                />
+                <span class="truncate" :class="platformTextClass(group.platform)">{{ group.name }}</span>
+                <span class="ml-auto text-xs text-gray-400">{{ group.rate_multiplier }}x</span>
+              </label>
+            </div>
+          </div>
+          <p v-if="groupedPlanGroups.length === 0" class="text-xs text-gray-500 dark:text-dark-400">
+            {{ t('payment.admin.noAvailableGroups') }}
           </p>
         </div>
+        <p v-if="selectedImageGroups.length > 0" class="mt-2 text-xs text-amber-600 dark:text-amber-400">
+          {{ t('payment.admin.imageGroupsWarning') }}
+        </p>
       </div>
 
       <div><label class="input-label">{{ t('payment.admin.planDescription') }} <span class="text-red-500">*</span></label><textarea v-model="planForm.description" rows="2" class="input" required></textarea></div>
@@ -128,7 +139,8 @@ import type { SubscriptionPlan } from '@/types/payment'
 import type { AdminGroup } from '@/types'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import Select from '@/components/common/Select.vue'
- import { platformTextClass } from '@/utils/platformColors'
+import PlatformIcon from '@/components/common/PlatformIcon.vue'
+import { platformLabel, platformTextClass } from '@/utils/platformColors'
 
 const props = defineProps<{
   show: boolean
@@ -179,7 +191,34 @@ const tierOptions = computed(() => [
   { value: 'plus', label: t('payment.admin.tierPlus') }
 ])
 
-const openaiGroups = computed(() => props.groups.filter(g => g.platform === 'openai'))
+const planGroupPlatformOrder = ['openai', 'anthropic', 'gemini', 'antigravity', 'grok', 'deepseek', 'kimi', 'glm', 'qwen', 'minimax', 'mimo', 'hunyuan']
+
+const groupedPlanGroups = computed(() => {
+  const byPlatform = new Map<string, AdminGroup[]>()
+  for (const group of props.groups) {
+    const platform = group.platform || 'unknown'
+    const list = byPlatform.get(platform) || []
+    list.push(group)
+    byPlatform.set(platform, list)
+  }
+  const sections = planGroupPlatformOrder
+    .filter((platform) => byPlatform.has(platform))
+    .map((platform) => ({
+      platform,
+      label: platformLabel(platform),
+      groups: byPlatform.get(platform) || [],
+    }))
+  for (const [platform, groups] of byPlatform) {
+    if (!planGroupPlatformOrder.includes(platform)) {
+      sections.push({ platform, label: platformLabel(platform), groups })
+    }
+  }
+  return sections
+})
+
+const selectedImageGroups = computed(() =>
+  props.groups.filter((group) => planForm.group_ids.includes(group.id) && group.allow_image_generation)
+)
 
 function roundCnyAmount(value: number): number {
   return Math.round(value * 100) / 100

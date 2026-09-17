@@ -38,6 +38,17 @@
         </div>
       </div>
 
+      <div v-if="includedGroups.length" class="mb-3 flex flex-wrap gap-1.5">
+        <span
+          v-for="group in includedGroups"
+          :key="group.id"
+          class="inline-flex max-w-full items-center gap-1 rounded-md border border-gray-200 px-2 py-0.5 text-[11px] text-gray-600 dark:border-dark-600 dark:text-dark-300"
+        >
+          <PlatformIcon :platform="group.platform" size="xs" />
+          <span class="min-w-0 truncate">{{ group.name }}</span>
+        </span>
+      </div>
+
       <!-- Shared purchase snapshot -->
       <div class="mb-3 grid grid-cols-2 gap-x-3 gap-y-1 rounded-lg bg-gray-50 px-3 py-2 text-xs dark:bg-dark-700/50">
         <div class="flex items-center justify-between">
@@ -87,6 +98,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { SubscriptionPlan } from '@/types/payment'
 import { currencySymbol } from '@/components/payment/currency'
+import PlatformIcon from '@/components/common/PlatformIcon.vue'
 import {
   platformAccentBarClass,
   platformBadgeLightClass,
@@ -123,7 +135,12 @@ const discountText = computed(() => {
   return pct > 0 ? `-${pct}%` : ''
 })
 
+const includedGroups = computed(() => (props.plan.groups || []).filter((group) => group.id > 0))
+
 const includedGroupCount = computed(() => {
+  if (includedGroups.value.length > 0) {
+    return includedGroups.value.length
+  }
   const ids = props.plan.group_ids?.length ? props.plan.group_ids : [props.plan.group_id]
   return new Set(ids.filter((id) => id > 0)).size
 })
