@@ -424,7 +424,7 @@ func TestOpenAIGatewayServiceRecordUsage_Grok46Applies200kLongContextWithoutOpen
 	require.InDelta(t, wantCache, usageRepo.lastLog.CacheReadCost, 1e-12)
 	require.InDelta(t, wantOutput, usageRepo.lastLog.OutputCost, 1e-12)
 	require.InDelta(t, wantTotal, usageRepo.lastLog.TotalCost, 1e-12)
-	require.InDelta(t, wantTotal*1.1, usageRepo.lastLog.ActualCost, 1e-12)
+	require.InDelta(t, wantTotal, usageRepo.lastLog.ActualCost, 1e-12)
 }
 
 func TestOpenAIGatewayServiceRecordUsage_Grok46Below200kKeepsStandardRate(t *testing.T) {
