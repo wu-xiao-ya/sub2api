@@ -496,7 +496,6 @@
             :searchable="true"
             :search-placeholder="t('keys.searchGroup')"
             data-tour="key-form-group"
-            :disabled="showEditModal && formKind === 'aggregate'"
           >
             <template #selected="{ option }">
               <GroupBadge
