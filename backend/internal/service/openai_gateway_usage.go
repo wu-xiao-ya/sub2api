@@ -218,7 +218,7 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 			return err
 		}
 	}
-	longContextBillingEnabled := billingAccount.IsOpenAILongContextBillingEnabled()
+	longContextBillingEnabled := billingAccount.IsOpenAILongContextBillingEnabled() || billingAccount.IsGrok()
 	cost, err = s.calculateOpenAIRecordUsageCost(
 		ctx,
 		result,

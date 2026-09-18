@@ -377,6 +377,42 @@ func newStubPricingServiceFromMap(data map[string]*LiteLLMModelPricing) *Pricing
 	return &PricingService{pricingData: data}
 }
 
+func TestFillGrokLongContextDisplay_Adds200kMetadataWithoutChangingBasePrice(t *testing.T) {
+	svc := &ChannelService{}
+	models := []SupportedModel{
+		{
+			Name:     "grok-4.6",
+			Platform: PlatformGrok,
+			Pricing: &ChannelModelPricing{
+				BillingMode:    BillingModeToken,
+				InputPrice:     testPtrFloat64(9e-6),
+				OutputPrice:    testPtrFloat64(8e-6),
+				CacheReadPrice: testPtrFloat64(7e-7),
+			},
+		},
+		{
+			Name:     "grok-imagine-image",
+			Platform: PlatformGrok,
+			Pricing: &ChannelModelPricing{
+				BillingMode: BillingModeImage,
+			},
+		},
+	}
+
+	svc.fillGrokLongContextDisplay(models)
+
+	require.InDelta(t, 9e-6, *models[0].Pricing.InputPrice, 1e-12)
+	require.InDelta(t, 8e-6, *models[0].Pricing.OutputPrice, 1e-12)
+	require.InDelta(t, 7e-7, *models[0].Pricing.CacheReadPrice, 1e-12)
+	require.NotNil(t, models[0].Pricing.LongContextInputTokenThreshold)
+	require.Equal(t, grokLongContextInputThreshold, *models[0].Pricing.LongContextInputTokenThreshold)
+	require.NotNil(t, models[0].Pricing.LongContextInputCostMultiplier)
+	require.InDelta(t, grokLongContextInputMultiplier, *models[0].Pricing.LongContextInputCostMultiplier, 1e-12)
+	require.NotNil(t, models[0].Pricing.LongContextOutputCostMultiplier)
+	require.InDelta(t, grokLongContextOutputMultiplier, *models[0].Pricing.LongContextOutputCostMultiplier, 1e-12)
+	require.Nil(t, models[1].Pricing.LongContextInputTokenThreshold)
+}
+
 func TestListAvailable_UsesChannelPricingNotGroupLists(t *testing.T) {
 	input := 3e-6
 	channels := []Channel{{

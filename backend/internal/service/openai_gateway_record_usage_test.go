@@ -382,6 +382,95 @@ func TestOpenAIGatewayServiceRecordUsage_Grok46BillsTokensCacheAndSearch(t *test
 	require.InDelta(t, wantTotal, userRepo.lastAmount, 1e-12)
 }
 
+func TestOpenAIGatewayServiceRecordUsage_Grok46Applies200kLongContextWithoutOpenAISwitch(t *testing.T) {
+	usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
+	userRepo := &openAIRecordUsageUserRepoStub{}
+	svc := newOpenAIRecordUsageServiceForTest(usageRepo, userRepo, &openAIRecordUsageSubRepoStub{}, nil)
+	groupID := int64(461)
+
+	err := svc.RecordUsage(context.Background(), &OpenAIRecordUsageInput{
+		Result: &OpenAIForwardResult{
+			RequestID:     "grok-46-long-context",
+			Model:         "grok-4.6",
+			UpstreamModel: "grok-4.6",
+			Usage: OpenAIUsage{
+				InputTokens:          200000,
+				OutputTokens:         20,
+				CacheReadInputTokens: 50000,
+			},
+			Duration: time.Second,
+		},
+		APIKey: &APIKey{
+			ID:      1461,
+			GroupID: &groupID,
+			Group: &Group{
+				ID:             groupID,
+				Platform:       PlatformGrok,
+				RateMultiplier: 1,
+			},
+		},
+		User:    &User{ID: 2461},
+		Account: &Account{ID: 3461, Platform: PlatformGrok},
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, usageRepo.lastLog)
+	require.True(t, usageRepo.lastLog.LongContextBillingApplied)
+	wantInput := float64(150000) * 2e-6 * 2
+	wantCache := float64(50000) * 0.5e-6 * 2
+	wantOutput := float64(20) * 6e-6 * 2
+	wantTotal := wantInput + wantCache + wantOutput
+	require.InDelta(t, wantInput, usageRepo.lastLog.InputCost, 1e-12)
+	require.InDelta(t, wantCache, usageRepo.lastLog.CacheReadCost, 1e-12)
+	require.InDelta(t, wantOutput, usageRepo.lastLog.OutputCost, 1e-12)
+	require.InDelta(t, wantTotal, usageRepo.lastLog.TotalCost, 1e-12)
+	require.InDelta(t, wantTotal*1.1, usageRepo.lastLog.ActualCost, 1e-12)
+}
+
+func TestOpenAIGatewayServiceRecordUsage_Grok46Below200kKeepsStandardRate(t *testing.T) {
+	usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
+	userRepo := &openAIRecordUsageUserRepoStub{}
+	svc := newOpenAIRecordUsageServiceForTest(usageRepo, userRepo, &openAIRecordUsageSubRepoStub{}, nil)
+	groupID := int64(462)
+
+	err := svc.RecordUsage(context.Background(), &OpenAIRecordUsageInput{
+		Result: &OpenAIForwardResult{
+			RequestID:     "grok-46-short-context",
+			Model:         "grok-4.6",
+			UpstreamModel: "grok-4.6",
+			Usage: OpenAIUsage{
+				InputTokens:          199999,
+				OutputTokens:         20,
+				CacheReadInputTokens: 49999,
+			},
+			Duration: time.Second,
+		},
+		APIKey: &APIKey{
+			ID:      1462,
+			GroupID: &groupID,
+			Group: &Group{
+				ID:             groupID,
+				Platform:       PlatformGrok,
+				RateMultiplier: 1,
+			},
+		},
+		User:    &User{ID: 2462},
+		Account: &Account{ID: 3462, Platform: PlatformGrok},
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, usageRepo.lastLog)
+	require.False(t, usageRepo.lastLog.LongContextBillingApplied)
+	wantInput := float64(150000) * 2e-6
+	wantCache := float64(49999) * 0.5e-6
+	wantOutput := float64(20) * 6e-6
+	wantTotal := wantInput + wantCache + wantOutput
+	require.InDelta(t, wantInput, usageRepo.lastLog.InputCost, 1e-12)
+	require.InDelta(t, wantCache, usageRepo.lastLog.CacheReadCost, 1e-12)
+	require.InDelta(t, wantOutput, usageRepo.lastLog.OutputCost, 1e-12)
+	require.InDelta(t, wantTotal, usageRepo.lastLog.TotalCost, 1e-12)
+}
+
 func TestOpenAIGatewayServiceRecordUsage_MissingPricingRecordsZeroCostUsageLog(t *testing.T) {
 	usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
 	billingRepo := &openAIRecordUsageBillingRepoStub{result: &UsageBillingApplyResult{Applied: true}}

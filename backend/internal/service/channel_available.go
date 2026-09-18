@@ -92,6 +92,7 @@ func (s *ChannelService) ListAvailable(ctx context.Context) ([]AvailableChannel,
 
 		supported := ch.SupportedModels()
 		s.fillGlobalPricingFallback(supported)
+		s.fillGrokLongContextDisplay(supported)
 
 		out = append(out, AvailableChannel{
 			ID:                 ch.ID,
@@ -143,6 +144,25 @@ func liteLLMHasLongContextPricing(lp *LiteLLMModelPricing) bool {
 		(lp.LongContextInputTokenThreshold > 0 ||
 			lp.LongContextInputCostMultiplier > 0 ||
 			lp.LongContextOutputCostMultiplier > 0)
+}
+
+// fillGrokLongContextDisplay overlays official Grok 200k whole-request 2x
+// metadata onto existing plaza prices. It does not invent models or replace
+// channel base token prices.
+func (s *ChannelService) fillGrokLongContextDisplay(models []SupportedModel) {
+	for i := range models {
+		if !isGrokUnknownTextFamilyModel(models[i].Name) || models[i].Pricing == nil {
+			continue
+		}
+		cloned := models[i].Pricing.Clone()
+		threshold := grokLongContextInputThreshold
+		inputMult := grokLongContextInputMultiplier
+		outputMult := grokLongContextOutputMultiplier
+		cloned.LongContextInputTokenThreshold = &threshold
+		cloned.LongContextInputCostMultiplier = &inputMult
+		cloned.LongContextOutputCostMultiplier = &outputMult
+		models[i].Pricing = &cloned
+	}
 }
 
 // pricingNeedsFallback 判定一个 ChannelModelPricing 是否需要走全局回落。
