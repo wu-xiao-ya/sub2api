@@ -1223,7 +1223,7 @@ func TestGetModelPricing_Grok45And46OfficialFallback(t *testing.T) {
 
 	for _, model := range []string{
 		"grok", "grok-latest", "grok-4.5", "grok-4.5-latest", "grok-build-latest",
-		"grok-4.6", "grok-4.6-latest",
+		"grok-4.6", "grok-4.6-latest", "grok-4-6", "grok-4-6-latest",
 	} {
 		model := model
 		t.Run(model, func(t *testing.T) {
@@ -1242,24 +1242,58 @@ func TestGetModelPricing_Grok46UsesGrok45DynamicPricing(t *testing.T) {
 	pricingSvc := &PricingService{
 		pricingData: map[string]*LiteLLMModelPricing{
 			"grok-4.5": {
-				InputCostPerToken:       2e-6,
-				OutputCostPerToken:      6e-6,
-				CacheReadInputTokenCost: 0.5e-6,
+				InputCostPerToken:               2e-6,
+				OutputCostPerToken:              6e-6,
+				CacheReadInputTokenCost:         0.3e-6,
+				CacheReadInputTokenCostPriority: 0.3e-6,
 			},
 			"grok-4.6": {
-				InputCostPerToken:  99e-6,
-				OutputCostPerToken: 99e-6,
+				InputCostPerToken:       99e-6,
+				OutputCostPerToken:      99e-6,
+				CacheReadInputTokenCost: 0.3e-6,
 			},
 		},
 	}
 	svc := NewBillingService(&config.Config{}, pricingSvc)
 
-	pricing, err := svc.GetModelPricing("grok-4.6")
+	for _, model := range []string{"grok-4.6", "grok-4.6-latest", "grok-4-6"} {
+		pricing, err := svc.GetModelPricing(model)
+		require.NoError(t, err, model)
+		require.InDelta(t, 2e-6, pricing.InputPricePerToken, 1e-12, model)
+		require.InDelta(t, 6e-6, pricing.OutputPricePerToken, 1e-12, model)
+		require.InDelta(t, 0.5e-6, pricing.CacheReadPricePerToken, 1e-12, model)
+		require.InDelta(t, 0.5e-6, pricing.CacheReadPricePerTokenPriority, 1e-12, model)
+		requireGrok200kLongContext(t, pricing)
+	}
+
+	grok45, err := svc.GetModelPricing("grok-4.5")
 	require.NoError(t, err)
-	require.InDelta(t, 2e-6, pricing.InputPricePerToken, 1e-12)
-	require.InDelta(t, 6e-6, pricing.OutputPricePerToken, 1e-12)
-	require.InDelta(t, 0.5e-6, pricing.CacheReadPricePerToken, 1e-12)
-	requireGrok200kLongContext(t, pricing)
+	require.InDelta(t, 0.3e-6, grok45.CacheReadPricePerToken, 1e-12)
+}
+
+func TestCalculateCost_Grok46PinsCacheReadOverLiteLLMOfficial30(t *testing.T) {
+	pricingSvc := &PricingService{
+		pricingData: map[string]*LiteLLMModelPricing{
+			"grok-4.5": {
+				InputCostPerToken:       2e-6,
+				OutputCostPerToken:      6e-6,
+				CacheReadInputTokenCost: 0.3e-6,
+			},
+		},
+	}
+	svc := NewBillingService(&config.Config{}, pricingSvc)
+
+	short, err := svc.CalculateCost("grok-4.6", UsageTokens{InputTokens: 423, CacheReadTokens: 20000, OutputTokens: 326}, 0.135)
+	require.NoError(t, err)
+	require.False(t, short.LongContextBillingApplied)
+	require.InDelta(t, 20000*0.5e-6, short.CacheReadCost, 1e-12)
+	require.InDelta(t, (423*2e-6+20000*0.5e-6+326*6e-6)*0.135, short.ActualCost, 1e-12)
+
+	longCost, err := svc.CalculateCost("grok-4.6", UsageTokens{InputTokens: 423, CacheReadTokens: 258048, OutputTokens: 326}, 0.135)
+	require.NoError(t, err)
+	require.True(t, longCost.LongContextBillingApplied)
+	require.InDelta(t, 258048*0.5e-6*2, longCost.CacheReadCost, 1e-12)
+	require.InDelta(t, (423*2e-6*2+258048*0.5e-6*2+326*6e-6*2)*0.135, longCost.ActualCost, 1e-12)
 }
 
 func TestCalculateSearchCost_DefaultAndExplicitFree(t *testing.T) {

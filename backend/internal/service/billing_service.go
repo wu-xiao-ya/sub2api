@@ -609,8 +609,9 @@ func (s *BillingService) initFallbackPricing() {
 		LongContextThresholdInclusive: true,
 	}
 
-	// xAI Grok 4.6 uses the same short-context token card as Grok 4.5, with the
-	// official ≥200k whole-request 2× long-context band.
+	// xAI Grok 4.6 uses the same short-context input/output card as Grok 4.5,
+	// with the official ≥200k whole-request 2× long-context band. Cached input
+	// is pinned at $0.50/MTok even when LiteLLM reports the official $0.30.
 	s.fallbackPrices["grok-4.6"] = &ModelPricing{
 		InputPricePerToken:            2e-6,
 		OutputPricePerToken:           6e-6,
@@ -836,7 +837,7 @@ func (s *BillingService) getFallbackPricing(model string) *ModelPricing {
 	switch modelLower {
 	case "grok", "grok-latest", "grok-4.5", "grok-4.5-latest", "grok-build-latest":
 		return s.fallbackPrices["grok-4.5"]
-	case "grok-4.6", "grok-4.6-latest":
+	case "grok-4.6", "grok-4.6-latest", "grok-4-6", "grok-4-6-latest":
 		return s.fallbackPrices["grok-4.6"]
 	case "grok-4.3",
 		"grok-4.20-0309-reasoning",
@@ -888,7 +889,7 @@ func (s *BillingService) GetModelPricing(model string) (*ModelPricing, error) {
 	model = strings.ToLower(model)
 	pricingLookupModel := model
 	switch model {
-	case "grok-4.6", "grok-4.6-latest":
+	case "grok-4.6", "grok-4.6-latest", "grok-4-6", "grok-4-6-latest":
 		pricingLookupModel = "grok-4.5"
 	}
 
@@ -1294,6 +1295,9 @@ func (s *BillingService) applyModelSpecificPricingPolicy(model string, pricing *
 		return nil
 	}
 	normalized := normalizeKnownOpenAICodexModel(model)
+	if isGrok46Family(model) {
+		pricing = applyGrok46CacheReadPricing(pricing)
+	}
 	if isGrokUnknownTextFamilyModel(model) {
 		return applyGrokLongContextPricing(pricing)
 	}
@@ -1347,6 +1351,33 @@ func (s *BillingService) applyModelSpecificPricingPolicy(model string, pricing *
 			cloned.LongContextOutputMultiplier = openAIGPT54LongContextOutputMultiplier
 		}
 	}
+	return &cloned
+}
+
+const grok46CacheReadPricePerToken = 0.5e-6
+
+func isGrok46Family(model string) bool {
+	native := strings.ToLower(strings.TrimSpace(xai.StripGrokProviderPrefix(model)))
+	native = grokHyphenVersionToDotted(native)
+	switch native {
+	case "grok-4.6", "grok-4.6-latest":
+		return true
+	default:
+		return false
+	}
+}
+
+func applyGrok46CacheReadPricing(pricing *ModelPricing) *ModelPricing {
+	if pricing == nil {
+		return nil
+	}
+	if pricing.CacheReadPricePerToken == grok46CacheReadPricePerToken &&
+		(pricing.CacheReadPricePerTokenPriority == 0 || pricing.CacheReadPricePerTokenPriority == grok46CacheReadPricePerToken) {
+		return pricing
+	}
+	cloned := *pricing
+	cloned.CacheReadPricePerToken = grok46CacheReadPricePerToken
+	cloned.CacheReadPricePerTokenPriority = grok46CacheReadPricePerToken
 	return &cloned
 }
 
