@@ -34,6 +34,7 @@ type APIKey struct {
 	Name        string
 	GroupID     *int64
 	Status      string
+	KeyKind     string
 	IPWhitelist []string
 	IPBlacklist []string
 	// 预编译的 IP 规则，用于认证热路径避免重复 ParseIP/ParseCIDR。
@@ -45,6 +46,9 @@ type APIKey struct {
 	UpdatedAt           time.Time
 	User                *User
 	Group               *Group
+	Members             []*APIKey
+	RoutedMemberKeyID   int64   `json:"-"`
+	RoutedMember        *APIKey `json:"-"`
 	CurrentConcurrency  int
 
 	// Quota fields

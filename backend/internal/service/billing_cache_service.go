@@ -744,6 +744,19 @@ func (s *BillingCacheService) CheckBillingEligibility(ctx context.Context, user 
 			return err
 		}
 	}
+	if apiKey != nil && apiKey.RoutedMember != nil {
+		if apiKey.RoutedMember.IsExpired() {
+			return ErrAPIKeyExpired
+		}
+		if apiKey.RoutedMember.IsQuotaExhausted() {
+			return ErrAPIKeyQuotaExhausted
+		}
+		if apiKey.RoutedMember.HasRateLimits() {
+			if err := s.checkAPIKeyRateLimits(ctx, apiKey.RoutedMember); err != nil {
+				return err
+			}
+		}
+	}
 
 	// RPM 限流：级联回落（Override → Group → User），放在最后以避免为注定失败的请求增加计数。
 	if err := s.checkRPM(ctx, user, group); err != nil {

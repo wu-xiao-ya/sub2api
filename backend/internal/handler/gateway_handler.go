@@ -59,6 +59,13 @@ type GatewayHandler struct {
 	settingService            *service.SettingService
 }
 
+func (h *GatewayHandler) AggregateModelSupportChecker() service.AggregateModelSupportChecker {
+	if h == nil {
+		return nil
+	}
+	return h.gatewayService
+}
+
 // NewGatewayHandler creates a new GatewayHandler
 func NewGatewayHandler(
 	gatewayService *service.GatewayService,
@@ -1003,6 +1010,10 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 // Falls back to default models if no whitelist is configured
 func (h *GatewayHandler) Models(c *gin.Context) {
 	apiKey, _ := middleware2.GetAPIKeyFromContext(c)
+	if apiKey != nil && apiKey.IsAggregate() {
+		writeOpenAIModelsList(c, h.aggregateModels(c.Request.Context(), apiKey))
+		return
+	}
 
 	var groupID *int64
 	var platform string
@@ -1153,6 +1164,31 @@ func grokModelSupportsConfigurableReasoning(modelID string) bool {
 	default:
 		return false
 	}
+}
+
+func (h *GatewayHandler) aggregateModels(ctx context.Context, apiKey *service.APIKey) []string {
+	if h == nil || h.gatewayService == nil || apiKey == nil {
+		return nil
+	}
+	seen := make(map[string]struct{})
+	out := make([]string, 0)
+	for _, member := range apiKey.Members {
+		if member == nil || !member.IsMemberUsable() {
+			continue
+		}
+		for _, modelID := range h.gatewayService.ListModelsForGroup(ctx, member.Group) {
+			modelID = strings.TrimSpace(modelID)
+			if modelID == "" {
+				continue
+			}
+			if _, ok := seen[modelID]; ok {
+				continue
+			}
+			seen[modelID] = struct{}{}
+			out = append(out, modelID)
+		}
+	}
+	return out
 }
 
 func writeOpenAIModelsList(c *gin.Context, modelIDs []string) {

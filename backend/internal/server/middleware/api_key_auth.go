@@ -189,6 +189,41 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 			return
 		}
 
+		// Unresolved aggregate keys have no group yet. Enforce this key's own
+		// expiry/quota here, then let ResolveAggregateAPIKey bind a member
+		// group and load that group's subscription before dispatch.
+		if apiKey.IsAggregate() {
+			if !skipBilling {
+				switch apiKey.Status {
+				case service.StatusAPIKeyQuotaExhausted:
+					abortWithAPIKeyQuotaError(c)
+					return
+				case service.StatusAPIKeyExpired:
+					AbortWithError(c, 403, "API_KEY_EXPIRED", "API key 已过期")
+					return
+				}
+				if apiKey.IsExpired() {
+					AbortWithError(c, 403, "API_KEY_EXPIRED", "API key 已过期")
+					return
+				}
+				if apiKey.IsQuotaExhausted() {
+					abortWithAPIKeyQuotaError(c)
+					return
+				}
+			}
+			c.Set(string(ContextKeyAPIKey), apiKey)
+			c.Set(string(ContextKeyUser), AuthSubject{
+				UserID:      apiKey.User.ID,
+				Concurrency: apiKey.User.Concurrency,
+			})
+			c.Set(string(ContextKeyUserRole), apiKey.User.Role)
+			if !billingInfoRequest {
+				_ = apiKeyService.TouchLastUsed(c.Request.Context(), apiKey.ID)
+			}
+			c.Next()
+			return
+		}
+
 		// ── 5. 按端点需要加载订阅（仅 subscription_purchases） ──────────
 
 		var subscription *service.UserSubscription

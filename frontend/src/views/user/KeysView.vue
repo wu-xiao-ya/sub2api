@@ -74,9 +74,12 @@
               </button>
             </div>
           </div>
-          <button @click="showCreateModal = true" class="btn btn-primary" data-tour="keys-create-btn">
+          <button @click="openCreateModal('group')" class="btn btn-primary" data-tour="keys-create-btn">
             <Icon name="plus" size="md" class="mr-2" />
             {{ t('keys.createKey') }}
+          </button>
+          <button @click="openCreateModal('aggregate')" class="btn btn-secondary">
+            {{ t('keys.createAggregateKey') }}
           </button>
         </div>
       </template>
@@ -124,6 +127,12 @@
           <template #cell-name="{ value, row }">
             <div class="flex items-center gap-1.5">
               <span class="font-medium text-gray-900 dark:text-white">{{ value }}</span>
+              <span
+                v-if="isAggregateKey(row)"
+                class="rounded px-1.5 py-0.5 text-[11px] font-medium text-sky-700 bg-sky-50 ring-1 ring-sky-200 dark:bg-sky-900/30 dark:text-sky-300 dark:ring-sky-800"
+              >
+                {{ t('keys.aggregateBadge') }} · {{ row.members?.length || 0 }}
+              </span>
               <Icon
                 v-if="row.ip_whitelist?.length > 0 || row.ip_blacklist?.length > 0"
                 name="shield"
@@ -135,7 +144,20 @@
           </template>
 
           <template #cell-group="{ row }">
-            <div class="group/dropdown relative">
+            <div v-if="isAggregateKey(row)" class="flex flex-wrap items-center gap-1.5">
+              <GroupBadge
+                v-for="member in row.members || []"
+                :key="member.id"
+                :name="member.group?.name || member.name"
+                :platform="member.group?.platform"
+                :subscription-type="member.group?.subscription_type"
+                :rate-multiplier="member.group?.rate_multiplier"
+              />
+              <span v-if="!(row.members && row.members.length)" class="text-sm text-gray-400 dark:text-dark-500">
+                {{ t('keys.noGroup') }}
+              </span>
+            </div>
+            <div v-else class="group/dropdown relative">
               <button
                 :ref="(el) => setGroupButtonRef(row.id, el)"
                 @click="openGroupSelector(row)"
@@ -427,7 +449,7 @@
               :title="t('keys.noKeysYet')"
               :description="t('keys.createFirstKey')"
               :action-text="t('keys.createKey')"
-              @action="showCreateModal = true"
+              @action="openCreateModal('group')"
             />
           </template>
         </DataTable>
@@ -465,7 +487,7 @@
           />
         </div>
 
-        <div>
+        <div v-if="formKind === 'group'">
           <label class="input-label">{{ t('keys.groupLabel') }}</label>
           <Select
             v-model="formData.group_id"
@@ -474,6 +496,7 @@
             :searchable="true"
             :search-placeholder="t('keys.searchGroup')"
             data-tour="key-form-group"
+            :disabled="showEditModal && formKind === 'aggregate'"
           >
             <template #selected="{ option }">
               <GroupBadge
@@ -506,6 +529,48 @@
               />
             </template>
           </Select>
+        </div>
+
+        <div v-if="formKind === 'aggregate'" class="space-y-3">
+          <label class="input-label">{{ t('keys.aggregateMembers') }}</label>
+          <p class="input-hint">{{ t('keys.aggregateMembersHint') }}</p>
+          <div v-if="formData.member_key_ids.length === 0" class="text-sm text-gray-500 dark:text-gray-400">
+            {{ t('keys.aggregateMembersRequired') }}
+          </div>
+          <div
+            v-for="(memberId, index) in formData.member_key_ids"
+            :key="memberId"
+            class="flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 dark:border-dark-600"
+          >
+            <div class="min-w-0 flex-1">
+              <div class="truncate text-sm font-medium text-gray-900 dark:text-white">
+                {{ memberKeyLabel(memberId) }}
+              </div>
+            </div>
+            <button type="button" class="btn btn-secondary px-2 py-1 text-xs" :disabled="index === 0" @click="moveMember(index, -1)">
+              {{ t('keys.moveMemberUp') }}
+            </button>
+            <button type="button" class="btn btn-secondary px-2 py-1 text-xs" :disabled="index === formData.member_key_ids.length - 1" @click="moveMember(index, 1)">
+              {{ t('keys.moveMemberDown') }}
+            </button>
+            <button type="button" class="btn btn-secondary px-2 py-1 text-xs" @click="removeMember(index)">
+              {{ t('keys.removeMember') }}
+            </button>
+          </div>
+          <Select
+            v-if="availableMemberOptions.length && formData.member_key_ids.length < 32"
+            :model-value="null"
+            :options="availableMemberOptions"
+            :placeholder="t('keys.addMember')"
+            :searchable="true"
+            @update:model-value="addMember"
+          />
+          <p v-else-if="memberCandidatesLoading" class="text-sm text-gray-500 dark:text-gray-400">
+            {{ t('common.loading') }}
+          </p>
+          <p v-else-if="formData.member_key_ids.length === 0" class="text-sm text-gray-500 dark:text-gray-400">
+            {{ t('keys.noGroupKeysForAggregate') }}
+          </p>
         </div>
 
         <!-- Custom Key Section (only for create) -->
@@ -1141,7 +1206,7 @@ import TablePageLayout from '@/components/layout/TablePageLayout.vue'
 	import EndpointPopover from '@/components/keys/EndpointPopover.vue'
 	import GroupBadge from '@/components/common/GroupBadge.vue'
 	import GroupOptionItem from '@/components/common/GroupOptionItem.vue'
-	import type { ApiKey, Group, PublicSettings, SubscriptionType, GroupPlatform, UpdateApiKeyRequest } from '@/types'
+	import type { ApiKey, ApiKeyMember, Group, PublicSettings, SubscriptionType, GroupPlatform, UpdateApiKeyRequest } from '@/types'
 import type { Column } from '@/components/common/types'
 import type { BatchApiKeyUsageStats } from '@/api/usage'
 import { formatDateTime } from '@/utils/format'
@@ -1328,9 +1393,13 @@ const setGroupButtonRef = (keyId: number, el: Element | ComponentPublicInstance 
   }
 }
 
+const formKind = ref<'group' | 'aggregate'>('group')
+const memberCandidateKeys = ref<ApiKey[]>([])
+const memberCandidatesLoading = ref(false)
 const formData = ref({
   name: '',
   group_id: null as number | null,
+  member_key_ids: [] as number[],
   status: 'active' as 'active' | 'inactive',
   use_custom_key: false,
   custom_key: '',
@@ -1349,6 +1418,126 @@ const formData = ref({
   expiration_preset: '30' as '7' | '30' | '90' | 'custom',
   expiration_date: ''
 })
+
+const isAggregateKey = (key: Pick<ApiKey, 'key_kind'>) => key.key_kind === 'aggregate'
+
+const findMemberKey = (id: number): ApiKey | ApiKeyMember | undefined => {
+  return memberCandidateKeys.value.find((item) => item.id === id)
+    || apiKeys.value.find((item) => item.id === id)
+    || selectedKey.value?.members?.find((item) => item.id === id)
+}
+
+const groupKeysForAggregate = computed(() => {
+  const byId = new Map<number, ApiKey>()
+  for (const key of [...memberCandidateKeys.value, ...apiKeys.value]) {
+    if (!isAggregateKey(key) && key.group_id) {
+      byId.set(key.id, key)
+    }
+  }
+  return Array.from(byId.values())
+})
+
+const selectedMemberGroupIds = computed(() => {
+  const ids = new Set<number>()
+  for (const id of formData.value.member_key_ids) {
+    const groupId = findMemberKey(id)?.group_id
+    if (groupId) ids.add(groupId)
+  }
+  return ids
+})
+
+const availableMemberOptions = computed(() =>
+  groupKeysForAggregate.value
+    .filter((key) => !formData.value.member_key_ids.includes(key.id))
+    .filter((key) => !key.group_id || !selectedMemberGroupIds.value.has(key.group_id))
+    .map((key) => ({
+      value: key.id,
+      label: key.group?.name ? `${key.name} · ${key.group.name}` : key.name
+    }))
+)
+
+const memberKeyLabel = (id: number) => {
+  const key = findMemberKey(id)
+  if (!key) return `#${id}`
+  return key.group?.name ? `${key.name} · ${key.group.name}` : key.name
+}
+
+const addMember = (value: string | number | boolean | null) => {
+  const id = Number(value)
+  if (!id || formData.value.member_key_ids.includes(id)) return
+  if (formData.value.member_key_ids.length >= 32) return
+  const groupId = findMemberKey(id)?.group_id
+  if (groupId && selectedMemberGroupIds.value.has(groupId)) return
+  formData.value.member_key_ids.push(id)
+}
+
+const removeMember = (index: number) => {
+  formData.value.member_key_ids.splice(index, 1)
+}
+
+const moveMember = (index: number, delta: number) => {
+  const next = index + delta
+  if (next < 0 || next >= formData.value.member_key_ids.length) return
+  const ids = formData.value.member_key_ids
+  const current = ids[index]
+  ids[index] = ids[next]
+  ids[next] = current
+}
+
+const emptyFormData = () => ({
+  name: '',
+  group_id: null as number | null,
+  member_key_ids: [] as number[],
+  status: 'active' as 'active' | 'inactive',
+  use_custom_key: false,
+  custom_key: '',
+  enable_ip_restriction: false,
+  ip_whitelist: '',
+  ip_blacklist: '',
+  enable_quota: false,
+  quota: null as number | null,
+  enable_rate_limit: false,
+  rate_limit_5h: null as number | null,
+  rate_limit_1d: null as number | null,
+  rate_limit_7d: null as number | null,
+  enable_expiration: false,
+  expiration_preset: '30' as '7' | '30' | '90' | 'custom',
+  expiration_date: ''
+})
+
+const loadMemberCandidates = async () => {
+  memberCandidatesLoading.value = true
+  try {
+    const collected: ApiKey[] = []
+    let page = 1
+    const pageSize = 100
+    while (page <= 5) {
+      const response = await keysAPI.list(page, pageSize)
+      collected.push(...(response.items || []))
+      const total = response.total || collected.length
+      if (!response.items || response.items.length < pageSize || collected.length >= total) {
+        break
+      }
+      page += 1
+    }
+    memberCandidateKeys.value = collected
+  } catch {
+    if (memberCandidateKeys.value.length === 0) {
+      memberCandidateKeys.value = apiKeys.value
+    }
+  } finally {
+    memberCandidatesLoading.value = false
+  }
+}
+
+const openCreateModal = (kind: 'group' | 'aggregate') => {
+  formKind.value = kind
+  formData.value = emptyFormData()
+  showCreateModal.value = true
+  if (kind === 'aggregate') {
+    void loadMemberCandidates()
+  }
+}
 
 // 自定义Key验证
 const customKeyError = computed(() => {
@@ -1560,11 +1749,13 @@ const handleSort = (key: string, order: 'asc' | 'desc') => {
 
 const editKey = (key: ApiKey) => {
   selectedKey.value = key
+  formKind.value = isAggregateKey(key) ? 'aggregate' : 'group'
   const hasIPRestriction = (key.ip_whitelist?.length > 0) || (key.ip_blacklist?.length > 0)
   const hasExpiration = !!key.expires_at
   formData.value = {
     name: key.name,
     group_id: key.group_id,
+    member_key_ids: (key.members || []).map((member) => member.id),
     status: key.status === 'quota_exhausted' || key.status === 'expired' ? 'inactive' : key.status,
     use_custom_key: false,
     custom_key: '',
@@ -1582,6 +1773,9 @@ const editKey = (key: ApiKey) => {
     expiration_date: key.expires_at ? formatDateTimeLocal(key.expires_at) : ''
   }
   showEditModal.value = true
+  if (isAggregateKey(key)) {
+    void loadMemberCandidates()
+  }
 }
 
 const toggleKeyStatus = async (key: ApiKey) => {
@@ -1598,6 +1792,7 @@ const toggleKeyStatus = async (key: ApiKey) => {
 }
 
 const openGroupSelector = (key: ApiKey) => {
+  if (isAggregateKey(key)) return
   if (groupSelectorKeyId.value === key.id) {
     groupSelectorKeyId.value = null
     dropdownPosition.value = null
@@ -1660,8 +1855,12 @@ const confirmDelete = (key: ApiKey) => {
 }
 
 const handleSubmit = async () => {
-  // Validate group_id is required
-  if (formData.value.group_id === null) {
+  if (formKind.value === 'aggregate') {
+    if (formData.value.member_key_ids.length === 0) {
+      appStore.showError(t('keys.aggregateMembersRequired'))
+      return
+    }
+  } else if (formData.value.group_id === null) {
     appStore.showError(t('keys.groupRequired'))
     return
   }
@@ -1718,7 +1917,6 @@ const handleSubmit = async () => {
     if (showEditModal.value && selectedKey.value) {
       const updates: UpdateApiKeyRequest = {
         name: formData.value.name,
-        group_id: formData.value.group_id,
         ip_whitelist: ipWhitelist,
         ip_blacklist: ipBlacklist,
         quota: quota,
@@ -1726,6 +1924,11 @@ const handleSubmit = async () => {
         rate_limit_5h: rateLimitData.rate_limit_5h,
         rate_limit_1d: rateLimitData.rate_limit_1d,
         rate_limit_7d: rateLimitData.rate_limit_7d,
+      }
+      if (formKind.value === 'aggregate') {
+        updates.member_key_ids = formData.value.member_key_ids
+      } else {
+        updates.group_id = formData.value.group_id
       }
       if (shouldSubmitEditStatus(selectedKey.value, formData.value.status)) {
         updates.status = formData.value.status
@@ -1736,13 +1939,16 @@ const handleSubmit = async () => {
       const customKey = formData.value.use_custom_key ? formData.value.custom_key : undefined
       await keysAPI.create(
         formData.value.name,
-        formData.value.group_id,
+        formKind.value === 'aggregate' ? null : formData.value.group_id,
         customKey,
         ipWhitelist,
         ipBlacklist,
         quota,
         expiresInDays,
-        rateLimitData
+        rateLimitData,
+        formKind.value === 'aggregate'
+          ? { key_kind: 'aggregate', member_key_ids: formData.value.member_key_ids }
+          : undefined
       )
       appStore.showSuccess(t('keys.keyCreatedSuccess'))
       // Only advance tour if active, on submit step, and creation succeeded
@@ -1785,25 +1991,8 @@ const closeModals = () => {
   showCreateModal.value = false
   showEditModal.value = false
   selectedKey.value = null
-  formData.value = {
-    name: '',
-    group_id: null,
-    status: 'active',
-    use_custom_key: false,
-    custom_key: '',
-    enable_ip_restriction: false,
-    ip_whitelist: '',
-    ip_blacklist: '',
-    enable_quota: false,
-    quota: null,
-    enable_rate_limit: false,
-    rate_limit_5h: null,
-    rate_limit_1d: null,
-    rate_limit_7d: null,
-    enable_expiration: false,
-    expiration_preset: '30',
-    expiration_date: ''
-  }
+  formKind.value = 'group'
+  formData.value = emptyFormData()
 }
 
 // Show reset quota confirmation dialog

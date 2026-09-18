@@ -181,6 +181,8 @@ type APIKeyAuthCacheInvalidator interface {
 type CreateAPIKeyRequest struct {
 	Name        string   `json:"name"`
 	GroupID     *int64   `json:"group_id"`
+	KeyKind     string   `json:"key_kind"`
+	MemberKeyIDs []int64 `json:"member_key_ids"`
 	CustomKey   *string  `json:"custom_key"`   // 可选的自定义key
 	IPWhitelist []string `json:"ip_whitelist"` // IP 白名单
 	IPBlacklist []string `json:"ip_blacklist"` // IP 黑名单
@@ -200,6 +202,7 @@ type UpdateAPIKeyRequest struct {
 	Name        *string   `json:"name"`
 	GroupID     *int64    `json:"group_id"`
 	Status      *string   `json:"status"`
+	MemberKeyIDs *[]int64 `json:"member_key_ids"`
 	IPWhitelist *[]string `json:"ip_whitelist"` // IP 白名单（nil 不修改，空数组清空）
 	IPBlacklist *[]string `json:"ip_blacklist"` // IP 黑名单（nil 不修改，空数组清空）
 
@@ -436,6 +439,21 @@ func (s *APIKeyService) Create(ctx context.Context, userID int64, req CreateAPIK
 		}
 	}
 
+	kind := NormalizeAPIKeyKind(req.KeyKind)
+	var members []*APIKey
+	if kind == APIKeyKindAggregate {
+		if req.GroupID != nil {
+			return nil, ErrAggregateCannotBindGroup
+		}
+		loaded, err := s.loadAggregateMembers(ctx, userID, req.MemberKeyIDs)
+		if err != nil {
+			return nil, err
+		}
+		members = loaded
+	} else if len(req.MemberKeyIDs) > 0 {
+		return nil, ErrGroupKeyCannotHaveMembers
+	}
+
 	// 验证分组权限（如果指定了分组）
 	if req.GroupID != nil {
 		group, err := s.groupRepo.GetByID(ctx, *req.GroupID)
@@ -491,6 +509,7 @@ func (s *APIKeyService) Create(ctx context.Context, userID int64, req CreateAPIK
 		Name:        html.EscapeString(req.Name),
 		GroupID:     req.GroupID,
 		Status:      StatusActive,
+		KeyKind:     kind,
 		IPWhitelist: req.IPWhitelist,
 		IPBlacklist: req.IPBlacklist,
 		Quota:       req.Quota,
@@ -498,6 +517,10 @@ func (s *APIKeyService) Create(ctx context.Context, userID int64, req CreateAPIK
 		RateLimit5h: req.RateLimit5h,
 		RateLimit1d: req.RateLimit1d,
 		RateLimit7d: req.RateLimit7d,
+		Members:     members,
+	}
+	if kind == APIKeyKindAggregate {
+		apiKey.GroupID = nil
 	}
 
 	// Set expiration time if specified
@@ -508,6 +531,14 @@ func (s *APIKeyService) Create(ctx context.Context, userID int64, req CreateAPIK
 
 	if err := s.apiKeyRepo.Create(ctx, apiKey); err != nil {
 		return nil, fmt.Errorf("create api key: %w", err)
+	}
+	memberIDs := req.MemberKeyIDs
+	if kind == APIKeyKindAggregate {
+		memberIDs = apiKey.MemberIDs()
+	}
+	if err := s.persistAggregateMetadata(ctx, apiKey, memberIDs); err != nil {
+		s.rollbackCreatedAPIKey(ctx, apiKey.ID)
+		return nil, fmt.Errorf("persist aggregate api key: %w", err)
 	}
 
 	s.InvalidateAuthCacheByKey(ctx, apiKey.Key)
@@ -720,6 +751,23 @@ func (s *APIKeyService) Update(ctx context.Context, id int64, userID int64, req 
 	if apiKey.UserID != userID {
 		return nil, ErrInsufficientPerms
 	}
+	if apiKey.IsAggregate() && req.GroupID != nil {
+		return nil, ErrAggregateCannotBindGroup
+	}
+	if !apiKey.IsAggregate() && req.MemberKeyIDs != nil {
+		return nil, ErrGroupKeyCannotHaveMembers
+	}
+
+	var members []*APIKey
+	memberIDsChanged := false
+	if apiKey.IsAggregate() && req.MemberKeyIDs != nil {
+		loaded, err := s.loadAggregateMembers(ctx, userID, *req.MemberKeyIDs)
+		if err != nil {
+			return nil, err
+		}
+		members = loaded
+		memberIDsChanged = true
+	}
 
 	// 验证 IP 白名单格式
 	if req.IPWhitelist != nil && len(*req.IPWhitelist) > 0 {
@@ -827,8 +875,17 @@ func (s *APIKeyService) Update(ctx context.Context, id int64, userID int64, req 
 	if err := s.apiKeyRepo.Update(ctx, apiKey); err != nil {
 		return nil, fmt.Errorf("update api key: %w", err)
 	}
+	if memberIDsChanged {
+		apiKey.Members = members
+		if err := s.persistAggregateMetadata(ctx, apiKey, apiKey.MemberIDs()); err != nil {
+			return nil, fmt.Errorf("update aggregate members: %w", err)
+		}
+	}
 
 	s.InvalidateAuthCacheByKey(ctx, apiKey.Key)
+	if !apiKey.IsAggregate() {
+		s.invalidateAggregateParents(ctx, apiKey.ID)
+	}
 	s.compileAPIKeyIPRules(apiKey)
 
 	// Invalidate Redis rate limit cache so reset takes effect immediately
@@ -849,6 +906,13 @@ func (s *APIKeyService) Delete(ctx context.Context, id int64, userID int64) erro
 	// 验证当前用户是否为该 API Key 的所有者
 	if ownerID != userID {
 		return ErrInsufficientPerms
+	}
+
+	s.invalidateAggregateParents(ctx, id)
+	if store, ok := s.apiKeyRepo.(apiKeyAggregateStore); ok {
+		if err := store.DeleteAggregateMembershipsForKey(ctx, id); err != nil {
+			return fmt.Errorf("delete aggregate memberships: %w", err)
+		}
 	}
 
 	// 事务内:写审计 + 软删除(tombstone)。

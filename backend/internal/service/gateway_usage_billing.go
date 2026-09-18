@@ -110,6 +110,23 @@ func (p *postUsageBillingParams) shouldDeductAPIKeyQuota() bool {
 	return p.Cost.ActualCost > 0 && p.APIKey.Quota > 0 && p.APIKeyService != nil
 }
 
+func (p *postUsageBillingParams) applyRoutedMemberQuota(ctx context.Context, cost float64) {
+	if p == nil || p.APIKey == nil || p.APIKeyService == nil || cost <= 0 || p.APIKey.RoutedMemberKeyID <= 0 {
+		return
+	}
+	member := p.APIKey.RoutedMember
+	if member == nil || member.Quota > 0 {
+		if err := p.APIKeyService.UpdateQuotaUsed(ctx, p.APIKey.RoutedMemberKeyID, cost); err != nil {
+			slog.Error("update routed member api key quota failed", "api_key_id", p.APIKey.RoutedMemberKeyID, "error", err)
+		}
+	}
+	if member == nil || member.HasRateLimits() {
+		if err := p.APIKeyService.UpdateRateLimitUsage(ctx, p.APIKey.RoutedMemberKeyID, cost); err != nil {
+			slog.Error("update routed member api key rate limit usage failed", "api_key_id", p.APIKey.RoutedMemberKeyID, "error", err)
+		}
+	}
+}
+
 func (p *postUsageBillingParams) shouldUpdateRateLimits() bool {
 	return p.Cost.ActualCost > 0 && p.APIKey.HasRateLimits() && p.APIKeyService != nil
 }
@@ -169,6 +186,7 @@ func postUsageBilling(ctx context.Context, p *postUsageBillingParams, deps *bill
 			slog.Error("update api key rate limit usage failed", "api_key_id", p.APIKey.ID, "error", err)
 		}
 	}
+	p.applyRoutedMemberQuota(billingCtx, cost.ActualCost)
 
 	if p.shouldUpdateAccountQuota() {
 		accountCost := cost.TotalCost * p.AccountRateMultiplier
@@ -421,6 +439,12 @@ func finalizePostUsageBilling(ctx context.Context, p *postUsageBillingParams, de
 
 	if p.Cost.ActualCost > 0 && p.APIKey != nil && p.APIKey.HasRateLimits() {
 		deps.billingCacheService.QueueUpdateAPIKeyRateLimitUsage(p.APIKey.ID, p.Cost.ActualCost)
+	}
+	if p.Cost.ActualCost > 0 && p.APIKey != nil && p.APIKey.RoutedMemberKeyID > 0 {
+		p.applyRoutedMemberQuota(ctx, p.Cost.ActualCost)
+		if p.APIKey.RoutedMember != nil && p.APIKey.RoutedMember.HasRateLimits() && deps.billingCacheService != nil {
+			deps.billingCacheService.QueueUpdateAPIKeyRateLimitUsage(p.APIKey.RoutedMemberKeyID, p.Cost.ActualCost)
+		}
 	}
 
 	deps.deferredService.ScheduleLastUsedUpdate(p.Account.ID)

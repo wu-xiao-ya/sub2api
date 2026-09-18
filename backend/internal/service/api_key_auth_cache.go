@@ -26,6 +26,24 @@ type APIKeyAuthSnapshot struct {
 	RateLimit5h float64 `json:"rate_limit_5h"`
 	RateLimit1d float64 `json:"rate_limit_1d"`
 	RateLimit7d float64 `json:"rate_limit_7d"`
+
+	KeyKind string                     `json:"key_kind,omitempty"`
+	Members []APIKeyAuthMemberSnapshot `json:"members,omitempty"`
+}
+
+type APIKeyAuthMemberSnapshot struct {
+	APIKeyID    int64                    `json:"api_key_id"`
+	UserID      int64                    `json:"user_id"`
+	GroupID     *int64                   `json:"group_id,omitempty"`
+	Name        string                   `json:"name"`
+	Status      string                   `json:"status"`
+	Quota       float64                  `json:"quota"`
+	QuotaUsed   float64                  `json:"quota_used"`
+	ExpiresAt   *time.Time               `json:"expires_at,omitempty"`
+	RateLimit5h float64                  `json:"rate_limit_5h"`
+	RateLimit1d float64                  `json:"rate_limit_1d"`
+	RateLimit7d float64                  `json:"rate_limit_7d"`
+	Group       *APIKeyAuthGroupSnapshot `json:"group,omitempty"`
 }
 
 // APIKeyAuthUserSnapshot 用户快照

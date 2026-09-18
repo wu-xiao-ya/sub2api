@@ -56,6 +56,7 @@ type APIKey struct {
 	Name        string     `json:"name"`
 	GroupID     *int64     `json:"group_id"`
 	Status      string     `json:"status"`
+	KeyKind     string     `json:"key_kind"`
 	IPWhitelist []string   `json:"ip_whitelist"`
 	IPBlacklist []string   `json:"ip_blacklist"`
 	LastUsedAt  *time.Time `json:"last_used_at"`
@@ -82,8 +83,17 @@ type APIKey struct {
 	Reset1dAt     *time.Time `json:"reset_1d_at,omitempty"`
 	Reset7dAt     *time.Time `json:"reset_7d_at,omitempty"`
 
-	User  *User  `json:"user,omitempty"`
-	Group *Group `json:"group,omitempty"`
+	User    *User           `json:"user,omitempty"`
+	Group   *Group          `json:"group,omitempty"`
+	Members []APIKeyMember  `json:"members,omitempty"`
+}
+
+type APIKeyMember struct {
+	ID      int64  `json:"id"`
+	Name    string `json:"name"`
+	GroupID *int64 `json:"group_id"`
+	Status  string `json:"status"`
+	Group   *Group `json:"group,omitempty"`
 }
 
 type Group struct {
