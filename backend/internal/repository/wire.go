@@ -64,6 +64,10 @@ func ProvideSchedulerCache(rdb *redis.Client, cfg *config.Config) service.Schedu
 }
 
 // ProviderSet is the Wire provider set for all repositories
+func ProvideRelayHTTPUpstream(cfg *config.Config, _ *service.AccountOutboundService) service.HTTPUpstream {
+	return service.WrapRelayHTTPUpstream(NewHTTPUpstream(cfg))
+}
+
 var ProviderSet = wire.NewSet(
 	NewUserRepository,
 	NewAPIKeyRepository,
@@ -159,7 +163,7 @@ var ProviderSet = wire.NewSet(
 	NewProxyExitInfoProber,
 	NewClaudeUsageFetcher,
 	NewClaudeOAuthClient,
-	NewHTTPUpstream,
+	ProvideRelayHTTPUpstream,
 	NewOpenAIOAuthClient,
 	NewGrokOAuthClient,
 	NewGeminiOAuthClient,

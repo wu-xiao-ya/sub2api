@@ -120,6 +120,7 @@ type OpenAICodexPATCreateRequest struct {
 	LoadFactor              *int           `json:"load_factor"`
 	ExpiresAt               *int64         `json:"expires_at"`
 	AutoPauseOnExpired      *bool          `json:"auto_pause_on_expired"`
+	UseRelayRoute           *bool          `json:"use_relay_route"`
 	CredentialExtras        map[string]any `json:"credential_extras"`
 	Extra                   map[string]any `json:"extra"`
 	SkipDefaultGroupBind    *bool          `json:"skip_default_group_bind"`
@@ -386,6 +387,7 @@ func (h *OpenAIOAuthHandler) CreateAccountFromCodexPAT(c *gin.Context) {
 		PoolGroupID:           req.PoolGroupID,
 		ExpiresAt:             req.ExpiresAt,
 		AutoPauseOnExpired:    req.AutoPauseOnExpired,
+		UseRelayRoute:         req.UseRelayRoute,
 		SkipDefaultGroupBind:  skipDefaultGroupBind,
 		SkipMixedChannelCheck: req.ConfirmMixedChannelRisk != nil && *req.ConfirmMixedChannelRisk,
 	})

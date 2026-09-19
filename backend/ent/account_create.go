@@ -139,6 +139,20 @@ func (_c *AccountCreate) SetNillableProxyFallbackOriginID(v *int64) *AccountCrea
 	return _c
 }
 
+// SetUseRelayRoute sets the "use_relay_route" field.
+func (_c *AccountCreate) SetUseRelayRoute(v bool) *AccountCreate {
+	_c.mutation.SetUseRelayRoute(v)
+	return _c
+}
+
+// SetNillableUseRelayRoute sets the "use_relay_route" field if the given value is not nil.
+func (_c *AccountCreate) SetNillableUseRelayRoute(v *bool) *AccountCreate {
+	if v != nil {
+		_c.SetUseRelayRoute(*v)
+	}
+	return _c
+}
+
 // SetConcurrency sets the "concurrency" field.
 func (_c *AccountCreate) SetConcurrency(v int) *AccountCreate {
 	_c.mutation.SetConcurrency(v)
@@ -623,6 +637,10 @@ func (_c *AccountCreate) defaults() error {
 		v := account.DefaultExtra()
 		_c.mutation.SetExtra(v)
 	}
+	if _, ok := _c.mutation.UseRelayRoute(); !ok {
+		v := account.DefaultUseRelayRoute
+		_c.mutation.SetUseRelayRoute(v)
+	}
 	if _, ok := _c.mutation.Concurrency(); !ok {
 		v := account.DefaultConcurrency
 		_c.mutation.SetConcurrency(v)
@@ -695,6 +713,9 @@ func (_c *AccountCreate) check() error {
 	}
 	if _, ok := _c.mutation.Extra(); !ok {
 		return &ValidationError{Name: "extra", err: errors.New(`ent: missing required field "Account.extra"`)}
+	}
+	if _, ok := _c.mutation.UseRelayRoute(); !ok {
+		return &ValidationError{Name: "use_relay_route", err: errors.New(`ent: missing required field "Account.use_relay_route"`)}
 	}
 	if _, ok := _c.mutation.Concurrency(); !ok {
 		return &ValidationError{Name: "concurrency", err: errors.New(`ent: missing required field "Account.concurrency"`)}
@@ -806,6 +827,10 @@ func (_c *AccountCreate) createSpec() (*Account, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.ProxyFallbackOriginID(); ok {
 		_spec.SetField(account.FieldProxyFallbackOriginID, field.TypeInt64, value)
 		_node.ProxyFallbackOriginID = &value
+	}
+	if value, ok := _c.mutation.UseRelayRoute(); ok {
+		_spec.SetField(account.FieldUseRelayRoute, field.TypeBool, value)
+		_node.UseRelayRoute = value
 	}
 	if value, ok := _c.mutation.Concurrency(); ok {
 		_spec.SetField(account.FieldConcurrency, field.TypeInt, value)
@@ -1188,6 +1213,18 @@ func (u *AccountUpsert) AddProxyFallbackOriginID(v int64) *AccountUpsert {
 // ClearProxyFallbackOriginID clears the value of the "proxy_fallback_origin_id" field.
 func (u *AccountUpsert) ClearProxyFallbackOriginID() *AccountUpsert {
 	u.SetNull(account.FieldProxyFallbackOriginID)
+	return u
+}
+
+// SetUseRelayRoute sets the "use_relay_route" field.
+func (u *AccountUpsert) SetUseRelayRoute(v bool) *AccountUpsert {
+	u.Set(account.FieldUseRelayRoute, v)
+	return u
+}
+
+// UpdateUseRelayRoute sets the "use_relay_route" field to the value that was provided on create.
+func (u *AccountUpsert) UpdateUseRelayRoute() *AccountUpsert {
+	u.SetExcluded(account.FieldUseRelayRoute)
 	return u
 }
 
@@ -1840,6 +1877,20 @@ func (u *AccountUpsertOne) UpdateProxyFallbackOriginID() *AccountUpsertOne {
 func (u *AccountUpsertOne) ClearProxyFallbackOriginID() *AccountUpsertOne {
 	return u.Update(func(s *AccountUpsert) {
 		s.ClearProxyFallbackOriginID()
+	})
+}
+
+// SetUseRelayRoute sets the "use_relay_route" field.
+func (u *AccountUpsertOne) SetUseRelayRoute(v bool) *AccountUpsertOne {
+	return u.Update(func(s *AccountUpsert) {
+		s.SetUseRelayRoute(v)
+	})
+}
+
+// UpdateUseRelayRoute sets the "use_relay_route" field to the value that was provided on create.
+func (u *AccountUpsertOne) UpdateUseRelayRoute() *AccountUpsertOne {
+	return u.Update(func(s *AccountUpsert) {
+		s.UpdateUseRelayRoute()
 	})
 }
 
@@ -2730,6 +2781,20 @@ func (u *AccountUpsertBulk) UpdateProxyFallbackOriginID() *AccountUpsertBulk {
 func (u *AccountUpsertBulk) ClearProxyFallbackOriginID() *AccountUpsertBulk {
 	return u.Update(func(s *AccountUpsert) {
 		s.ClearProxyFallbackOriginID()
+	})
+}
+
+// SetUseRelayRoute sets the "use_relay_route" field.
+func (u *AccountUpsertBulk) SetUseRelayRoute(v bool) *AccountUpsertBulk {
+	return u.Update(func(s *AccountUpsert) {
+		s.SetUseRelayRoute(v)
+	})
+}
+
+// UpdateUseRelayRoute sets the "use_relay_route" field to the value that was provided on create.
+func (u *AccountUpsertBulk) UpdateUseRelayRoute() *AccountUpsertBulk {
+	return u.Update(func(s *AccountUpsert) {
+		s.UpdateUseRelayRoute()
 	})
 }
 

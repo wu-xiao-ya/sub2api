@@ -181,18 +181,8 @@ func registerAgentIdentityTask(ctx context.Context, account *Account) (string, e
 	if err != nil {
 		return "", err
 	}
-	proxyURL := ""
-	if account.ProxyID != nil && account.Proxy != nil {
-		proxyURL = account.Proxy.URL()
-	}
-	client, err := httpclient.GetClient(httpclient.Options{
-		ProxyURL:              proxyURL,
-		Timeout:               agentIdentityTaskRegistrationTimeout,
-		ResponseHeaderTimeout: 15 * time.Second,
-	})
-	if err != nil {
-		return "", errors.New("invalid proxy configuration for agent task registration")
-	}
+	proxyURL := AccountDefaultProxyURL(account)
+	ctx = withAccountOperationRoute(ctx, account, proxyURL)
 	body, err := json.Marshal(map[string]string{
 		"timestamp": timestamp,
 		"signature": signature,
@@ -207,7 +197,20 @@ func registerAgentIdentityTask(ctx context.Context, account *Account) (string, e
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
-	resp, err := client.Do(req)
+	resp, _, err := accountOutboundOperation(ctx, proxyURL, func(route string) (*http.Response, error) {
+		client, err := httpclient.GetClient(httpclient.Options{
+			ProxyURL: route, Timeout: agentIdentityTaskRegistrationTimeout,
+			ResponseHeaderTimeout: 15 * time.Second,
+		})
+		if err != nil {
+			return nil, errors.New("invalid proxy configuration for agent task registration")
+		}
+		attempt, err := cloneHTTPRequest(req)
+		if err != nil {
+			return nil, err
+		}
+		return client.Do(attempt)
+	})
 	if err != nil {
 		return "", errors.New("agent task registration request failed")
 	}

@@ -203,6 +203,57 @@
 
         <!-- Tab: Gateway -->
         <div v-show="activeTab === 'gateway'" class="space-y-6">
+          <div class="card">
+            <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
+              <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+                {{ t("admin.settings.trafficRelay.title") }}
+              </h2>
+              <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                {{ t("admin.settings.trafficRelay.description") }}
+              </p>
+            </div>
+            <div class="space-y-5 p-6">
+              <div class="flex items-center justify-between">
+                <div>
+                  <label class="font-medium text-gray-900 dark:text-white">{{
+                    t("admin.settings.trafficRelay.enabled")
+                  }}</label>
+                  <p class="text-sm text-gray-500 dark:text-gray-400">
+                    {{ t("admin.settings.trafficRelay.enabledHint") }}
+                  </p>
+                </div>
+                <Toggle v-model="form.traffic_relay_enabled" />
+              </div>
+              <div>
+                <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  {{ t("admin.settings.trafficRelay.proxy") }}
+                </label>
+                <ProxySelector
+                  :model-value="form.traffic_relay_proxy_id || null"
+                  :proxies="trafficRelayProxies"
+                  @update:model-value="form.traffic_relay_proxy_id = $event || 0"
+                />
+                <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                  {{ t("admin.settings.trafficRelay.proxyHint") }}
+                </p>
+              </div>
+              <div>
+                <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  {{ t("admin.settings.trafficRelay.ttl") }}
+                </label>
+                <input
+                  v-model.number="form.traffic_relay_unavailable_ttl_seconds"
+                  type="number"
+                  min="5"
+                  max="600"
+                  class="input w-32"
+                />
+                <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                  {{ t("admin.settings.trafficRelay.ttlHint") }}
+                </p>
+              </div>
+            </div>
+          </div>
           <!-- Overload Cooldown (529) Settings -->
           <div class="card">
             <div
@@ -8527,6 +8578,9 @@ const form = reactive<SettingsForm>({
   step_up_enabled: false,
   audit_log_retention_days: 180,
   mainland_access_restriction_enabled: true,
+  traffic_relay_enabled: false,
+  traffic_relay_proxy_id: 0,
+  traffic_relay_unavailable_ttl_seconds: 45,
   login_agreement_enabled: false,
   login_agreement_mode: "modal",
   login_agreement_updated_at: "2026-03-31",
@@ -8937,6 +8991,7 @@ const authSourceDefaultsMeta = computed(() => [
 
 // Proxies for web search emulation ProxySelector
 const webSearchProxies = ref<Proxy[]>([]);
+const trafficRelayProxies = ref<Proxy[]>([]);
 
 // Web Search Emulation config (loaded/saved separately)
 const DEFAULT_WEB_SEARCH_QUOTA_LIMIT = 1000;
@@ -9662,6 +9717,16 @@ async function loadSettings() {
   loadFailed.value = false;
   try {
     const settings = await adminAPI.settings.getSettings();
+    adminAPI.proxies.getAll().then((proxies) => {
+      trafficRelayProxies.value = proxies.filter(
+        (proxy) => proxy.protocol === "http" && proxy.status === "active",
+      );
+      if (!webSearchProxies.value.length) {
+        webSearchProxies.value = proxies;
+      }
+    }).catch(() => {
+      trafficRelayProxies.value = [];
+    });
     settings.payment_load_balance_strategy =
       settings.payment_load_balance_strategy || "round-robin";
     // Only assign non-null values from backend (null means unconfigured, keep defaults)
@@ -10094,6 +10159,11 @@ async function saveSettings() {
       allow_ungrouped_key_scheduling: form.allow_ungrouped_key_scheduling,
       mainland_access_restriction_enabled:
         form.mainland_access_restriction_enabled,
+      traffic_relay_enabled: form.traffic_relay_enabled,
+      traffic_relay_proxy_id: Number(form.traffic_relay_proxy_id || 0),
+      traffic_relay_unavailable_ttl_seconds: Number(
+        form.traffic_relay_unavailable_ttl_seconds || 45,
+      ),
       enable_fingerprint_unification: form.enable_fingerprint_unification,
       enable_metadata_passthrough: form.enable_metadata_passthrough,
       enable_cch_signing: form.enable_cch_signing,

@@ -20,22 +20,25 @@ import (
 // UpdateSettingsRequest 更新设置请求
 type UpdateSettingsRequest struct {
 	// 注册设置
-	RegistrationEnabled              bool                         `json:"registration_enabled"`
-	EmailVerifyEnabled               bool                         `json:"email_verify_enabled"`
-	RegistrationEmailSuffixWhitelist []string                     `json:"registration_email_suffix_whitelist"`
-	PromoCodeEnabled                 bool                         `json:"promo_code_enabled"`
-	PasswordResetEnabled             bool                         `json:"password_reset_enabled"`
-	FrontendURL                      string                       `json:"frontend_url"`
-	InvitationCodeEnabled            bool                         `json:"invitation_code_enabled"`
-	TotpEnabled                      bool                         `json:"totp_enabled"`             // TOTP 双因素认证
-	SessionBindingEnabled            *bool                        `json:"session_binding_enabled"`  // 会话 IP/UA 绑定（省略=保持现值）
-	StepUpEnabled                    *bool                        `json:"step_up_enabled"`          // 敏感操作 step-up 2FA（省略=保持现值）
-	AuditLogRetentionDays            int                          `json:"audit_log_retention_days"` // 审计日志保留天数
-	MainlandAccessRestrictionEnabled *bool                        `json:"mainland_access_restriction_enabled"`
-	LoginAgreementEnabled            bool                         `json:"login_agreement_enabled"`
-	LoginAgreementMode               string                       `json:"login_agreement_mode"`
-	LoginAgreementUpdatedAt          string                       `json:"login_agreement_updated_at"`
-	LoginAgreementDocuments          []dto.LoginAgreementDocument `json:"login_agreement_documents"`
+	RegistrationEnabled               bool                         `json:"registration_enabled"`
+	EmailVerifyEnabled                bool                         `json:"email_verify_enabled"`
+	RegistrationEmailSuffixWhitelist  []string                     `json:"registration_email_suffix_whitelist"`
+	PromoCodeEnabled                  bool                         `json:"promo_code_enabled"`
+	PasswordResetEnabled              bool                         `json:"password_reset_enabled"`
+	FrontendURL                       string                       `json:"frontend_url"`
+	InvitationCodeEnabled             bool                         `json:"invitation_code_enabled"`
+	TotpEnabled                       bool                         `json:"totp_enabled"`             // TOTP 双因素认证
+	SessionBindingEnabled             *bool                        `json:"session_binding_enabled"`  // 会话 IP/UA 绑定（省略=保持现值）
+	StepUpEnabled                     *bool                        `json:"step_up_enabled"`          // 敏感操作 step-up 2FA（省略=保持现值）
+	AuditLogRetentionDays             int                          `json:"audit_log_retention_days"` // 审计日志保留天数
+	MainlandAccessRestrictionEnabled  *bool                        `json:"mainland_access_restriction_enabled"`
+	TrafficRelayEnabled               *bool                        `json:"traffic_relay_enabled"`
+	TrafficRelayProxyID               *int64                       `json:"traffic_relay_proxy_id"`
+	TrafficRelayUnavailableTTLSeconds *int                         `json:"traffic_relay_unavailable_ttl_seconds"`
+	LoginAgreementEnabled             bool                         `json:"login_agreement_enabled"`
+	LoginAgreementMode                string                       `json:"login_agreement_mode"`
+	LoginAgreementUpdatedAt           string                       `json:"login_agreement_updated_at"`
+	LoginAgreementDocuments           []dto.LoginAgreementDocument `json:"login_agreement_documents"`
 
 	// 邮件服务设置
 	SMTPHost     string `json:"smtp_host"`
@@ -1275,6 +1278,37 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 			}
 			return previousSettings.MainlandAccessRestrictionEnabled
 		}(),
+		TrafficRelayEnabled: func() bool {
+			if req.TrafficRelayEnabled != nil {
+				return *req.TrafficRelayEnabled
+			}
+			return previousSettings.TrafficRelayEnabled
+		}(),
+		TrafficRelayProxyID: func() int64 {
+			if req.TrafficRelayProxyID != nil {
+				if *req.TrafficRelayProxyID < 0 {
+					return 0
+				}
+				return *req.TrafficRelayProxyID
+			}
+			return previousSettings.TrafficRelayProxyID
+		}(),
+		TrafficRelayUnavailableTTLSeconds: func() int {
+			if req.TrafficRelayUnavailableTTLSeconds != nil {
+				ttl := *req.TrafficRelayUnavailableTTLSeconds
+				if ttl <= 0 {
+					return 45
+				}
+				if ttl < 5 {
+					return 5
+				}
+				if ttl > 600 {
+					return 600
+				}
+				return ttl
+			}
+			return previousSettings.TrafficRelayUnavailableTTLSeconds
+		}(),
 		LoginAgreementEnabled:   req.LoginAgreementEnabled,
 		LoginAgreementMode:      loginAgreementMode,
 		LoginAgreementUpdatedAt: loginAgreementUpdatedAt,
@@ -1857,6 +1891,9 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		StepUpEnabled:                                          updatedSettings.StepUpEnabled,
 		AuditLogRetentionDays:                                  updatedSettings.AuditLogRetentionDays,
 		MainlandAccessRestrictionEnabled:                       updatedSettings.MainlandAccessRestrictionEnabled,
+		TrafficRelayEnabled:                                    updatedSettings.TrafficRelayEnabled,
+		TrafficRelayProxyID:                                    updatedSettings.TrafficRelayProxyID,
+		TrafficRelayUnavailableTTLSeconds:                      updatedSettings.TrafficRelayUnavailableTTLSeconds,
 		LoginAgreementEnabled:                                  updatedSettings.LoginAgreementEnabled,
 		LoginAgreementMode:                                     updatedSettings.LoginAgreementMode,
 		LoginAgreementUpdatedAt:                                updatedSettings.LoginAgreementUpdatedAt,

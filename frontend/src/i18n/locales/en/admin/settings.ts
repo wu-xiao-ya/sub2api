@@ -995,6 +995,16 @@ export default {
           testFailed: 'Google Drive storage test failed'
         }
       },
+      trafficRelay: {
+        title: 'Account relay route',
+        description: 'Applies only to accounts that opt in. The relay uses HTTP CONNECT and does not rewrite upstream URLs. If CONNECT fails, the same request immediately falls back to the account default route.',
+        enabled: 'Enable system relay',
+        enabledHint: 'When disabled, every account uses its own proxy or direct connect and the account switch is ignored.',
+        proxy: 'Relay proxy',
+        proxyHint: 'Choose an HTTP proxy as the Tokyo egress. Do not bind it to regular accounts.',
+        ttl: 'Unavailable memory (seconds)',
+        ttlHint: 'After a relay CONNECT failure, new requests skip the relay until this TTL expires. Range 5-600 seconds.'
+      },
       overloadCooldown: {
         title: '529 Overload Cooldown',
         description: 'Configure account scheduling pause strategy when upstream returns 529 (overloaded)',

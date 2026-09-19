@@ -31,6 +31,7 @@ type Account struct {
 	ProxyID                 *int64
 	ProxyFallbackOriginID   *int64
 	ProxyFallbackOriginName *string // 仅展示用
+	UseRelayRoute           bool
 	PoolGroupID             *int64
 	Concurrency             int
 	Priority                int

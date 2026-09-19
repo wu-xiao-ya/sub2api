@@ -1285,6 +1285,7 @@ func buildUpstreamTransport(settings poolSettings, proxyURL *url.URL, protocolMo
 	if err := proxyutil.ConfigureTransportProxy(transport, proxyURL); err != nil {
 		return nil, err
 	}
+	proxyutil.ConfigureRelayConnectBudget(transport, proxyURL)
 	return transport, nil
 }
 

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/proxyurl"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/proxyutil"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/servertiming"
 
 	"github.com/imroc/req/v3"
@@ -52,12 +53,19 @@ func getSharedReqClient(opts reqClientOptions) (*req.Client, error) {
 	if opts.Impersonate {
 		client = client.ImpersonateChrome()
 	}
-	trimmed, _, err := proxyurl.Parse(opts.ProxyURL)
+	trimmed, parsed, err := proxyurl.Parse(opts.ProxyURL)
 	if err != nil {
 		return nil, err
 	}
 	if trimmed != "" {
 		client.SetProxyURL(trimmed)
+		// Keep req's TLS fingerprint/HTTP2 settings; only replace proxy selection
+		// and TCP/CONNECT dialing for explicitly marked relay requests.
+		transport := client.GetTransport()
+		hooks := &http.Transport{Proxy: transport.Proxy, DialContext: transport.DialContext}
+		proxyutil.ConfigureRelayConnectBudget(hooks, parsed)
+		transport.Proxy = hooks.Proxy
+		transport.DialContext = hooks.DialContext
 	}
 	client = instrumentReqClient(client)
 

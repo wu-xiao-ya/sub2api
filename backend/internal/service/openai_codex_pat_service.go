@@ -43,15 +43,6 @@ func (s *OpenAIOAuthService) ValidateCodexPersonalAccessToken(ctx context.Contex
 		return nil, infraerrors.New(http.StatusBadRequest, "OPENAI_CODEX_PAT_INVALID_PREFIX", "Codex personal access token must start with at-")
 	}
 
-	client, err := httpclient.GetClient(httpclient.Options{
-		ProxyURL:              proxyURL,
-		Timeout:               20 * time.Second,
-		ResponseHeaderTimeout: 15 * time.Second,
-	})
-	if err != nil {
-		return nil, infraerrors.Newf(http.StatusBadRequest, "OPENAI_CODEX_PAT_PROXY_INVALID", "invalid proxy configuration: %v", err)
-	}
-
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, openAICodexPATWhoamiURL, nil)
 	if err != nil {
 		return nil, infraerrors.Newf(http.StatusInternalServerError, "OPENAI_CODEX_PAT_REQUEST_FAILED", "failed to build validation request: %v", err)
@@ -61,7 +52,15 @@ func (s *OpenAIOAuthService) ValidateCodexPersonalAccessToken(ctx context.Contex
 	req.Header.Set("originator", "codex_cli_rs")
 	req.Header.Set("user-agent", codexCLIUserAgent)
 
-	resp, err := client.Do(req)
+	resp, _, err := accountOutboundOperation(ctx, proxyURL, func(route string) (*http.Response, error) {
+		client, err := httpclient.GetClient(httpclient.Options{
+			ProxyURL: route, Timeout: 20 * time.Second, ResponseHeaderTimeout: 15 * time.Second,
+		})
+		if err != nil {
+			return nil, infraerrors.Newf(http.StatusBadRequest, "OPENAI_CODEX_PAT_PROXY_INVALID", "invalid proxy configuration: %v", err)
+		}
+		return client.Do(req.Clone(ctx))
+	})
 	if err != nil {
 		return nil, infraerrors.Newf(http.StatusBadGateway, "OPENAI_CODEX_PAT_VALIDATE_FAILED", "failed to validate Codex personal access token: %v", err)
 	}

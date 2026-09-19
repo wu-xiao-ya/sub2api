@@ -1,12 +1,27 @@
 package repository
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/stretchr/testify/require"
 )
+
+func TestSchedulerRelayFlagSurvivesCache(t *testing.T) {
+	account := service.Account{ID: 17, UseRelayRoute: true}
+	metadata := buildSchedulerMetadataAccount(account)
+	require.True(t, metadata.UseRelayRoute)
+	payload, err := json.Marshal(account)
+	require.NoError(t, err)
+	decoded, err := decodeCachedAccount(payload)
+	require.NoError(t, err)
+	require.True(t, decoded.UseRelayRoute)
+	legacy, err := decodeCachedAccount(`{"ID":17}`)
+	require.NoError(t, err)
+	require.False(t, legacy.UseRelayRoute)
+}
 
 func TestFilterSchedulerCredentialsKeepsSubscriptionPlanType(t *testing.T) {
 	filtered := filterSchedulerCredentials(map[string]any{

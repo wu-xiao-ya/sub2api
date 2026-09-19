@@ -26,6 +26,18 @@ type openaiTransportAccountRepoStub struct {
 	tempUnschedCalls []tempUnschedCall
 }
 
+func TestRelayTransportFailureDoesNotUnscheduleAccount(t *testing.T) {
+	repo := &openaiTransportAccountRepoStub{}
+	svc := &OpenAIGatewayService{accountRepo: repo}
+	account := &Account{ID: 42, Platform: PlatformOpenAI}
+	c, _ := newOpenAITransportErrTestContext()
+	err := &relayRouteFailure{err: errors.New("proxyconnect tcp: connection refused")}
+	_ = svc.handleOpenAIUpstreamTransportError(context.Background(), c, account, err, false)
+	require.Empty(t, repo.tempUnschedCalls)
+	require.False(t, classifyOpenAITransportError(err).Persistent)
+	require.True(t, classifyOpenAITransportError(err.err).Persistent, "default proxy failures must retain original behavior")
+}
+
 func (r *openaiTransportAccountRepoStub) SetTempUnschedulable(_ context.Context, id int64, until time.Time, reason string) error {
 	r.tempUnschedCalls = append(r.tempUnschedCalls, tempUnschedCall{accountID: id, until: until, reason: reason})
 	return nil

@@ -6,6 +6,7 @@
     :class="[modelValue ? 'bg-primary-600' : 'bg-gray-200 dark:bg-dark-600']"
     role="switch"
     :aria-checked="modelValue"
+    :disabled="disabled"
   >
     <span
       class="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out"
@@ -17,6 +18,7 @@
 <script setup lang="ts">
 const props = defineProps<{
   modelValue: boolean
+  disabled?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -24,6 +26,7 @@ const emit = defineEmits<{
 }>()
 
 function toggle() {
+  if (props.disabled) return
   emit('update:modelValue', !props.modelValue)
 }
 </script>

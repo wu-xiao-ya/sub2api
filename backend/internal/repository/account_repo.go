@@ -119,7 +119,8 @@ func createAccountRecord(ctx context.Context, client *dbent.Client, account *ser
 		SetStatus(account.Status).
 		SetErrorMessage(account.ErrorMessage).
 		SetSchedulable(account.Schedulable).
-		SetAutoPauseOnExpired(account.AutoPauseOnExpired)
+		SetAutoPauseOnExpired(account.AutoPauseOnExpired).
+		SetUseRelayRoute(account.UseRelayRoute)
 
 	if account.OwnerUserID != nil {
 		builder.SetOwnerUserID(*account.OwnerUserID)
@@ -500,7 +501,8 @@ func (r *accountRepository) updateLockedAccount(ctx context.Context, client *dbe
 		SetStatus(account.Status).
 		SetErrorMessage(account.ErrorMessage).
 		SetSchedulable(schedulable).
-		SetAutoPauseOnExpired(account.AutoPauseOnExpired)
+		SetAutoPauseOnExpired(account.AutoPauseOnExpired).
+		SetUseRelayRoute(account.UseRelayRoute)
 
 	builder.SetNillableOwnerUserID(account.OwnerUserID)
 	builder.SetContributionStatus(account.ContributionStatus)
@@ -2968,6 +2970,11 @@ func (r *accountRepository) BulkUpdate(ctx context.Context, ids []int64, updates
 		args = append(args, *updates.Schedulable)
 		idx++
 	}
+	if updates.UseRelayRoute != nil {
+		setClauses = append(setClauses, "use_relay_route = $"+itoa(idx))
+		args = append(args, *updates.UseRelayRoute)
+		idx++
+	}
 	if updates.ProbeEnabled != nil {
 		if updates.Extra == nil {
 			updates.Extra = make(map[string]any)
@@ -3520,6 +3527,7 @@ func accountEntityToService(m *dbent.Account) *service.Account {
 		LastUsedAt:              m.LastUsedAt,
 		ExpiresAt:               m.ExpiresAt,
 		AutoPauseOnExpired:      m.AutoPauseOnExpired,
+		UseRelayRoute:           m.UseRelayRoute,
 		CreatedAt:               m.CreatedAt,
 		UpdatedAt:               m.UpdatedAt,
 		OwnerUserID:             m.OwnerUserID,

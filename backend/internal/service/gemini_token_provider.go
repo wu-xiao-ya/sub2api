@@ -123,7 +123,7 @@ func (p *GeminiTokenProvider) GetAccessToken(ctx context.Context, account *Accou
 			}
 		}
 
-		detected, tierID, err := p.geminiOAuthService.fetchProjectID(ctx, accessToken, proxyURL)
+		detected, tierID, err := p.geminiOAuthService.fetchProjectID(withAccountOperationRoute(ctx, account, proxyURL), accessToken, proxyURL)
 		if err != nil {
 			log.Printf("[GeminiTokenProvider] Auto-detect project_id failed: %v, fallback to AI Studio API mode", err)
 			return accessToken, nil

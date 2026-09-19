@@ -471,19 +471,15 @@ func accountProbeProvider(m *ChannelMonitor, account *Account) string {
 
 func (s *ChannelMonitorService) doAccountProbeRequest(req *http.Request, account *Account) (*http.Response, error) {
 	proxyURL := ""
-	if account.ProxyID != nil && account.Proxy != nil {
-		proxyURL = account.Proxy.URL()
-	}
+	proxyURL = ResolveAccountProxyURL(account)
 	if s.tlsFPProfileService != nil {
-		return s.httpUpstream.DoWithTLS(
-			req,
-			proxyURL,
+		return s.httpUpstream.DoWithTLS(WithAccountOutbound(req, account, proxyURL), proxyURL,
 			account.ID,
 			account.Concurrency,
 			s.tlsFPProfileService.ResolveTLSProfile(account),
 		)
 	}
-	return s.httpUpstream.DoWithTLS(req, proxyURL, account.ID, account.Concurrency, nil)
+	return s.httpUpstream.DoWithTLS(WithAccountOutbound(req, account, proxyURL), proxyURL, account.ID, account.Concurrency, nil)
 }
 
 func extractAccountProbeText(apiMode string, respBytes []byte) string {

@@ -179,11 +179,13 @@ func (s *AntigravityOAuthService) RefreshToken(ctx context.Context, refreshToken
 			time.Sleep(backoff)
 		}
 
-		client, err := antigravity.NewClient(proxyURL)
-		if err != nil {
-			return nil, fmt.Errorf("create antigravity client failed: %w", err)
-		}
-		tokenResp, err := client.RefreshToken(ctx, refreshToken)
+		tokenResp, _, err := accountOutboundOperation(ctx, proxyURL, func(route string) (*antigravity.TokenResponse, error) {
+			client, err := antigravity.NewClient(route)
+			if err != nil {
+				return nil, fmt.Errorf("create antigravity client failed: %w", err)
+			}
+			return client.RefreshToken(ctx, refreshToken)
+		})
 		if err == nil {
 			now := time.Now()
 			expiresAt := now.Unix() + tokenResp.ExpiresIn - 300
@@ -293,6 +295,7 @@ func (s *AntigravityOAuthService) RefreshAccountToken(ctx context.Context, accou
 		}
 	}
 
+	ctx = withAccountOperationRoute(ctx, account, proxyURL)
 	tokenInfo, err := s.RefreshToken(ctx, refreshToken, proxyURL)
 	if err != nil {
 		return nil, err
@@ -333,6 +336,12 @@ type loadCodeAssistResult struct {
 	Subscription *AntigravitySubscriptionResult
 }
 
+type relayCodeAssistResult struct {
+	response *antigravity.LoadCodeAssistResponse
+	raw      map[string]any
+	client   *antigravity.Client
+}
+
 // loadProjectIDWithRetry 带重试机制获取 project_id，同时从响应中提取 plan_type。
 func (s *AntigravityOAuthService) loadProjectIDWithRetry(ctx context.Context, accessToken, proxyURL string, maxRetries int) (*loadCodeAssistResult, error) {
 	var lastErr error
@@ -347,7 +356,7 @@ func (s *AntigravityOAuthService) loadProjectIDWithRetry(ctx context.Context, ac
 			time.Sleep(backoff)
 		}
 
-		client, err := antigravity.NewClient(proxyURL)
+		client, err := newAccountAntigravityClient(ctx, proxyURL)
 		if err != nil {
 			return nil, fmt.Errorf("create antigravity client failed: %w", err)
 		}
@@ -448,7 +457,7 @@ func (s *AntigravityOAuthService) FillProjectID(ctx context.Context, account *Ac
 			proxyURL = proxy.URL()
 		}
 	}
-	result, err := s.loadProjectIDWithRetry(ctx, accessToken, proxyURL, 3)
+	result, err := s.loadProjectIDWithRetry(withAccountOperationRoute(ctx, account, proxyURL), accessToken, proxyURL, 3)
 	if result != nil {
 		return result.ProjectID, err
 	}

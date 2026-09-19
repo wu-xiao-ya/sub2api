@@ -2302,6 +2302,7 @@ type AccountMutation struct {
 	extra                       *map[string]interface{}
 	proxy_fallback_origin_id    *int64
 	addproxy_fallback_origin_id *int64
+	use_relay_route             *bool
 	concurrency                 *int
 	addconcurrency              *int
 	load_factor                 *int
@@ -2915,6 +2916,42 @@ func (m *AccountMutation) ResetProxyFallbackOriginID() {
 	m.proxy_fallback_origin_id = nil
 	m.addproxy_fallback_origin_id = nil
 	delete(m.clearedFields, account.FieldProxyFallbackOriginID)
+}
+
+// SetUseRelayRoute sets the "use_relay_route" field.
+func (m *AccountMutation) SetUseRelayRoute(b bool) {
+	m.use_relay_route = &b
+}
+
+// UseRelayRoute returns the value of the "use_relay_route" field in the mutation.
+func (m *AccountMutation) UseRelayRoute() (r bool, exists bool) {
+	v := m.use_relay_route
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUseRelayRoute returns the old "use_relay_route" field's value of the Account entity.
+// If the Account object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AccountMutation) OldUseRelayRoute(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUseRelayRoute is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUseRelayRoute requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUseRelayRoute: %w", err)
+	}
+	return oldValue.UseRelayRoute, nil
+}
+
+// ResetUseRelayRoute resets all changes to the "use_relay_route" field.
+func (m *AccountMutation) ResetUseRelayRoute() {
+	m.use_relay_route = nil
 }
 
 // SetConcurrency sets the "concurrency" field.
@@ -4403,7 +4440,7 @@ func (m *AccountMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *AccountMutation) Fields() []string {
-	fields := make([]string, 0, 36)
+	fields := make([]string, 0, 37)
 	if m.created_at != nil {
 		fields = append(fields, account.FieldCreatedAt)
 	}
@@ -4436,6 +4473,9 @@ func (m *AccountMutation) Fields() []string {
 	}
 	if m.proxy_fallback_origin_id != nil {
 		fields = append(fields, account.FieldProxyFallbackOriginID)
+	}
+	if m.use_relay_route != nil {
+		fields = append(fields, account.FieldUseRelayRoute)
 	}
 	if m.concurrency != nil {
 		fields = append(fields, account.FieldConcurrency)
@@ -4542,6 +4582,8 @@ func (m *AccountMutation) Field(name string) (ent.Value, bool) {
 		return m.ProxyID()
 	case account.FieldProxyFallbackOriginID:
 		return m.ProxyFallbackOriginID()
+	case account.FieldUseRelayRoute:
+		return m.UseRelayRoute()
 	case account.FieldConcurrency:
 		return m.Concurrency()
 	case account.FieldLoadFactor:
@@ -4623,6 +4665,8 @@ func (m *AccountMutation) OldField(ctx context.Context, name string) (ent.Value,
 		return m.OldProxyID(ctx)
 	case account.FieldProxyFallbackOriginID:
 		return m.OldProxyFallbackOriginID(ctx)
+	case account.FieldUseRelayRoute:
+		return m.OldUseRelayRoute(ctx)
 	case account.FieldConcurrency:
 		return m.OldConcurrency(ctx)
 	case account.FieldLoadFactor:
@@ -4758,6 +4802,13 @@ func (m *AccountMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetProxyFallbackOriginID(v)
+		return nil
+	case account.FieldUseRelayRoute:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUseRelayRoute(v)
 		return nil
 	case account.FieldConcurrency:
 		v, ok := value.(int)
@@ -5219,6 +5270,9 @@ func (m *AccountMutation) ResetField(name string) error {
 		return nil
 	case account.FieldProxyFallbackOriginID:
 		m.ResetProxyFallbackOriginID()
+		return nil
+	case account.FieldUseRelayRoute:
+		m.ResetUseRelayRoute()
 		return nil
 	case account.FieldConcurrency:
 		m.ResetConcurrency()

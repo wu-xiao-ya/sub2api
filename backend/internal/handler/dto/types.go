@@ -83,9 +83,9 @@ type APIKey struct {
 	Reset1dAt     *time.Time `json:"reset_1d_at,omitempty"`
 	Reset7dAt     *time.Time `json:"reset_7d_at,omitempty"`
 
-	User    *User           `json:"user,omitempty"`
-	Group   *Group          `json:"group,omitempty"`
-	Members []APIKeyMember  `json:"members,omitempty"`
+	User    *User          `json:"user,omitempty"`
+	Group   *Group         `json:"group,omitempty"`
+	Members []APIKeyMember `json:"members,omitempty"`
 }
 
 type APIKeyMember struct {
@@ -214,6 +214,7 @@ type Account struct {
 	LastUsedAt              *time.Time      `json:"last_used_at"`
 	ExpiresAt               *int64          `json:"expires_at"`
 	AutoPauseOnExpired      bool            `json:"auto_pause_on_expired"`
+	UseRelayRoute           bool            `json:"use_relay_route"`
 	CreatedAt               time.Time       `json:"created_at"`
 	UpdatedAt               time.Time       `json:"updated_at"`
 

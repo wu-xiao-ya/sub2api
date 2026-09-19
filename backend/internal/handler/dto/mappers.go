@@ -279,6 +279,7 @@ func AccountFromServiceShallow(a *service.Account) *Account {
 		LastUsedAt:              a.LastUsedAt,
 		ExpiresAt:               timeToUnixSeconds(a.ExpiresAt),
 		AutoPauseOnExpired:      a.AutoPauseOnExpired,
+		UseRelayRoute:           a.UseRelayRoute,
 		CreatedAt:               a.CreatedAt,
 		UpdatedAt:               a.UpdatedAt,
 		OwnerUserID:             a.OwnerUserID,

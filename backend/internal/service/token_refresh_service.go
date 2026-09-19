@@ -1082,6 +1082,9 @@ func (s *TokenRefreshService) refreshWithRetryWithRateGate(
 	)
 
 	// 设置临时不可调度 10 分钟（不标记 error，保持 status=active 让下个刷新周期能继续尝试）
+	if isRelayRouteFailure(lastErr) {
+		return lastErr
+	}
 	until := time.Now().Add(tokenRefreshTempUnschedDuration)
 	reason := "token refresh retry exhausted"
 	if lastErr != nil {
@@ -1463,7 +1466,7 @@ func (s *TokenRefreshService) ensureOpenAIPrivacy(ctx context.Context, account *
 		}
 	}
 
-	mode := disableOpenAITraining(ctx, s.privacyClientFactory, token, proxyURL)
+	mode := disableOpenAITraining(withAccountOperationRoute(ctx, account, proxyURL), s.privacyClientFactory, token, proxyURL)
 	if mode == "" {
 		return
 	}
@@ -1508,7 +1511,7 @@ func (s *TokenRefreshService) ensureAntigravityPrivacy(ctx context.Context, acco
 		}
 	}
 
-	mode := setAntigravityPrivacy(ctx, token, projectID, proxyURL)
+	mode := setAntigravityPrivacy(withAccountOperationRoute(ctx, account, proxyURL), token, projectID, proxyURL)
 	if mode == "" {
 		return
 	}

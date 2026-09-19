@@ -27,23 +27,26 @@ type CustomEndpoint struct {
 
 // SystemSettings represents the admin settings API response payload.
 type SystemSettings struct {
-	RegistrationEnabled              bool                     `json:"registration_enabled"`
-	EmailVerifyEnabled               bool                     `json:"email_verify_enabled"`
-	RegistrationEmailSuffixWhitelist []string                 `json:"registration_email_suffix_whitelist"`
-	PromoCodeEnabled                 bool                     `json:"promo_code_enabled"`
-	PasswordResetEnabled             bool                     `json:"password_reset_enabled"`
-	FrontendURL                      string                   `json:"frontend_url"`
-	InvitationCodeEnabled            bool                     `json:"invitation_code_enabled"`
-	TotpEnabled                      bool                     `json:"totp_enabled"`                   // TOTP 双因素认证
-	TotpEncryptionKeyConfigured      bool                     `json:"totp_encryption_key_configured"` // TOTP 加密密钥是否已配置
-	SessionBindingEnabled            bool                     `json:"session_binding_enabled"`        // 会话 IP/UA 绑定
-	StepUpEnabled                    bool                     `json:"step_up_enabled"`                // 敏感操作 step-up 2FA
-	AuditLogRetentionDays            int                      `json:"audit_log_retention_days"`       // 审计日志保留天数
-	MainlandAccessRestrictionEnabled bool                     `json:"mainland_access_restriction_enabled"`
-	LoginAgreementEnabled            bool                     `json:"login_agreement_enabled"`
-	LoginAgreementMode               string                   `json:"login_agreement_mode"`
-	LoginAgreementUpdatedAt          string                   `json:"login_agreement_updated_at"`
-	LoginAgreementDocuments          []LoginAgreementDocument `json:"login_agreement_documents"`
+	RegistrationEnabled               bool                     `json:"registration_enabled"`
+	EmailVerifyEnabled                bool                     `json:"email_verify_enabled"`
+	RegistrationEmailSuffixWhitelist  []string                 `json:"registration_email_suffix_whitelist"`
+	PromoCodeEnabled                  bool                     `json:"promo_code_enabled"`
+	PasswordResetEnabled              bool                     `json:"password_reset_enabled"`
+	FrontendURL                       string                   `json:"frontend_url"`
+	InvitationCodeEnabled             bool                     `json:"invitation_code_enabled"`
+	TotpEnabled                       bool                     `json:"totp_enabled"`                   // TOTP 双因素认证
+	TotpEncryptionKeyConfigured       bool                     `json:"totp_encryption_key_configured"` // TOTP 加密密钥是否已配置
+	SessionBindingEnabled             bool                     `json:"session_binding_enabled"`        // 会话 IP/UA 绑定
+	StepUpEnabled                     bool                     `json:"step_up_enabled"`                // 敏感操作 step-up 2FA
+	AuditLogRetentionDays             int                      `json:"audit_log_retention_days"`       // 审计日志保留天数
+	MainlandAccessRestrictionEnabled  bool                     `json:"mainland_access_restriction_enabled"`
+	TrafficRelayEnabled               bool                     `json:"traffic_relay_enabled"`
+	TrafficRelayProxyID               int64                    `json:"traffic_relay_proxy_id"`
+	TrafficRelayUnavailableTTLSeconds int                      `json:"traffic_relay_unavailable_ttl_seconds"`
+	LoginAgreementEnabled             bool                     `json:"login_agreement_enabled"`
+	LoginAgreementMode                string                   `json:"login_agreement_mode"`
+	LoginAgreementUpdatedAt           string                   `json:"login_agreement_updated_at"`
+	LoginAgreementDocuments           []LoginAgreementDocument `json:"login_agreement_documents"`
 
 	SMTPHost               string `json:"smtp_host"`
 	SMTPPort               int    `json:"smtp_port"`

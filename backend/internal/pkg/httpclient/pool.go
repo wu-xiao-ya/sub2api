@@ -139,6 +139,7 @@ func buildTransport(opts Options) (*http.Transport, error) {
 	if err := proxyutil.ConfigureTransportProxy(transport, parsed); err != nil {
 		return nil, err
 	}
+	proxyutil.ConfigureRelayConnectBudget(transport, parsed)
 
 	return transport, nil
 }

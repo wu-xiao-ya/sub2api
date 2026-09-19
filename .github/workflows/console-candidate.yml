@@ -26,6 +26,8 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  traffic-relay-validation:
+    uses: ./.github/workflows/traffic-relay-validation.yml
   performance-validation:
     if: ${{ !inputs.verified_commit }}
     uses: ./.github/workflows/channel-performance-validation.yml
@@ -47,8 +49,8 @@ jobs:
       - run: pnpm run typecheck
       - run: pnpm exec vitest run src/utils/__tests__/brandRegistry.spec.ts src/components/user/dashboard/__tests__ src/views/user/__tests__ src/components/layout/__tests__ src/components/channels/__tests__ src/features/channel-monitor-v2/__tests__ src/components/common/__tests__/BaseDialog.spec.ts src/components/common/__tests__/PlatformTypeBadge.grok.spec.ts src/views/admin/__tests__/ChannelMonitorView.grok.spec.ts --maxWorkers=2 --minWorkers=1
   image:
-    needs: [frontend, performance-validation]
-    if: ${{ !cancelled() && needs.frontend.result == 'success' && (needs['performance-validation'].result == 'success' || (inputs.verified_commit != '' && needs['performance-validation'].result == 'skipped')) }}
+    needs: [frontend, performance-validation, traffic-relay-validation]
+    if: ${{ !cancelled() && needs.frontend.result == 'success' && needs['traffic-relay-validation'].result == 'success' && (needs['performance-validation'].result == 'success' || (inputs.verified_commit != '' && needs['performance-validation'].result == 'skipped')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 50
     steps:

@@ -1,0 +1,80 @@
+name: Traffic Relay Validation
+
+on:
+  workflow_call:
+  workflow_dispatch:
+  push:
+    branches: [codex/upstream-v020-selective]
+    paths:
+      - 'backend/**'
+      - 'frontend/src/components/account/**'
+      - '.github/workflows/traffic-relay-validation.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  relay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: relay_test
+          POSTGRES_PASSWORD: isolated_ci_only
+          POSTGRES_DB: relay_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U relay_test -d relay_test"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      PGHOST: 127.0.0.1
+      PGPORT: '5432'
+      PGUSER: relay_test
+      PGPASSWORD: isolated_ci_only
+      PGDATABASE: relay_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+      - name: Verify additive migration and repeat execution
+        shell: bash
+        run: |
+          psql -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE TABLE accounts (id bigint PRIMARY KEY, proxy_id bigint, deleted_at timestamptz);
+          INSERT INTO accounts VALUES (1, 7, NULL), (2, NULL, NULL);
+          SQL
+          psql -v ON_ERROR_STOP=1 -f backend/migrations/255_account_use_relay_route.sql
+          psql -v ON_ERROR_STOP=1 -f backend/migrations/255_account_use_relay_route.sql
+          psql -v ON_ERROR_STOP=1 <<'SQL'
+          DO $$
+          BEGIN
+            IF (SELECT count(*) FROM accounts) <> 2
+               OR EXISTS (SELECT 1 FROM accounts WHERE use_relay_route IS DISTINCT FROM false)
+               OR (SELECT proxy_id FROM accounts WHERE id = 1) IS DISTINCT FROM 7
+               OR (SELECT proxy_id FROM accounts WHERE id = 2) IS NOT NULL THEN
+              RAISE EXCEPTION 'migration changed account routing defaults';
+            END IF;
+          END $$;
+          UPDATE accounts SET use_relay_route = true WHERE id = 1;
+          SQL
+          psql -v ON_ERROR_STOP=1 -f backend/migrations/255_account_use_relay_route.sql
+          test "$(psql -Atc 'SELECT use_relay_route FROM accounts WHERE id = 1')" = t
+      - name: Relay, OAuth, shadow inheritance, and WebSocket regressions
+        working-directory: backend
+        run: go test -p 2 -tags unit ./internal/service -run 'Test.*(Relay|Outbound|RefreshAccountToken|Vertex|OAuthService|TrafficRelay|CodexPersonalAccessToken)|TestOpenAIWSConnPool|TestBulkUpdateAccounts_(RelayOnly|PropagatesProxy|RejectsProxy)' -count=1
+      - name: Shared outage and request isolation race checks
+        working-directory: backend
+        run: go test -race -p 2 ./internal/service -run 'TestRelay|TestAccountOutbound|TestAccountRelay|TestRetryRelay|TestWrapRelay' -count=1
+      - name: Quota operations and replay protection
+        working-directory: backend
+        run: go test -p 2 -tags unit ./internal/service -run 'TestRelayQuota|TestQueryUsage|TestResetCredit|TestPrepareUpstream|TestAccountOutbound|TestAccountPrivacy' -count=1
+      - name: Transport, cache and audit regressions
+        working-directory: backend
+        run: go test -p 2 ./internal/repository ./internal/handler/admin -run 'TestHTTPUpstreamDo|TestSchedulerRelay|TestTrafficRelaySettingsAreAudited|TestReqClientRelay|TestGetSharedReqClient' -count=1
+      - name: Relay CONNECT budgets and TLS transport regressions
+        working-directory: backend
+        run: go test -race -p 2 -tags unit ./internal/pkg/proxyutil ./internal/pkg/tlsfingerprint ./internal/pkg/httpclient ./internal/pkg/antigravity -count=1

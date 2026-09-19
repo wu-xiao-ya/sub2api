@@ -38,6 +38,8 @@ const (
 	FieldProxyID = "proxy_id"
 	// FieldProxyFallbackOriginID holds the string denoting the proxy_fallback_origin_id field in the database.
 	FieldProxyFallbackOriginID = "proxy_fallback_origin_id"
+	// FieldUseRelayRoute holds the string denoting the use_relay_route field in the database.
+	FieldUseRelayRoute = "use_relay_route"
 	// FieldConcurrency holds the string denoting the concurrency field in the database.
 	FieldConcurrency = "concurrency"
 	// FieldLoadFactor holds the string denoting the load_factor field in the database.
@@ -152,6 +154,7 @@ var Columns = []string{
 	FieldExtra,
 	FieldProxyID,
 	FieldProxyFallbackOriginID,
+	FieldUseRelayRoute,
 	FieldConcurrency,
 	FieldLoadFactor,
 	FieldPriority,
@@ -219,6 +222,8 @@ var (
 	DefaultCredentials func() map[string]interface{}
 	// DefaultExtra holds the default value on creation for the "extra" field.
 	DefaultExtra func() map[string]interface{}
+	// DefaultUseRelayRoute holds the default value on creation for the "use_relay_route" field.
+	DefaultUseRelayRoute bool
 	// DefaultConcurrency holds the default value on creation for the "concurrency" field.
 	DefaultConcurrency int
 	// DefaultPriority holds the default value on creation for the "priority" field.
@@ -318,6 +323,11 @@ func ByProxyID(opts ...sql.OrderTermOption) OrderOption {
 // ByProxyFallbackOriginID orders the results by the proxy_fallback_origin_id field.
 func ByProxyFallbackOriginID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldProxyFallbackOriginID, opts...).ToFunc()
+}
+
+// ByUseRelayRoute orders the results by the use_relay_route field.
+func ByUseRelayRoute(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldUseRelayRoute, opts...).ToFunc()
 }
 
 // ByConcurrency orders the results by the concurrency field.

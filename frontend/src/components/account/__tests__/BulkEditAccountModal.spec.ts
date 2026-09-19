@@ -14,6 +14,12 @@ vi.mock('@/stores/app', () => ({
 
 vi.mock('@/api/admin', () => ({
   adminAPI: {
+    settings: {
+      getSettings: vi.fn().mockResolvedValue({
+        traffic_relay_enabled: false,
+        traffic_relay_proxy_id: 0
+      })
+    },
     accounts: {
       bulkUpdate: vi.fn(),
       checkMixedChannelRisk: vi.fn()
@@ -44,6 +50,7 @@ function mountModal(extraProps: Record<string, unknown> = {}) {
       selectedTypes: ['apikey'],
       proxies: [],
       groups: [],
+      poolGroups: [],
       ...extraProps
     } as any,
     global: {
@@ -74,6 +81,16 @@ function mountModal(extraProps: Record<string, unknown> = {}) {
 }
 
 describe('BulkEditAccountModal', () => {
+  it('disables relay opt-in when the system relay is unavailable', async () => {
+    const wrapper = mountModal()
+    await flushPromises()
+    await wrapper.get('#bulk-edit-relay-enabled').setValue(true)
+    const toggle = wrapper.get('#bulk-edit-relay-body button[role="switch"]')
+    expect(toggle.attributes('disabled')).toBeDefined()
+    await toggle.trigger('click')
+    expect(toggle.attributes('aria-checked')).toBe('false')
+  })
+
   beforeEach(() => {
     vi.mocked(adminAPI.accounts.bulkUpdate).mockReset()
     vi.mocked(adminAPI.accounts.checkMixedChannelRisk).mockReset()

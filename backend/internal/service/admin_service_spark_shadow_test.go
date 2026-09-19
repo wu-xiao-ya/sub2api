@@ -726,6 +726,38 @@ func TestBulkUpdateAccounts_PropagatesProxyToShadow(t *testing.T) {
 	require.Equal(t, newProxy, *storedShadow.ProxyID)
 }
 
+func TestBulkUpdateAccounts_RelayOnlyPreservesEachShadowProxy(t *testing.T) {
+	ctx := context.Background()
+	repo := newSparkShadowRepoStub()
+	svc := &adminServiceImpl{accountRepo: repo}
+	proxyID := int64(7)
+	var parents, shadows []*Account
+	for _, proxy := range []*int64{&proxyID, nil} {
+		parent := &Account{Name: "parent", Platform: PlatformOpenAI, Type: AccountTypeOAuth,
+			Status: StatusActive, ProxyID: proxy, Credentials: map[string]any{"chatgpt_account_id": "org"}}
+		require.NoError(t, repo.Create(ctx, parent))
+		shadow, err := svc.CreateShadow(ctx, parent.ID, ShadowOptions{Name: "shadow"})
+		require.NoError(t, err)
+		parents = append(parents, parent)
+		shadows = append(shadows, shadow)
+	}
+	enabled := true
+	_, err := svc.BulkUpdateAccounts(ctx, &BulkUpdateAccountsInput{
+		AccountIDs: []int64{parents[0].ID, parents[1].ID}, UseRelayRoute: &enabled,
+	})
+	require.NoError(t, err)
+	require.Equal(t, &proxyID, repo.accounts[shadows[0].ID].ProxyID)
+	require.Nil(t, repo.accounts[shadows[1].ID].ProxyID)
+	for _, shadow := range shadows {
+		require.True(t, repo.accounts[shadow.ID].UseRelayRoute)
+	}
+	_, err = svc.BulkUpdateAccounts(ctx, &BulkUpdateAccountsInput{
+		AccountIDs: []int64{shadows[0].ID}, UseRelayRoute: &enabled,
+	})
+	require.Error(t, err)
+	require.Equal(t, http.StatusBadRequest, infraerrors.Code(err))
+}
+
 // ── 外审 P1/P2 加固:专用测试桩 ───────────────────────────────────────────
 
 // raceCreateRepoStub 模拟并发竞态:对影子的 Create 撞一母一影唯一索引(返回错误),

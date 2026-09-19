@@ -366,7 +366,9 @@ func (s *GeminiOAuthService) FetchGoogleOneTier(ctx context.Context, accessToken
 	// Use Drive API to infer tier from storage quota (requires drive.readonly scope)
 	logger.LegacyPrintf("service.gemini_oauth", "[GeminiOAuth] Calling Drive API for storage quota...")
 
-	storageInfo, err := s.driveClient.GetStorageQuota(ctx, accessToken, proxyURL)
+	storageInfo, _, err := accountOutboundOperation(ctx, proxyURL, func(route string) (*geminicli.DriveStorageInfo, error) {
+		return s.driveClient.GetStorageQuota(ctx, accessToken, route)
+	})
 	if err != nil {
 		// Check if it's a 403 (scope not granted)
 		if strings.Contains(err.Error(), "status 403") {
@@ -411,9 +413,8 @@ func (s *GeminiOAuthService) RefreshAccountGoogleOneTier(
 
 	// 获取 proxy URL
 	var proxyURL string
-	if account.ProxyID != nil && account.Proxy != nil {
-		proxyURL = account.Proxy.URL()
-	}
+	proxyURL = AccountDefaultProxyURL(account)
+	ctx = withAccountOperationRoute(ctx, account, proxyURL)
 
 	// 调用 Drive API
 	tierID, storageInfo, err := s.FetchGoogleOneTier(ctx, accessToken, proxyURL)
@@ -684,7 +685,9 @@ func (s *GeminiOAuthService) RefreshToken(ctx context.Context, oauthType, refres
 			time.Sleep(backoff)
 		}
 
-		tokenResp, err := s.oauthClient.RefreshToken(ctx, oauthType, refreshToken, proxyURL)
+		tokenResp, _, err := accountOutboundOperation(ctx, proxyURL, func(route string) (*geminicli.TokenResponse, error) {
+			return s.oauthClient.RefreshToken(ctx, oauthType, refreshToken, route)
+		})
 		if err == nil {
 			// 计算过期时间：减去 5 分钟安全时间窗口（考虑网络延迟和时钟偏差）
 			// 同时设置下界保护，防止 expires_in 过小导致过去时间（引发刷新风暴）
@@ -754,6 +757,7 @@ func (s *GeminiOAuthService) RefreshAccountToken(ctx context.Context, account *A
 		}
 	}
 
+	ctx = withAccountOperationRoute(ctx, account, proxyURL)
 	tokenInfo, err := s.RefreshToken(ctx, oauthType, refreshToken, proxyURL)
 	// Backward compatibility:
 	// Older versions could refresh Code Assist tokens using a user-provided OAuth client when configured.
@@ -924,7 +928,9 @@ func (s *GeminiOAuthService) fetchProjectID(ctx context.Context, accessToken, pr
 		return "", "", errors.New("code assist client not configured")
 	}
 
-	loadResp, loadErr := s.codeAssist.LoadCodeAssist(ctx, accessToken, proxyURL, nil)
+	loadResp, _, loadErr := accountOutboundOperation(ctx, proxyURL, func(route string) (*geminicli.LoadCodeAssistResponse, error) {
+		return s.codeAssist.LoadCodeAssist(ctx, accessToken, route, nil)
+	})
 
 	// Extract tierID from response (works whether CloudAICompanionProject is set or not)
 	tierID := "LEGACY"
@@ -980,7 +986,9 @@ func (s *GeminiOAuthService) fetchProjectID(ctx context.Context, accessToken, pr
 
 	maxAttempts := 5
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
-		resp, err := s.codeAssist.OnboardUser(ctx, accessToken, proxyURL, req)
+		resp, _, err := accountOutboundOperation(ctx, proxyURL, func(route string) (*geminicli.OnboardUserResponse, error) {
+			return s.codeAssist.OnboardUser(ctx, accessToken, route, req)
+		})
 		if err != nil {
 			// If Code Assist onboarding fails (e.g. INVALID_ARGUMENT), fallback to Cloud Resource Manager projects.
 			fallback, fbErr := fetchProjectIDFromResourceManager(ctx, accessToken, proxyURL)
@@ -1039,16 +1047,15 @@ func fetchProjectIDFromResourceManager(ctx context.Context, accessToken, proxyUR
 	req.Header.Set("Authorization", "Bearer "+accessToken)
 	req.Header.Set("User-Agent", geminicli.GeminiCLIUserAgent)
 
-	client, err := httpclient.GetClient(httpclient.Options{
-		ProxyURL:           strings.TrimSpace(proxyURL),
-		Timeout:            30 * time.Second,
-		ValidateResolvedIP: true,
+	resp, _, err := accountOutboundOperation(ctx, proxyURL, func(route string) (*http.Response, error) {
+		client, err := httpclient.GetClient(httpclient.Options{
+			ProxyURL: strings.TrimSpace(route), Timeout: 30 * time.Second, ValidateResolvedIP: true,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("create http client failed: %w", err)
+		}
+		return client.Do(req.Clone(ctx))
 	})
-	if err != nil {
-		return "", fmt.Errorf("create http client failed: %w", err)
-	}
-
-	resp, err := client.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("resource manager request failed: %w", err)
 	}

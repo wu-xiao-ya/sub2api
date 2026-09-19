@@ -11,7 +11,9 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/pkg/proxyutil"
 	utls "github.com/refraction-networking/utls"
 	"golang.org/x/net/proxy"
 )
@@ -197,13 +199,24 @@ func (d *HTTPProxyDialer) DialTLSContext(ctx context.Context, network, addr stri
 		}
 	}
 
+	connectCtx, cancelConnect := proxyutil.RelayConnectContext(ctx, d.proxyURL.Host)
+	defer cancelConnect()
 	dialer := &net.Dialer{}
-	conn, err := dialer.DialContext(ctx, "tcp", proxyAddr)
+	conn, err := dialer.DialContext(connectCtx, "tcp", proxyAddr)
 	if err != nil {
 		slog.Debug("tls_fingerprint_http_proxy_connect_failed", "error", err)
-		return nil, fmt.Errorf("connect to proxy: %w", err)
+		return nil, &proxyutil.ConnectError{ProxyHost: d.proxyURL.Host, Stage: "connect to proxy", Err: err}
 	}
 	slog.Debug("tls_fingerprint_http_proxy_connected", "proxy_addr", proxyAddr)
+	if deadline, ok := connectCtx.Deadline(); ok {
+		_ = conn.SetDeadline(deadline)
+	}
+	closed := make(chan struct{})
+	stopClose := context.AfterFunc(connectCtx, func() {
+		_ = conn.Close()
+		close(closed)
+	})
+	defer stopClose()
 
 	// Step 2: Send CONNECT request to establish tunnel
 	req := &http.Request{
@@ -225,7 +238,7 @@ func (d *HTTPProxyDialer) DialTLSContext(ctx context.Context, network, addr stri
 	if err := req.Write(conn); err != nil {
 		_ = conn.Close()
 		slog.Debug("tls_fingerprint_http_proxy_write_failed", "error", err)
-		return nil, fmt.Errorf("write CONNECT request: %w", err)
+		return nil, &proxyutil.ConnectError{ProxyHost: d.proxyURL.Host, Stage: "write CONNECT request", Err: err}
 	}
 
 	// Step 3: Read CONNECT response
@@ -234,7 +247,7 @@ func (d *HTTPProxyDialer) DialTLSContext(ctx context.Context, network, addr stri
 	if err != nil {
 		_ = conn.Close()
 		slog.Debug("tls_fingerprint_http_proxy_read_response_failed", "error", err)
-		return nil, fmt.Errorf("read CONNECT response: %w", err)
+		return nil, &proxyutil.ConnectError{ProxyHost: d.proxyURL.Host, Stage: "read CONNECT response", Err: err}
 	}
 	// CONNECT response has no body; do not defer resp.Body.Close() as it wraps the
 	// same conn that will be used for the TLS handshake.
@@ -242,9 +255,20 @@ func (d *HTTPProxyDialer) DialTLSContext(ctx context.Context, network, addr stri
 	if resp.StatusCode != http.StatusOK {
 		_ = conn.Close()
 		slog.Debug("tls_fingerprint_http_proxy_connect_failed_status", "status_code", resp.StatusCode, "status", resp.Status)
-		return nil, fmt.Errorf("proxy CONNECT failed: %s", resp.Status)
+		return nil, &proxyutil.ConnectError{ProxyHost: d.proxyURL.Host, StatusCode: resp.StatusCode}
 	}
 	slog.Debug("tls_fingerprint_http_proxy_tunnel_established")
+	// Detach the CONNECT budget before origin TLS. If cancellation already
+	// started, wait for its close so it cannot race with the TLS handshake.
+	if !stopClose() {
+		<-closed
+		return nil, &proxyutil.ConnectError{ProxyHost: d.proxyURL.Host, Stage: "proxy CONNECT cancelled", Err: connectCtx.Err()}
+	}
+	if err := connectCtx.Err(); err != nil {
+		_ = conn.Close()
+		return nil, &proxyutil.ConnectError{ProxyHost: d.proxyURL.Host, Stage: "proxy CONNECT cancelled", Err: err}
+	}
+	_ = conn.SetDeadline(time.Time{})
 
 	// Step 4: Perform TLS handshake on the tunnel with utls fingerprint
 	return performTLSHandshake(ctx, conn, d.profile, addr)

@@ -176,7 +176,8 @@ func getVertexServiceAccountAccessToken(ctx context.Context, cache GeminiTokenCa
 		}
 	}
 
-	accessToken, ttl, err := exchangeVertexServiceAccountToken(ctx, key, vertexServiceAccountProxyURL(account))
+	ctx = withAccountOperationRoute(ctx, account, AccountDefaultProxyURL(account))
+	accessToken, ttl, err := exchangeVertexServiceAccountToken(ctx, key, AccountDefaultProxyURL(account))
 	if err != nil {
 		return "", err
 	}
@@ -187,10 +188,7 @@ func getVertexServiceAccountAccessToken(ctx context.Context, cache GeminiTokenCa
 }
 
 func vertexServiceAccountProxyURL(account *Account) string {
-	if account == nil || account.ProxyID == nil || account.Proxy == nil {
-		return ""
-	}
-	return account.Proxy.URL()
+	return ResolveAccountProxyURL(account)
 }
 
 func newVertexServiceAccountHTTPClient(proxyURL string) (*http.Client, error) {
@@ -247,11 +245,17 @@ func exchangeVertexServiceAccountToken(ctx context.Context, key *vertexServiceAc
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
-	client, err := newVertexServiceAccountHTTPClient(proxyURL)
-	if err != nil {
-		return "", 0, fmt.Errorf("configure service account token proxy: %w", err)
-	}
-	resp, err := client.Do(req)
+	resp, _, err := accountOutboundOperation(ctx, proxyURL, func(route string) (*http.Response, error) {
+		client, err := newVertexServiceAccountHTTPClient(route)
+		if err != nil {
+			return nil, fmt.Errorf("configure service account token proxy: %w", err)
+		}
+		attempt, err := cloneHTTPRequest(req)
+		if err != nil {
+			return nil, err
+		}
+		return client.Do(attempt)
+	})
 	if err != nil {
 		return "", 0, fmt.Errorf("service account token request failed: %w", err)
 	}

@@ -12,22 +12,25 @@ func firstNonEmpty(values ...string) string {
 }
 
 type SystemSettings struct {
-	RegistrationEnabled              bool
-	EmailVerifyEnabled               bool
-	RegistrationEmailSuffixWhitelist []string
-	PromoCodeEnabled                 bool
-	PasswordResetEnabled             bool
-	FrontendURL                      string
-	InvitationCodeEnabled            bool
-	TotpEnabled                      bool // TOTP 双因素认证
-	SessionBindingEnabled            bool // 会话 IP/UA 绑定（变更即失效）
-	StepUpEnabled                    bool // 敏感操作 step-up 2FA 门控
-	AuditLogRetentionDays            int  // 审计日志保留天数（<=0 永久保留）
-	MainlandAccessRestrictionEnabled bool // 中国大陆地区访问限制
-	LoginAgreementEnabled            bool
-	LoginAgreementMode               string
-	LoginAgreementUpdatedAt          string
-	LoginAgreementDocuments          []LoginAgreementDocument
+	RegistrationEnabled               bool
+	EmailVerifyEnabled                bool
+	RegistrationEmailSuffixWhitelist  []string
+	PromoCodeEnabled                  bool
+	PasswordResetEnabled              bool
+	FrontendURL                       string
+	InvitationCodeEnabled             bool
+	TotpEnabled                       bool // TOTP 双因素认证
+	SessionBindingEnabled             bool // 会话 IP/UA 绑定（变更即失效）
+	StepUpEnabled                     bool // 敏感操作 step-up 2FA 门控
+	AuditLogRetentionDays             int  // 审计日志保留天数（<=0 永久保留）
+	MainlandAccessRestrictionEnabled  bool // 中国大陆地区访问限制
+	TrafficRelayEnabled               bool
+	TrafficRelayProxyID               int64
+	TrafficRelayUnavailableTTLSeconds int
+	LoginAgreementEnabled             bool
+	LoginAgreementMode                string
+	LoginAgreementUpdatedAt           string
+	LoginAgreementDocuments           []LoginAgreementDocument
 
 	SMTPHost               string
 	SMTPPort               int

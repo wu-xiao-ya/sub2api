@@ -988,6 +988,16 @@ export default {
           testFailed: 'Google Drive 存储测试失败'
         }
       },
+      trafficRelay: {
+        title: '账号中转线路',
+        description: '仅对勾选了中转线路的账号生效。中转使用 HTTP CONNECT，不修改上游地址；连接失败时当次请求立即回退到账号默认线路。',
+        enabled: '启用系统中转',
+        enabledHint: '关闭后所有账号都走各自原来的代理或直连，账号上的中转开关会被忽略。',
+        proxy: '中转代理',
+        proxyHint: '选择一条 HTTP 代理作为东京出口。不要把它绑到普通账号上。',
+        ttl: '不可用记忆（秒）',
+        ttlHint: '中转连接失败后，在此时间内新请求直接走默认线路，到期后自动再试中转。范围 5-600 秒。'
+      },
       overloadCooldown: {
         title: '529 过载冷却',
         description: '配置上游返回 529（过载）时的账号调度暂停策略',

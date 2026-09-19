@@ -214,7 +214,9 @@ func (s *OpenAIOAuthService) RefreshToken(ctx context.Context, refreshToken stri
 
 // RefreshTokenWithClientID refreshes an OpenAI OAuth token with optional client_id.
 func (s *OpenAIOAuthService) RefreshTokenWithClientID(ctx context.Context, refreshToken string, proxyURL string, clientID string) (*OpenAITokenInfo, error) {
-	tokenResp, err := s.oauthClient.RefreshTokenWithClientID(ctx, refreshToken, proxyURL, clientID)
+	tokenResp, proxyURL, err := accountOutboundOperation(ctx, proxyURL, func(route string) (*openai.TokenResponse, error) {
+		return s.oauthClient.RefreshTokenWithClientID(ctx, refreshToken, route, clientID)
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -333,7 +335,7 @@ func (s *OpenAIOAuthService) RefreshAccountToken(ctx context.Context, account *A
 		if accessToken == "" {
 			return nil, infraerrors.New(http.StatusBadRequest, "OPENAI_CODEX_PAT_REQUIRED", "access token is required")
 		}
-		return s.ValidateCodexPersonalAccessToken(ctx, accessToken, proxyURL)
+		return s.ValidateCodexPersonalAccessToken(withAccountOperationRoute(ctx, account, proxyURL), accessToken, proxyURL)
 	}
 
 	refreshToken := account.GetCredential("refresh_token")
@@ -362,7 +364,7 @@ func (s *OpenAIOAuthService) RefreshAccountToken(ctx context.Context, account *A
 	}
 
 	clientID := account.GetCredential("client_id")
-	return s.RefreshTokenWithClientID(ctx, refreshToken, proxyURL, clientID)
+	return s.RefreshTokenWithClientID(withAccountOperationRoute(ctx, account, proxyURL), refreshToken, proxyURL, clientID)
 }
 
 // BuildAccountCredentials builds credentials map from token info

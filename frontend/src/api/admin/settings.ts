@@ -418,6 +418,9 @@ export interface SystemSettings {
   step_up_enabled: boolean; // 敏感操作 step-up 2FA
   audit_log_retention_days: number; // 审计日志保留天数
   mainland_access_restriction_enabled: boolean;
+  traffic_relay_enabled: boolean;
+  traffic_relay_proxy_id: number;
+  traffic_relay_unavailable_ttl_seconds: number;
   login_agreement_enabled: boolean;
   login_agreement_mode: "modal" | "checkbox" | string;
   login_agreement_updated_at: string;
@@ -737,6 +740,9 @@ export interface UpdateSettingsRequest {
   step_up_enabled?: boolean; // 敏感操作 step-up 2FA
   audit_log_retention_days?: number; // 审计日志保留天数
   mainland_access_restriction_enabled?: boolean;
+  traffic_relay_enabled?: boolean;
+  traffic_relay_proxy_id?: number;
+  traffic_relay_unavailable_ttl_seconds?: number;
   login_agreement_enabled?: boolean;
   login_agreement_mode?: "modal" | "checkbox" | string;
   login_agreement_updated_at?: string;

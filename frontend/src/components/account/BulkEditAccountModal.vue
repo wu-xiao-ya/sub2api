@@ -580,6 +580,38 @@
           />
         </div>
       </div>
+      <!-- Relay route -->
+      <div class="border-t border-gray-200 pt-4 dark:border-dark-600">
+        <div class="mb-3 flex items-center justify-between">
+          <label
+            id="bulk-edit-relay-label"
+            class="input-label mb-0"
+            for="bulk-edit-relay-enabled"
+          >
+            {{ t('admin.accounts.useRelayRoute') }}
+          </label>
+          <input
+            v-model="enableRelayRoute"
+            id="bulk-edit-relay-enabled"
+            type="checkbox"
+            aria-controls="bulk-edit-relay-body"
+            class="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+          />
+        </div>
+        <div id="bulk-edit-relay-body" :class="!enableRelayRoute && 'pointer-events-none opacity-50'">
+          <div class="flex items-center justify-between gap-3">
+            <p class="input-hint mb-0">{{ t('admin.accounts.useRelayRouteHint') }}</p>
+            <Toggle
+              v-model="useRelayRoute"
+              :disabled="!enableRelayRoute || (!trafficRelayConfigured && !useRelayRoute)"
+              :aria-label="t('admin.accounts.useRelayRoute')"
+            />
+          </div>
+          <p v-if="!trafficRelayConfigured" class="mt-2 input-hint text-amber-600 dark:text-amber-400">
+            {{ t('admin.accounts.useRelayRouteDisabled') }}
+          </p>
+        </div>
+      </div>
 
       <!-- Account Pool Group -->
       <div class="border-t border-gray-200 pt-4 dark:border-dark-600">
@@ -1278,6 +1310,7 @@ import BaseDialog from '@/components/common/BaseDialog.vue'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import Select from '@/components/common/Select.vue'
 import ProxySelector from '@/components/common/ProxySelector.vue'
+import Toggle from '@/components/common/Toggle.vue'
 import GroupSelector from '@/components/common/GroupSelector.vue'
 import ModelWhitelistSelector from '@/components/account/ModelWhitelistSelector.vue'
 import Icon from '@/components/icons/Icon.vue'
@@ -1421,6 +1454,21 @@ const enableCustomErrorCodes = ref(false)
 const enableInterceptWarmup = ref(false)
 const enableHeaderOverride = ref(false)
 const enableProxy = ref(false)
+const enableRelayRoute = ref(false)
+const useRelayRoute = ref(false)
+const trafficRelayConfigured = ref(false)
+async function loadTrafficRelayState() {
+  trafficRelayConfigured.value = false
+  try {
+    const settings = await adminAPI.settings.getSettings()
+    trafficRelayConfigured.value = !!settings.traffic_relay_enabled && Number(settings.traffic_relay_proxy_id || 0) > 0
+  } catch {
+    trafficRelayConfigured.value = false
+  }
+}
+watch(() => props.show, show => {
+  if (show) void loadTrafficRelayState()
+}, { immediate: true })
 const enableConcurrency = ref(false)
 const enableLoadFactor = ref(false)
 const enablePriority = ref(false)
@@ -1634,6 +1682,9 @@ const buildUpdatePayload = (): Record<string, unknown> | null => {
   if (enableProxy.value) {
     // 后端期望 proxy_id: 0 表示清除代理，而不是 null
     updates.proxy_id = proxyId.value === null ? 0 : proxyId.value
+  }
+  if (enableRelayRoute.value) {
+    updates.use_relay_route = useRelayRoute.value
   }
 
   if (enableConcurrency.value) {
@@ -1855,6 +1906,7 @@ const handleSubmit = async () => {
     enableInterceptWarmup.value ||
     enableHeaderOverride.value ||
     enableProxy.value ||
+    enableRelayRoute.value ||
     enableConcurrency.value ||
     enableLoadFactor.value ||
     enablePriority.value ||
@@ -1984,6 +2036,8 @@ watch(
       enableInterceptWarmup.value = false
       enableHeaderOverride.value = false
       enableProxy.value = false
+      enableRelayRoute.value = false
+      useRelayRoute.value = false
       enableConcurrency.value = false
       enableLoadFactor.value = false
       enablePriority.value = false
