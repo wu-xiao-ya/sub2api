@@ -1,6 +1,24 @@
 # Traffic Relay Readiness
 
-Updated: 2026-09-19. Local implementation is not production-ready.
+Updated: 2026-09-19. Production deployment is not authorized.
+
+## Latest Candidate
+
+- Branch: `codex/tokyo-relay-candidate-20260919`.
+- Application commit: `2cf539cdeefe0b3be492ff16c67111ea22c43417`.
+- CI run: `35443347063` in `wu-xiao-ya/sub2api`.
+- Frontend typecheck and selected regressions, relay regressions and race tests,
+  additive migration repeat checks, and performance/billing isolation jobs passed.
+- Image build passed. End-to-end acceptance exposed a fixture assertion that
+  counted automatic account-creation capability probes as gateway fallback.
+  The test now compares per-request counter deltas. Final acceptance is pending.
+- Earlier run `35442380750` failed because fixture control ports were published
+  on an internal Docker network. Control now runs inside the fixture container.
+- Earlier run `35441749238` passed, but its image predates the latest fixes and
+  must not be substituted for the final candidate.
+
+The historical verification notes below describe individual checks, not a claim
+that every test in the repository or authenticated live upstream generation passed.
 
 ## Verified
 
@@ -48,8 +66,8 @@ Updated: 2026-09-19. Local implementation is not production-ready.
   leakage to the origin, streaming past the connect budget and tunnel reuse.
 - Local unit-tagged proxyutil, tlsfingerprint, httpclient and Antigravity package
   tests passed. Targeted service, repository and administrator regressions for
-  routing, OAuth, WebSocket, bulk updates and settings audits passed. CI has not
-  yet executed the new race checks.
+  routing, OAuth, WebSocket, bulk updates and settings audits passed. The latest
+  candidate CI also passed the relay race checks.
 - Targeted local service, TLS-fingerprint and proxy utility tests pass after the
   CONNECT budget changes. Fingerprint relay TCP/CONNECT gets at most five seconds
   or half the remaining request deadline; origin TLS retains the parent context.
@@ -95,22 +113,17 @@ Updated: 2026-09-19. Local implementation is not production-ready.
   local fallback on Redis failure, and preventing late outages shortening TTL.
 - Added a GitHub CI relay validation workflow and candidate-build prerequisite.
   Workflow includes isolated PostgreSQL migration repeat checks and race tests.
-  This workflow has not been pushed or executed yet.
+  The workflow is now pushed and its validation job passed in the latest run.
 - Found a separate intact baseline checkout at commit
   311af471f069db53eebb30502c0dd039a8d89d28. Read-only comparison reports 106 changed
   tracked files and zero missing tracked files (new files require a separate audit).
 
 ## Release Blockers
 
-- Finish the final cross-platform call-site audit and candidate integration
-  validation. Unit tests are not proof of successful real model generation.
-- Run race tests on CI and real Redis checks; local simulated-Redis tests passed.
-- Review import/export and run the additive migration on an isolated database.
-- Complete frontend UI browser interaction tests.
-- Review the isolated candidate diff and new files before pushing; do not
-  initialize/reset over the original broken worktree.
-- Review full diff, push the verified source, build a GitHub CI candidate,
-  validate the candidate database/image and frontend entry points.
+- Complete candidate-image integration and browser acceptance in run 35443347063.
+  Unit tests and controlled fixtures are not proof of live model generation.
+- After separate production authorization, verify real upstream generation using
+  an explicitly selected account before enabling additional accounts.
 - A broader local test selection also exposed failing Grok429WithoutQuotaHeaders
   and AdminResetQuota cases (the latter expect retired native-subscription
   behavior). Grok429WithoutQuotaHeaders and AdminResetQuota_ResetBoth both
