@@ -14,11 +14,7 @@ import (
 )
 
 func TestReqClientRelayConnectBudget(t *testing.T) {
-	for _, impersonate := range []bool{false, true} {
-		name := "standard"
-		if impersonate {
-			name = "fingerprint"
-		}
+	for _, name := range []string{"standard", "fingerprint", "claude-session"} {
 		t.Run(name, func(t *testing.T) {
 			closed := make(chan struct{})
 			proxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -31,7 +27,10 @@ func TestReqClientRelayConnectBudget(t *testing.T) {
 				_, _ = io.Copy(io.Discard, conn)
 			}))
 			defer proxy.Close()
-			client, err := getSharedReqClient(reqClientOptions{ProxyURL: proxy.URL, Timeout: 3 * time.Second, Impersonate: impersonate})
+			client, err := getSharedReqClient(reqClientOptions{ProxyURL: proxy.URL, Timeout: 3 * time.Second, Impersonate: name == "fingerprint"})
+			if name == "claude-session" {
+				client, err = createReqClient(proxy.URL)
+			}
 			if err != nil {
 				t.Fatal(err)
 			}

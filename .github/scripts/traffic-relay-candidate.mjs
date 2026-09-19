@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { writeFile } from 'node:fs/promises'
 import { setTimeout as delay } from 'node:timers/promises'
+import { execFileSync } from 'node:child_process'
 
 export async function verifyTrafficRelay({ api, admin, base }) {
   const auth = { token: admin.access_token }
@@ -29,10 +30,13 @@ export async function verifyTrafficRelay({ api, admin, base }) {
   const key = await api('/api/v1/keys', { token: user.access_token, method: 'POST', body: {
     name: 'CI relay key', group_id: group.id
   } })
-  const stats = async port => (await fetch(`http://127.0.0.1:${port}/stats`)).json()
+  const control = (container, path, method = 'GET') => execFileSync('docker', [
+    'exec', container, 'node', '--input-type=module', '-e',
+    `const r=await fetch(${JSON.stringify('http://127.0.0.1:38480' + path)}, {method:${JSON.stringify(method)}}); if(!r.ok) process.exit(1); console.log(await r.text())`
+  ], { encoding: 'utf8', timeout: 15000 }).trim()
+  const stats = async port => JSON.parse(control(port === 18093 ? 'console-relay' : 'console-default-proxy', '/stats'))
   const mode = async value => {
-    const response = await fetch('http://127.0.0.1:18093/mode?value=' + value, { method: 'POST' })
-    assert(response.ok)
+    assert.equal(control('console-relay', '/mode?value=' + value, 'POST'), 'ok')
   }
   const request = async () => {
     const response = await fetch(base + '/v1/responses', {

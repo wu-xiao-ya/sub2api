@@ -15,6 +15,7 @@ import (
 
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	sharedhttp "github.com/Wei-Shaw/sub2api/internal/pkg/httpclient"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/proxyutil"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/xai"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/Wei-Shaw/sub2api/internal/util/logredact"
@@ -248,6 +249,7 @@ func createGrokHTTPClient(proxyURL string, noRedirect bool) (*http.Client, error
 			return nil, err
 		}
 		transport.Proxy = http.ProxyURL(parsed)
+		proxyutil.ConfigureRelayConnectBudget(transport, parsed)
 	}
 	client := &http.Client{Timeout: 120 * time.Second, Transport: transport}
 	if noRedirect {

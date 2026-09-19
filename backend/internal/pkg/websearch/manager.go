@@ -420,6 +420,7 @@ func newHTTPClient(proxyURL string) (*http.Client, error) {
 		if err := proxyutil.ConfigureTransportProxy(transport, parsed); err != nil {
 			return nil, fmt.Errorf("configure proxy: %w", err)
 		}
+		proxyutil.ConfigureRelayConnectBudget(transport, parsed)
 	}
 	return &http.Client{Transport: transport, Timeout: searchRequestTimeout}, nil
 }

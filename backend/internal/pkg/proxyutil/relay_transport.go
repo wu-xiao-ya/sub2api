@@ -22,7 +22,13 @@ func ConfigureRelayConnectBudget(transport *http.Transport, proxyURL *url.URL) {
 	originalProxy := transport.Proxy
 	originalDial := transport.DialContext
 	if originalDial == nil {
-		originalDial = (&net.Dialer{Timeout: 30 * time.Second, KeepAlive: 30 * time.Second}).DialContext
+		originalDial = (&net.Dialer{}).DialContext
+		// Adding a custom dial hook otherwise disables net/http's implicit H2.
+		// Preserve explicit H1/TLS configuration and the original default mode.
+		if transport.DialTLSContext == nil && transport.DialTLS == nil &&
+			transport.TLSClientConfig == nil && transport.TLSNextProto == nil {
+			transport.ForceAttemptHTTP2 = true
+		}
 	}
 	transport.Proxy = func(req *http.Request) (*url.URL, error) {
 		if isRelayConnectHost(req.Context(), proxy.Host) {

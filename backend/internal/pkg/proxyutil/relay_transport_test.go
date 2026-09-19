@@ -2,6 +2,7 @@ package proxyutil
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"io"
 	"net"
@@ -12,6 +13,20 @@ import (
 	"testing"
 	"time"
 )
+
+func TestRelayTransportPreservesProtocolSelection(t *testing.T) {
+	proxy, _ := url.Parse("http://relay.test:38480")
+	defaultTransport := &http.Transport{}
+	ConfigureRelayConnectBudget(defaultTransport, proxy)
+	if !defaultTransport.ForceAttemptHTTP2 {
+		t.Fatal("dial hook disabled implicit HTTP/2")
+	}
+	h1 := &http.Transport{TLSNextProto: make(map[string]func(string, *tls.Conn) http.RoundTripper)}
+	ConfigureRelayConnectBudget(h1, proxy)
+	if h1.ForceAttemptHTTP2 {
+		t.Fatal("explicit HTTP/1.1 setting changed")
+	}
+}
 
 func TestRelayTransportStalledCONNECTLeavesFallbackBudget(t *testing.T) {
 	closed := make(chan struct{})

@@ -3,6 +3,7 @@ package repository
 import (
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -61,11 +62,7 @@ func getSharedReqClient(opts reqClientOptions) (*req.Client, error) {
 		client.SetProxyURL(trimmed)
 		// Keep req's TLS fingerprint/HTTP2 settings; only replace proxy selection
 		// and TCP/CONNECT dialing for explicitly marked relay requests.
-		transport := client.GetTransport()
-		hooks := &http.Transport{Proxy: transport.Proxy, DialContext: transport.DialContext}
-		proxyutil.ConfigureRelayConnectBudget(hooks, parsed)
-		transport.Proxy = hooks.Proxy
-		transport.DialContext = hooks.DialContext
+		configureReqRelayTransport(client, parsed)
 	}
 	client = instrumentReqClient(client)
 
@@ -74,6 +71,14 @@ func getSharedReqClient(opts reqClientOptions) (*req.Client, error) {
 		return c, nil
 	}
 	return client, nil
+}
+
+func configureReqRelayTransport(client *req.Client, proxy *url.URL) {
+	transport := client.GetTransport()
+	hooks := &http.Transport{Proxy: transport.Proxy, DialContext: transport.DialContext}
+	proxyutil.ConfigureRelayConnectBudget(hooks, proxy)
+	transport.Proxy = hooks.Proxy
+	transport.DialContext = hooks.DialContext
 }
 
 func instrumentReqClient(client *req.Client) *req.Client {

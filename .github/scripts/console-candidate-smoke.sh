@@ -18,9 +18,9 @@ trap cleanup EXIT
 node --test .github/scripts/performance-upstream.test.mjs
 docker network create --internal console-ci
 docker network create console-ui
-docker run -d --name console-relay --network console-ci -p 127.0.0.1:18093:38480 \
+docker run -d --name console-relay --network console-ci \
   -v "$PWD/.github/scripts:/fixture:ro" node:24-alpine node /fixture/traffic-relay-fixture.mjs
-docker run -d --name console-default-proxy --network console-ci -p 127.0.0.1:18094:38480 \
+docker run -d --name console-default-proxy --network console-ci \
   -v "$PWD/.github/scripts:/fixture:ro" node:24-alpine node /fixture/traffic-relay-fixture.mjs
 tlsdir=$(mktemp -d)
 openssl req -x509 -newkey rsa:2048 -nodes -days 1 -keyout "$tlsdir/server.key" -out "$tlsdir/server.crt" \
