@@ -8,7 +8,9 @@ cleanup() {
   docker logs console-db > "$out/database.log" 2>&1 || true
   docker logs console-web > "$out/nginx.log" 2>&1 || true
   docker logs console-upstream > "$out/upstream.log" 2>&1 || true
-  docker rm -f console-web console-app console-db console-redis console-upstream >/dev/null 2>&1 || true
+  docker logs console-relay > "$out/relay.log" 2>&1 || true
+  docker logs console-default-proxy > "$out/default-proxy.log" 2>&1 || true
+  docker rm -f console-web console-app console-db console-redis console-upstream console-relay console-default-proxy >/dev/null 2>&1 || true
   docker network rm console-ci >/dev/null 2>&1 || true
   docker network rm console-ui >/dev/null 2>&1 || true
 }
@@ -16,6 +18,10 @@ trap cleanup EXIT
 node --test .github/scripts/performance-upstream.test.mjs
 docker network create --internal console-ci
 docker network create console-ui
+docker run -d --name console-relay --network console-ci -p 127.0.0.1:18093:38480 \
+  -v "$PWD/.github/scripts:/fixture:ro" node:24-alpine node /fixture/traffic-relay-fixture.mjs
+docker run -d --name console-default-proxy --network console-ci -p 127.0.0.1:18094:38480 \
+  -v "$PWD/.github/scripts:/fixture:ro" node:24-alpine node /fixture/traffic-relay-fixture.mjs
 tlsdir=$(mktemp -d)
 openssl req -x509 -newkey rsa:2048 -nodes -days 1 -keyout "$tlsdir/server.key" -out "$tlsdir/server.crt" \
   -subj '/CN=chatgpt.com' -addext 'subjectAltName=DNS:chatgpt.com,DNS:cloudcode-pa.googleapis.com,DNS:daily-cloudcode-pa.googleapis.com'
@@ -77,6 +83,7 @@ import assert from 'node:assert/strict'
 import { writeFile } from 'node:fs/promises'
 import { verifyPerformanceRequests } from './.github/scripts/performance-candidate-e2e.mjs'
 import { verifyPlatformMatrix } from './.github/scripts/performance-platform-matrix.mjs'
+import { verifyTrafficRelay } from './.github/scripts/traffic-relay-candidate.mjs'
 const base = 'http://127.0.0.1:18091'
 const checks = []
 for (const path of ['/', '/starlightai/', '/login', '/starlightai/login']) {
@@ -149,7 +156,9 @@ for (const prefix of ['', '/starlightai']) {
 await api('/api/v1/admin/users', { token: user.access_token, status: 403 })
 await verifyPerformanceRequests({ api, admin, user, userId: createdUser.id, base })
 await verifyPlatformMatrix({ api, admin, base })
+await verifyTrafficRelay({ api, admin, base })
 await writeFile('/tmp/console-candidate-smoke/performance-api.json', JSON.stringify(apiChecks, null, 2))
 console.log('Authenticated performance and permission checks passed: ' + apiChecks.length)
 NODE
 node .github/scripts/performance-candidate-browser.mjs
+node .github/scripts/traffic-relay-browser.mjs

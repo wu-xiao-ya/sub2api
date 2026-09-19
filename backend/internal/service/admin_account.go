@@ -1604,7 +1604,7 @@ func (s *adminServiceImpl) EnsureOpenAIPrivacy(ctx context.Context, account *Acc
 		}
 	}
 
-	mode := disableOpenAITraining(ctx, s.privacyClientFactory, token, proxyURL)
+	mode := disableOpenAITraining(withAccountOperationRoute(ctx, account, proxyURL), s.privacyClientFactory, token, proxyURL)
 	if mode == "" {
 		return ""
 	}
@@ -1638,7 +1638,7 @@ func (s *adminServiceImpl) ForceOpenAIPrivacy(ctx context.Context, account *Acco
 		}
 	}
 
-	mode := disableOpenAITraining(ctx, s.privacyClientFactory, token, proxyURL)
+	mode := disableOpenAITraining(withAccountOperationRoute(ctx, account, proxyURL), s.privacyClientFactory, token, proxyURL)
 	if mode == "" {
 		return ""
 	}

@@ -7,11 +7,13 @@ const {
   probeUpstreamBillingMock,
   importCodexSessionMock,
   createOpenAICodexPATMock,
+  relaySettingsMock,
 } = vi.hoisted(() => ({
   createAccountMock: vi.fn(),
   probeUpstreamBillingMock: vi.fn(),
   importCodexSessionMock: vi.fn(),
   createOpenAICodexPATMock: vi.fn(),
+  relaySettingsMock: vi.fn(),
 }))
 
 vi.mock('@/stores/app', () => ({
@@ -37,7 +39,7 @@ vi.mock('@/api/admin', () => ({
     },
     settings: {
       getWebSearchEmulationConfig: vi.fn().mockResolvedValue({ enabled: false, providers: [] }),
-      getSettings: vi.fn().mockResolvedValue({}),
+      getSettings: relaySettingsMock,
     },
     tlsFingerprintProfiles: {
       list: vi.fn().mockResolvedValue([]),
@@ -147,6 +149,7 @@ async function openCodexImportStep(toggleClicks = 0) {
 
 describe('CreateAccountModal OpenAI long-context billing', () => {
   beforeEach(() => {
+    relaySettingsMock.mockReset().mockResolvedValue({})
     createAccountMock.mockReset().mockResolvedValue({ id: 42, platform: 'openai', type: 'apikey' })
     probeUpstreamBillingMock.mockReset().mockResolvedValue({})
     importCodexSessionMock.mockReset().mockResolvedValue({
@@ -158,6 +161,22 @@ describe('CreateAccountModal OpenAI long-context billing', () => {
       warnings: [],
     })
     createOpenAICodexPATMock.mockReset().mockResolvedValue({})
+  })
+
+  it('reloads relay availability on reopen and keeps new accounts opt-out', async () => {
+    const wrapper = mountModal()
+    await flushPromises()
+    const selector = '[role="switch"][aria-label="admin.accounts.useRelayRoute"]'
+    expect(wrapper.get(selector).attributes('disabled')).toBeDefined()
+    relaySettingsMock.mockResolvedValue({ traffic_relay_enabled: true, traffic_relay_proxy_id: 7 })
+    await wrapper.setProps({ show: false })
+    await wrapper.setProps({ show: true })
+    await flushPromises()
+    expect(wrapper.get(selector).attributes('disabled')).toBeUndefined()
+    expect(wrapper.get(selector).attributes('aria-checked')).toBe('false')
+    await wrapper.get(selector).trigger('click')
+    expect(wrapper.get(selector).attributes('aria-checked')).toBe('true')
+    wrapper.unmount()
   })
 
   it('sends false explicitly for normal OpenAI account creation by default', async () => {

@@ -47,6 +47,7 @@ jobs:
           run_install: false
       - run: pnpm install --frozen-lockfile
       - run: pnpm run typecheck
+      - run: pnpm exec vitest run src/components/account/__tests__ src/components/common/__tests__/Toggle.spec.ts --maxWorkers=2 --minWorkers=1
       - run: pnpm exec vitest run src/utils/__tests__/brandRegistry.spec.ts src/components/user/dashboard/__tests__ src/views/user/__tests__ src/components/layout/__tests__ src/components/channels/__tests__ src/features/channel-monitor-v2/__tests__ src/components/common/__tests__/BaseDialog.spec.ts src/components/common/__tests__/PlatformTypeBadge.grok.spec.ts src/views/admin/__tests__/ChannelMonitorView.grok.spec.ts --maxWorkers=2 --minWorkers=1
   image:
     needs: [frontend, performance-validation, traffic-relay-validation]
