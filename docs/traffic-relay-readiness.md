@@ -5,13 +5,24 @@ Updated: 2026-09-19. Production deployment is not authorized.
 ## Latest Candidate
 
 - Branch: `codex/tokyo-relay-candidate-20260919`.
-- Application commit: `2cf539cdeefe0b3be492ff16c67111ea22c43417`.
-- CI run: `35443347063` in `wu-xiao-ya/sub2api`.
+- Verified image commit: `7959c032f484c129a4fbb5ff22f10447c3d62497`.
+- Successful CI run: `35445139417` in `wu-xiao-ya/sub2api`.
+- Published image:
+  `ghcr.io/wu-xiao-ya/sub2api:console-7959c032f484c129a4fbb5ff22f10447c3d62497`.
 - Frontend typecheck and selected regressions, relay regressions and race tests,
   additive migration repeat checks, and performance/billing isolation jobs passed.
-- Image build passed. End-to-end acceptance exposed a fixture assertion that
-  counted automatic account-creation capability probes as gateway fallback.
-  The test now compares per-request counter deltas. Final acceptance is pending.
+- Image build and isolated end-to-end/browser acceptance passed.
+- Relay evidence: healthy relay, same-request own-proxy fallback, shared
+  cooldown, TTL recovery and unchecked-account default routing all passed;
+  the account remained active and schedulable after relay rejection.
+- Browser evidence: light/dark themes at 375, 768, 1440 and 1920 pixels passed
+  unconfigured-disable and keyboard-toggle checks without page errors.
+- Root, subpath and both login routes returned HTML and valid embedded assets.
+  The existing platform matrix passed 16 account paths and 29 requests.
+- Local evidence: `tmp/relay-ci-final-smoke/`, including `traffic-relay.json`,
+  `relay-browser/checks.json`, screenshots and `pages.json`.
+- The end-to-end test compares per-request counter deltas to exclude automatic
+  creation probes; browser fixtures seed the bootstrap admin's completed tour.
 - Earlier run `35442380750` failed because fixture control ports were published
   on an internal Docker network. Control now runs inside the fixture container.
 - Earlier run `35441749238` passed, but its image predates the latest fixes and
@@ -118,12 +129,14 @@ that every test in the repository or authenticated live upstream generation pass
   311af471f069db53eebb30502c0dd039a8d89d28. Read-only comparison reports 106 changed
   tracked files and zero missing tracked files (new files require a separate audit).
 
-## Release Blockers
+## Remaining Production Gates
 
-- Complete candidate-image integration and browser acceptance in run 35443347063.
-  Unit tests and controlled fixtures are not proof of live model generation.
+- Candidate-image integration and browser acceptance passed. Unit tests and
+  controlled fixtures are not proof of live model generation or acceleration.
 - After separate production authorization, verify real upstream generation using
-  an explicitly selected account before enabling additional accounts.
+  an explicitly selected account before enabling additional accounts. Keep
+  existing accounts opted out by default, configure the active HTTP relay, and
+  verify frontend/API entry points before hot-switching and draining old traffic.
 - A broader local test selection also exposed failing Grok429WithoutQuotaHeaders
   and AdminResetQuota cases (the latter expect retired native-subscription
   behavior). Grok429WithoutQuotaHeaders and AdminResetQuota_ResetBoth both
