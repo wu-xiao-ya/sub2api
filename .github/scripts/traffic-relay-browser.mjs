@@ -29,6 +29,9 @@ try {
     await context.addInitScript(theme => {
       localStorage.setItem('theme', theme)
       localStorage.setItem('sub2api_locale', 'zh')
+      // The isolated bootstrap administrator is user 1. This suite verifies
+      // account controls, not the first-login onboarding overlay.
+      localStorage.setItem('admin_guide_1_admin_v4_interactive', 'true')
     }, theme)
     const page = await context.newPage()
     page.setDefaultTimeout(15000)
