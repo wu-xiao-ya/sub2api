@@ -1360,7 +1360,7 @@ export default {
       loadFailed: '加载模板失败',
       saveFailed: '保存模板失败',
       deleteFailed: '删除模板失败'
-
+    },
     imageUpstreamCost: {
       title: '生图上游成本',
       hint: '单张生成图片的上游成本，用于成本/利润统计。不会改变面向用户的生图价格或历史用量金额。取值优先级：账号+模型 > 模型 > 账号 > 全局默认。',

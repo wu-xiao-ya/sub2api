@@ -1367,7 +1367,7 @@ export default {
       loadFailed: 'Failed to load profiles',
       saveFailed: 'Failed to save profile',
       deleteFailed: 'Failed to delete profile'
-
+    },
     imageUpstreamCost: {
       title: 'Image Upstream Cost',
       hint: 'The upstream cost of one generated image, used by cost/profit reporting. This never changes user-facing image prices or historical usage amounts. Resolution priority: account + model > model > account > global default.',
