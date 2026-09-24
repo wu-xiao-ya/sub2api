@@ -1360,5 +1360,22 @@ export default {
       loadFailed: '加载模板失败',
       saveFailed: '保存模板失败',
       deleteFailed: '删除模板失败'
+
+    imageUpstreamCost: {
+      title: '生图上游成本',
+      hint: '单张生成图片的上游成本，用于成本/利润统计。不会改变面向用户的生图价格或历史用量金额。取值优先级：账号+模型 > 模型 > 账号 > 全局默认。',
+      defaultPrice: '每张图默认成本',
+      defaultPriceHint: '当模型和账号都没有单独配置时使用。',
+      byModel: '按模型设置成本',
+      addModel: '添加模型',
+      modelPlaceholder: '模型名，例如 gpt-image-2',
+      noModelOverride: '未配置按模型成本，所有模型使用账号价或默认价。',
+      byAccount: '按账号设置成本',
+      addAccount: '添加账号',
+      accountIdPlaceholder: '账号 ID',
+      noAccountOverride: '未配置按账号成本。',
+      ignoreSnapshot: '图片成本不叠加上游倍率快照',
+      ignoreSnapshotHint: '开启后，每张图成本视为绝对值，不再乘以上游计费倍率。请在所有生图账号都配好真实每张成本后再开启，否则利润会被高估。',
+      saved: '生图上游成本已保存'
     }
 }

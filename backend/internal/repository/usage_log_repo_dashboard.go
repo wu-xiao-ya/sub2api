@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/timezone"
@@ -19,7 +20,7 @@ func (r *usageLogRepository) getPerformanceStats(ctx context.Context, userID int
 		SELECT
 			COUNT(*) as request_count,
 			COALESCE(SUM(input_tokens + output_tokens), 0) as token_count
-		FROM usage_logs
+		FROM usage_logs ul
 		WHERE created_at >= $1`
 	args := []any{fiveMinutesAgo}
 	if userID > 0 {
@@ -54,7 +55,7 @@ func (r *usageLogRepository) GetUserStats(ctx context.Context, userID int64, sta
 			COALESCE(SUM(input_tokens), 0) as input_tokens,
 			COALESCE(SUM(output_tokens), 0) as output_tokens,
 			COALESCE(SUM(cache_read_tokens), 0) as cache_read_tokens
-		FROM usage_logs
+		FROM usage_logs ul
 		WHERE user_id = $1 AND created_at >= $2 AND created_at < $3
 	`
 
@@ -203,7 +204,7 @@ func (r *usageLogRepository) fillDashboardMonitorUsageStats(ctx context.Context,
 	if stats == nil {
 		return nil
 	}
-	query := `
+	query := fmt.Sprintf(`
 		SELECT
 			COUNT(*) AS monitor_requests,
 			COALESCE(SUM(account_cost), 0) AS monitor_actual_cost,
@@ -219,14 +220,14 @@ func (r *usageLogRepository) fillDashboardMonitorUsageStats(ctx context.Context,
 			UNION ALL
 
 			SELECT
-				actual_cost AS estimated_cost,
-				COALESCE(account_stats_cost, total_cost) * COALESCE(account_rate_multiplier, 1) AS account_cost
-			FROM usage_logs
-			WHERE usage_source = $3
-			  AND created_at >= $1
-			  AND created_at < $2
+				ul.actual_cost AS estimated_cost,
+				%s AS account_cost
+			FROM usage_logs ul
+			WHERE ul.usage_source = $3
+			  AND ul.created_at >= $1
+			  AND ul.created_at < $2
 		) AS monitor_costs
-	`
+	`, inlineImageAwareAccountCostExpr("ul"))
 	return scanSingleRow(
 		ctx,
 		r.sql,
@@ -327,22 +328,24 @@ func (r *usageLogRepository) fillDashboardUsageStatsAggregated(ctx context.Conte
 
 func (r *usageLogRepository) fillDashboardUsageStatsFromUsageLogs(ctx context.Context, stats *DashboardStats, startUTC, endUTC, todayUTC, now time.Time) error {
 	todayEnd := todayUTC.Add(24 * time.Hour)
-	combinedStatsQuery := `
+	combinedStatsQuery := fmt.Sprintf(`
 		WITH scoped AS (
 			SELECT
-				created_at,
-				input_tokens,
-				output_tokens,
-				cache_creation_tokens,
-				cache_read_tokens,
-				total_cost,
-				actual_cost,
-				COALESCE(account_stats_cost, total_cost) * COALESCE(account_rate_multiplier, 1) AS account_cost,
-				COALESCE(duration_ms, 0) AS duration_ms
-			FROM usage_logs
-			WHERE created_at >= LEAST($1::timestamptz, $3::timestamptz)
-				AND created_at < GREATEST($2::timestamptz, $4::timestamptz)
+				ul.created_at,
+				ul.input_tokens,
+				ul.output_tokens,
+				ul.cache_creation_tokens,
+				ul.cache_read_tokens,
+				ul.total_cost,
+				ul.actual_cost,
+				%s AS account_cost,
+				COALESCE(ul.duration_ms, 0) AS duration_ms
+			FROM usage_logs ul
+			WHERE ul.created_at >= LEAST($1::timestamptz, $3::timestamptz)
+				AND ul.created_at < GREATEST($2::timestamptz, $4::timestamptz)
 		)
+	`, inlineImageAwareAccountCostExpr("ul"))
+	combinedStatsQuery += `
 		SELECT
 			COUNT(*) FILTER (WHERE created_at >= $1::timestamptz AND created_at < $2::timestamptz) AS total_requests,
 			COALESCE(SUM(input_tokens) FILTER (WHERE created_at >= $1::timestamptz AND created_at < $2::timestamptz), 0) AS total_input_tokens,
@@ -401,7 +404,7 @@ func (r *usageLogRepository) fillDashboardUsageStatsFromUsageLogs(ctx context.Co
 	activeUsersQuery := `
 		WITH scoped AS (
 			SELECT user_id, created_at
-			FROM usage_logs
+			FROM usage_logs ul
 			WHERE created_at >= LEAST($1::timestamptz, $3::timestamptz)
 				AND created_at < GREATEST($2::timestamptz, $4::timestamptz)
 		)
@@ -459,7 +462,7 @@ func (r *usageLogRepository) GetUserDashboardStats(ctx context.Context, userID i
 			COALESCE(SUM(total_cost), 0) as total_cost,
 			COALESCE(SUM(actual_cost), 0) as total_actual_cost,
 			COALESCE(AVG(duration_ms), 0) as avg_duration_ms
-		FROM usage_logs
+		FROM usage_logs ul
 		WHERE user_id = $1
 	`
 	if err := scanSingleRow(
@@ -490,7 +493,7 @@ func (r *usageLogRepository) GetUserDashboardStats(ctx context.Context, userID i
 			COALESCE(SUM(cache_read_tokens), 0) as today_cache_read_tokens,
 			COALESCE(SUM(total_cost), 0) as today_cost,
 			COALESCE(SUM(actual_cost), 0) as today_actual_cost
-		FROM usage_logs
+		FROM usage_logs ul
 		WHERE user_id = $1 AND created_at >= $2
 	`
 	if err := scanSingleRow(
@@ -579,7 +582,7 @@ func (r *usageLogRepository) getPerformanceStatsByAPIKey(ctx context.Context, ap
 		SELECT
 			COUNT(*) as request_count,
 			COALESCE(SUM(input_tokens + output_tokens + cache_creation_tokens + cache_read_tokens), 0) as token_count
-		FROM usage_logs
+		FROM usage_logs ul
 		WHERE created_at >= $1 AND api_key_id = $2`
 	args := []any{fiveMinutesAgo, apiKeyID}
 
@@ -611,7 +614,7 @@ func (r *usageLogRepository) GetAPIKeyDashboardStats(ctx context.Context, apiKey
 			COALESCE(SUM(total_cost), 0) as total_cost,
 			COALESCE(SUM(actual_cost), 0) as total_actual_cost,
 			COALESCE(AVG(duration_ms), 0) as avg_duration_ms
-		FROM usage_logs
+		FROM usage_logs ul
 		WHERE api_key_id = $1
 	`
 	if err := scanSingleRow(
@@ -642,7 +645,7 @@ func (r *usageLogRepository) GetAPIKeyDashboardStats(ctx context.Context, apiKey
 			COALESCE(SUM(cache_read_tokens), 0) as today_cache_read_tokens,
 			COALESCE(SUM(total_cost), 0) as today_cost,
 			COALESCE(SUM(actual_cost), 0) as today_actual_cost
-		FROM usage_logs
+		FROM usage_logs ul
 		WHERE api_key_id = $1 AND created_at >= $2
 	`
 	if err := scanSingleRow(

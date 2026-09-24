@@ -474,6 +474,24 @@ const (
 	// upstream-cost overrides as a JSON object keyed by account ID.
 	SettingKeyImageUpstreamCostByAccount = "image_upstream_cost_by_account"
 
+	// SettingKeyImageUpstreamCostByModel stores per-model image upstream cost as
+	// a JSON object keyed by model then billing tier, e.g.
+	// {"gpt-image-2":{"1K":0.08,"2K":0.12,"4K":0.24}}. It ranks between the
+	// account-level override and the global default.
+	SettingKeyImageUpstreamCostByModel = "image_upstream_cost_by_model"
+
+	// SettingKeyImageUpstreamCostByAccountModel stores account-and-model image
+	// upstream cost as a JSON object keyed by account ID, then model, then tier,
+	// e.g. {"228":{"gpt-image-2":{"2K":0.10}}}. It has the highest priority.
+	SettingKeyImageUpstreamCostByAccountModel = "image_upstream_cost_by_account_model"
+
+	// SettingKeyImageCostIgnoreUpstreamRateSnapshot controls whether the
+	// absolute per-image upstream cost is still multiplied by the upstream
+	// billing rate snapshot. Image cost is denominated in USD per image, so a
+	// token-oriented rate multiplier has no meaning there. "true" ignores the
+	// snapshot; any other value keeps the historical behavior.
+	SettingKeyImageCostIgnoreUpstreamRateSnapshot = "image_cost_ignore_upstream_rate_snapshot"
+
 	// =========================
 	// Overload Cooldown (529)
 	// =========================

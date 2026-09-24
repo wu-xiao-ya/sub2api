@@ -452,33 +452,7 @@ func (r *usageLogRepository) getModelStatsWithFiltersBySource(ctx context.Contex
 	// falls back to account_rate_multiplier and can overstate DeepSeek costs
 	// when an account has a lower upstream billing rate.
 	query := fmt.Sprintf(`
-		WITH runtime_settings AS (
-			SELECT COALESCE(
-				(
-					SELECT CASE
-						WHEN TRIM(value) ~ '^[0-9]+(\.[0-9]+)?$'
-						THEN TRIM(value)::double precision
-						ELSE NULL
-					END
-					FROM settings
-					WHERE key = 'image_upstream_cost_per_image'
-					LIMIT 1
-				),
-				0.001::double precision
-			) AS image_upstream_cost_per_image,
-			COALESCE(
-				(
-					SELECT CASE
-						WHEN jsonb_typeof(value::jsonb) = 'object' THEN value::jsonb
-						ELSE '{}'::jsonb
-					END
-					FROM settings
-					WHERE key = 'image_upstream_cost_by_account'
-					LIMIT 1
-				),
-				'{}'::jsonb
-			) AS image_upstream_cost_by_account
-		),
+		WITH %s,
 		usage_by_model_account_bucket AS (
 			SELECT
 				%s AS model,
@@ -494,44 +468,24 @@ func (r *usageLogRepository) getModelStatsWithFiltersBySource(ctx context.Contex
 				COALESCE(SUM(ul.input_tokens + ul.output_tokens + ul.cache_creation_tokens + ul.cache_read_tokens), 0) AS total_tokens,
 				COALESCE(SUM(ul.total_cost), 0) AS cost,
 				COALESCE(SUM(ul.actual_cost), 0) AS actual_cost,
-				COALESCE(SUM(
-					CASE
-						WHEN COALESCE(ul.billing_mode, '') = 'image'
-							OR (
-								COALESCE(ul.billing_mode, '') = ''
-								AND COALESCE(ul.image_count, 0) > 0
-							)
-						THEN GREATEST(COALESCE(ul.image_count, 0), 0) * COALESCE(
-							CASE
-								WHEN (rs.image_upstream_cost_by_account ->> ul.account_id::text) ~ '^[0-9]+(\.[0-9]+)?$'
-									THEN (rs.image_upstream_cost_by_account ->> ul.account_id::text)::double precision
-							END,
-							rs.image_upstream_cost_per_image
-						)
-						ELSE COALESCE(ul.account_stats_cost, ul.total_cost)
-					END
-				), 0) AS standard_account_cost,
-				COALESCE(SUM(
-					CASE
-						WHEN COALESCE(ul.billing_mode, '') = 'image'
-							OR (
-								COALESCE(ul.billing_mode, '') = ''
-								AND COALESCE(ul.image_count, 0) > 0
-							)
-						THEN GREATEST(COALESCE(ul.image_count, 0), 0) * COALESCE(
-							CASE
-								WHEN (rs.image_upstream_cost_by_account ->> ul.account_id::text) ~ '^[0-9]+(\.[0-9]+)?$'
-									THEN (rs.image_upstream_cost_by_account ->> ul.account_id::text)::double precision
-							END,
-							rs.image_upstream_cost_per_image
-						)
-						ELSE COALESCE(ul.account_stats_cost, ul.total_cost)
-					END * COALESCE(ul.account_rate_multiplier, 1)
-				), 0) AS legacy_account_cost
+				COALESCE(SUM(%s), 0) AS standard_account_cost,
+				COALESCE(SUM(%s), 0) AS legacy_account_cost,
+				-- Per-image rows keep their own absolute cost so the snapshot
+				-- multiplier can be skipped for them independently of the
+				-- token rows aggregated into the same bucket.
+				COALESCE(SUM(CASE
+					WHEN %s AND rs.image_cost_ignore_upstream_rate_snapshot
+					THEN GREATEST(COALESCE(ul.image_count, 0), 0) * (%s)
+					ELSE 0
+				END), 0) AS image_absolute_cost
 			FROM usage_logs ul
 			CROSS JOIN runtime_settings rs
 			WHERE ul.created_at >= $1 AND ul.created_at < $2
-	`, modelExpr)
+	`, imageUpstreamCostCTE(), modelExpr,
+		imageAccountCostExprCTE("ul"),
+		fmt.Sprintf("(%s * COALESCE(ul.account_rate_multiplier, 1))", imageAccountCostExprCTE("ul")),
+		imageRowIsImageBilledExpr("ul"),
+		imageUnitCostExpr("ul"))
 
 	args := []any{startTime, endTime}
 	if userID > 0 {
@@ -575,12 +529,21 @@ func (r *usageLogRepository) getModelStatsWithFiltersBySource(ctx context.Contex
 			SELECT
 				ub.*,
 				CASE
+					-- Per-image cost is an absolute USD amount with no token
+					-- basis, so the token-oriented upstream rate snapshot must
+					-- not scale it. The image portion was aggregated separately
+					-- so token rows in the same bucket keep their multiplier.
+					WHEN rs.image_cost_ignore_upstream_rate_snapshot
+						THEN ub.image_absolute_cost + (
+							ub.standard_account_cost - ub.image_absolute_cost
+						) * COALESCE(upstream_rate.effective_rate_multiplier, 1)
 					WHEN upstream_rate.effective_rate_multiplier IS NULL
 						OR upstream_rate.source = 'manual_cleared'
-					THEN ub.legacy_account_cost
+						THEN ub.legacy_account_cost
 					ELSE ub.standard_account_cost * upstream_rate.effective_rate_multiplier
 				END AS account_cost
 			FROM usage_by_model_account_bucket ub
+			CROSS JOIN runtime_settings rs
 			LEFT JOIN LATERAL (
 				SELECT s.effective_rate_multiplier, s.source
 				FROM account_upstream_rate_snapshots s
@@ -637,34 +600,8 @@ func (r *usageLogRepository) GetGroupStatsWithUsageFilters(ctx context.Context, 
 }
 
 func (r *usageLogRepository) getGroupStatsWithFilters(ctx context.Context, startTime, endTime time.Time, userID, apiKeyID, accountID, groupID int64, model string, requestType *int16, stream *bool, billingType *int8, billingMode string, excludeUserIDs []int64, excludeUserEmails []string, includeMonitorUsage bool) (results []usagestats.GroupStat, err error) {
-	query := `
-		WITH runtime_settings AS (
-			SELECT COALESCE(
-				(
-					SELECT CASE
-						WHEN TRIM(value) ~ '^[0-9]+(\.[0-9]+)?$'
-						THEN TRIM(value)::double precision
-						ELSE NULL
-					END
-					FROM settings
-					WHERE key = 'image_upstream_cost_per_image'
-					LIMIT 1
-				),
-				0.001::double precision
-			) AS image_upstream_cost_per_image,
-			COALESCE(
-				(
-					SELECT CASE
-						WHEN jsonb_typeof(value::jsonb) = 'object' THEN value::jsonb
-						ELSE '{}'::jsonb
-					END
-					FROM settings
-					WHERE key = 'image_upstream_cost_by_account'
-					LIMIT 1
-				),
-				'{}'::jsonb
-			) AS image_upstream_cost_by_account
-		),
+	query := fmt.Sprintf(`
+		WITH %s,
 		usage_by_account_bucket AS (
 			SELECT
 				ul.group_id,
@@ -675,44 +612,24 @@ func (r *usageLogRepository) getGroupStatsWithFilters(ctx context.Context, start
 				COALESCE(SUM(ul.input_tokens + ul.output_tokens + ul.cache_creation_tokens + ul.cache_read_tokens), 0) AS total_tokens,
 				COALESCE(SUM(ul.total_cost), 0) AS cost,
 				COALESCE(SUM(ul.actual_cost), 0) AS actual_cost,
-				COALESCE(SUM(
-					CASE
-						WHEN COALESCE(ul.billing_mode, '') = 'image'
-							OR (
-								COALESCE(ul.billing_mode, '') = ''
-								AND COALESCE(ul.image_count, 0) > 0
-							)
-						THEN GREATEST(COALESCE(ul.image_count, 0), 0) * COALESCE(
-							CASE
-								WHEN (rs.image_upstream_cost_by_account ->> ul.account_id::text) ~ '^[0-9]+(\.[0-9]+)?$'
-									THEN (rs.image_upstream_cost_by_account ->> ul.account_id::text)::double precision
-							END,
-							rs.image_upstream_cost_per_image
-						)
-						ELSE COALESCE(ul.account_stats_cost, ul.total_cost)
-					END
-				), 0) AS standard_cost,
-				COALESCE(SUM(
-					CASE
-						WHEN COALESCE(ul.billing_mode, '') = 'image'
-							OR (
-								COALESCE(ul.billing_mode, '') = ''
-								AND COALESCE(ul.image_count, 0) > 0
-							)
-						THEN GREATEST(COALESCE(ul.image_count, 0), 0) * COALESCE(
-							CASE
-								WHEN (rs.image_upstream_cost_by_account ->> ul.account_id::text) ~ '^[0-9]+(\.[0-9]+)?$'
-									THEN (rs.image_upstream_cost_by_account ->> ul.account_id::text)::double precision
-							END,
-							rs.image_upstream_cost_per_image
-						)
-						ELSE COALESCE(ul.account_stats_cost, ul.total_cost)
-					END * COALESCE(ul.account_rate_multiplier, 1)
-				), 0) AS legacy_account_cost
+				COALESCE(SUM(ul.image_count), 0)::bigint AS image_count,
+				COALESCE(SUM(%s), 0) AS standard_cost,
+				COALESCE(SUM(%s * COALESCE(ul.account_rate_multiplier, 1)), 0) AS legacy_account_cost,
+				-- Per-image rows keep an absolute cost that must not be scaled
+				-- by the token-oriented upstream rate snapshot.
+				COALESCE(SUM(CASE
+					WHEN %s AND rs.image_cost_ignore_upstream_rate_snapshot
+					THEN GREATEST(COALESCE(ul.image_count, 0), 0) * (%s)
+					ELSE 0
+				END), 0) AS image_absolute_cost
 			FROM usage_logs ul
 			CROSS JOIN runtime_settings rs
 			WHERE ul.created_at >= $1 AND ul.created_at < $2
-	`
+	`, imageUpstreamCostCTE(),
+		imageAccountCostExprCTE("ul"),
+		imageAccountCostExprCTE("ul"),
+		imageRowIsImageBilledExpr("ul"),
+		imageUnitCostExpr("ul"))
 
 	args := []any{startTime, endTime}
 	if userID > 0 {
@@ -765,12 +682,21 @@ func (r *usageLogRepository) getGroupStatsWithFilters(ctx context.Context, start
 				ub.cost,
 				ub.actual_cost,
 				CASE
+					-- Per-image cost is an absolute USD amount with no token
+					-- basis, so the token-oriented upstream rate snapshot must
+					-- not scale it. The image portion was aggregated separately
+					-- so token rows in the same bucket keep their multiplier.
+					WHEN rs.image_cost_ignore_upstream_rate_snapshot
+						THEN ub.image_absolute_cost + (
+							ub.standard_cost - ub.image_absolute_cost
+						) * COALESCE(upstream_rate.effective_rate_multiplier, 1)
 					WHEN upstream_rate.effective_rate_multiplier IS NULL
 						OR upstream_rate.source = 'manual_cleared'
-					THEN ub.legacy_account_cost
+						THEN ub.legacy_account_cost
 					ELSE ub.standard_cost * upstream_rate.effective_rate_multiplier
 				END AS account_cost
 			FROM usage_by_account_bucket ub
+			CROSS JOIN runtime_settings rs
 			LEFT JOIN LATERAL (
 				SELECT s.effective_rate_multiplier, s.source
 				FROM account_upstream_rate_snapshots s
