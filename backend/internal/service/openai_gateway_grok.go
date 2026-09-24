@@ -507,7 +507,7 @@ func patchGrokResponsesBodyBase(body []byte, upstreamModel string) ([]byte, erro
 func isGrok45CompatibleTextModel(model string) bool {
 	model = strings.ToLower(strings.TrimSpace(xai.StripGrokProviderPrefix(model)))
 	switch model {
-	case "grok-4.5", "grok-4.5-latest", "grok-4.6", "grok-4.6-latest":
+	case "grok-4.5", "grok-4.5-latest", "grok-4.6", "grok-4.6-latest", "grok-4.7", "grok-4.7-latest":
 		return true
 	default:
 		return false
@@ -572,7 +572,7 @@ func normalizeGrokResponsesReasoningEffort(body []byte, upstreamModel string) ([
 	if raw == "" {
 		raw = strings.TrimSpace(gjson.GetBytes(out, "reasoningEffort").String())
 	}
-	normalized, keep := normalizeGrokReasoningEffortValue(raw)
+	normalized, keep := normalizeGrokReasoningEffortForModel(raw, upstreamModel)
 	keep = keep && supportsEffort
 
 	for _, field := range []string{"reasoning_effort", "reasoningEffort"} {
@@ -631,7 +631,7 @@ func normalizeGrokChatReasoningEffort(body []byte, upstreamModel string) ([]byte
 	if raw == "" {
 		raw = strings.TrimSpace(gjson.GetBytes(body, "reasoningEffort").String())
 	}
-	normalized, keep := normalizeGrokReasoningEffortValue(raw)
+	normalized, keep := normalizeGrokReasoningEffortForModel(raw, upstreamModel)
 	keep = keep && grokSupportsReasoningEffort(upstreamModel)
 	out := body
 	var err error
@@ -658,6 +658,10 @@ func normalizeGrokChatReasoningEffort(body []byte, upstreamModel string) ([]byte
 }
 
 func normalizeGrokReasoningEffortValue(raw string) (string, bool) {
+	return normalizeGrokReasoningEffortForModel(raw, "")
+}
+
+func normalizeGrokReasoningEffortForModel(raw, model string) (string, bool) {
 	value := strings.NewReplacer("-", "", "_", "", " ", "").Replace(strings.ToLower(strings.TrimSpace(raw)))
 	switch value {
 	case "none", "low", "medium", "high":
@@ -665,16 +669,25 @@ func normalizeGrokReasoningEffortValue(raw string) (string, bool) {
 	case "minimal":
 		return "low", true
 	case "xhigh", "extrahigh", "max", "ultra":
+		if grokKeepsXHighReasoningEffort(model) {
+			return "xhigh", true
+		}
 		return "high", true
 	default:
 		return "", false
 	}
 }
 
+func grokKeepsXHighReasoningEffort(model string) bool {
+	model = strings.ToLower(xai.StripGrokProviderPrefix(strings.TrimSpace(model)))
+	return model == "grok-4.7" || model == "grok-4.7-latest"
+}
+
 func grokSupportsReasoningEffort(model string) bool {
 	model = strings.ToLower(xai.StripGrokProviderPrefix(strings.TrimSpace(model)))
 	switch model {
 	case xai.DefaultTextModel, "grok-4.5-latest", "grok-4.6", "grok-4.6-latest",
+		"grok-4.7", "grok-4.7-latest",
 		"grok-4.3", "grok-4.3-latest",
 		"grok-3-mini", "grok-3-mini-fast", "grok-4.20-0309-reasoning",
 		"grok-4.20-reasoning", "grok-4.20-multi-agent-0309":

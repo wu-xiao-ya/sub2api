@@ -265,6 +265,20 @@ func (s *BillingService) initFallbackPricing() {
 	// Claude 4.7 Opus (暂与4.6同价，待官方定价更新)
 	s.fallbackPrices["claude-opus-4.7"] = s.fallbackPrices["claude-opus-4.6"]
 
+	// Claude Opus 5.5 官方价（USD/token）。优先级档为对应基础价的 2 倍。
+	s.fallbackPrices["claude-opus-5-5"] = &ModelPricing{
+		InputPricePerToken:                 4e-6,
+		InputPricePerTokenPriority:         8e-6,
+		OutputPricePerToken:                20e-6,
+		OutputPricePerTokenPriority:        40e-6,
+		CacheCreationPricePerToken:         5e-6,
+		CacheCreationPricePerTokenPriority: 10e-6,
+		CacheCreation1hPrice:               8e-6,
+		CacheReadPricePerToken:             0.2e-6,
+		CacheReadPricePerTokenPriority:     0.4e-6,
+		SupportsCacheBreakdown:             true,
+	}
+
 	// Gemini 3.1 Pro
 	s.fallbackPrices["gemini-3.1-pro"] = &ModelPricing{
 		InputPricePerToken:         2e-6,   // $2 per MTok
@@ -306,19 +320,45 @@ func (s *BillingService) initFallbackPricing() {
 		LongContextInputMultiplier:         openAIGPT54LongContextInputMultiplier,
 		LongContextOutputMultiplier:        openAIGPT54LongContextOutputMultiplier,
 	}
-		s.fallbackPrices["gpt-6-astra"] = &ModelPricing{
-			InputPricePerToken:                 10e-6,
-			InputPricePerTokenPriority:         20e-6,
-			OutputPricePerToken:                50e-6,
-			OutputPricePerTokenPriority:        100e-6,
-			CacheCreationPricePerToken:         12.5e-6,
-			CacheCreationPricePerTokenPriority: 25e-6,
-			CacheReadPricePerToken:             1e-6,
-			CacheReadPricePerTokenPriority:     2e-6,
-			LongContextInputThreshold:          openAIGPT54LongContextInputThreshold,
-			LongContextInputMultiplier:         openAIGPT54LongContextInputMultiplier,
-			LongContextOutputMultiplier:        openAIGPT54LongContextOutputMultiplier,
-		}
+	s.fallbackPrices["gpt-6-astra"] = &ModelPricing{
+		InputPricePerToken:                 10e-6,
+		InputPricePerTokenPriority:         20e-6,
+		OutputPricePerToken:                50e-6,
+		OutputPricePerTokenPriority:        100e-6,
+		CacheCreationPricePerToken:         12.5e-6,
+		CacheCreationPricePerTokenPriority: 25e-6,
+		CacheReadPricePerToken:             1e-6,
+		CacheReadPricePerTokenPriority:     2e-6,
+		LongContextInputThreshold:          openAIGPT54LongContextInputThreshold,
+		LongContextInputMultiplier:         openAIGPT54LongContextInputMultiplier,
+		LongContextOutputMultiplier:        openAIGPT54LongContextOutputMultiplier,
+	}
+	s.fallbackPrices["gpt-6-sol"] = &ModelPricing{
+		InputPricePerToken:                 2e-6,
+		InputPricePerTokenPriority:         4e-6,
+		OutputPricePerToken:                10e-6,
+		OutputPricePerTokenPriority:        20e-6,
+		CacheCreationPricePerToken:         2.5e-6,
+		CacheCreationPricePerTokenPriority: 5e-6,
+		CacheReadPricePerToken:             0.2e-6,
+		CacheReadPricePerTokenPriority:     0.4e-6,
+		LongContextInputThreshold:          openAIGPT54LongContextInputThreshold,
+		LongContextInputMultiplier:         openAIGPT54LongContextInputMultiplier,
+		LongContextOutputMultiplier:        openAIGPT54LongContextOutputMultiplier,
+	}
+	s.fallbackPrices["gpt-6-luna"] = &ModelPricing{
+		InputPricePerToken:                 0.1e-6,
+		InputPricePerTokenPriority:         0.2e-6,
+		OutputPricePerToken:                0.5e-6,
+		OutputPricePerTokenPriority:        1e-6,
+		CacheCreationPricePerToken:         0.125e-6,
+		CacheCreationPricePerTokenPriority: 0.25e-6,
+		CacheReadPricePerToken:             0.01e-6,
+		CacheReadPricePerTokenPriority:     0.02e-6,
+		LongContextInputThreshold:          openAIGPT54LongContextInputThreshold,
+		LongContextInputMultiplier:         openAIGPT54LongContextInputMultiplier,
+		LongContextOutputMultiplier:        openAIGPT54LongContextOutputMultiplier,
+	}
 	s.fallbackPrices["gpt-5.6-terra"] = &ModelPricing{
 		InputPricePerToken:                 2e-6,
 		InputPricePerTokenPriority:         4e-6,
@@ -601,6 +641,16 @@ func (s *BillingService) initFallbackPricing() {
 	// $6 output per MTok under 200k prompt tokens; ≥200k is 2× on input,
 	// cached input, and output). Official cached short-context is $0.30, but
 	// keep the existing $0.50 card to avoid a silent cache-price change here.
+	s.fallbackPrices["grok-4.7"] = &ModelPricing{
+		InputPricePerToken:            2e-6,
+		OutputPricePerToken:           6e-6,
+		CacheReadPricePerToken:        0.5e-6,
+		SupportsCacheBreakdown:        false,
+		LongContextInputThreshold:     grokLongContextInputThreshold,
+		LongContextInputMultiplier:    grokLongContextInputMultiplier,
+		LongContextOutputMultiplier:   grokLongContextOutputMultiplier,
+		LongContextThresholdInclusive: true,
+	}
 	s.fallbackPrices["grok-4.5"] = &ModelPricing{
 		InputPricePerToken:            2e-6,
 		OutputPricePerToken:           6e-6,
@@ -660,6 +710,9 @@ func (s *BillingService) getFallbackPricing(model string) *ModelPricing {
 
 	// 按模型系列匹配
 	if strings.Contains(modelLower, "opus") {
+		if isClaudeOpus55Model(modelLower) {
+			return s.fallbackPrices["claude-opus-5-5"]
+		}
 		if strings.Contains(modelLower, "4.7") || strings.Contains(modelLower, "4-7") {
 			return s.fallbackPrices["claude-opus-4.7"]
 		}
@@ -814,6 +867,10 @@ func (s *BillingService) getFallbackPricing(model string) *ModelPricing {
 		switch normalized {
 		case "gpt-6-astra":
 			return s.fallbackPrices["gpt-6-astra"]
+		case "gpt-6-sol":
+			return s.fallbackPrices["gpt-6-sol"]
+		case "gpt-6-luna":
+			return s.fallbackPrices["gpt-6-luna"]
 		case "gpt-5.6-sol":
 			return s.fallbackPrices["gpt-5.6-sol"]
 		case "gpt-5.6-terra":
@@ -840,6 +897,8 @@ func (s *BillingService) getFallbackPricing(model string) *ModelPricing {
 	switch modelLower {
 	case "grok", "grok-latest", "grok-4.5", "grok-4.5-latest", "grok-build-latest":
 		return s.fallbackPrices["grok-4.5"]
+	case "grok-4.7", "grok-4.7-latest", "grok-4-7", "grok-4-7-latest", "grok-4.7-build-fast", "grok-4-7-build-fast":
+		return s.fallbackPrices["grok-4.7"]
 	case "grok-4.6", "grok-4.6-latest", "grok-4-6", "grok-4-6-latest":
 		return s.fallbackPrices["grok-4.6"]
 	case "grok-4.3",
@@ -892,7 +951,9 @@ func (s *BillingService) GetModelPricing(model string) (*ModelPricing, error) {
 	model = strings.ToLower(model)
 	pricingLookupModel := model
 	switch model {
-	case "grok-4.6", "grok-4.6-latest", "grok-4-6", "grok-4-6-latest":
+	case "grok-4.6", "grok-4.6-latest", "grok-4-6", "grok-4-6-latest",
+		"grok-4.7", "grok-4.7-latest", "grok-4-7", "grok-4-7-latest",
+		"grok-4.7-build-fast", "grok-4-7-build-fast":
 		pricingLookupModel = "grok-4.5"
 	}
 
@@ -1298,27 +1359,27 @@ func (s *BillingService) applyModelSpecificPricingPolicy(model string, pricing *
 		return nil
 	}
 	normalized := normalizeKnownOpenAICodexModel(model)
-	if isGrok46Family(model) {
+	if isGrok46Family(model) || isGrok47Family(model) {
 		pricing = applyGrok46CacheReadPricing(pricing)
 	}
 	if isGrokUnknownTextFamilyModel(model) {
 		return applyGrokLongContextPricing(pricing)
 	}
-		// Astra uses the same 272k whole-request surcharge as GPT-5.6:
-		// input and cache 2x, output 1.5x. Fill missing rates so channel prices
-		// and older remote files, which only store base token prices, still apply it.
-		if normalized == "gpt-6-astra" {
-			cloned := *pricing
-			if cloned.LongContextInputThreshold <= 0 {
-				cloned.LongContextInputThreshold = openAIGPT54LongContextInputThreshold
-			}
-			if cloned.LongContextInputMultiplier <= 0 {
-				cloned.LongContextInputMultiplier = openAIGPT54LongContextInputMultiplier
-			}
-			if cloned.LongContextOutputMultiplier <= 0 {
-				cloned.LongContextOutputMultiplier = openAIGPT54LongContextOutputMultiplier
-			}
-			if !cloned.CacheCreationPriceExplicit {
+	// Astra uses the same 272k whole-request surcharge as GPT-5.6:
+	// input and cache 2x, output 1.5x. Fill missing rates so channel prices
+	// and older remote files, which only store base token prices, still apply it.
+	if normalized == "gpt-6-astra" || normalized == "gpt-6-sol" || normalized == "gpt-6-luna" {
+		cloned := *pricing
+		if cloned.LongContextInputThreshold <= 0 {
+			cloned.LongContextInputThreshold = openAIGPT54LongContextInputThreshold
+		}
+		if cloned.LongContextInputMultiplier <= 0 {
+			cloned.LongContextInputMultiplier = openAIGPT54LongContextInputMultiplier
+		}
+		if cloned.LongContextOutputMultiplier <= 0 {
+			cloned.LongContextOutputMultiplier = openAIGPT54LongContextOutputMultiplier
+		}
+		if !cloned.CacheCreationPriceExplicit {
 			if cloned.CacheCreationPricePerToken <= 0 {
 				cloned.CacheCreationPricePerToken = cloned.InputPricePerToken * 1.25
 			}
@@ -1375,6 +1436,26 @@ func isGrok46Family(model string) bool {
 	default:
 		return false
 	}
+}
+
+func isGrok47Family(model string) bool {
+	native := strings.ToLower(strings.TrimSpace(xai.StripGrokProviderPrefix(model)))
+	native = grokHyphenVersionToDotted(native)
+	switch native {
+	case "grok-4.7", "grok-4.7-latest", "grok-4.7-build-fast":
+		return true
+	default:
+		return false
+	}
+}
+
+func isClaudeOpus55Model(model string) bool {
+	native := strings.ToLower(strings.TrimSpace(model))
+	if slash := strings.LastIndex(native, "/"); slash >= 0 {
+		native = strings.TrimSpace(native[slash+1:])
+	}
+	native = strings.NewReplacer("_", "-", ".", "-", " ", "-").Replace(native)
+	return native == "claude-opus-5-5" || strings.HasPrefix(native, "claude-opus-5-5-")
 }
 
 func applyGrok46CacheReadPricing(pricing *ModelPricing) *ModelPricing {

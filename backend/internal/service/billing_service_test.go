@@ -1309,7 +1309,37 @@ func TestCalculateSearchCost_DefaultAndExplicitFree(t *testing.T) {
 	require.Zero(t, got.ActualCost)
 }
 
-func TestGetModelPricing_UnknownGrokTextFallsBackToGrok45(t *testing.T) {
+	func TestNewModelFallbacksDoNotUseLegacyCards(t *testing.T) {
+		svc := newTestBillingService()
+
+		sol, err := svc.CalculateCost("gpt-6-sol", UsageTokens{InputTokens: 1_000_000, OutputTokens: 1_000_000}, 1)
+		require.NoError(t, err)
+		require.InDelta(t, 2, sol.InputCost, 1e-9)
+		require.InDelta(t, 10, sol.OutputCost, 1e-9)
+		require.False(t, sol.LongContextBillingApplied)
+
+		solLong, err := svc.CalculateCost("gpt-6-sol", UsageTokens{InputTokens: 272001, OutputTokens: 1000}, 1)
+		require.NoError(t, err)
+		require.True(t, solLong.LongContextBillingApplied)
+		require.InDelta(t, 272001*2e-6*2, solLong.InputCost, 1e-9)
+		require.InDelta(t, 1000*10e-6*1.5, solLong.OutputCost, 1e-9)
+
+		luna, err := svc.CalculateCost("gpt-6-luna-max", UsageTokens{InputTokens: 1_000_000, OutputTokens: 1_000_000}, 1)
+		require.NoError(t, err)
+		require.InDelta(t, 0.1, luna.InputCost, 1e-9)
+		require.InDelta(t, 0.5, luna.OutputCost, 1e-9)
+
+		opus, err := svc.GetModelPricing("claude-opus-5-5")
+		require.NoError(t, err)
+		require.InDelta(t, 4e-6, opus.InputPricePerToken, 1e-12)
+		require.InDelta(t, 20e-6, opus.OutputPricePerToken, 1e-12)
+		require.InDelta(t, 0.2e-6, opus.CacheReadPricePerToken, 1e-12)
+		legacy, err := svc.GetModelPricing("claude-3-opus")
+		require.NoError(t, err)
+		require.NotEqual(t, legacy.InputPricePerToken, opus.InputPricePerToken)
+	}
+
+	func TestGetModelPricing_UnknownGrokTextFallsBackToGrok45(t *testing.T) {
 	svc := newTestBillingService()
 	baseline, err := svc.GetModelPricing("grok-4.5")
 	require.NoError(t, err)
@@ -1336,8 +1366,16 @@ func TestGetModelPricing_UnknownGrokTextFallsBackToGrok45(t *testing.T) {
 		require.ErrorIs(t, err, ErrModelPricingUnavailable)
 	}
 
-	// Known cards stay on their own rate, not the 4.5 family floor.
-	build, err := svc.GetModelPricing("grok-build-0.1")
+		// Known cards stay on their own rate, not the 4.5 family floor.
+		for _, model := range []string{"grok-4.7", "grok-4.7-latest", "grok-4.7-build-fast"} {
+			pricing, err := svc.GetModelPricing(model)
+			require.NoError(t, err, model)
+			require.InDelta(t, 2e-6, pricing.InputPricePerToken, 1e-12, model)
+			require.InDelta(t, 6e-6, pricing.OutputPricePerToken, 1e-12, model)
+			require.InDelta(t, 0.5e-6, pricing.CacheReadPricePerToken, 1e-12, model)
+			require.True(t, pricing.LongContextThresholdInclusive, model)
+		}
+		build, err := svc.GetModelPricing("grok-build-0.1")
 	require.NoError(t, err)
 	require.InDelta(t, 1e-6, build.InputPricePerToken, 1e-12)
 }

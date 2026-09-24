@@ -12,7 +12,10 @@ func TestDefaultModelMappingExcludesCrossClientWildcards(t *testing.T) {
 	SetRuntimeModelMappingOptions(ModelMappingOptions{})
 	mapping := DefaultModelMapping()
 
-	require.Equal(t, "grok-4.6", mapping["grok-4.6"])
+		require.Equal(t, "grok-4.7", mapping["grok-4.7"])
+		require.Equal(t, "grok-4.7", mapping["grok-4.7-latest"])
+		require.Equal(t, "grok-4.7-build-fast", mapping["grok-4.7-build-fast"])
+		require.Equal(t, "grok-4.6", mapping["grok-4.6"])
 	require.Equal(t, "grok-4.6", mapping["grok-4.6-latest"])
 	require.Equal(t, "grok-4.5", mapping["grok"])
 	require.Equal(t, "grok-4.5", mapping["grok-latest"])
@@ -64,8 +67,12 @@ func TestIsGrokModelID(t *testing.T) {
 func TestDefaultModelsIncludesGrok46(t *testing.T) {
 	t.Parallel()
 	ids := DefaultModelIDs()
-	require.Contains(t, ids, "grok-4.6")
-	require.Equal(t, "grok-4.6", ResolveGrokTextResponsesModelID("grok-4.6"))
+		require.Contains(t, ids, "grok-4.7")
+		require.Contains(t, ids, "grok-4.7-build-fast")
+		require.Contains(t, ids, "grok-4.6")
+		require.Equal(t, "grok-4.7", ResolveGrokTextResponsesModelID("grok-4.7-latest"))
+		require.Equal(t, "grok-4.7-build-fast", ResolveGrokTextResponsesModelID("grok-4.7-build-fast"))
+		require.Equal(t, "grok-4.6", ResolveGrokTextResponsesModelID("grok-4.6"))
 	require.Equal(t, "grok-4.6", ResolveGrokTextResponsesModelID("grok-4.6-latest"))
 }
 
