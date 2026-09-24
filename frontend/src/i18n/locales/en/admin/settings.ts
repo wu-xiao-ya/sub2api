@@ -1233,7 +1233,24 @@ export default {
       failedToLoad: 'Failed to load settings',
       failedToSave: 'Failed to save settings',
       failedToTestSmtp: 'SMTP connection test failed',
-      failedToSendTestEmail: 'Failed to send test email'
+      failedToSendTestEmail: 'Failed to send test email',
+      imageUpstreamCost: {
+        title: 'Image Upstream Cost',
+        hint: 'The upstream cost of one generated image, used by cost/profit reporting. This never changes user-facing image prices or historical usage amounts. Resolution priority: account + model > model > account > global default.',
+        defaultPrice: 'Default cost per image',
+        defaultPriceHint: 'Used when neither the model nor the account has an override.',
+        byModel: 'Per-model cost',
+        addModel: 'Add model',
+        modelPlaceholder: 'Model, e.g. gpt-image-2',
+        noModelOverride: 'No per-model cost configured. Models use the account or default price.',
+        byAccount: 'Per-account cost',
+        addAccount: 'Add account',
+        accountIdPlaceholder: 'Account ID',
+        noAccountOverride: 'No per-account cost configured.',
+        ignoreSnapshot: 'Ignore the upstream rate snapshot for images',
+        ignoreSnapshotHint: 'When enabled, per-image cost is treated as an absolute amount and is no longer multiplied by the upstream billing rate. Leave this off until every image account has a real per-image price, otherwise profits will be overstated.',
+        saved: 'Image upstream cost saved'
+      }
     },
 
     // Error Passthrough Rules
@@ -1367,22 +1384,5 @@ export default {
       loadFailed: 'Failed to load profiles',
       saveFailed: 'Failed to save profile',
       deleteFailed: 'Failed to delete profile'
-    },
-    imageUpstreamCost: {
-      title: 'Image Upstream Cost',
-      hint: 'The upstream cost of one generated image, used by cost/profit reporting. This never changes user-facing image prices or historical usage amounts. Resolution priority: account + model > model > account > global default.',
-      defaultPrice: 'Default cost per image',
-      defaultPriceHint: 'Used when neither the model nor the account has an override.',
-      byModel: 'Per-model cost',
-      addModel: 'Add model',
-      modelPlaceholder: 'Model, e.g. gpt-image-2',
-      noModelOverride: 'No per-model cost configured. Models use the account or default price.',
-      byAccount: 'Per-account cost',
-      addAccount: 'Add account',
-      accountIdPlaceholder: 'Account ID',
-      noAccountOverride: 'No per-account cost configured.',
-      ignoreSnapshot: 'Ignore the upstream rate snapshot for images',
-      ignoreSnapshotHint: 'When enabled, per-image cost is treated as an absolute amount and is no longer multiplied by the upstream billing rate. Leave this off until every image account has a real per-image price, otherwise profits will be overstated.',
-      saved: 'Image upstream cost saved'
     }
 }
