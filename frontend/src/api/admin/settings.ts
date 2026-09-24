@@ -1484,8 +1484,63 @@ export async function resetWebSearchUsage(payload: {
   );
 }
 
+export interface ImageUpstreamCostAccountOverride {
+  account_id: number;
+  cost_per_image: number;
+}
+
+export interface ImageUpstreamCostModelOverride {
+  model: string;
+  tiers: Record<string, number>;
+}
+
+export interface ImageUpstreamCostAccountModelOverride {
+  account_id: number;
+  model: string;
+  tiers: Record<string, number>;
+}
+
+export interface ImageUpstreamCostSettings {
+  cost_per_image: number;
+  account_overrides: ImageUpstreamCostAccountOverride[];
+  model_overrides: ImageUpstreamCostModelOverride[];
+  account_model_overrides: ImageUpstreamCostAccountModelOverride[];
+  ignore_upstream_rate_snapshot: boolean;
+  billing_mode: string;
+  unit: string;
+}
+
+export interface ImageUpstreamCostUpdateRequest {
+  cost_per_image?: number;
+  account_overrides?: ImageUpstreamCostAccountOverride[];
+  model_overrides?: ImageUpstreamCostModelOverride[];
+  account_model_overrides?: ImageUpstreamCostAccountModelOverride[];
+  ignore_upstream_rate_snapshot?: boolean;
+}
+
+// Upstream cost per generated image, used by cost/profit reporting. This never
+// changes user-facing image prices.
+export async function getImageUpstreamCost(): Promise<ImageUpstreamCostSettings> {
+  const { data } = await apiClient.get<ImageUpstreamCostSettings>(
+    "/admin/settings/image-upstream-cost",
+  );
+  return data;
+}
+
+export async function updateImageUpstreamCost(
+  settings: ImageUpstreamCostUpdateRequest,
+): Promise<ImageUpstreamCostSettings> {
+  const { data } = await apiClient.put<ImageUpstreamCostSettings>(
+    "/admin/settings/image-upstream-cost",
+    settings,
+  );
+  return data;
+}
+
 export const settingsAPI = {
   getSettings,
+  getImageUpstreamCost,
+  updateImageUpstreamCost,
   updateSettings,
   testSmtpConnection,
   sendTestEmail,

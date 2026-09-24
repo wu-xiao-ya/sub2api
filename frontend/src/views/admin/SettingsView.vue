@@ -6007,6 +6007,18 @@
         <div class="card">
           <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
             <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+              {{ t('admin.settings.imageUpstreamCost.title') }}
+            </h2>
+          </div>
+          <div class="p-6">
+            <ImageUpstreamCostPanel />
+          </div>
+        </div>
+
+
+        <div class="card">
+          <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
               {{ t('admin.settings.features.channelMonitor.title') }}
             </h2>
             <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
@@ -7887,6 +7899,7 @@ import ImageUpload from "@/components/common/ImageUpload.vue";
 import BackupSettings from "@/views/admin/BackupView.vue";
 import EmailTemplateEditor from "@/views/admin/settings/EmailTemplateEditor.vue";
 import OpenAIFastPolicyUserSelector from "@/views/admin/settings/OpenAIFastPolicyUserSelector.vue";
+import ImageUpstreamCostPanel from "@/views/admin/settings/ImageUpstreamCostPanel.vue";
 import { useClipboard } from "@/composables/useClipboard";
 import {
   useStepUp,

@@ -495,7 +495,7 @@ func TestUsageLogRepositoryGetStatsWithFiltersRequestedModelSource(t *testing.T)
 		ModelFilterSource: usagestats.ModelSourceRequested,
 	}
 
-	mock.ExpectQuery("FROM usage_logs\\s+WHERE COALESCE\\(NULLIF\\(TRIM\\(requested_model\\), ''\\), model\\) = \\$1").
+	mock.ExpectQuery("FROM usage_logs( ul)?\\s+WHERE COALESCE\\(NULLIF\\(TRIM\\(requested_model\\), ''\\), model\\) = \\$1").
 		WithArgs("gpt-5").
 		WillReturnRows(sqlmock.NewRows([]string{
 			"total_requests",
@@ -536,7 +536,7 @@ func TestUsageLogRepositoryGetStatsWithFiltersRequestTypePriority(t *testing.T) 
 		Stream:      &stream,
 	}
 
-	mock.ExpectQuery("FROM usage_logs\\s+WHERE \\(request_type = \\$1 OR \\(request_type = 0 AND stream = FALSE AND openai_ws_mode = FALSE\\)\\)").
+	mock.ExpectQuery("FROM usage_logs( ul)?\\s+WHERE \\(request_type = \\$1 OR \\(request_type = 0 AND stream = FALSE AND openai_ws_mode = FALSE\\)\\)").
 		WithArgs(requestType).
 		WillReturnRows(sqlmock.NewRows([]string{
 			"total_requests",
@@ -705,7 +705,10 @@ func TestUsageLogRepositoryGetGroupStatsUsesConfiguredImageUpstreamCost(t *testi
 	start := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
 	end := start.Add(time.Hour)
 
-	mock.ExpectQuery(`(?s)image_upstream_cost_per_image.*image_upstream_cost_by_account.*COALESCE\(ul\.billing_mode, ''\) = 'image'.*GREATEST\(COALESCE\(ul\.image_count, 0\), 0\) \* COALESCE`).
+	// The group stats query must resolve image rows through the shared cost
+	// builder: the settings keys in priority order, the image-row predicate,
+	// and the per-image cost multiplication.
+	mock.ExpectQuery(`(?s)image_upstream_cost_per_image.*image_upstream_cost_by_account_model.*image_upstream_cost_by_model.*image_upstream_cost_by_account.*COALESCE\(ul\.billing_mode, ''\) = 'image'.*GREATEST\(COALESCE\(ul\.image_count, 0\), 0\) \* \(COALESCE`).
 		WithArgs(start, end).
 		WillReturnRows(sqlmock.NewRows([]string{
 			"group_id", "group_name", "requests", "total_tokens",

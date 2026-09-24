@@ -294,12 +294,12 @@ func (r *usageCleanupRepository) DeleteUsageLogsBatch(ctx context.Context, filte
 	query := fmt.Sprintf(`
 		WITH target AS (
 			SELECT id
-			FROM usage_logs
+			FROM usage_logs ul
 			WHERE %s
 			ORDER BY created_at ASC, id ASC
 			LIMIT $%d
 		)
-		DELETE FROM usage_logs
+		DELETE FROM usage_logs ul
 		WHERE id IN (SELECT id FROM target)
 		RETURNING id
 	`, whereClause, len(args))
@@ -331,7 +331,7 @@ func (r *usageCleanupRepository) FindNextUsageLogArchiveWindow(ctx context.Conte
 	var bucketStart sql.NullTime
 	if err := scanSingleRow(ctx, r.sql, `
 		SELECT date_trunc('hour', MIN(created_at))
-		FROM usage_logs
+		FROM usage_logs ul
 		WHERE created_at < $1
 	`, []any{cutoff}, &bucketStart); err != nil {
 		return nil, err
@@ -372,7 +372,7 @@ func (r *usageCleanupRepository) ArchiveUsageLogsWindow(ctx context.Context, sta
 }
 
 func archiveUsageLogsWindowWithExecutor(ctx context.Context, exec sqlExecutor, start, end time.Time) (*service.UsageLogArchiveResult, error) {
-	query := `
+	query := fmt.Sprintf(`
 		WITH aggregated AS (
 			SELECT
 				date_trunc('hour', created_at) AS bucket_start,
@@ -411,10 +411,10 @@ func archiveUsageLogsWindowWithExecutor(ctx context.Context, exec sqlExecutor, s
 				COALESCE(SUM(image_output_cost), 0) AS image_output_cost,
 				COALESCE(SUM(total_cost), 0) AS total_cost,
 				COALESCE(SUM(actual_cost), 0) AS actual_cost,
-				COALESCE(SUM(COALESCE(account_stats_cost, total_cost) * COALESCE(account_rate_multiplier, 1)), 0) AS account_cost,
+				COALESCE(SUM(%s), 0) AS account_cost,
 				COALESCE(SUM(duration_ms), 0)::bigint AS total_duration_ms,
 				COALESCE(SUM(first_token_ms), 0)::bigint AS total_first_token_ms
-			FROM usage_logs
+			FROM usage_logs ul
 			WHERE created_at >= $1 AND created_at < $2
 			GROUP BY
 				bucket_start,
@@ -561,14 +561,14 @@ func archiveUsageLogsWindowWithExecutor(ctx context.Context, exec sqlExecutor, s
 			RETURNING 1
 		),
 		deleted AS (
-			DELETE FROM usage_logs
+			DELETE FROM usage_logs ul
 			WHERE created_at >= $1 AND created_at < $2
 			RETURNING 1
 		)
 		SELECT
 			(SELECT COUNT(*) FROM upserted)::bigint AS summary_rows,
 			(SELECT COUNT(*) FROM deleted)::bigint AS deleted_rows
-	`
+	`, inlineImageAwareAccountCostExpr("ul"))
 	result := &service.UsageLogArchiveResult{}
 	if err := scanSingleRow(ctx, exec, query, []any{start, end}, &result.SummaryRows, &result.DeletedRows); err != nil {
 		return nil, err
