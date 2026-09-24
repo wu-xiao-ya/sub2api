@@ -90,9 +90,10 @@ func (s *ChannelService) ListAvailable(ctx context.Context) ([]AvailableChannel,
 
 		ch.normalizeBillingModelSource()
 
-		supported := ch.SupportedModels()
-		s.fillGlobalPricingFallback(supported)
-		s.fillGrokLongContextDisplay(supported)
+			supported := ch.SupportedModels()
+			s.fillGlobalPricingFallback(supported)
+			s.fillGrokLongContextDisplay(supported)
+			s.fillAstraLongContextDisplay(supported)
 
 		out = append(out, AvailableChannel{
 			ID:                 ch.ID,
@@ -161,11 +162,30 @@ func (s *ChannelService) fillGrokLongContextDisplay(models []SupportedModel) {
 		cloned.LongContextInputTokenThreshold = &threshold
 		cloned.LongContextInputCostMultiplier = &inputMult
 		cloned.LongContextOutputCostMultiplier = &outputMult
-		models[i].Pricing = &cloned
+			models[i].Pricing = &cloned
+		}
 	}
-}
 
-// pricingNeedsFallback 判定一个 ChannelModelPricing 是否需要走全局回落。
+	// fillAstraLongContextDisplay overlays the official GPT-6 Astra 272k
+	// whole-request surcharge onto existing plaza prices. Input and cache are
+	// 2x and output is 1.5x. Channel base token prices stay unchanged.
+	func (s *ChannelService) fillAstraLongContextDisplay(models []SupportedModel) {
+		for i := range models {
+			if normalizeKnownOpenAICodexModel(models[i].Name) != "gpt-6-astra" || models[i].Pricing == nil {
+				continue
+			}
+			cloned := models[i].Pricing.Clone()
+			threshold := openAIGPT54LongContextInputThreshold
+			inputMult := openAIGPT54LongContextInputMultiplier
+			outputMult := openAIGPT54LongContextOutputMultiplier
+			cloned.LongContextInputTokenThreshold = &threshold
+			cloned.LongContextInputCostMultiplier = &inputMult
+			cloned.LongContextOutputCostMultiplier = &outputMult
+			models[i].Pricing = &cloned
+		}
+	}
+
+	// pricingNeedsFallback 判定一个 ChannelModelPricing 是否需要走全局回落。
 // 价格全部缺失（无 flat 字段且无任何带价 interval）即视为未配置。
 func pricingNeedsFallback(p *ChannelModelPricing) bool {
 	if p == nil {

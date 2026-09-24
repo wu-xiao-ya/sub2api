@@ -410,8 +410,45 @@ func TestFillGrokLongContextDisplay_Adds200kMetadataWithoutChangingBasePrice(t *
 	require.InDelta(t, grokLongContextInputMultiplier, *models[0].Pricing.LongContextInputCostMultiplier, 1e-12)
 	require.NotNil(t, models[0].Pricing.LongContextOutputCostMultiplier)
 	require.InDelta(t, grokLongContextOutputMultiplier, *models[0].Pricing.LongContextOutputCostMultiplier, 1e-12)
-	require.Nil(t, models[1].Pricing.LongContextInputTokenThreshold)
-}
+		require.Nil(t, models[1].Pricing.LongContextInputTokenThreshold)
+	}
+
+	func TestFillAstraLongContextDisplay_Adds272kMetadataWithoutChangingBasePrice(t *testing.T) {
+		svc := &ChannelService{}
+		models := []SupportedModel{
+			{
+				Name:     "gpt-6-astra",
+				Platform: PlatformOpenAI,
+				Pricing: &ChannelModelPricing{
+					BillingMode:    BillingModeToken,
+					InputPrice:     testPtrFloat64(10e-6),
+					OutputPrice:    testPtrFloat64(50e-6),
+					CacheReadPrice: testPtrFloat64(1e-6),
+				},
+			},
+			{
+				Name:     "gpt-5.6-sol",
+				Platform: PlatformOpenAI,
+				Pricing: &ChannelModelPricing{
+					BillingMode: BillingModeToken,
+					InputPrice:  testPtrFloat64(5e-6),
+				},
+			},
+		}
+
+		svc.fillAstraLongContextDisplay(models)
+
+		require.InDelta(t, 10e-6, *models[0].Pricing.InputPrice, 1e-12)
+		require.InDelta(t, 50e-6, *models[0].Pricing.OutputPrice, 1e-12)
+		require.InDelta(t, 1e-6, *models[0].Pricing.CacheReadPrice, 1e-12)
+		require.NotNil(t, models[0].Pricing.LongContextInputTokenThreshold)
+		require.Equal(t, openAIGPT54LongContextInputThreshold, *models[0].Pricing.LongContextInputTokenThreshold)
+		require.NotNil(t, models[0].Pricing.LongContextInputCostMultiplier)
+		require.InDelta(t, openAIGPT54LongContextInputMultiplier, *models[0].Pricing.LongContextInputCostMultiplier, 1e-12)
+		require.NotNil(t, models[0].Pricing.LongContextOutputCostMultiplier)
+		require.InDelta(t, openAIGPT54LongContextOutputMultiplier, *models[0].Pricing.LongContextOutputCostMultiplier, 1e-12)
+		require.Nil(t, models[1].Pricing.LongContextInputTokenThreshold)
+	}
 
 func TestListAvailable_UsesChannelPricingNotGroupLists(t *testing.T) {
 	input := 3e-6
