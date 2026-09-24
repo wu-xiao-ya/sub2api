@@ -59,9 +59,12 @@ var (
 		OutputCostPerTokenPriority:          1e-04,
 		CacheCreationInputTokenCost:         1.25e-05,
 		CacheCreationInputTokenCostPriority: 2.5e-05,
-		CacheReadInputTokenCost:             1e-06,
-		CacheReadInputTokenCostPriority:     2e-06,
-		SupportsServiceTier:                 true,
+			CacheReadInputTokenCost:             1e-06,
+			CacheReadInputTokenCostPriority:     2e-06,
+			LongContextInputTokenThreshold:      openAIGPT54LongContextInputThreshold,
+			LongContextInputCostMultiplier:      openAIGPT54LongContextInputMultiplier,
+			LongContextOutputCostMultiplier:     openAIGPT54LongContextOutputMultiplier,
+			SupportsServiceTier:                 true,
 		LiteLLMProvider:                     "openai",
 		Mode:                                "chat",
 		SupportsPromptCaching:               true,
@@ -506,13 +509,8 @@ func (s *PricingService) parsePricingData(body []byte) (map[string]*LiteLLMModel
 		// newer entries expose explicit multipliers, while older OpenAI entries
 		// expose absolute prices above 272K tokens. Normalize the latter so
 		// downstream billing and available-channel display see one shape.
-		applyAbove272KLongContextPricing(pricing, &entry)
-		if normalizeKnownOpenAICodexModel(modelName) == "gpt-6-astra" {
-			pricing.LongContextInputTokenThreshold = 0
-			pricing.LongContextInputCostMultiplier = 0
-			pricing.LongContextOutputCostMultiplier = 0
-		}
-		if entry.OutputCostPerImage != nil {
+			applyAbove272KLongContextPricing(pricing, &entry)
+			if entry.OutputCostPerImage != nil {
 			pricing.OutputCostPerImage = *entry.OutputCostPerImage
 		}
 		if entry.OutputCostPerImageToken != nil {

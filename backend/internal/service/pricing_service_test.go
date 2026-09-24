@@ -133,15 +133,11 @@ func TestBillingService_GPT56CacheWritePricingUsesOfficialMultiplier(t *testing.
 
 			pricing, err := svc.GetModelPricing(tt.model)
 			require.NoError(t, err)
-			require.InDelta(t, tt.input*1.25, pricing.CacheCreationPricePerToken, 1e-12)
-			require.InDelta(t, tt.inputPriority*1.25, pricing.CacheCreationPricePerTokenPriority, 1e-12)
-			if tt.model == "gpt-6-astra" {
-				require.Zero(t, pricing.LongContextInputThreshold)
-			} else {
+				require.InDelta(t, tt.input*1.25, pricing.CacheCreationPricePerToken, 1e-12)
+				require.InDelta(t, tt.inputPriority*1.25, pricing.CacheCreationPricePerTokenPriority, 1e-12)
 				require.Equal(t, 272000, pricing.LongContextInputThreshold)
 				require.InDelta(t, 2.0, pricing.LongContextInputMultiplier, 1e-12)
 				require.InDelta(t, 1.5, pricing.LongContextOutputMultiplier, 1e-12)
-			}
 
 			tokens := UsageTokens{InputTokens: 700, OutputTokens: 50, CacheCreationTokens: 200, CacheReadTokens: 100}
 			standard, err := svc.CalculateCostWithServiceTier(tt.model, tokens, 1, "")
@@ -281,16 +277,10 @@ func TestDefaultPricingIncludesOfficialGPT56Rates(t *testing.T) {
 			require.InDelta(t, tt.inputPriority, pricing.InputPricePerTokenPriority, 1e-12)
 			require.InDelta(t, tt.cachedPriority, pricing.CacheReadPricePerTokenPriority, 1e-12)
 			require.InDelta(t, tt.cacheWritePriority, pricing.CacheCreationPricePerTokenPriority, 1e-12)
-			require.InDelta(t, tt.outputPriority, pricing.OutputPricePerTokenPriority, 1e-12)
-			if tt.model == "gpt-6-astra" {
-				require.Zero(t, pricing.LongContextInputThreshold)
-				require.Zero(t, pricing.LongContextInputMultiplier)
-				require.Zero(t, pricing.LongContextOutputMultiplier)
-			} else {
+				require.InDelta(t, tt.outputPriority, pricing.OutputPricePerTokenPriority, 1e-12)
 				require.Equal(t, 272000, pricing.LongContextInputThreshold)
 				require.InDelta(t, 2.0, pricing.LongContextInputMultiplier, 1e-12)
 				require.InDelta(t, 1.5, pricing.LongContextOutputMultiplier, 1e-12)
-			}
 		})
 	}
 }
@@ -351,14 +341,8 @@ func assertGPT56FallbackPricing(t *testing.T, model string, pricing *ModelPricin
 	require.InDelta(t, input, pricing.InputPricePerToken, 1e-12)
 	require.InDelta(t, cached, pricing.CacheReadPricePerToken, 1e-12)
 	require.InDelta(t, cacheWrite, pricing.CacheCreationPricePerToken, 1e-12)
-	require.InDelta(t, output, pricing.OutputPricePerToken, 1e-12)
-	if model == "gpt-6-astra" {
-		require.Zero(t, pricing.LongContextInputThreshold)
-		require.Zero(t, pricing.LongContextInputMultiplier)
-		require.Zero(t, pricing.LongContextOutputMultiplier)
-		return
-	}
-	require.Equal(t, 272000, pricing.LongContextInputThreshold)
+		require.InDelta(t, output, pricing.OutputPricePerToken, 1e-12)
+		require.Equal(t, 272000, pricing.LongContextInputThreshold)
 	require.InDelta(t, 2.0, pricing.LongContextInputMultiplier, 1e-12)
 	require.InDelta(t, 1.5, pricing.LongContextOutputMultiplier, 1e-12)
 }

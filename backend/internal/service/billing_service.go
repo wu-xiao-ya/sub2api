@@ -306,16 +306,19 @@ func (s *BillingService) initFallbackPricing() {
 		LongContextInputMultiplier:         openAIGPT54LongContextInputMultiplier,
 		LongContextOutputMultiplier:        openAIGPT54LongContextOutputMultiplier,
 	}
-	s.fallbackPrices["gpt-6-astra"] = &ModelPricing{
-		InputPricePerToken:                 10e-6,
-		InputPricePerTokenPriority:         20e-6,
-		OutputPricePerToken:                50e-6,
-		OutputPricePerTokenPriority:        100e-6,
-		CacheCreationPricePerToken:         12.5e-6,
-		CacheCreationPricePerTokenPriority: 25e-6,
-		CacheReadPricePerToken:             1e-6,
-		CacheReadPricePerTokenPriority:     2e-6,
-	}
+		s.fallbackPrices["gpt-6-astra"] = &ModelPricing{
+			InputPricePerToken:                 10e-6,
+			InputPricePerTokenPriority:         20e-6,
+			OutputPricePerToken:                50e-6,
+			OutputPricePerTokenPriority:        100e-6,
+			CacheCreationPricePerToken:         12.5e-6,
+			CacheCreationPricePerTokenPriority: 25e-6,
+			CacheReadPricePerToken:             1e-6,
+			CacheReadPricePerTokenPriority:     2e-6,
+			LongContextInputThreshold:          openAIGPT54LongContextInputThreshold,
+			LongContextInputMultiplier:         openAIGPT54LongContextInputMultiplier,
+			LongContextOutputMultiplier:        openAIGPT54LongContextOutputMultiplier,
+		}
 	s.fallbackPrices["gpt-5.6-terra"] = &ModelPricing{
 		InputPricePerToken:                 2e-6,
 		InputPricePerTokenPriority:         4e-6,
@@ -1301,14 +1304,21 @@ func (s *BillingService) applyModelSpecificPricingPolicy(model string, pricing *
 	if isGrokUnknownTextFamilyModel(model) {
 		return applyGrokLongContextPricing(pricing)
 	}
-	// Site policy disables Astra's surcharge, including in older remote/local files.
-	// Normalize a copy so cached pricing and explicit service-tier prices stay intact.
-	if normalized == "gpt-6-astra" {
-		cloned := *pricing
-		cloned.LongContextInputThreshold = 0
-		cloned.LongContextInputMultiplier = 0
-		cloned.LongContextOutputMultiplier = 0
-		if !cloned.CacheCreationPriceExplicit {
+		// Astra uses the same 272k whole-request surcharge as GPT-5.6:
+		// input and cache 2x, output 1.5x. Fill missing rates so channel prices
+		// and older remote files, which only store base token prices, still apply it.
+		if normalized == "gpt-6-astra" {
+			cloned := *pricing
+			if cloned.LongContextInputThreshold <= 0 {
+				cloned.LongContextInputThreshold = openAIGPT54LongContextInputThreshold
+			}
+			if cloned.LongContextInputMultiplier <= 0 {
+				cloned.LongContextInputMultiplier = openAIGPT54LongContextInputMultiplier
+			}
+			if cloned.LongContextOutputMultiplier <= 0 {
+				cloned.LongContextOutputMultiplier = openAIGPT54LongContextOutputMultiplier
+			}
+			if !cloned.CacheCreationPriceExplicit {
 			if cloned.CacheCreationPricePerToken <= 0 {
 				cloned.CacheCreationPricePerToken = cloned.InputPricePerToken * 1.25
 			}
