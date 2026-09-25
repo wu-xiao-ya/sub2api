@@ -786,7 +786,7 @@ func buildAnthropicAdaptiveAccountProbeRequest(
 	body, err := json.Marshal(map[string]any{
 		"model":      mappedModel,
 		"messages":   []map[string]string{{"role": "user", "content": monitorLowCostChallengePrompt}},
-		"max_tokens": monitorLowCostMaxTokens,
+		"max_tokens": monitorAnthropicLowCostMaxTokens,
 		"stream":     false,
 	})
 	if err != nil {

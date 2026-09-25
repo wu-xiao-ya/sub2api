@@ -572,7 +572,7 @@ func TestAdaptiveAccountProbeUsesLowCostAnthropicAPIKeyRequest(t *testing.T) {
 	if request.body["model"] != "P6.1-claude-sonnet-5" {
 		t.Fatalf("body model = %#v", request.body["model"])
 	}
-	if request.body["max_tokens"] != float64(monitorLowCostMaxTokens) || request.body["stream"] != false {
+	if request.body["max_tokens"] != float64(monitorAnthropicLowCostMaxTokens) || request.body["stream"] != false {
 		t.Fatalf("low-cost body = %#v", request.body)
 	}
 	if _, ok := request.body["system"]; ok {

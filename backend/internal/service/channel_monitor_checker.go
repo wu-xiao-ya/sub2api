@@ -746,9 +746,18 @@ func validateMonitorChallengeResponse(
 	if validateChallenge(responseText, expected) {
 		return true
 	}
-	return isLowCostCheck(opts) &&
+	if isLowCostCheck(opts) &&
 		isCompatibleReasoningMonitorProvider(provider) &&
-		hasCompatibleReasoningOutput(rawBody)
+		hasCompatibleReasoningOutput(rawBody) {
+		return true
+	}
+	// Thinking-mandatory Anthropic models (e.g. Opus 5.5) can spend the whole
+	// short low-cost budget on hidden reasoning and return 2xx with no visible
+	// answer. A reply cut off by the token limit that still shows reasoning
+	// output proves the channel accepted, processed and billed the request.
+	return isLowCostCheck(opts) &&
+		provider == MonitorProviderAnthropic &&
+		hasAnthropicThinkingEvidence(rawBody)
 }
 
 func isCompatibleReasoningMonitorProvider(provider string) bool {
@@ -774,6 +783,31 @@ func hasCompatibleReasoningOutput(rawBody []byte) bool {
 		}
 	}
 	return false
+}
+
+// hasAnthropicThinkingEvidence reports whether an Anthropic reply spent output
+// on hidden reasoning: a thinking content block, or the gateway-reported
+// thinking token count. Only replies stopped by max_tokens qualify — a reply
+// that ended on its own without the answer text is still a real failure.
+func hasAnthropicThinkingEvidence(rawBody []byte) bool {
+	if gjson.GetBytes(rawBody, "stop_reason").String() != "max_tokens" {
+		return false
+	}
+	content := gjson.GetBytes(rawBody, "content")
+	if content.IsArray() {
+		found := false
+		content.ForEach(func(_, item gjson.Result) bool {
+			if item.Get("type").String() == "thinking" {
+				found = true
+				return false
+			}
+			return true
+		})
+		if found {
+			return true
+		}
+	}
+	return gjson.GetBytes(rawBody, "usage.output_tokens_details.thinking_tokens").Int() > 0
 }
 
 func cloneMonitorRequestBody(body map[string]any) (map[string]any, error) {
@@ -803,7 +837,11 @@ func applyLowCostOutputLimit(provider, apiMode string, body map[string]any) {
 			return
 		}
 		body["max_tokens"] = lowCostOutputTokenLimit(provider)
-	case MonitorProviderAnthropic, MonitorProviderGrok:
+	case MonitorProviderAnthropic:
+		// Thinking-mandatory Anthropic models (e.g. Opus 5.5) spend output on
+		// hidden reasoning first; a one-token budget can never emit text.
+		body["max_tokens"] = monitorAnthropicLowCostMaxTokens
+	case MonitorProviderGrok:
 		body["max_tokens"] = monitorLowCostMaxTokens
 	case MonitorProviderGemini:
 		config, ok := body["generationConfig"].(map[string]any)

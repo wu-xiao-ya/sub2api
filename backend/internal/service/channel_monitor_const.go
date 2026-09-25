@@ -126,6 +126,11 @@ const (
 	monitorChallengeMaxTokens = 50
 	// monitorLowCostMaxTokens 同组并发探测的最大输出 token。
 	monitorLowCostMaxTokens = 1
+	// monitorAnthropicLowCostMaxTokens gives Anthropic low-cost probes room
+	// for thinking-mandatory models (e.g. Opus 5.5): their hidden reasoning
+	// consumes the whole one-token budget, so the challenge would always see
+	// an empty reply. Kept small so per-probe cost stays negligible.
+	monitorAnthropicLowCostMaxTokens = 64
 	// monitorCompatibleLowCostMaxTokens gives independently managed
 	// OpenAI-compatible reasoning providers enough room to emit the final
 	// confirmation token. A one-token limit can be consumed before content is
