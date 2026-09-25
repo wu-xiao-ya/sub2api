@@ -43,6 +43,11 @@ type UsageLogRepository interface {
 	GetAccountWindowStats(ctx context.Context, accountID int64, startTime time.Time) (*usagestats.AccountStats, error)
 	GetAccountTodayStats(ctx context.Context, accountID int64) (*usagestats.AccountStats, error)
 
+	// Image upstream cost candidates, collected from real usage rather than a
+	// shipped catalog so upstream-only model IDs stay configurable.
+	ListImageGenerationModels(ctx context.Context) ([]string, error)
+	ListImageGenerationAccounts(ctx context.Context) ([]ImageUpstreamCostAccountCandidate, error)
+
 	// Admin dashboard stats
 	GetDashboardStats(ctx context.Context) (*usagestats.DashboardStats, error)
 	GetUsageTrendWithFilters(ctx context.Context, startTime, endTime time.Time, granularity string, userID, apiKeyID, accountID, groupID int64, model string, requestType *int16, stream *bool, billingType *int8) ([]usagestats.TrendDataPoint, error)

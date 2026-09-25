@@ -9,114 +9,161 @@
     </div>
 
     <template v-else>
-      <!-- Global default -->
-      <div
-        class="rounded-lg border border-gray-200 p-4 dark:border-dark-600"
-      >
-        <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-200">
-          {{ t("admin.settings.imageUpstreamCost.defaultPrice") }}
-        </label>
-        <input
-          v-model.number="form.cost_per_image"
-          type="number"
-          step="0.0001"
-          min="0"
-          class="input w-48"
-        />
-        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-          {{ t("admin.settings.imageUpstreamCost.defaultPriceHint") }}
-        </p>
+      <!-- All override levels in one table, highest priority first. The global
+           default is the last row so an operator reads it as the fallback. -->
+      <div class="overflow-x-auto">
+        <table class="w-full min-w-[46rem] text-sm">
+          <thead>
+            <tr class="border-b border-gray-200 text-left text-xs text-gray-500 dark:border-dark-600">
+              <th class="py-2 pr-3 font-medium">
+                {{ t("admin.settings.imageUpstreamCost.colAccount") }}
+              </th>
+              <th class="py-2 pr-3 font-medium">
+                {{ t("admin.settings.imageUpstreamCost.colModel") }}
+              </th>
+              <th v-for="tier in TIERS" :key="tier" class="w-28 py-2 pr-3 font-medium">
+                {{ tier }}
+              </th>
+              <th class="w-20 py-2 font-medium"></th>
+            </tr>
+          </thead>
+          <tbody>
+            <!-- Account + model rows -->
+            <tr
+              v-for="(row, index) in accountModelRows"
+              :key="`am-${index}`"
+              class="border-b border-gray-100 dark:border-dark-700"
+            >
+              <td class="py-2 pr-3">
+                <AccountSelector v-model="row.accountId" :platform="PLATFORM" />
+              </td>
+              <td class="py-2 pr-3">
+                <ModelPicker v-model="row.model" :candidates="candidateModels" />
+              </td>
+              <td v-for="tier in TIERS" :key="tier" class="py-2 pr-3">
+                <input
+                  v-model.number="row.tiers[tier]"
+                  type="number"
+                  step="0.0001"
+                  min="0"
+                  class="input w-24"
+                />
+              </td>
+              <td class="py-2">
+                <button
+                  type="button"
+                  class="btn btn-ghost btn-sm text-red-600"
+                  @click="removeAccountModelRow(index)"
+                >
+                  {{ t("common.delete") }}
+                </button>
+              </td>
+            </tr>
+
+            <!-- Model rows (any account) -->
+            <tr
+              v-for="(row, index) in modelRows"
+              :key="`m-${index}`"
+              class="border-b border-gray-100 dark:border-dark-700"
+            >
+              <td class="py-2 pr-3 text-xs text-gray-500 dark:text-gray-400">
+                {{ t("admin.settings.imageUpstreamCost.anyAccount") }}
+              </td>
+              <td class="py-2 pr-3">
+                <ModelPicker v-model="row.model" :candidates="candidateModels" />
+              </td>
+              <td v-for="tier in TIERS" :key="tier" class="py-2 pr-3">
+                <input
+                  v-model.number="row.tiers[tier]"
+                  type="number"
+                  step="0.0001"
+                  min="0"
+                  class="input w-24"
+                />
+              </td>
+              <td class="py-2">
+                <button
+                  type="button"
+                  class="btn btn-ghost btn-sm text-red-600"
+                  @click="removeModelRow(index)"
+                >
+                  {{ t("common.delete") }}
+                </button>
+              </td>
+            </tr>
+
+            <!-- Account rows (all models) -->
+            <tr
+              v-for="(row, index) in accountRows"
+              :key="`a-${index}`"
+              class="border-b border-gray-100 dark:border-dark-700"
+            >
+              <td class="py-2 pr-3">
+                <AccountSelector v-model="row.accountId" :platform="PLATFORM" />
+              </td>
+              <td class="py-2 pr-3 text-xs text-gray-500 dark:text-gray-400">
+                {{ t("admin.settings.imageUpstreamCost.allModels") }}
+              </td>
+              <td colspan="3" class="py-2 pr-3">
+                <input
+                  v-model.number="row.costPerImage"
+                  type="number"
+                  step="0.0001"
+                  min="0"
+                  class="input w-32"
+                />
+              </td>
+              <td class="py-2">
+                <button
+                  type="button"
+                  class="btn btn-ghost btn-sm text-red-600"
+                  @click="removeAccountRow(index)"
+                >
+                  {{ t("common.delete") }}
+                </button>
+              </td>
+            </tr>
+
+            <!-- Global default -->
+            <tr>
+              <td class="py-2 pr-3 text-xs text-gray-500 dark:text-gray-400">
+                {{ t("admin.settings.imageUpstreamCost.globalDefault") }}
+              </td>
+              <td class="py-2 pr-3 text-xs text-gray-500 dark:text-gray-400">
+                {{ t("admin.settings.imageUpstreamCost.allModels") }}
+              </td>
+              <td colspan="3" class="py-2 pr-3">
+                <input
+                  v-model.number="form.cost_per_image"
+                  type="number"
+                  step="0.0001"
+                  min="0"
+                  class="input w-32"
+                />
+              </td>
+              <td class="py-2 text-xs text-gray-400">
+                {{ t("admin.settings.imageUpstreamCost.fallback") }}
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
 
-      <!-- Per-model tiers -->
-      <div class="rounded-lg border border-gray-200 p-4 dark:border-dark-600">
-        <div class="mb-3 flex items-center justify-between">
-          <h4 class="text-sm font-medium text-gray-700 dark:text-gray-200">
-            {{ t("admin.settings.imageUpstreamCost.byModel") }}
-          </h4>
-          <button type="button" class="btn btn-secondary btn-sm" @click="addModel">
-            {{ t("admin.settings.imageUpstreamCost.addModel") }}
-          </button>
-        </div>
-
-        <p v-if="form.model_overrides.length === 0" class="text-xs text-gray-500 dark:text-gray-400">
-          {{ t("admin.settings.imageUpstreamCost.noModelOverride") }}
-        </p>
-
-        <div
-          v-for="(entry, index) in form.model_overrides"
-          :key="`model-${index}`"
-          class="mb-3 grid grid-cols-1 gap-2 border-b border-gray-100 pb-3 last:mb-0 last:border-b-0 last:pb-0 dark:border-dark-700 sm:grid-cols-[minmax(0,1fr)_repeat(3,7rem)_auto]"
-        >
-          <input
-            v-model="entry.model"
-            type="text"
-            :placeholder="t('admin.settings.imageUpstreamCost.modelPlaceholder')"
-            class="input"
-          />
-          <input
-            v-for="tier in TIERS"
-            :key="tier"
-            v-model.number="entry.tiers[tier]"
-            type="number"
-            step="0.0001"
-            min="0"
-            :placeholder="tier"
-            class="input"
-          />
-          <button
-            type="button"
-            class="btn btn-ghost btn-sm text-red-600"
-            @click="form.model_overrides.splice(index, 1)"
-          >
-            {{ t("common.delete") }}
-          </button>
-        </div>
+      <div class="flex flex-wrap gap-2">
+        <button type="button" class="btn btn-secondary btn-sm" @click="addAccountModelRow">
+          {{ t("admin.settings.imageUpstreamCost.addAccountModel") }}
+        </button>
+        <button type="button" class="btn btn-secondary btn-sm" @click="addModelRow">
+          {{ t("admin.settings.imageUpstreamCost.addModel") }}
+        </button>
+        <button type="button" class="btn btn-secondary btn-sm" @click="addAccountRow">
+          {{ t("admin.settings.imageUpstreamCost.addAccount") }}
+        </button>
       </div>
 
-      <!-- Per-account flat override -->
-      <div class="rounded-lg border border-gray-200 p-4 dark:border-dark-600">
-        <div class="mb-3 flex items-center justify-between">
-          <h4 class="text-sm font-medium text-gray-700 dark:text-gray-200">
-            {{ t("admin.settings.imageUpstreamCost.byAccount") }}
-          </h4>
-          <button type="button" class="btn btn-secondary btn-sm" @click="addAccount">
-            {{ t("admin.settings.imageUpstreamCost.addAccount") }}
-          </button>
-        </div>
-
-        <p v-if="form.account_overrides.length === 0" class="text-xs text-gray-500 dark:text-gray-400">
-          {{ t("admin.settings.imageUpstreamCost.noAccountOverride") }}
-        </p>
-
-        <div
-          v-for="(entry, index) in form.account_overrides"
-          :key="`acct-${index}`"
-          class="mb-2 flex flex-wrap items-center gap-2"
-        >
-          <input
-            v-model.number="entry.account_id"
-            type="number"
-            min="1"
-            :placeholder="t('admin.settings.imageUpstreamCost.accountIdPlaceholder')"
-            class="input w-32"
-          />
-          <input
-            v-model.number="entry.cost_per_image"
-            type="number"
-            step="0.0001"
-            min="0"
-            class="input w-40"
-          />
-          <button
-            type="button"
-            class="btn btn-ghost btn-sm text-red-600"
-            @click="form.account_overrides.splice(index, 1)"
-          >
-            {{ t("common.delete") }}
-          </button>
-        </div>
-      </div>
+      <p class="text-xs text-gray-500 dark:text-gray-400">
+        {{ t("admin.settings.imageUpstreamCost.emptyTierHint") }}
+      </p>
 
       <!-- Snapshot multiplier switch -->
       <div class="rounded-lg border border-gray-200 p-4 dark:border-dark-600">
@@ -154,78 +201,141 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref } from "vue";
+import { computed, onMounted, reactive, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import {
   settingsAPI,
+  type ImageUpstreamCostAccountModelOverride,
   type ImageUpstreamCostAccountOverride,
   type ImageUpstreamCostModelOverride,
 } from "@/api/admin/settings";
+import AccountSelector from "@/components/common/AccountSelector.vue";
+import ModelPicker from "@/views/admin/settings/ModelPicker.vue";
 
 const { t } = useI18n();
 
 // Tier keys must match the backend's canonical billing sizes.
 const TIERS = ["1K", "2K", "4K"] as const;
+// Image generation lives on the OpenAI-compatible platform today.
+const PLATFORM = "openai";
 
-interface ModelOverrideForm {
+interface AccountModelRow {
+  accountId: number | null;
   model: string;
   tiers: Record<string, number | undefined>;
+}
+interface ModelRow {
+  model: string;
+  tiers: Record<string, number | undefined>;
+}
+interface AccountRow {
+  accountId: number | null;
+  costPerImage: number;
 }
 
 const loading = ref(true);
 const saving = ref(false);
 const saveMessage = ref("");
 const saveError = ref(false);
+const candidateModels = ref<string[]>([]);
 
 const form = reactive({
   cost_per_image: 0,
   ignore_upstream_rate_snapshot: false,
-  model_overrides: [] as ModelOverrideForm[],
-  account_overrides: [] as ImageUpstreamCostAccountOverride[],
+  accountModelRows: [] as AccountModelRow[],
+  modelRows: [] as ModelRow[],
+  accountRows: [] as AccountRow[],
 });
 
-function addModel() {
-  form.model_overrides.push({ model: "", tiers: {} });
+const accountModelRows = computed(() => form.accountModelRows);
+const modelRows = computed(() => form.modelRows);
+const accountRows = computed(() => form.accountRows);
+
+function emptyTiers(): Record<string, number | undefined> {
+  return {};
 }
 
-function addAccount() {
-  form.account_overrides.push({ account_id: 0, cost_per_image: 0 });
+function addAccountModelRow() {
+  form.accountModelRows.push({ accountId: null, model: "", tiers: emptyTiers() });
+}
+function addModelRow() {
+  form.modelRows.push({ model: "", tiers: emptyTiers() });
+}
+function addAccountRow() {
+  form.accountRows.push({ accountId: null, costPerImage: 0 });
+}
+function removeAccountModelRow(index: number) {
+  form.accountModelRows.splice(index, 1);
+}
+function removeModelRow(index: number) {
+  form.modelRows.splice(index, 1);
+}
+function removeAccountRow(index: number) {
+  form.accountRows.splice(index, 1);
 }
 
-// Drop blank rows and unset tiers so the request only carries real overrides.
+// Trim rows the backend would reject: a row without its key column, or without
+// any tier filled, carries no information and is dropped rather than failing
+// the whole save.
+function buildTiers(tiers: Record<string, number | undefined>): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const tier of TIERS) {
+    const value = tiers[tier];
+    if (typeof value === "number" && Number.isFinite(value)) {
+      out[tier] = value;
+    }
+  }
+  return out;
+}
+
+function buildAccountModelOverrides(): ImageUpstreamCostAccountModelOverride[] {
+  return form.accountModelRows
+    .filter((row) => row.accountId !== null && row.model.trim() !== "")
+    .map((row) => ({
+      account_id: row.accountId as number,
+      model: row.model.trim(),
+      tiers: buildTiers(row.tiers),
+    }))
+    .filter((row) => Object.keys(row.tiers).length > 0);
+}
+
 function buildModelOverrides(): ImageUpstreamCostModelOverride[] {
-  return form.model_overrides
-    .filter((entry) => entry.model.trim() !== "")
-    .map((entry) => {
-      const tiers: Record<string, number> = {};
-      for (const tier of TIERS) {
-        const value = entry.tiers[tier];
-        if (typeof value === "number" && Number.isFinite(value)) {
-          tiers[tier] = value;
-        }
-      }
-      return { model: entry.model.trim(), tiers };
-    })
-    .filter((entry) => Object.keys(entry.tiers).length > 0);
+  return form.modelRows
+    .filter((row) => row.model.trim() !== "")
+    .map((row) => ({ model: row.model.trim(), tiers: buildTiers(row.tiers) }))
+    .filter((row) => Object.keys(row.tiers).length > 0);
 }
 
 function buildAccountOverrides(): ImageUpstreamCostAccountOverride[] {
-  return form.account_overrides.filter(
-    (entry) => Number.isFinite(entry.account_id) && entry.account_id > 0,
-  );
+  return form.accountRows
+    .filter((row) => row.accountId !== null)
+    .map((row) => ({ account_id: row.accountId as number, cost_per_image: row.costPerImage }));
 }
 
 async function load() {
   loading.value = true;
   try {
-    const settings = await settingsAPI.getImageUpstreamCost();
+    const [settings, candidates] = await Promise.all([
+      settingsAPI.getImageUpstreamCost(),
+      // Candidates are a convenience only; a failure must not block the form.
+      settingsAPI.getImageUpstreamCostCandidates().catch(() => ({ models: [], accounts: [] })),
+    ]);
     form.cost_per_image = settings.cost_per_image;
     form.ignore_upstream_rate_snapshot = settings.ignore_upstream_rate_snapshot;
-    form.model_overrides = (settings.model_overrides ?? []).map((entry) => ({
+    form.accountModelRows = (settings.account_model_overrides ?? []).map((entry) => ({
+      accountId: entry.account_id,
       model: entry.model,
       tiers: { ...entry.tiers },
     }));
-    form.account_overrides = (settings.account_overrides ?? []).map((entry) => ({ ...entry }));
+    form.modelRows = (settings.model_overrides ?? []).map((entry) => ({
+      model: entry.model,
+      tiers: { ...entry.tiers },
+    }));
+    form.accountRows = (settings.account_overrides ?? []).map((entry) => ({
+      accountId: entry.account_id,
+      costPerImage: entry.cost_per_image,
+    }));
+    candidateModels.value = candidates.models ?? [];
   } catch (error) {
     saveError.value = true;
     saveMessage.value = error instanceof Error ? error.message : String(error);
@@ -242,6 +352,7 @@ async function save() {
     await settingsAPI.updateImageUpstreamCost({
       cost_per_image: form.cost_per_image,
       ignore_upstream_rate_snapshot: form.ignore_upstream_rate_snapshot,
+      account_model_overrides: buildAccountModelOverrides(),
       model_overrides: buildModelOverrides(),
       account_overrides: buildAccountOverrides(),
     });

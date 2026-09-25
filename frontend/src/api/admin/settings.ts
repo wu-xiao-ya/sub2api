@@ -1537,10 +1537,30 @@ export async function updateImageUpstreamCost(
   return data;
 }
 
+export interface ImageUpstreamCostAccountCandidate {
+  account_id: number;
+  account_name: string;
+}
+
+export interface ImageUpstreamCostCandidates {
+  models: string[];
+  accounts: ImageUpstreamCostAccountCandidate[];
+}
+
+// Models and accounts seen in real image traffic. A shipped catalog cannot
+// list upstream-only image model IDs, so the pickers are seeded from usage.
+export async function getImageUpstreamCostCandidates(): Promise<ImageUpstreamCostCandidates> {
+  const { data } = await apiClient.get<ImageUpstreamCostCandidates>(
+    "/admin/settings/image-upstream-cost/candidates",
+  );
+  return data;
+}
+
 export const settingsAPI = {
   getSettings,
   getImageUpstreamCost,
   updateImageUpstreamCost,
+  getImageUpstreamCostCandidates,
   updateSettings,
   testSmtpConnection,
   sendTestEmail,

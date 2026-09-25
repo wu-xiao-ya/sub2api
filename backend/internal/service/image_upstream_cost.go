@@ -56,6 +56,41 @@ type ImageUpstreamCostAccountModelOverride struct {
 	Tiers     map[string]float64 `json:"tiers"`
 }
 
+// ImageUpstreamCostAccountCandidate is an account that recently generated
+// images, offered so operators select one by name instead of looking up its ID.
+type ImageUpstreamCostAccountCandidate struct {
+	AccountID   int64  `json:"account_id"`
+	AccountName string `json:"account_name"`
+}
+
+// ImageUpstreamCostCandidates holds the pickers' data. Models come from real
+// usage because upstream providers expose image model IDs that no shipped
+// catalog contains.
+type ImageUpstreamCostCandidates struct {
+	Models   []string                            `json:"models"`
+	Accounts []ImageUpstreamCostAccountCandidate `json:"accounts"`
+}
+
+// GetImageUpstreamCostCandidates returns the image models and accounts seen in
+// recent usage. It degrades to empty lists on error so a reporting hiccup
+// cannot block the settings page, which keeps its manual entry paths.
+func (s *SettingService) GetImageUpstreamCostCandidates(ctx context.Context) *ImageUpstreamCostCandidates {
+	candidates := &ImageUpstreamCostCandidates{
+		Models:   []string{},
+		Accounts: []ImageUpstreamCostAccountCandidate{},
+	}
+	if s == nil || s.usageLogRepo == nil {
+		return candidates
+	}
+	if models, err := s.usageLogRepo.ListImageGenerationModels(ctx); err == nil && len(models) > 0 {
+		candidates.Models = models
+	}
+	if accounts, err := s.usageLogRepo.ListImageGenerationAccounts(ctx); err == nil && len(accounts) > 0 {
+		candidates.Accounts = accounts
+	}
+	return candidates
+}
+
 // GetImageUpstreamCostPerImage returns the configured upstream cost per image.
 // Missing, malformed, or unavailable settings fall back to the safe default so
 // a settings problem cannot break dashboard cost queries.

@@ -121,6 +121,7 @@ type SettingService struct {
 	settingRepo                 SettingRepository
 	defaultSubGroupReader       DefaultSubscriptionGroupReader
 	proxyRepo                   ProxyRepository // for resolving websearch provider proxy URLs
+	usageLogRepo                UsageLogRepository
 	cfg                         *config.Config
 	onUpdate                    func() // Callback when settings are updated (for cache invalidation)
 	version                     string // Application version
@@ -295,6 +296,12 @@ func (s *SettingService) SetDefaultSubscriptionGroupReader(reader DefaultSubscri
 // SetProxyRepository injects a proxy repo for resolving websearch provider proxy URLs.
 func (s *SettingService) SetProxyRepository(repo ProxyRepository) {
 	s.proxyRepo = repo
+}
+
+// SetUsageLogRepository injects a usage-log reader so image upstream cost
+// candidate pickers can be seeded from real image traffic.
+func (s *SettingService) SetUsageLogRepository(repo UsageLogRepository) {
+	s.usageLogRepo = repo
 }
 
 func (s *SettingService) LoadForwardedClientIPSettings(ctx context.Context) error {

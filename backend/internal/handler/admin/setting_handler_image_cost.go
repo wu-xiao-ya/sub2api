@@ -14,6 +14,14 @@ func (h *SettingHandler) GetImageUpstreamCost(c *gin.Context) {
 	response.Success(c, h.settingService.GetImageUpstreamCostSettings(c.Request.Context()))
 }
 
+// GetImageUpstreamCostCandidates returns the image models and accounts that
+// recently generated images, so the settings UI can offer pickers instead of
+// raw ID and model-name text inputs.
+// GET /api/v1/admin/settings/image-upstream-cost/candidates
+func (h *SettingHandler) GetImageUpstreamCostCandidates(c *gin.Context) {
+	response.Success(c, h.settingService.GetImageUpstreamCostCandidates(c.Request.Context()))
+}
+
 type updateImageUpstreamCostRequest struct {
 	CostPerImage               *float64                                         `json:"cost_per_image"`
 	AccountOverrides           *[]service.ImageUpstreamCostAccountOverride      `json:"account_overrides"`

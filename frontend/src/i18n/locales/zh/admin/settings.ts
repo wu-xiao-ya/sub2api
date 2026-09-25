@@ -1237,6 +1237,7 @@ export default {
       failedToSave: '保存设置失败',
       failedToTestSmtp: 'SMTP 连接测试失败',
       failedToSendTestEmail: '发送测试邮件失败',
+
       imageUpstreamCost: {
         title: '生图上游成本',
         hint: '单张生成图片的上游成本，用于成本/利润统计。不会改变面向用户的生图价格或历史用量金额。取值优先级：账号+模型 > 模型 > 账号 > 全局默认。',
@@ -1252,7 +1253,20 @@ export default {
         noAccountOverride: '未配置按账号成本。',
         ignoreSnapshot: '图片成本不叠加上游倍率快照',
         ignoreSnapshotHint: '开启后，每张图成本视为绝对值，不再乘以上游计费倍率。请在所有生图账号都配好真实每张成本后再开启，否则利润会被高估。',
-        saved: '生图上游成本已保存'
+        saved: '生图上游成本已保存',
+        colAccount: '账号',
+        colModel: '模型',
+        anyAccount: '任意账号',
+        allModels: '全部模型',
+        globalDefault: '全局默认',
+        fallback: '兜底',
+        addAccountModel: '添加账号+模型',
+        accountSearchPlaceholder: '按账号名搜索',
+        accountSearchEmpty: '没有匹配的账号',
+        accountLabel: '{name} #{id}',
+        accountIdFallback: '#{id}',
+        modelSearchPlaceholder: '模型名，或直接输入',
+        emptyTierHint: '价格留空表示不覆盖该档，继续向下回退。',
       }
     },
 

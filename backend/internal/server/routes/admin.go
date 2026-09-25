@@ -566,6 +566,7 @@ func registerSettingsRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		adminSettings.PUT("", h.Admin.Setting.UpdateSettings)
 		adminSettings.GET("/image-upstream-cost", h.Admin.Setting.GetImageUpstreamCost)
 		adminSettings.PUT("/image-upstream-cost", h.Admin.Setting.UpdateImageUpstreamCost)
+		adminSettings.GET("/image-upstream-cost/candidates", h.Admin.Setting.GetImageUpstreamCostCandidates)
 		adminSettings.POST("/test-smtp", h.Admin.Setting.TestSMTPConnection)
 		adminSettings.POST("/send-test-email", h.Admin.Setting.SendTestEmail)
 		adminSettings.GET("/email-templates", h.Admin.Setting.ListEmailTemplates)

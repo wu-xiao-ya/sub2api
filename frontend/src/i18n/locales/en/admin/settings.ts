@@ -1244,6 +1244,7 @@ export default {
       failedToSave: 'Failed to save settings',
       failedToTestSmtp: 'SMTP connection test failed',
       failedToSendTestEmail: 'Failed to send test email',
+
       imageUpstreamCost: {
         title: 'Image Upstream Cost',
         hint: 'The upstream cost of one generated image, used by cost/profit reporting. This never changes user-facing image prices or historical usage amounts. Resolution priority: account + model > model > account > global default.',
@@ -1259,7 +1260,20 @@ export default {
         noAccountOverride: 'No per-account cost configured.',
         ignoreSnapshot: 'Ignore the upstream rate snapshot for images',
         ignoreSnapshotHint: 'When enabled, per-image cost is treated as an absolute amount and is no longer multiplied by the upstream billing rate. Leave this off until every image account has a real per-image price, otherwise profits will be overstated.',
-        saved: 'Image upstream cost saved'
+        saved: 'Image upstream cost saved',
+        colAccount: 'Account',
+        colModel: 'Model',
+        anyAccount: 'Any account',
+        allModels: 'All models',
+        globalDefault: 'Global default',
+        fallback: 'fallback',
+        addAccountModel: 'Add account + model',
+        accountSearchPlaceholder: 'Search accounts by name',
+        accountSearchEmpty: 'No matching accounts',
+        accountLabel: '{name} #{id}',
+        accountIdFallback: '#{id}',
+        modelSearchPlaceholder: 'Model, or type any name',
+        emptyTierHint: 'Leave a price blank to fall through to the next level below.',
       }
     },
 
