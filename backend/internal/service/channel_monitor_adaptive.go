@@ -15,6 +15,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/pkg/geminicli"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/usagesource"
 	"github.com/Wei-Shaw/sub2api/internal/util/urlvalidator"
+	"github.com/tidwall/gjson"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -714,58 +715,81 @@ func (s *ChannelMonitorService) runAnthropicAPIKeyAdaptiveAccountProbe(
 		return result
 	}
 
-	req, err := buildAnthropicAdaptiveAccountProbeRequest(ctx, baseURL, apiKey, account, model, result.monitorCostModel)
-	if err != nil {
-		result.Message = truncateMessage(sanitizeErrorMessage(fmt.Sprintf("build anthropic request: %v", err)))
-		return result
-	}
+	// Pool-style upstreams intermittently serve 2xx with an empty body, so a
+	// single sample turns a working channel into false red. Two attempts, the
+	// second after a short pause, smooth the flapping without masking a
+	// persistently broken upstream (transport and HTTP errors still fail
+	// immediately).
+	const attempts = 2
+	respText := ""
+	mismatchDiagnostics := ""
+	for attempt := 1; attempt <= attempts; attempt++ {
+		req, err := buildAnthropicAdaptiveAccountProbeRequest(ctx, baseURL, apiKey, account, model, result.monitorCostModel)
+		if err != nil {
+			result.Message = truncateMessage(sanitizeErrorMessage(fmt.Sprintf("build anthropic request: %v", err)))
+			return result
+		}
 
-	start := time.Now()
-	result.monitorRequestAttempted = true
-	resp, err := s.doAccountProbeRequest(req, account)
-	latency := time.Since(start)
-	latencyMs := int(latency / time.Millisecond)
-	result.LatencyMs = &latencyMs
-	if err != nil {
-		result.Message = truncateMessage(sanitizeErrorMessage(fmt.Sprintf("do anthropic request: %v", err)))
-		return result
-	}
-	defer func() { _ = resp.Body.Close() }()
+		start := time.Now()
+		result.monitorRequestAttempted = true
+		resp, err := s.doAccountProbeRequest(req, account)
+		latencyMs := int(time.Since(start) / time.Millisecond)
+		result.LatencyMs = &latencyMs
+		if err != nil {
+			result.Message = truncateMessage(sanitizeErrorMessage(fmt.Sprintf("do anthropic request: %v", err)))
+			return result
+		}
 
-	respBytes, readErr := io.ReadAll(io.LimitReader(resp.Body, monitorResponseMaxBytes+1))
-	if readErr != nil {
-		result.Message = truncateMessage(sanitizeErrorMessage(fmt.Sprintf("read anthropic body: %v", readErr)))
-		return result
-	}
-	if len(respBytes) > monitorResponseMaxBytes {
-		result.Message = truncateMessage("anthropic response exceeded monitor size limit")
-		return result
-	}
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		result.Message = truncateMessage(sanitizeErrorMessage(fmt.Sprintf(
-			"upstream HTTP %d: %s", resp.StatusCode, truncateForErrorBody(string(respBytes)),
-		)))
-		return result
-	}
+		respBytes, readErr := io.ReadAll(io.LimitReader(resp.Body, monitorResponseMaxBytes+1))
+		_ = resp.Body.Close()
+		if readErr != nil {
+			result.Message = truncateMessage(sanitizeErrorMessage(fmt.Sprintf("read anthropic body: %v", readErr)))
+			return result
+		}
+		if len(respBytes) > monitorResponseMaxBytes {
+			result.Message = truncateMessage("anthropic response exceeded monitor size limit")
+			return result
+		}
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			result.Message = truncateMessage(sanitizeErrorMessage(fmt.Sprintf(
+				"upstream HTTP %d: %s", resp.StatusCode, truncateForErrorBody(string(respBytes)),
+			)))
+			return result
+		}
 
-	result.monitorUsage = monitorUsageFromAnthropicPayload(genericJSONPayload(respBytes))
-	respText := extractAnthropicMonitorText(respBytes)
-	if !validateMonitorChallengeResponse(
-		MonitorProviderAnthropic,
-		respText,
-		respBytes,
-		"1",
-		&CheckOptions{LowCost: true},
-	) {
-		result.Status = MonitorStatusFailed
-		result.Message = truncateMessage(sanitizeErrorMessage(fmt.Sprintf(
-			"anthropic low-cost challenge mismatch: got %q",
+		result.monitorUsage = monitorUsageFromAnthropicPayload(genericJSONPayload(respBytes))
+		respText = extractAnthropicMonitorText(respBytes)
+		if validateMonitorChallengeResponse(
+			MonitorProviderAnthropic,
 			respText,
-		)))
-		return result
+			respBytes,
+			"1",
+			&CheckOptions{LowCost: true},
+		) {
+			result.Status = MonitorStatusOperational
+			return result
+		}
+		mismatchDiagnostics = anthropicChallengeDiagnostics(respBytes)
+		if attempt < attempts {
+			time.Sleep(2 * time.Second)
+		}
 	}
-	result.Status = MonitorStatusOperational
+	result.Status = MonitorStatusFailed
+	result.Message = truncateMessage(sanitizeErrorMessage(fmt.Sprintf(
+		"anthropic low-cost challenge mismatch after %d attempts: got %q%s",
+		attempts, respText, mismatchDiagnostics,
+	)))
 	return result
+}
+
+// anthropicChallengeDiagnostics summarizes a 2xx reply that failed the
+// challenge so the failure message distinguishes "thinking consumed the
+// budget" from "upstream served an empty completion".
+func anthropicChallengeDiagnostics(respBytes []byte) string {
+	stopReason := gjson.GetBytes(respBytes, "stop_reason").String()
+	thinking := gjson.GetBytes(respBytes, "usage.output_tokens_details.thinking_tokens").Int()
+	output := gjson.GetBytes(respBytes, "usage.output_tokens").Int()
+	return fmt.Sprintf(" (stop_reason=%s, thinking_tokens=%d, output_tokens=%d)", stopReason, thinking, output)
 }
 
 func buildAnthropicAdaptiveAccountProbeRequest(
@@ -786,7 +810,7 @@ func buildAnthropicAdaptiveAccountProbeRequest(
 	body, err := json.Marshal(map[string]any{
 		"model":      mappedModel,
 		"messages":   []map[string]string{{"role": "user", "content": monitorLowCostChallengePrompt}},
-		"max_tokens": monitorLowCostMaxTokens,
+		"max_tokens": monitorAnthropicLowCostMaxTokens,
 		"stream":     false,
 	})
 	if err != nil {

@@ -239,6 +239,7 @@ type IntelligenceProbeService struct {
 	stopped      bool
 	cycleMu      sync.Mutex
 	runSlots     chan struct{}
+	inFlight     sync.Map // target ID -> drawing; skips duplicate triggers
 	now          func() time.Time
 	lockCache    LeaderLockCache
 	db           *sql.DB
@@ -526,6 +527,13 @@ func (s *IntelligenceProbeService) probeTarget(
 	target *IntelligenceProbeTarget,
 	settings *IntelligenceProbeSettings,
 ) (*IntelligenceProbeResult, error) {
+	// A drawing runs minutes while the runner ticks every minute; without
+	// this guard a slow drawing gets re-triggered (and re-billed) by the next
+	// tick and by manual runs before next_run_at moves forward.
+	if _, busy := s.inFlight.LoadOrStore(target.ID, struct{}{}); busy {
+		return nil, nil
+	}
+	defer s.inFlight.Delete(target.ID)
 	now := s.currentTime()
 	result := s.executeProbe(ctx, target, settings)
 	if err := s.repo.InsertResult(ctx, result); err != nil {

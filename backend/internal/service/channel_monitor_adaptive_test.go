@@ -81,7 +81,10 @@ type anthropicAdaptiveHTTPStub struct {
 	mu           sync.Mutex
 	status       int
 	responseBody string
-	requests     []anthropicAdaptiveRequestSnapshot
+	// responses, when set, are served one per request (the last one repeats);
+	// it models upstreams that answer differently per attempt.
+	responses []string
+	requests  []anthropicAdaptiveRequestSnapshot
 }
 
 type geminiAdaptiveHTTPStub struct {
@@ -193,6 +196,15 @@ func (s *anthropicAdaptiveHTTPStub) DoWithTLS(
 		status = http.StatusOK
 	}
 	responseBody := s.responseBody
+	if len(s.responses) > 0 {
+		index := len(s.requests) - 1
+		if index >= len(s.responses) {
+			index = len(s.responses) - 1
+		}
+		if index >= 0 {
+			responseBody = s.responses[index]
+		}
+	}
 	if responseBody == "" {
 		responseBody = `{"content":[{"type":"text","text":"1"}],"usage":{"input_tokens":3,"output_tokens":1}}`
 	}
@@ -572,7 +584,7 @@ func TestAdaptiveAccountProbeUsesLowCostAnthropicAPIKeyRequest(t *testing.T) {
 	if request.body["model"] != "P6.1-claude-sonnet-5" {
 		t.Fatalf("body model = %#v", request.body["model"])
 	}
-	if request.body["max_tokens"] != float64(monitorLowCostMaxTokens) || request.body["stream"] != false {
+	if request.body["max_tokens"] != float64(monitorAnthropicLowCostMaxTokens) || request.body["stream"] != false {
 		t.Fatalf("low-cost body = %#v", request.body)
 	}
 	if _, ok := request.body["system"]; ok {
@@ -1167,5 +1179,54 @@ func TestAdaptiveStateRepositoryPreservesFullSweepTimestamp(t *testing.T) {
 	}
 	if state == nil || state.LastFullSweepAt == nil || !state.LastFullSweepAt.Equal(now) {
 		t.Fatalf("state = %#v, want preserved full sweep timestamp", state)
+	}
+}
+
+// A pool-style upstream intermittently answers 2xx with an empty body; the
+// adaptive probe must retry once before declaring the channel failed.
+func TestAdaptiveAccountProbeAnthropicRetriesEmptyChallenge(t *testing.T) {
+	executor := &adaptiveProbeExecutorStub{results: map[int64][]AccountMonitorProbeResult{}, callIndex: map[int64]int{}}
+	svc, repo := newAdaptiveMonitorTestService(t, nil, executor)
+	accountRepo := svc.accountProbeRepo.(*accountProbeRepoStub)
+	accountRepo.groupPlatform = PlatformAnthropic
+	accountRepo.accounts = []Account{{
+		ID:          102,
+		Name:        "cc-line-retry",
+		Platform:    PlatformAnthropic,
+		Type:        AccountTypeAPIKey,
+		Status:      StatusActive,
+		Schedulable: true,
+		Concurrency: 3,
+		Priority:    1,
+		Credentials: map[string]any{
+			"api_key":  "sk-retry",
+			"base_url": "https://retry.example.com",
+		},
+	}}
+	upstream := &anthropicAdaptiveHTTPStub{responses: []string{
+		// First attempt: 2xx, no visible text and no thinking evidence —
+		// indistinguishable from a dead upstream on a single sample.
+		`{"content":[{"type":"text","text":""}],"stop_reason":"end_turn","usage":{"input_tokens":15,"output_tokens":0}}`,
+		// Second attempt answers the challenge.
+		`{"content":[{"type":"text","text":"1"}],"stop_reason":"end_turn","usage":{"input_tokens":15,"output_tokens":1}}`,
+	}}
+	svc.SetAccountProbeDependencies(accountRepo, upstream, &config.Config{}, nil)
+
+	monitor := repo.monitors[11]
+	monitor.Provider = MonitorProviderAnthropic
+	monitor.PrimaryModel = "claude-sonnet-5"
+
+	results, err := svc.RunCheck(context.Background(), 11)
+	if err != nil {
+		t.Fatalf("RunCheck: %v", err)
+	}
+	if len(results) != 1 || results[0].Status != MonitorStatusOperational {
+		t.Fatalf("results = %#v, want operational after retry", results)
+	}
+	upstream.mu.Lock()
+	attempts := len(upstream.requests)
+	upstream.mu.Unlock()
+	if attempts != 2 {
+		t.Fatalf("attempts = %d, want 2", attempts)
 	}
 }
