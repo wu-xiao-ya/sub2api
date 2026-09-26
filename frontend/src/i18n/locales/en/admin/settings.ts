@@ -1298,7 +1298,7 @@ export default {
         runNow: 'Run one round now',
         running: 'Running…',
         runNowHint: 'Runs every saved target immediately, one by one (up to 2 minutes each).',
-        runDone: 'Ran {count} target(s); check the "Intelligence" tab on the channel monitor page shortly',
+        runStarted: 'Background probes started: each drawing takes about 2 minutes and appears in the Intelligence tab when done',
         loadFailed: 'Failed to load the intelligence probe configuration',
         saveFailed: 'Save failed',
         runFailed: 'Run failed'

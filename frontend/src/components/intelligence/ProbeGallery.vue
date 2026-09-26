@@ -92,7 +92,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import {
   intelligenceProbeAPI,
@@ -116,6 +116,7 @@ const { t, locale } = useI18n();
 
 const loading = ref(false);
 const fetchedItems = ref<IntelligenceProbeUserResult[]>([]);
+let pollTimer: number | undefined;
 const selected = ref<IntelligenceProbeUserResult | null>(null);
 
 const effectiveItems = computed<IntelligenceProbeUserResult[]>(() =>
@@ -190,7 +191,18 @@ watch(
   },
 );
 
-onMounted(load);
+onMounted(() => {
+  void load();
+  // Admin galleries render new results without a manual reload; the drawings
+  // land a couple of minutes after each run starts.
+  pollTimer = window.setInterval(() => {
+    if (!document.hidden && props.items === null) void load();
+  }, 30000);
+});
+
+onBeforeUnmount(() => {
+  if (pollTimer !== undefined) window.clearInterval(pollTimer);
+});
 
 defineExpose({ load });
 </script>

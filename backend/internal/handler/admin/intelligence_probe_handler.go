@@ -61,7 +61,9 @@ type intelligenceProbeRunRequest struct {
 	TargetID int64 `json:"target_id"`
 }
 
-// RunNow performs one immediate probe, optionally restricted to one target.
+// RunNow starts background probes and returns immediately: a drawing takes
+// minutes, and a synchronous response would be killed by browser or proxy
+// timeouts, cancelling the probe mid-flight. Results appear in the gallery.
 func (h *IntelligenceProbeHandler) RunNow(c *gin.Context) {
 	if h.probe == nil {
 		response.ErrorFrom(c, service.ErrIntelligenceProbeUnavailable)
@@ -70,32 +72,20 @@ func (h *IntelligenceProbeHandler) RunNow(c *gin.Context) {
 	var req intelligenceProbeRunRequest
 	_ = c.ShouldBindJSON(&req)
 	if req.TargetID > 0 {
-		result, err := h.probe.RunTarget(c.Request.Context(), req.TargetID)
+		started, err := h.probe.RunTargetBackground(req.TargetID)
 		if err != nil {
 			response.ErrorFrom(c, err)
 			return
 		}
-		response.Success(c, gin.H{"results": []*service.IntelligenceProbeResult{result}})
+		response.Success(c, gin.H{"started": started})
 		return
 	}
-	config, err := h.probe.GetConfig(c.Request.Context())
+	count, err := h.probe.RunEnabledBackground()
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return
 	}
-	results := make([]*service.IntelligenceProbeResult, 0, len(config.Targets))
-	for _, target := range config.Targets {
-		if !target.Enabled {
-			continue
-		}
-		result, err := h.probe.RunTarget(c.Request.Context(), target.ID)
-		if err != nil {
-			response.ErrorFrom(c, err)
-			return
-		}
-		results = append(results, result)
-	}
-	response.Success(c, gin.H{"results": results})
+	response.Success(c, gin.H{"started": count > 0, "targets": count})
 }
 
 // ListResults returns stored probe results for one target, newest first.

@@ -431,20 +431,55 @@ func (s *IntelligenceProbeService) UpdateConfig(ctx context.Context, config *Int
 	return s.GetConfig(ctx)
 }
 
-// RunTarget performs one manual probe, ignoring the enabled and schedule gates.
-func (s *IntelligenceProbeService) RunTarget(ctx context.Context, targetID int64) (*IntelligenceProbeResult, error) {
+// RunTargetBackground performs one probe detached from the caller's context:
+// a drawing takes minutes, so browser or proxy disconnects must not kill it
+// mid-flight. The result lands in the gallery when it finishes.
+func (s *IntelligenceProbeService) RunTargetBackground(targetID int64) (bool, error) {
 	if s == nil || s.repo == nil {
-		return nil, ErrIntelligenceProbeUnavailable
+		return false, ErrIntelligenceProbeUnavailable
 	}
-	target, err := s.repo.GetTarget(ctx, targetID)
+	target, err := s.repo.GetTarget(context.Background(), targetID)
 	if err != nil {
-		return nil, err
+		return false, err
 	}
-	settings, err := s.getSettings(ctx)
+	settings, err := s.getSettings(context.Background())
 	if err != nil {
-		return nil, err
+		return false, err
 	}
-	return s.probeTarget(ctx, target, settings)
+	go s.runDetachedProbe(target, settings)
+	return true, nil
+}
+
+// RunEnabledBackground probes every enabled target in the background.
+func (s *IntelligenceProbeService) RunEnabledBackground() (int, error) {
+	if s == nil || s.repo == nil {
+		return 0, ErrIntelligenceProbeUnavailable
+	}
+	targets, err := s.repo.ListTargets(context.Background(), true)
+	if err != nil {
+		return 0, err
+	}
+	settings, err := s.getSettings(context.Background())
+	if err != nil {
+		return 0, err
+	}
+	count := 0
+	for _, target := range targets {
+		if !target.Enabled {
+			continue
+		}
+		count++
+		go s.runDetachedProbe(target, settings)
+	}
+	return count, nil
+}
+
+func (s *IntelligenceProbeService) runDetachedProbe(target *IntelligenceProbeTarget, settings *IntelligenceProbeSettings) {
+	ctx, cancel := context.WithTimeout(context.Background(), intelligenceProbeRequestTimeout+30*time.Second)
+	defer cancel()
+	if _, err := s.probeTarget(ctx, target, settings); err != nil {
+		logger.LegacyPrintf("service.intelligence_probe", "manual_probe_failed: target_id=%d err=%v", target.ID, err)
+	}
 }
 
 // ListResults returns stored results for one target, newest first.

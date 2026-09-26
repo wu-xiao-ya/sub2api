@@ -122,10 +122,10 @@
         <button type="button" class="btn btn-primary" :disabled="saving" @click="save">
           {{ saving ? t("common.saving") : t("common.save") }}
         </button>
-        <button type="button" class="btn btn-secondary" :disabled="running || !loadedTargetIds.length" @click="runNow">
+        <button type="button" class="btn btn-secondary" :disabled="running" @click="runNow">
           {{ running ? t("admin.settings.intelligenceProbe.running") : t("admin.settings.intelligenceProbe.runNow") }}
         </button>
-        <p v-if="loadedTargetIds.length" class="w-full text-xs text-gray-500 dark:text-gray-400">
+        <p class="w-full text-xs text-gray-500 dark:text-gray-400">
           {{ t("admin.settings.intelligenceProbe.runNowHint") }}
         </p>
       </div>
@@ -259,15 +259,11 @@ async function runNow() {
   saveMessage.value = "";
   saveError.value = false;
   try {
-    // One request per saved target: a single run can take up to two minutes
-    // (the model is actually drawing), so we never batch them into one HTTP
-    // call that would run past the client timeout.
-    let done = 0;
-    for (const targetId of loadedTargetIds.value) {
-      await intelligenceProbeAPI.run(targetId);
-      done += 1;
-    }
-    saveMessage.value = t("admin.settings.intelligenceProbe.runDone", { count: done });
+    // The backend runs the probes in the background and answers immediately;
+    // drawings take about two minutes each and appear in the gallery when
+    // done.
+    await intelligenceProbeAPI.run();
+    saveMessage.value = t("admin.settings.intelligenceProbe.runStarted");
   } catch (error) {
     saveError.value = true;
     saveMessage.value = extractApiErrorMessage(error, t("admin.settings.intelligenceProbe.runFailed"));

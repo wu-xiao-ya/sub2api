@@ -1291,7 +1291,7 @@ export default {
         runNow: '立即运行一轮',
         running: '运行中…',
         runNowHint: '按已保存的目标逐个立即执行（每个最多 2 分钟）。',
-        runDone: '已执行 {count} 个目标，稍后可在渠道监控页"降智检测"查看结果',
+        runStarted: '已在后台开始检测：每张画约需 2 分钟，完成后自动出现在渠道监控页的"降智检测"标签',
         loadFailed: '加载降智检测配置失败',
         saveFailed: '保存失败',
         runFailed: '运行失败'
