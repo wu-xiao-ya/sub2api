@@ -5,6 +5,7 @@ import channelMonitorV2 from './channelMonitorV2'
 import batchImage from './batchImage'
 import admin from './admin'
 import misc from './misc'
+import intelligence from './intelligence'
 import serverMonitor from './serverMonitor'
 
 export default {
@@ -16,4 +17,5 @@ export default {
   ...batchImage,
   admin,
   ...misc,
+  ...intelligence,
 }

@@ -133,6 +133,12 @@ func RegisterUserRoutes(
 			monitors.GET("/:id/image", h.ChannelMonitor.Image)
 		}
 
+		// 降智检测展示（用户只读）
+		intelligenceProbe := authenticated.Group("/intelligence-probe")
+		{
+			intelligenceProbe.GET("/results", h.IntelligenceProbe.ListUserResults)
+		}
+
 		// 共享号池：用户提交、查看贡献账号和收益
 		contributions := authenticated.Group("/account-contributions")
 		{

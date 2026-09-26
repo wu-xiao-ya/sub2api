@@ -116,6 +116,9 @@ func RegisterAdminRoutes(
 		registerChannelMonitorRoutes(admin, h, settingService)
 		registerChannelMonitorV2Routes(admin, h, settingService)
 
+		// 降智检测（鹈鹕 SVG 测试）
+		registerIntelligenceProbeRoutes(admin, h)
+
 		// 风控中心
 		registerContentModerationRoutes(admin, h)
 
@@ -852,5 +855,17 @@ func channelMonitorModeV2Guard(settingService *service.SettingService) gin.Handl
 			return
 		}
 		c.Next()
+	}
+}
+
+// registerIntelligenceProbeRoutes wires the GPT intelligence degradation
+// probe (pelican SVG test) admin endpoints.
+func registerIntelligenceProbeRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
+	probe := admin.Group("/intelligence-probe")
+	{
+		probe.GET("/config", h.Admin.IntelligenceProbe.GetConfig)
+		probe.PUT("/config", h.Admin.IntelligenceProbe.UpdateConfig)
+		probe.POST("/run", h.Admin.IntelligenceProbe.RunNow)
+		probe.GET("/results", h.Admin.IntelligenceProbe.ListResults)
 	}
 }

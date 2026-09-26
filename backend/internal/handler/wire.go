@@ -48,6 +48,7 @@ func ProvideAdminHandlers(
 	complianceHandler *admin.ComplianceHandler,
 	auditLogHandler *admin.AuditLogHandler,
 	upstreamBillingProbe *service.UpstreamBillingProbeService,
+	intelligenceProbeHandler *admin.IntelligenceProbeHandler,
 ) *AdminHandlers {
 	accountHandler.SetUpstreamBillingProbeService(upstreamBillingProbe)
 	return &AdminHandlers{
@@ -87,6 +88,7 @@ func ProvideAdminHandlers(
 		Affiliate:              affiliateHandler,
 		Compliance:             complianceHandler,
 		AuditLog:               auditLogHandler,
+		IntelligenceProbe:      intelligenceProbeHandler,
 	}
 }
 
@@ -188,6 +190,7 @@ func ProvideHandlers(
 	asyncImageHandler *AsyncImageHandler,
 	batchImageHandler *BatchImageHandler,
 	accountContributionHandler *AccountContributionHandler,
+	intelligenceProbeHandler *admin.IntelligenceProbeHandler,
 	_ *service.IdempotencyCoordinator,
 	_ *service.IdempotencyCleanupService,
 ) *Handlers {
@@ -212,6 +215,7 @@ func ProvideHandlers(
 		AsyncImage:          asyncImageHandler,
 		BatchImage:          batchImageHandler,
 		AccountContribution: accountContributionHandler,
+		IntelligenceProbe:   intelligenceProbeHandler,
 	}
 }
 
@@ -274,6 +278,7 @@ var ProviderSet = wire.NewSet(
 	admin.NewAffiliateHandler,
 	admin.NewComplianceHandler,
 	admin.NewAuditLogHandler,
+	admin.NewIntelligenceProbeHandler,
 
 	// AdminHandlers and Handlers constructors
 	ProvideAdminHandlers,

@@ -148,6 +148,8 @@ export default {
       tabV1History: 'V1 history (probes not active in current mode)',
       showSettings: 'Show V2 monitor settings',
       hideSettings: 'Hide V2 monitor settings',
+      tabIntelligence: 'Intelligence',
+      intelligenceHint: 'Pelican SVG test results: each run actually draws a "pelican riding a bicycle" through the group. A drawing that stays much simpler over time suggests the group serves a degraded model. Click a thumbnail to view it full-size.',
     },
   },
 }

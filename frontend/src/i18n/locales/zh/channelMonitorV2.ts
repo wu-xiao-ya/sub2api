@@ -142,6 +142,8 @@ export default {
       tabV2: 'V2 数据监控配置',
       tabV1Active: 'V1 主动探测',
       tabV1History: 'V1 历史（当前模式未启用探测）',
+      tabIntelligence: '降智检测',
+      intelligenceHint: '鹈鹕 SVG 测试结果：每次测试让分组实际画一只"骑自行车的鹈鹕"，画作长期明显变简单说明该分组可能被降智。点击缩略图查看原图。',
     },
   },
 }

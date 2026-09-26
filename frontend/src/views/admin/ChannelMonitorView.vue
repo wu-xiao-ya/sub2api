@@ -39,6 +39,16 @@
             >
               {{ t('channelMonitorV2.admin.tabV1') }}
             </button>
+            <button
+              type="button"
+              role="tab"
+              class="tab flex-1 sm:flex-none"
+              :class="adminMonitorTab === 'intelligence' ? 'tab-active' : ''"
+              :aria-selected="adminMonitorTab === 'intelligence'"
+              @click="adminMonitorTab = 'intelligence'"
+            >
+              {{ t('channelMonitorV2.admin.tabIntelligence') }}
+            </button>
           </div>
           <button
             type="button"
@@ -57,6 +67,13 @@
         <ChannelStatusV2View embedded />
         <MonitorSettingsPanel v-if="showV2Settings" />
       </template>
+
+      <div v-else-if="adminMonitorTab === 'intelligence'" class="card p-5 sm:p-6">
+        <p class="mb-4 text-sm text-gray-500 dark:text-gray-400">
+          {{ t('channelMonitorV2.admin.intelligenceHint') }}
+        </p>
+        <ProbeGallery />
+      </div>
 
       <TablePageLayout v-else>
       <template #filters>
@@ -242,11 +259,12 @@ import { getPersistedPageSize } from '@/composables/usePersistedPageSize'
 import { useChannelMonitorFormat } from '@/composables/useChannelMonitorFormat'
 import MonitorSettingsPanel from '@/features/channel-monitor-v2/MonitorSettingsPanel.vue'
 import ChannelStatusV2View from '@/views/user/ChannelStatusV2View.vue'
+import ProbeGallery from '@/components/intelligence/ProbeGallery.vue'
 import { isChannelMonitorV1Mode } from '@/utils/featureFlags'
 
 const { t } = useI18n()
 const appStore = useAppStore()
-const adminMonitorTab = ref<'v2' | 'legacy'>(isChannelMonitorV1Mode() ? 'legacy' : 'v2')
+const adminMonitorTab = ref<'v2' | 'legacy' | 'intelligence'>(isChannelMonitorV1Mode() ? 'legacy' : 'v2')
 const showV2Settings = ref(false)
 const {
   providerLabel,

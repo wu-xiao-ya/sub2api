@@ -452,6 +452,13 @@ const (
 	// limits and retry behavior as a single JSON value.
 	SettingKeyChannelMonitorAccountProbeSettings = "channel_monitor_account_probe_settings"
 
+	// SettingKeyIntelligenceProbeSettings stores the GPT intelligence degradation
+	// probe runner settings as a single JSON value:
+	// {"enabled":false,"interval_minutes":12,"retention_days":1,"prompt_override":""}.
+	// The probe sends a pelican-SVG drawing request through each configured
+	// group and keeps the returned SVGs for manual comparison.
+	SettingKeyIntelligenceProbeSettings = "intelligence_probe_settings"
+
 	// SettingKeyChannelMonitorTrafficObservationSettings stores the optional
 	// real-request observation mode for account-group channel monitors.
 	SettingKeyChannelMonitorTrafficObservationSettings = "channel_monitor_traffic_observation_settings"

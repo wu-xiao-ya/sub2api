@@ -19,6 +19,10 @@ var monitoringKeyPlatforms = map[string]struct{}{
 	PlatformMiniMax:  {},
 	PlatformMiMo:     {},
 	PlatformHunyuan:  {},
+	// OpenAI is allowed so the intelligence degradation probe (and internal
+	// gateway monitors on OpenAI groups, already accepted by
+	// resolveInternalMonitorKey) can hold a station monitoring key.
+	PlatformOpenAI: {},
 }
 
 func isMonitoringKeyPlatform(platform string) bool {

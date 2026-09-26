@@ -20,7 +20,9 @@ func TestIsMonitoringKeyPlatform(t *testing.T) {
 	require.True(t, isMonitoringKeyPlatform(PlatformDeepSeek))
 	require.True(t, isMonitoringKeyPlatform(PlatformMiMo))
 	require.True(t, isMonitoringKeyPlatform(PlatformHunyuan))
-	require.False(t, isMonitoringKeyPlatform(PlatformOpenAI))
+	// OpenAI is required by the intelligence degradation probe (pelican SVG
+	// test) and already accepted by resolveInternalMonitorKey.
+	require.True(t, isMonitoringKeyPlatform(PlatformOpenAI))
 	require.False(t, isMonitoringKeyPlatform("unknown"))
 }
 

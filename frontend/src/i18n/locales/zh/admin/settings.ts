@@ -1267,6 +1267,31 @@ export default {
         accountIdFallback: '#{id}',
         modelSearchPlaceholder: '模型名，或直接输入',
         emptyTierHint: '价格留空表示不覆盖该档，继续向下回退。',
+      },
+      intelligenceProbe: {
+        title: '降智检测（鹈鹕测试）',
+        hint: '周期性地让目标分组画一只"骑自行车的鹈鹕"SVG，保留最近的画作供人工对比——画作明显变简单通常意味着上游降智。每次都会通过分组调度真实请求，消耗分组额度。',
+        enabled: '启用降智检测',
+        enabledHint: '默认关闭。开启后按下方间隔对每个启用的目标自动执行测试。',
+        intervalMinutes: '执行间隔（分钟）',
+        intervalHint: '范围 1-1440，默认 12。间隔越短消耗越大。',
+        retentionDays: '结果保留（天）',
+        retentionHint: '范围 1-30，默认 1。过期结果自动清理。',
+        promptOverride: '自定义画图提示词（可选）',
+        promptPlaceholder: '留空使用内置标准提示词',
+        promptHint: '内置提示词要求模型只输出一个完整 SVG 文档；仅在明确知道影响时才修改。',
+        colGroup: '分组',
+        colModel: '模型',
+        colEnabled: '启用',
+        groupPlaceholder: '选择 OpenAI 平台分组',
+        modelPlaceholder: '例如 gpt-6',
+        emptyTargets: '还没有目标。添加一行分组+模型后保存。',
+        addTarget: '添加目标',
+        saved: '降智检测配置已保存',
+        runNow: '立即运行一轮',
+        running: '运行中…',
+        runNowHint: '按已保存的目标逐个立即执行（每个最多 2 分钟）。',
+        runDone: '已执行 {count} 个目标，稍后可在渠道监控页"降智检测"查看结果'
       }
     },
 
@@ -1400,6 +1425,6 @@ export default {
       deleteSuccess: '模板删除成功',
       loadFailed: '加载模板失败',
       saveFailed: '保存模板失败',
-      deleteFailed: '删除模板失败'
+      deleteFailed: '删除模板失败',
     }
 }

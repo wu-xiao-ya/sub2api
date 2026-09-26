@@ -1274,6 +1274,31 @@ export default {
         accountIdFallback: '#{id}',
         modelSearchPlaceholder: 'Model, or type any name',
         emptyTierHint: 'Leave a price blank to fall through to the next level below.',
+      },
+      intelligenceProbe: {
+        title: 'Intelligence Probe (Pelican Test)',
+        hint: 'Periodically asks each target group to draw a "pelican riding a bicycle" in SVG and keeps recent drawings for manual comparison — a suddenly simpler drawing usually means the upstream degraded the model. Every run is a real scheduled request through the group and consumes its quota.',
+        enabled: 'Enable intelligence probe',
+        enabledHint: 'Off by default. When enabled, each active target is tested on the interval below.',
+        intervalMinutes: 'Interval (minutes)',
+        intervalHint: 'Range 1-1440, default 12. Shorter intervals cost more.',
+        retentionDays: 'Retention (days)',
+        retentionHint: 'Range 1-30, default 1. Older results are cleaned up automatically.',
+        promptOverride: 'Custom drawing prompt (optional)',
+        promptPlaceholder: 'Leave empty to use the built-in standard prompt',
+        promptHint: 'The built-in prompt asks the model to output exactly one complete SVG document; only change it if you know the impact.',
+        colGroup: 'Group',
+        colModel: 'Model',
+        colEnabled: 'Enabled',
+        groupPlaceholder: 'Pick an OpenAI-platform group',
+        modelPlaceholder: 'e.g. gpt-6',
+        emptyTargets: 'No targets yet. Add a group+model row and save.',
+        addTarget: 'Add target',
+        saved: 'Intelligence probe configuration saved',
+        runNow: 'Run one round now',
+        running: 'Running…',
+        runNowHint: 'Runs every saved target immediately, one by one (up to 2 minutes each).',
+        runDone: 'Ran {count} target(s); check the "Intelligence" tab on the channel monitor page shortly'
       }
     },
 
@@ -1407,6 +1432,6 @@ export default {
       deleteSuccess: 'Profile deleted successfully',
       loadFailed: 'Failed to load profiles',
       saveFailed: 'Failed to save profile',
-      deleteFailed: 'Failed to delete profile'
+      deleteFailed: 'Failed to delete profile',
     }
 }
