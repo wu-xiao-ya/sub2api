@@ -1486,6 +1486,92 @@ func RectifyThinkingBudget(body []byte) ([]byte, bool) {
 // if no rewrite was needed. Caller should be on the Anthropic forward path AFTER
 // FilterThinkingBlocks and BEFORE building the upstream request, only for
 // passback-required models (ResolveThinkingProtocol == PassbackRequired).
+// NormalizeAdaptiveThinking rewrites the top-level thinking configuration of a
+// claude-opus-5-5 request into the adaptive shape its upstreams validate:
+// thinking.type=adaptive paired with output_config.effort, or the pair removed
+// entirely. The legacy enabled+budget_tokens shape is rejected with 400
+// ("requires adaptive thinking") by upstreams that enabled the model's
+// thinking-protocol check.
+func NormalizeAdaptiveThinking(body []byte) ([]byte, bool) {
+	thinkingType := gjson.GetBytes(body, "thinking.type").String()
+	effort := gjson.GetBytes(body, "output_config.effort").String()
+
+	switch thinkingType {
+	case "enabled":
+		// Legacy shape: keep the requested reasoning level but convert it to
+		// adaptive + effort (budget_tokens reverse-mapped to a tier).
+		modified, err := sjson.SetBytes(body, "thinking.type", "adaptive")
+		if err != nil {
+			return body, false
+		}
+		modified, err = sjson.DeleteBytes(modified, "thinking.budget_tokens")
+		if err != nil {
+			return body, false
+		}
+		if effort == "" {
+			budget := gjson.GetBytes(body, "thinking.budget_tokens").Int()
+			modified, err = sjson.SetBytes(modified, "output_config.effort", effortForThinkingBudget(int(budget)))
+			if err != nil {
+				return body, false
+			}
+		}
+		return modified, true
+	case "disabled":
+		// The upstream accepts a fully omitted thinking configuration; honor
+		// the explicit disable by dropping both fields.
+		modified, err := sjson.DeleteBytes(body, "thinking")
+		if err != nil {
+			return body, false
+		}
+		applied := true
+		if gjson.GetBytes(modified, "output_config.effort").Exists() {
+			modified, err = sjson.DeleteBytes(modified, "output_config")
+			if err != nil {
+				return body, false
+			}
+			applied = true
+		}
+		return modified, applied
+	case "adaptive":
+		if effort != "" {
+			return body, false
+		}
+		modified, err := sjson.SetBytes(body, "output_config.effort", "medium")
+		if err != nil {
+			return body, false
+		}
+		return modified, true
+	case "":
+		// No thinking at all is accepted by the upstream, but a lone
+		// output_config.effort is rejected alongside thinking — pair it.
+		if effort == "" {
+			return body, false
+		}
+		modified, err := sjson.SetBytes(body, "thinking.type", "adaptive")
+		if err != nil {
+			return body, false
+		}
+		return modified, true
+	default:
+		return body, false
+	}
+}
+
+// effortForThinkingBudget maps a thinking budget back to the effort tier that
+// apicompat's defaultThinkingBudget would produce it from.
+func effortForThinkingBudget(budget int) string {
+	switch {
+	case budget >= 32768:
+		return "max"
+	case budget >= 10240:
+		return "high"
+	case budget >= 4096:
+		return "medium"
+	default:
+		return "low"
+	}
+}
+
 func NormalizeChineseLLMThinking(body []byte, mappedModel string) ([]byte, bool) {
 	modelLower := strings.ToLower(mappedModel)
 	if !strings.HasPrefix(modelLower, "minimax-m") {

@@ -64,7 +64,79 @@ func ResponsesToAnthropicRequest(req *ResponsesRequest) (*AnthropicRequest, erro
 		}
 	}
 
+	normalizeOpus55Thinking(out)
+
 	return out, nil
+}
+
+// isClaudeOpus55Model matches the claude-opus-5-5 family across the model id
+// spellings that reach the gateway (vendor prefixes, underscore variants).
+func isClaudeOpus55Model(model string) bool {
+	native := strings.ToLower(strings.TrimSpace(model))
+	if slash := strings.LastIndex(native, "/"); slash >= 0 {
+		native = strings.TrimSpace(native[slash+1:])
+	}
+	native = strings.NewReplacer("_", "-", ".", "-", " ", "-").Replace(native)
+	return native == "claude-opus-5-5" || strings.HasPrefix(native, "claude-opus-5-5-")
+}
+
+// normalizeOpus55Thinking rewrites the thinking configuration of a
+// claude-opus-5-5 request into the adaptive shape its upstreams validate:
+// thinking.type=adaptive paired with output_config.effort, or the pair
+// removed entirely. The legacy enabled+budget_tokens shape is rejected with
+// 400 ("requires adaptive thinking").
+func normalizeOpus55Thinking(out *AnthropicRequest) {
+	if out == nil || !isClaudeOpus55Model(out.Model) {
+		return
+	}
+	if out.Thinking == nil {
+		if out.OutputConfig != nil && out.OutputConfig.Effort != "" {
+			// effort alone is rejected alongside thinking; pair it.
+			out.Thinking = &AnthropicThinking{Type: "adaptive"}
+		}
+		return
+	}
+	switch out.Thinking.Type {
+	case "enabled":
+		effort := ""
+		if out.OutputConfig != nil {
+			effort = out.OutputConfig.Effort
+		}
+		if effort == "" {
+			effort = effortForBudget(out.Thinking.BudgetTokens)
+		}
+		out.Thinking = &AnthropicThinking{Type: "adaptive"}
+		if out.OutputConfig == nil {
+			out.OutputConfig = &AnthropicOutputConfig{}
+		}
+		if out.OutputConfig.Effort == "" {
+			out.OutputConfig.Effort = effort
+		}
+	case "disabled":
+		// The upstream accepts a fully omitted thinking configuration; honor
+		// the explicit disable by dropping both fields.
+		out.Thinking = nil
+		out.OutputConfig = nil
+	case "adaptive":
+		if out.OutputConfig == nil || out.OutputConfig.Effort == "" {
+			out.OutputConfig = &AnthropicOutputConfig{Effort: "medium"}
+		}
+	}
+}
+
+// effortForBudget maps a thinking budget back to the effort tier that
+// defaultThinkingBudget would have produced it from.
+func effortForBudget(budget int) string {
+	switch {
+	case budget >= 32768:
+		return "max"
+	case budget >= 10240:
+		return "high"
+	case budget >= 4096:
+		return "medium"
+	default:
+		return "low"
+	}
 }
 
 // defaultThinkingBudget returns a sensible thinking budget based on effort level.

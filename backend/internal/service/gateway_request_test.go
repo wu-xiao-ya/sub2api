@@ -1639,3 +1639,76 @@ func TestNormalizeGLMOpenAIReasoningEffort(t *testing.T) {
 		})
 	}
 }
+
+// claude-opus-5-5 upstreams validate the thinking protocol: adaptive paired
+// with output_config.effort, or omitted entirely.
+func TestNormalizeAdaptiveThinkingShapes(t *testing.T) {
+	enabledBody := []byte(`{"model":"claude-opus-5-5","thinking":{"type":"enabled","budget_tokens":10240}}`)
+	out, applied := NormalizeAdaptiveThinking(enabledBody)
+	if !applied {
+		t.Fatal("enabled shape must be rewritten")
+	}
+	if gjson.GetBytes(out, "thinking.type").String() != "adaptive" {
+		t.Fatalf("thinking.type = %q, want adaptive", gjson.GetBytes(out, "thinking.type").String())
+	}
+	if gjson.GetBytes(out, "thinking.budget_tokens").Exists() {
+		t.Fatal("budget_tokens must be dropped")
+	}
+	if gjson.GetBytes(out, "output_config.effort").String() != "high" {
+		t.Fatalf("effort = %q, want high (reverse-mapped from 10240)",
+			gjson.GetBytes(out, "output_config.effort").String())
+	}
+
+	disabledBody := []byte(`{"model":"claude-opus-5-5","thinking":{"type":"disabled"},"output_config":{"effort":"low"}}`)
+	out, applied = NormalizeAdaptiveThinking(disabledBody)
+	if !applied {
+		t.Fatal("disabled shape must be rewritten")
+	}
+	if gjson.GetBytes(out, "thinking").Exists() || gjson.GetBytes(out, "output_config").Exists() {
+		t.Fatalf("disabled must drop both fields: %s", string(out))
+	}
+
+	adaptiveBody := []byte(`{"model":"claude-opus-5-5","thinking":{"type":"adaptive"}}`)
+	out, applied = NormalizeAdaptiveThinking(adaptiveBody)
+	if !applied {
+		t.Fatal("adaptive without effort must gain a default effort")
+	}
+	if gjson.GetBytes(out, "output_config.effort").String() != "medium" {
+		t.Fatalf("effort = %q, want medium", gjson.GetBytes(out, "output_config.effort").String())
+	}
+
+	loneEffort := []byte(`{"model":"claude-opus-5-5","output_config":{"effort":"low"}}`)
+	out, applied = NormalizeAdaptiveThinking(loneEffort)
+	if !applied {
+		t.Fatal("lone effort must be paired with adaptive")
+	}
+	if gjson.GetBytes(out, "thinking.type").String() != "adaptive" {
+		t.Fatalf("thinking.type = %q, want adaptive", gjson.GetBytes(out, "thinking.type").String())
+	}
+	if gjson.GetBytes(out, "output_config.effort").String() != "low" {
+		t.Fatalf("effort = %q, want preserved low", gjson.GetBytes(out, "output_config.effort").String())
+	}
+
+	untouched := []byte(`{"model":"claude-opus-5-5","messages":[]}`)
+	out, applied = NormalizeAdaptiveThinking(untouched)
+	if applied {
+		t.Fatal("no thinking and no effort must stay untouched")
+	}
+	if string(out) != string(untouched) {
+		t.Fatalf("untouched body changed: %s", string(out))
+	}
+
+	// The function itself is model-agnostic; the opus-5-5 gate lives in the
+	// Forward caller. Any enabled shape it is handed gets normalized.
+	otherModel := []byte(`{"model":"claude-sonnet-5","thinking":{"type":"enabled","budget_tokens":4096},"output_config":{"effort":"medium"}}`)
+	out, applied = NormalizeAdaptiveThinking(otherModel)
+	if !applied {
+		t.Fatal("enabled shape handed to the function must be normalized")
+	}
+	if gjson.GetBytes(out, "thinking.type").String() != "adaptive" {
+		t.Fatalf("thinking.type = %q, want adaptive", gjson.GetBytes(out, "thinking.type").String())
+	}
+	if gjson.GetBytes(out, "output_config.effort").String() != "medium" {
+		t.Fatalf("existing effort = %q, want preserved", gjson.GetBytes(out, "output_config.effort").String())
+	}
+}

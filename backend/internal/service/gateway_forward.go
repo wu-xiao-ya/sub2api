@@ -346,6 +346,18 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 		}
 	}
 
+	// claude-opus-5-5 上游（池化中转与官方 alike）校验 thinking 形状：必须
+	// adaptive + output_config.effort 成对，或整体省略；旧式
+	// enabled+budget_tokens 会被 400 拒绝。归一化为 adaptive 形状。
+	if isClaudeOpus55Model(reqModel) {
+		if rewritten, applied := NormalizeAdaptiveThinking(body); applied {
+			if err := replaceBody(rewritten); err != nil {
+				return nil, err
+			}
+			logger.LegacyPrintf("service.gateway", "Account %d: normalized thinking config for %s (adaptive shape required by upstream)", account.ID, reqModel)
+		}
+	}
+
 	// 重试循环
 	var resp *http.Response
 	lastWireBody := body
