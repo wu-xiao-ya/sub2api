@@ -514,6 +514,8 @@ export default {
     viewAria: 'Channel monitor view',
     viewV2: 'V2 request telemetry',
     viewV1: 'V1 active diagnostics',
+    viewIntelligence: 'Intelligence probe',
+    tabHint: 'Each group periodically draws a "pelican riding a bicycle" for real; drawings that get much simpler over time suggest a degraded model. Click a thumbnail for the full image.',
     description: 'Inspect channel availability, latency and recent status',
     searchPlaceholder: 'Search channels...',
     allProviders: 'All Providers',

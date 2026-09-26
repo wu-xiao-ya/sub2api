@@ -35,9 +35,10 @@ const (
 	IntelligenceProbeMaxRetentionDays     = 30
 
 	intelligenceProbeCycleInterval = time.Minute
-	// A pelican drawing through a real account routinely takes two minutes:
-	// non-streaming generation plus the gateway's own upstream retry loop.
-	intelligenceProbeRequestTimeout = 240 * time.Second
+	// A pelican drawing through a real account routinely takes two minutes
+	// and detailed ones plus upstream retries can exceed that, so the budget
+	// is generous; manual runs are background anyway.
+	intelligenceProbeRequestTimeout = 360 * time.Second
 	// Streaming keeps headers flowing as soon as an upstream attempt succeeds,
 	// but the gateway may spend a while in retries before that first byte, so
 	// the header timeout stays generous and the context budget dominates.
@@ -45,7 +46,7 @@ const (
 	intelligenceProbeMaxBodyBytes          = 512 * 1024
 	intelligenceProbeMaxTokens             = 8000
 	intelligenceProbeExcerptBytes          = 500
-	intelligenceProbeConcurrency           = 2
+	intelligenceProbeConcurrency           = 5
 	intelligenceProbeKeepPerTarget         = 500
 
 	intelligenceProbeLeaderLockKey  = "intelligence:probe:leader"

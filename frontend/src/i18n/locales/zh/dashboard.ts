@@ -519,6 +519,8 @@ export default {
     viewAria: '渠道监控视图',
     viewV2: 'V2 请求数据监控',
     viewV1: 'V1 主动账号诊断',
+    viewIntelligence: '降智检测 · 鹈鹕画作',
+    tabHint: '每个分组周期性真实画一只"骑自行车的鹈鹕"；画作长期明显变简单说明该分组可能被降智。点击缩略图看原图。',
     description: '查看渠道可用性、延迟和近期状态',
     searchPlaceholder: '搜索渠道...',
     allProviders: '全部供应商',

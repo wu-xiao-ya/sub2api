@@ -31,8 +31,8 @@ func (h *IntelligenceProbeHandler) GetConfig(c *gin.Context) {
 }
 
 type intelligenceProbeConfigRequest struct {
-	service.IntelligenceProbeSettings
-	Targets []*service.IntelligenceProbeTarget `json:"targets"`
+	Settings service.IntelligenceProbeSettings  `json:"settings"`
+	Targets  []*service.IntelligenceProbeTarget `json:"targets"`
 }
 
 // UpdateConfig validates and persists settings, then replaces the target list.
@@ -47,7 +47,7 @@ func (h *IntelligenceProbeHandler) UpdateConfig(c *gin.Context) {
 		return
 	}
 	config, err := h.probe.UpdateConfig(c.Request.Context(), &service.IntelligenceProbeConfig{
-		Settings: req.IntelligenceProbeSettings,
+		Settings: req.Settings,
 		Targets:  req.Targets,
 	})
 	if err != nil {

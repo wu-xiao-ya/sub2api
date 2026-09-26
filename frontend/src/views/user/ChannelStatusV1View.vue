@@ -29,12 +29,6 @@
       @close="closeDetail"
     />
 
-    <section v-if="intelligenceItems.length > 0" class="mt-2">
-      <h2 class="mb-3 px-1 text-sm font-semibold text-gray-600 dark:text-gray-300">
-        {{ t('intelligence.gallery.sectionTitle') }}
-      </h2>
-      <ProbeGallery :items="intelligenceItems" />
-    </section>
   </component>
 </template>
 
@@ -62,8 +56,6 @@ import MonitorHero, {
 } from '@/components/user/monitor/MonitorHero.vue'
 import MonitorCardGrid from '@/components/user/monitor/MonitorCardGrid.vue'
 import MonitorDetailDialog from '@/components/user/MonitorDetailDialog.vue'
-import ProbeGallery from '@/components/intelligence/ProbeGallery.vue'
-import { listIntelligenceProbeUserResults, type IntelligenceProbeUserResult } from '@/api/intelligenceProbe'
 import { DEFAULT_INTERVAL_SECONDS } from '@/constants/channelMonitor'
 import { useAutoRefresh } from '@/composables/useAutoRefresh'
 import { getMatrix, type MonitorMatrixRow } from '@/api/channelMonitorV2'
@@ -93,7 +85,6 @@ const imageUrls = reactive<Record<number, string>>({})
 const trafficMetrics = ref<TrafficMetricsByCard>({})
 const showDetail = ref(false)
 const detailTarget = ref<GroupedChannelStatus | null>(null)
-const intelligenceItems = ref<IntelligenceProbeUserResult[]>([])
 
 let abortController: AbortController | null = null
 let imageLoadGeneration = 0
@@ -241,20 +232,8 @@ async function loadLatestImages(rows: UserMonitorView[]) {
   }
 }
 
-async function loadIntelligenceResults() {
-  // The whole section stays hidden until at least one probe result exists, so
-  // operators who never configure the feature see no change on this page.
-  try {
-    const data = await listIntelligenceProbeUserResults(120)
-    intelligenceItems.value = data.items ?? []
-  } catch {
-    intelligenceItems.value = []
-  }
-}
-
 async function manualReload() {
   await reload(false)
-  void loadIntelligenceResults()
   // After base reload, refresh any cached detail records so non-7d availability
   // values stay in sync without forcing the user to switch tabs again.
   if (currentWindow.value !== '7d') {
@@ -306,7 +285,6 @@ watch(
 
 onMounted(() => {
   void reload(false)
-  void loadIntelligenceResults()
   if (appStore.cachedPublicSettings?.channel_monitor_enabled !== false) {
     autoRefresh.setEnabled(true)
   }

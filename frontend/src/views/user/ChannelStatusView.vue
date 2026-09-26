@@ -28,10 +28,26 @@
           >
             {{ t('channelStatus.viewV1') }}
           </button>
+          <button
+            type="button"
+            role="tab"
+            class="tab"
+            :class="activeView === 'intelligence' ? 'tab-active' : ''"
+            :aria-selected="activeView === 'intelligence'"
+            @click="activeView = 'intelligence'"
+          >
+            {{ t('channelStatus.viewIntelligence') }}
+          </button>
         </div>
       </nav>
 
       <ChannelStatusV2View v-if="activeView === 'v2'" embedded />
+      <div v-else-if="activeView === 'intelligence'" class="card p-5 sm:p-6">
+        <p class="mb-4 text-sm text-gray-500 dark:text-gray-400">
+          {{ t('intelligence.gallery.tabHint') }}
+        </p>
+        <ProbeGallery />
+      </div>
       <ChannelStatusV1View v-else embedded />
     </div>
   </AppLayout>
@@ -42,19 +58,22 @@ import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import AppLayout from '@/components/layout/AppLayout.vue'
-import type { ChannelMonitorMode } from '@/utils/featureFlags'
 import ChannelStatusV1View from './ChannelStatusV1View.vue'
 import ChannelStatusV2View from './ChannelStatusV2View.vue'
+import ProbeGallery from '@/components/intelligence/ProbeGallery.vue'
 
 const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 
-function parseView(value: unknown): ChannelMonitorMode {
-  return value === 'v2' ? 'v2' : 'v1'
+type StatusView = 'v2' | 'v1' | 'intelligence'
+
+function parseView(value: unknown): StatusView {
+  if (value === 'v2' || value === 'intelligence') return value
+  return 'v1'
 }
 
-const activeView = ref<ChannelMonitorMode>(parseView(route.query.view))
+const activeView = ref<StatusView>(parseView(route.query.view))
 
 watch(activeView, (view) => {
   void router.replace({
