@@ -541,7 +541,10 @@ func TestGatewayModels_AnthropicCustomModelsListIncludesOAuthClaudeWithoutMappin
 	require.Equal(t, []string{"claude-opus-4-6-thinking", "claude-sonnet-4-5"}, modelIDsForTest(got.Data))
 }
 
-func TestGatewayModels_CustomModelsListCanReturnEmptyWhenSelectionsUnavailable(t *testing.T) {
+// A group may select a model its accounts do not map. The selection is the
+// operator's intent for the group, so a model present in the platform catalog
+// must still be advertised; only unknown names are dropped.
+func TestGatewayModels_CustomModelsListAllowsCatalogModelMissingFromMapping(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	groupID := int64(24)
@@ -583,7 +586,148 @@ func TestGatewayModels_CustomModelsListCanReturnEmptyWhenSelectionsUnavailable(t
 
 	var got gatewayModelsResponseForTest
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &got))
+	require.Equal(t, []string{"gpt-5.5"}, modelIDsForTest(got.Data))
+}
+
+func TestGatewayModels_CustomModelsListDropsUnknownSelections(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	groupID := int64(240)
+	h := newGatewayModelsHandlerForTest(
+		&gatewayModelsAccountRepoStub{
+			byGroup: map[int64][]service.Account{
+				groupID: {
+					{
+						ID:       1,
+						Platform: service.PlatformOpenAI,
+						Credentials: map[string]any{
+							"model_mapping": map[string]any{
+								"gpt-5.4": "gpt-5.4",
+							},
+						},
+					},
+				},
+			},
+		},
+	)
+
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodGet, "/v1/models", nil)
+	c.Set(string(middleware2.ContextKeyAPIKey), &service.APIKey{
+		Group: &service.Group{
+			ID:       groupID,
+			Platform: service.PlatformOpenAI,
+			ModelsListConfig: service.GroupModelsListConfig{
+				Enabled: true,
+				Models:  []string{"totally-unknown-model"},
+			},
+		},
+	})
+
+	h.Models(c)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var got gatewayModelsResponseForTest
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &got))
 	require.Empty(t, modelIDsForTest(got.Data))
+}
+
+// An image group whose accounts map only text models must still advertise the
+// selected image models. Before the candidate source merged the platform
+// catalog, filtering against the mapping keys alone returned an empty list.
+func TestGatewayModels_ImageGroupAdvertisesSelectedImageModels(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	groupID := int64(241)
+	h := newGatewayModelsHandlerForTest(
+		&gatewayModelsAccountRepoStub{
+			byGroup: map[int64][]service.Account{
+				groupID: {
+					{
+						ID:       1,
+						Platform: service.PlatformOpenAI,
+						Credentials: map[string]any{
+							"model_mapping": map[string]any{
+								"gpt-5.6-sol": "gpt-5.6-sol",
+							},
+						},
+					},
+				},
+			},
+		},
+	)
+
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodGet, "/v1/models", nil)
+	c.Set(string(middleware2.ContextKeyAPIKey), &service.APIKey{
+		Group: &service.Group{
+			ID:       groupID,
+			Platform: service.PlatformOpenAI,
+			ModelsListConfig: service.GroupModelsListConfig{
+				Enabled: true,
+				Models:  []string{"gpt-image-2", "gpt-5.6-sol"},
+			},
+		},
+	})
+
+	h.Models(c)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var got gatewayModelsResponseForTest
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &got))
+	// Selection order is preserved for both the mapped and the catalog model.
+	require.Equal(t, []string{"gpt-image-2", "gpt-5.6-sol"}, modelIDsForTest(got.Data))
+}
+
+// With the selection list disabled the mapping keys alone decide the list, so
+// the fix must not leak the catalog into groups that did not opt in.
+func TestGatewayModels_ImageGroupWithoutCustomListIgnoresCatalog(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	groupID := int64(242)
+	h := newGatewayModelsHandlerForTest(
+		&gatewayModelsAccountRepoStub{
+			byGroup: map[int64][]service.Account{
+				groupID: {
+					{
+						ID:       1,
+						Platform: service.PlatformOpenAI,
+						Credentials: map[string]any{
+							"model_mapping": map[string]any{
+								"gpt-image-2": "gpt-image-2",
+							},
+						},
+					},
+				},
+			},
+		},
+	)
+
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodGet, "/v1/models", nil)
+	c.Set(string(middleware2.ContextKeyAPIKey), &service.APIKey{
+		Group: &service.Group{
+			ID:       groupID,
+			Platform: service.PlatformOpenAI,
+			ModelsListConfig: service.GroupModelsListConfig{
+				Enabled: false,
+				Models:  []string{"gpt-image-2"},
+			},
+		},
+	})
+
+	h.Models(c)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var got gatewayModelsResponseForTest
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &got))
+	require.Equal(t, []string{"gpt-image-2"}, modelIDsForTest(got.Data))
 }
 
 func TestGatewayModels_CustomModelsListFiltersDefaultFallbackModels(t *testing.T) {

@@ -1231,10 +1231,16 @@ func writeOpenAIModelsList(c *gin.Context, modelIDs []string) {
 }
 
 func customModelsListSource(platform string, availableModels, fallbackModels []string) []string {
-	if platform == service.PlatformAnthropic && len(availableModels) > 0 {
-		return mergeModelIDs(availableModels, fallbackModels)
+	if len(availableModels) == 0 {
+		return fallbackModels
 	}
-	return availableModels
+	// availableModels only reflects which models the group's accounts happen to
+	// map, not what the upstream can serve. A group that explicitly selects a
+	// model must be able to advertise it, so the platform catalog joins the
+	// candidate source on every platform. Without this, an image group whose
+	// accounts map only text models returns an empty list even when its
+	// selection names gpt-image-*.
+	return mergeModelIDs(availableModels, fallbackModels)
 }
 
 func filterModelsByCustomList(availableModels, fallbackModels, selectedModels []string) []string {
