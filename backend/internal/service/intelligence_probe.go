@@ -36,11 +36,15 @@ const (
 
 	intelligenceProbeCycleInterval  = time.Minute
 	intelligenceProbeRequestTimeout = 120 * time.Second
-	intelligenceProbeMaxBodyBytes   = 512 * 1024
-	intelligenceProbeMaxTokens      = 8000
-	intelligenceProbeExcerptBytes   = 500
-	intelligenceProbeConcurrency    = 2
-	intelligenceProbeKeepPerTarget  = 500
+	// Drawing a detailed SVG is a non-streaming request: headers only arrive
+	// once the full body is generated, which routinely exceeds the monitor
+	// client's 30s header timeout. Give the probe its own client.
+	intelligenceProbeResponseHeaderTimeout = 115 * time.Second
+	intelligenceProbeMaxBodyBytes          = 512 * 1024
+	intelligenceProbeMaxTokens             = 8000
+	intelligenceProbeExcerptBytes          = 500
+	intelligenceProbeConcurrency           = 2
+	intelligenceProbeKeepPerTarget         = 500
 
 	intelligenceProbeLeaderLockKey  = "intelligence:probe:leader"
 	intelligenceProbeLeaderLockTTL  = 2 * time.Minute
@@ -61,6 +65,13 @@ const (
 // model reply. Models wrap the SVG in prose or code fences, so the match must
 // not assume line boundaries.
 var intelligenceProbeSVGRegex = regexp.MustCompile(`(?is)<svg[\s>].*</svg>`)
+
+// intelligenceProbeHTTPClient dials the loopback gateway only, like the
+// monitor client, but tolerates long non-streaming generations.
+var intelligenceProbeHTTPClient = newLoopbackOnlyHTTPClient(
+	intelligenceProbeRequestTimeout,
+	intelligenceProbeResponseHeaderTimeout,
+)
 
 // IntelligenceProbeSettings controls the periodic degradation probe runner.
 type IntelligenceProbeSettings struct {
@@ -606,7 +617,7 @@ func (s *IntelligenceProbeService) postChatCompletion(
 	for key, value := range headers {
 		req.Header.Set(key, value)
 	}
-	resp, err := monitorInternalGatewayHTTPClient.Do(req)
+	resp, err := intelligenceProbeHTTPClient.Do(req)
 	if err != nil {
 		return "", nil, 0, fmt.Errorf("probe request failed: %w", err)
 	}
