@@ -1,6 +1,7 @@
 package service
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"database/sql"
@@ -17,7 +18,6 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/usagesource"
 	"github.com/google/uuid"
-	"github.com/tidwall/gjson"
 )
 
 // The probe replays the well-known "pelican riding a bicycle" drawing test
@@ -34,12 +34,14 @@ const (
 	IntelligenceProbeMinRetentionDays     = 1
 	IntelligenceProbeMaxRetentionDays     = 30
 
-	intelligenceProbeCycleInterval  = time.Minute
-	intelligenceProbeRequestTimeout = 120 * time.Second
-	// Drawing a detailed SVG is a non-streaming request: headers only arrive
-	// once the full body is generated, which routinely exceeds the monitor
-	// client's 30s header timeout. Give the probe its own client.
-	intelligenceProbeResponseHeaderTimeout = 115 * time.Second
+	intelligenceProbeCycleInterval = time.Minute
+	// A pelican drawing through a real account routinely takes two minutes:
+	// non-streaming generation plus the gateway's own upstream retry loop.
+	intelligenceProbeRequestTimeout = 240 * time.Second
+	// Streaming keeps headers flowing as soon as an upstream attempt succeeds,
+	// but the gateway may spend a while in retries before that first byte, so
+	// the header timeout stays generous and the context budget dominates.
+	intelligenceProbeResponseHeaderTimeout = 230 * time.Second
 	intelligenceProbeMaxBodyBytes          = 512 * 1024
 	intelligenceProbeMaxTokens             = 8000
 	intelligenceProbeExcerptBytes          = 500
@@ -514,6 +516,14 @@ func (s *IntelligenceProbeService) executeProbe(
 	}
 	text, latencyMs, httpStatus, err := s.postChatCompletion(ctx, plainKey, target.Model, settings.prompt())
 	result.LatencyMs = latencyMs
+	svg := intelligenceProbeSVGRegex.FindString(text)
+	if svg != "" {
+		// A complete SVG in the accumulated stream is a good drawing even if
+		// the read was cut short by the timeout.
+		result.Status = intelligenceProbeStatusSuccess
+		result.ResponseSVG = svg
+		return result
+	}
 	if err != nil {
 		result.Status = intelligenceProbeStatusFailed
 		if httpStatus > 0 {
@@ -523,14 +533,8 @@ func (s *IntelligenceProbeService) executeProbe(
 		}
 		return result
 	}
-	svg := intelligenceProbeSVGRegex.FindString(text)
-	if svg == "" {
-		result.Status = intelligenceProbeStatusNoSVG
-		result.ResponseExcerpt = truncateProbeMessage(strings.TrimSpace(text))
-		return result
-	}
-	result.Status = intelligenceProbeStatusSuccess
-	result.ResponseSVG = svg
+	result.Status = intelligenceProbeStatusNoSVG
+	result.ResponseExcerpt = truncateProbeMessage(strings.TrimSpace(text))
 	return result
 }
 
@@ -589,13 +593,15 @@ func (s *IntelligenceProbeService) postChatCompletion(
 	if err != nil {
 		return "", nil, 0, err
 	}
+	// Streaming on purpose: the drawing takes minutes, and non-streaming
+	// requests only send headers once the whole body exists, which turns any
+	// header-timeout into a hard cliff. With SSE the bytes flow as they are
+	// generated and the context budget below is the only real limit.
 	body, err := json.Marshal(map[string]any{
-		"model": model,
-		"messages": []map[string]string{
-			{"role": "user", "content": prompt},
-		},
+		"model":      model,
+		"messages":   []map[string]string{{"role": "user", "content": prompt}},
 		"max_tokens": intelligenceProbeMaxTokens,
-		"stream":     false,
+		"stream":     true,
 	})
 	if err != nil {
 		return "", nil, 0, fmt.Errorf("marshal probe body: %w", err)
@@ -611,7 +617,7 @@ func (s *IntelligenceProbeService) postChatCompletion(
 	// traffic observation does not count the drawing test as user load.
 	headers := usagesource.MarkChannelMonitor(map[string]string{
 		"Content-Type":  "application/json",
-		"Accept":        "application/json",
+		"Accept":        "text/event-stream",
 		"Authorization": "Bearer " + apiKey,
 	})
 	for key, value := range headers {
@@ -619,28 +625,59 @@ func (s *IntelligenceProbeService) postChatCompletion(
 	}
 	resp, err := intelligenceProbeHTTPClient.Do(req)
 	if err != nil {
+		// Transport failure before any response: nothing to salvage.
 		return "", nil, 0, fmt.Errorf("probe request failed: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
-	respBytes, readErr := io.ReadAll(io.LimitReader(resp.Body, intelligenceProbeMaxBodyBytes))
-	if readErr != nil {
-		return "", nil, resp.StatusCode, fmt.Errorf("read probe response: %w", readErr)
-	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		respBytes, _ := io.ReadAll(io.LimitReader(resp.Body, intelligenceProbeMaxBodyBytes))
 		return "", nil, resp.StatusCode, fmt.Errorf("upstream error: %s", truncateProbeMessage(string(respBytes)))
 	}
-	content := gjson.GetBytes(respBytes, "choices.0.message.content")
-	if content.IsArray() {
-		var parts []string
-		content.ForEach(func(_, item gjson.Result) bool {
-			if item.Get("type").String() == "text" || item.Get("text").Exists() {
-				parts = append(parts, item.Get("text").String())
+	text, readErr := accumulateStreamingText(resp.Body)
+	// Callers salvage partial text: a complete SVG in what already arrived is
+	// a perfectly good drawing even if the budget ran out mid-generation.
+	return text, nil, resp.StatusCode, readErr
+}
+
+// accumulateStreamingText reads an OpenAI-style SSE stream and concatenates
+// choices[0].delta.content until [DONE], EOF, or a read error (a timeout
+// surfaces as a non-nil error alongside whatever already arrived).
+func accumulateStreamingText(body io.Reader) (string, error) {
+	scanner := bufio.NewScanner(body)
+	scanner.Buffer(make([]byte, 0, 64*1024), intelligenceProbeMaxBodyBytes)
+	var parts []string
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if !strings.HasPrefix(line, "data:") {
+			continue
+		}
+		payload := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
+		if payload == "[DONE]" {
+			break
+		}
+		if payload == "" {
+			continue
+		}
+		var chunk struct {
+			Choices []struct {
+				Delta struct {
+					Content string `json:"content"`
+				} `json:"delta"`
+			} `json:"choices"`
+		}
+		if err := json.Unmarshal([]byte(payload), &chunk); err != nil {
+			continue
+		}
+		for _, choice := range chunk.Choices {
+			if choice.Delta.Content != "" {
+				parts = append(parts, choice.Delta.Content)
 			}
-			return true
-		})
-		return strings.Join(parts, "\n"), nil, resp.StatusCode, nil
+		}
 	}
-	return content.String(), nil, resp.StatusCode, nil
+	if err := scanner.Err(); err != nil {
+		return strings.Join(parts, ""), err
+	}
+	return strings.Join(parts, ""), nil
 }
 
 func (s *IntelligenceProbeService) tryAcquireLeaderLock(ctx context.Context, key string) (func(), bool, error) {
