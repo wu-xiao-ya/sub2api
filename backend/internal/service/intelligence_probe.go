@@ -50,6 +50,8 @@ const (
 	intelligenceProbeStatusNoSVG   = "no_svg"
 	intelligenceProbeStatusFailed  = "failed"
 
+	intelligenceProbeMaxTargets = 20
+
 	intelligenceProbeDefaultPrompt = "Draw a pelican riding a bicycle. " +
 		"Respond with one complete <svg>...</svg> document and nothing else. " +
 		"Make it detailed."
@@ -380,6 +382,10 @@ func (s *IntelligenceProbeService) UpdateConfig(ctx context.Context, config *Int
 	}
 	if config == nil {
 		return nil, fmt.Errorf("intelligence probe config cannot be nil")
+	}
+	if len(config.Targets) > intelligenceProbeMaxTargets {
+		return nil, fmt.Errorf("%w: at most %d targets are supported, got %d",
+			ErrIntelligenceProbeTargetInvalid, intelligenceProbeMaxTargets, len(config.Targets))
 	}
 	seen := make(map[string]struct{}, len(config.Targets))
 	for _, target := range config.Targets {

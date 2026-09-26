@@ -142,6 +142,7 @@ import {
   type IntelligenceProbeTargetInput,
 } from "@/api/admin/intelligenceProbe";
 import { groupsAPI } from "@/api/admin/groups";
+import { extractApiErrorMessage } from "@/utils/apiError";
 import type { AdminGroup } from "@/types";
 import Select from "@/components/common/Select.vue";
 import ModelPicker from "@/views/admin/settings/ModelPicker.vue";
@@ -221,7 +222,7 @@ async function load() {
     loadedTargetIds.value = config.targets.filter((target) => target.enabled).map((target) => target.id);
   } catch (error) {
     saveError.value = true;
-    saveMessage.value = error instanceof Error ? error.message : String(error);
+    saveMessage.value = extractApiErrorMessage(error, t("admin.settings.intelligenceProbe.loadFailed"));
   } finally {
     loading.value = false;
   }
@@ -247,7 +248,7 @@ async function save() {
     await load();
   } catch (error) {
     saveError.value = true;
-    saveMessage.value = error instanceof Error ? error.message : String(error);
+    saveMessage.value = extractApiErrorMessage(error, t("admin.settings.intelligenceProbe.saveFailed"));
   } finally {
     saving.value = false;
   }
@@ -269,7 +270,7 @@ async function runNow() {
     saveMessage.value = t("admin.settings.intelligenceProbe.runDone", { count: done });
   } catch (error) {
     saveError.value = true;
-    saveMessage.value = error instanceof Error ? error.message : String(error);
+    saveMessage.value = extractApiErrorMessage(error, t("admin.settings.intelligenceProbe.runFailed"));
   } finally {
     running.value = false;
   }

@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/service"
@@ -125,9 +126,17 @@ func (r *intelligenceProbeRepository) SyncTargets(ctx context.Context, targets [
 			return nil, err
 		}
 	} else {
-		if _, err := tx.ExecContext(ctx, `
-			DELETE FROM intelligence_probe_targets WHERE NOT (id = ANY($1))
-		`, keptIDs); err != nil {
+		// database/sql's postgres driver does not bind Go slices to array
+		// parameters, so build numbered placeholders for NOT IN instead.
+		placeholders := make([]string, len(keptIDs))
+		args := make([]any, len(keptIDs))
+		for i, id := range keptIDs {
+			placeholders[i] = fmt.Sprintf("$%d", i+1)
+			args[i] = id
+		}
+		query := `DELETE FROM intelligence_probe_targets WHERE id NOT IN (` +
+			strings.Join(placeholders, ",") + `)`
+		if _, err := tx.ExecContext(ctx, query, args...); err != nil {
 			return nil, err
 		}
 	}
