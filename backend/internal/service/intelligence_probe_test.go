@@ -76,43 +76,14 @@ func TestIntelligenceProbeSettingsPrompt(t *testing.T) {
 	}
 }
 
-func TestIntelligenceProbeSVGRegex(t *testing.T) {
-	cases := []struct {
-		name    string
-		reply   string
-		wantSVG bool
-	}{
-		{
-			name:    "plain svg",
-			reply:   `<svg xmlns="http://www.w3.org/2000/svg" width="10"><circle r="5"/></svg>`,
-			wantSVG: true,
-		},
-		{
-			name:    "svg wrapped in prose and fences",
-			reply:   "Here is your drawing:\n```svg\n<svg viewBox=\"0 0 10 10\">\n  <path d=\"M0 0\"/>\n</svg>\n```",
-			wantSVG: true,
-		},
-		{
-			name:    "no svg",
-			reply:   "I cannot draw that.",
-			wantSVG: false,
-		},
-		{
-			name:    "unclosed svg is not a document",
-			reply:   `<svg><circle r="5"/>`,
-			wantSVG: false,
-		},
+func TestExtractBalancedSVGWrappedInProse(t *testing.T) {
+	reply := "Here is your drawing:\n```svg\n<svg viewBox=\"0 0 10 10\">\n  <path d=\"M0 0\"/>\n</svg>\n```"
+	got := ExtractBalancedSVG(reply)
+	if !strings.HasPrefix(strings.ToLower(got), "<svg") {
+		t.Fatalf("wrapped svg not extracted: %q", got)
 	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			got := intelligenceProbeSVGRegex.FindString(tc.reply)
-			if (got != "") != tc.wantSVG {
-				t.Fatalf("match = %q, wantSVG = %v", got, tc.wantSVG)
-			}
-			if tc.wantSVG && !strings.HasPrefix(strings.ToLower(got), "<svg") {
-				t.Fatalf("match must start with <svg, got %q", got)
-			}
-		})
+	if got := ExtractBalancedSVG("I cannot draw that."); got != "" {
+		t.Fatalf("reply without svg = %q, want empty", got)
 	}
 }
 
@@ -124,5 +95,43 @@ func TestTruncateProbeMessage(t *testing.T) {
 	got := truncateProbeMessage(long)
 	if len(got) != intelligenceProbeExcerptBytes {
 		t.Fatalf("len = %d, want %d", len(got), intelligenceProbeExcerptBytes)
+	}
+}
+
+func TestExtractBalancedSVGPicksLongestBalancedBlock(t *testing.T) {
+	// Multi-document reply (animation frames): the naive greedy match would
+	// splice both documents into invalid XML.
+	reply := "<p>here</p>" +
+		`<svg viewBox="0 0 10 10"><rect width="2" height="2"/></svg>` +
+		"middle text" +
+		`<svg viewBox="0 0 100 100"><rect width="50" height="50"/><circle r="20"/></svg>`
+	got := ExtractBalancedSVG(reply)
+	want := `<svg viewBox="0 0 100 100"><rect width="50" height="50"/><circle r="20"/></svg>`
+	if got != want {
+		t.Fatalf("got %q, want the longest balanced block", got)
+	}
+}
+
+func TestExtractBalancedSVGHandlesNestingAndComments(t *testing.T) {
+	// Nested svg elements plus a commented-out frame before the real drawing.
+	reply := "<!-- draft: <svg><rect/></svg> -->" +
+		`<svg><g><svg id="inner"><circle r="3"/></svg><rect width="9"/></g></svg>`
+	got := ExtractBalancedSVG(reply)
+	if got != `<svg><g><svg id="inner"><circle r="3"/></svg><rect width="9"/></g></svg>` {
+		t.Fatalf("nested structure mangled: %q", got)
+	}
+}
+
+func TestExtractBalancedSVGRejectsTruncated(t *testing.T) {
+	if got := ExtractBalancedSVG(`<svg><rect width="3"/>`); got != "" {
+		t.Fatalf("truncated svg = %q, want empty", got)
+	}
+}
+
+func TestExtractBalancedSVGSelfClosingFrame(t *testing.T) {
+	reply := `<svg><defs><svg/><rect width="4"/></defs><rect width="9"/></svg>`
+	got := ExtractBalancedSVG(reply)
+	if got != reply {
+		t.Fatalf("self-closing nested frame mangled: %q", got)
 	}
 }

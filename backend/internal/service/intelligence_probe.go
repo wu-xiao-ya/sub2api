@@ -64,10 +64,10 @@ const (
 		"Make it detailed."
 )
 
-// intelligenceProbeSVGRegex extracts the first complete SVG document from a
-// model reply. Models wrap the SVG in prose or code fences, so the match must
-// not assume line boundaries.
-var intelligenceProbeSVGRegex = regexp.MustCompile(`(?is)<svg[\s>].*</svg>`)
+// commentBlockRegex strips HTML comments before SVG extraction: models
+// drawing multi-frame animations often comment out unused frames, and their
+// <svg> tags would otherwise splice into the extracted document.
+var commentBlockRegex = regexp.MustCompile(`(?s)<!--.*?-->`)
 
 // intelligenceProbeHTTPClient dials the loopback gateway only, like the
 // monitor client, but tolerates long non-streaming generations.
@@ -560,7 +560,7 @@ func (s *IntelligenceProbeService) executeProbe(
 	}
 	text, latencyMs, httpStatus, err := s.postChatCompletion(ctx, plainKey, target.Model, settings.prompt())
 	result.LatencyMs = latencyMs
-	svg := intelligenceProbeSVGRegex.FindString(text)
+	svg := ExtractBalancedSVG(commentBlockRegex.ReplaceAllString(text, ""))
 	if svg != "" {
 		// A complete SVG in the accumulated stream is a good drawing even if
 		// the read was cut short by the timeout.
@@ -760,4 +760,69 @@ func truncateProbeMessage(message string) string {
 		return message
 	}
 	return message[:intelligenceProbeExcerptBytes]
+}
+
+// ExtractBalancedSVG picks the longest well-balanced <svg>…</svg> block from a
+// model reply. Replies frequently contain several SVG documents (multi-frame
+// animations, commented-out drafts, HTML wrappers); a naive greedy first-to-
+// last match splices them into invalid XML that no browser can render.
+// Nested <svg> elements and self-closing frames are handled.
+func ExtractBalancedSVG(text string) string {
+	lower := strings.ToLower(text)
+	isTagBoundary := func(pos int) bool {
+		if pos >= len(text) {
+			return true
+		}
+		switch text[pos] {
+		case '>', ' ', '\t', '\n', '\r', '/':
+			return true
+		}
+		return false
+	}
+	selfClosed := func(openPos int) bool {
+		end := strings.Index(text[openPos:], ">")
+		return end >= 1 && text[openPos+end-1] == '/'
+	}
+	bestStart, bestLen := -1, 0
+	for start := 0; start < len(text); {
+		open := strings.Index(lower[start:], "<svg")
+		if open < 0 {
+			break
+		}
+		openPos := start + open
+		if !isTagBoundary(openPos + 4) {
+			start = openPos + 4
+			continue
+		}
+		depth, pos := 1, openPos+4
+		end := -1
+		for depth > 0 {
+			nextOpen := strings.Index(lower[pos:], "<svg")
+			nextClose := strings.Index(lower[pos:], "</svg")
+			if nextClose < 0 {
+				break
+			}
+			if nextOpen >= 0 && nextOpen < nextClose && isTagBoundary(pos+nextOpen+4) && !selfClosed(pos+nextOpen) {
+				depth++
+				pos += nextOpen + 4
+				continue
+			}
+			depth--
+			pos += nextClose + len("</svg>") // include the closing '>'
+			if depth == 0 {
+				end = pos
+			}
+		}
+		if end > 0 && end-openPos > bestLen {
+			bestStart, bestLen = openPos, end-openPos
+		}
+		start = openPos + 4
+		if end > 0 {
+			start = end
+		}
+	}
+	if bestStart < 0 {
+		return ""
+	}
+	return text[bestStart : bestStart+bestLen]
 }
