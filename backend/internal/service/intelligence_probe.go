@@ -48,6 +48,8 @@ const (
 	intelligenceProbeExcerptBytes          = 500
 	intelligenceProbeConcurrency           = 5
 	intelligenceProbeKeepPerTarget         = 500
+	intelligenceProbeMaxAttempts           = 2
+	intelligenceProbeRetryPause            = 2 * time.Second
 
 	intelligenceProbeLeaderLockKey  = "intelligence:probe:leader"
 	intelligenceProbeLeaderLockTTL  = 2 * time.Minute
@@ -477,7 +479,9 @@ func (s *IntelligenceProbeService) RunEnabledBackground() (int, error) {
 }
 
 func (s *IntelligenceProbeService) runDetachedProbe(target *IntelligenceProbeTarget, settings *IntelligenceProbeSettings) {
-	ctx, cancel := context.WithTimeout(context.Background(), intelligenceProbeRequestTimeout+30*time.Second)
+	// Two full drawing attempts plus the retry pause: executeProbe may rerun
+	// the whole drawing once after a transient upstream failure.
+	ctx, cancel := context.WithTimeout(context.Background(), 2*intelligenceProbeRequestTimeout+30*time.Second)
 	defer cancel()
 	if _, err := s.probeTarget(ctx, target, settings); err != nil {
 		logger.LegacyPrintf("service.intelligence_probe", "manual_probe_failed: target_id=%d err=%v", target.ID, err)
@@ -558,27 +562,65 @@ func (s *IntelligenceProbeService) executeProbe(
 		result.ErrorMessage = truncateProbeMessage(err.Error())
 		return result
 	}
-	text, latencyMs, httpStatus, err := s.postChatCompletion(ctx, plainKey, target.Model, settings.prompt())
+	return s.runProbeAttempts(ctx, target, plainKey, settings.prompt())
+}
+
+// runProbeAttempts draws, retries transient failures once, and classifies the
+// outcome. The monitoring key must already be resolved.
+func (s *IntelligenceProbeService) runProbeAttempts(
+	ctx context.Context,
+	target *IntelligenceProbeTarget,
+	plainKey, prompt string,
+) *IntelligenceProbeResult {
+	result := &IntelligenceProbeResult{TargetID: target.ID}
+	// One immediate retry absorbs transient pool errors (5xx bursts, empty
+	// 2xx streams). Persistent rejections (4xx) and mid-stream read errors
+	// are not retried: rerunning into an expired budget would only burn
+	// quota without changing the outcome.
+	var firstFailureMessage string
+	var text string
+	var latencyMs *int
+	var httpStatus int
+	var attemptErr error
+	var svg string
+	for attempt := 1; attempt <= intelligenceProbeMaxAttempts; attempt++ {
+		text, latencyMs, httpStatus, attemptErr = s.postChatCompletion(ctx, plainKey, target.Model, prompt)
+		svg = ensureSVGNamespace(ExtractBalancedSVG(commentBlockRegex.ReplaceAllString(text, "")))
+		if svg != "" || attempt >= intelligenceProbeMaxAttempts || !retryableProbeFailure(httpStatus, attemptErr, text) {
+			break
+		}
+		if !sleepBeforeProbeRetry(ctx) {
+			break
+		}
+		firstFailureMessage = probeAttemptMessage(httpStatus, attemptErr)
+	}
 	result.LatencyMs = latencyMs
-	svg := ExtractBalancedSVG(commentBlockRegex.ReplaceAllString(text, ""))
 	if svg != "" {
 		// A complete SVG in the accumulated stream is a good drawing even if
 		// the read was cut short by the timeout.
+		if firstFailureMessage != "" {
+			logger.LegacyPrintf("service.intelligence_probe",
+				"probe_recovered_on_retry: target_id=%d first_attempt=%s", target.ID, firstFailureMessage)
+		}
 		result.Status = intelligenceProbeStatusSuccess
 		result.ResponseSVG = svg
 		return result
 	}
-	if err != nil {
+	if attemptErr != nil {
 		result.Status = intelligenceProbeStatusFailed
-		if httpStatus > 0 {
-			result.ErrorMessage = truncateProbeMessage(fmt.Sprintf("HTTP %d: %s", httpStatus, err.Error()))
-		} else {
-			result.ErrorMessage = truncateProbeMessage(err.Error())
+		message := probeAttemptMessage(httpStatus, attemptErr)
+		if firstFailureMessage != "" {
+			message = "attempt1: " + firstFailureMessage + "; attempt2: " + message
 		}
+		result.ErrorMessage = truncateProbeMessage(message)
 		return result
 	}
 	result.Status = intelligenceProbeStatusNoSVG
-	result.ResponseExcerpt = truncateProbeMessage(strings.TrimSpace(text))
+	excerpt := strings.TrimSpace(text)
+	if excerpt == "" {
+		excerpt = fmt.Sprintf("HTTP %d but the response stream contained no content", httpStatus)
+	}
+	result.ResponseExcerpt = truncateProbeMessage(excerpt)
 	return result
 }
 
@@ -760,6 +802,71 @@ func truncateProbeMessage(message string) string {
 		return message
 	}
 	return message[:intelligenceProbeExcerptBytes]
+}
+
+// retryableProbeFailure reports whether a failed drawing attempt is worth one
+// immediate retry: transient pool errors (5xx, transport timeouts, empty 2xx
+// streams) versus persistent ones (4xx rejections, config errors) or a model
+// that answered prose instead of drawing.
+func retryableProbeFailure(httpStatus int, err error, text string) bool {
+	if httpStatus >= 500 {
+		return true
+	}
+	if httpStatus == 0 && err != nil {
+		return true
+	}
+	if httpStatus >= 200 && httpStatus < 300 && err == nil && strings.TrimSpace(text) == "" {
+		return true
+	}
+	return false
+}
+
+// probeAttemptMessage renders one attempt's outcome for error_message.
+func probeAttemptMessage(httpStatus int, err error) string {
+	if err == nil {
+		return fmt.Sprintf("HTTP %d: empty response", httpStatus)
+	}
+	if httpStatus > 0 {
+		return fmt.Sprintf("HTTP %d: %s", httpStatus, err.Error())
+	}
+	return err.Error()
+}
+
+// sleepBeforeProbeRetry waits out the retry pause, aborting early when the
+// surrounding context is already done.
+func sleepBeforeProbeRetry(ctx context.Context) bool {
+	timer := time.NewTimer(intelligenceProbeRetryPause)
+	defer timer.Stop()
+	select {
+	case <-timer.C:
+		return true
+	case <-ctx.Done():
+		return false
+	}
+}
+
+// ensureSVGNamespace injects the SVG namespace into the root <svg> tag when
+// the model omitted it. Inline HTML rendering tolerates a missing namespace,
+// but <img>/data-URI contexts parse the document as XML and refuse to render
+// a root outside the SVG namespace — the dominant cause of "corrupted"
+// gallery entries (70% of stored drawings in production).
+func ensureSVGNamespace(svg string) string {
+	if !strings.HasPrefix(strings.ToLower(svg), "<svg") {
+		return svg
+	}
+	closeIdx := strings.Index(svg, ">")
+	if closeIdx < 0 {
+		return svg
+	}
+	if strings.Contains(strings.ToLower(svg[:closeIdx]), "xmlns=") {
+		return svg
+	}
+	const declaration = ` xmlns="http://www.w3.org/2000/svg"`
+	if svg[closeIdx-1] == '/' {
+		// Self-closing root: insert before the slash.
+		return svg[:closeIdx-1] + declaration + svg[closeIdx-1:]
+	}
+	return svg[:closeIdx] + declaration + svg[closeIdx:]
 }
 
 // ExtractBalancedSVG picks the longest well-balanced <svg>…</svg> block from a

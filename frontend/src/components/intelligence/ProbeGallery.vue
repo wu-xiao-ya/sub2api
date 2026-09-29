@@ -34,11 +34,15 @@
           @click="selected = item"
         >
           <img
-            v-if="item.status === 'success' && item.response_svg"
+            v-if="canRender(item)"
             :src="svgDataUri(item.response_svg)"
             class="h-full w-full bg-white object-contain"
             :alt="t('intelligence.gallery.thumbnailAlt')"
+            @error="markRenderFailed(item.id)"
           />
+          <span v-else-if="renderFailed[item.id]" class="block pt-8 text-xs text-amber-600 dark:text-amber-400">
+            {{ t("intelligence.gallery.renderFailed") }}
+          </span>
           <span v-else-if="item.status === 'no_svg'" class="block pt-8 text-xs text-gray-500 dark:text-gray-400">
             {{ t("intelligence.gallery.noSvg") }}
           </span>
@@ -71,14 +75,21 @@
         </div>
 
         <div
-          v-if="selected.status === 'success' && selected.response_svg"
+          v-if="canRender(selected)"
           class="flex max-h-[60vh] items-center justify-center overflow-auto rounded-lg border border-gray-200 bg-white p-4 dark:border-dark-600"
         >
           <img
             :src="svgDataUri(selected.response_svg)"
             class="max-h-[55vh] w-auto max-w-full object-contain"
             :alt="t('intelligence.gallery.thumbnailAlt')"
+            @error="markRenderFailed(selected.id)"
           />
+        </div>
+        <div
+          v-else-if="renderFailed[selected.id]"
+          class="max-h-[60vh] overflow-auto whitespace-pre-wrap rounded-lg border border-gray-200 bg-gray-50 p-4 text-xs text-gray-600 dark:border-dark-600 dark:bg-dark-700 dark:text-gray-300"
+        >
+          {{ selected.response_svg }}
         </div>
         <div
           v-else
@@ -149,6 +160,19 @@ const groups = computed<GalleryGroup[]>(() => {
 // document, so untrusted model output cannot run in the page.
 function svgDataUri(svg: string): string {
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+}
+
+// A model drawing can still fail strict XML parsing in <img> context (e.g.
+// duplicate attributes); track those ids to show an explicit placeholder
+// instead of a broken-image glyph, with the raw SVG in the detail dialog.
+const renderFailed = ref<Record<number, boolean>>({});
+
+function markRenderFailed(id: number): void {
+  renderFailed.value[id] = true;
+}
+
+function canRender(item: IntelligenceProbeUserResult): boolean {
+  return item.status === "success" && !!item.response_svg && !renderFailed.value[item.id];
 }
 
 function tooltip(item: IntelligenceProbeUserResult): string {

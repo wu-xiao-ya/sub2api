@@ -8,6 +8,7 @@ export default {
           thumbnailAlt: '降智检测 SVG 画作',
           noSvg: '无图',
           failed: '失败',
+          renderFailed: '图片无法渲染',
           detailTitle: '降智检测详情',
           statusSuccess: '成功',
           statusNoSvg: '无 SVG',

@@ -8,6 +8,7 @@ export default {
           thumbnailAlt: 'Intelligence probe SVG drawing',
           noSvg: 'No SVG',
           failed: 'Failed',
+          renderFailed: 'Image failed to render',
           detailTitle: 'Intelligence probe details',
           statusSuccess: 'Success',
           statusNoSvg: 'No SVG',
