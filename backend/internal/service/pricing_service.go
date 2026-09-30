@@ -86,6 +86,25 @@ var (
 		Mode:                                "chat",
 		SupportsPromptCaching:               true,
 	}
+	// gpt-6.1-sol 与 gpt-6-sol 同卡价（渠道定价也按同价配置）；没有静态条目时
+	// 会回落到 DefaultTestModel，272k 长上下文档随之丢失。
+	openAIGPT61SolFallbackPricing = &LiteLLMModelPricing{
+		InputCostPerToken:                   2e-06,
+		InputCostPerTokenPriority:           4e-06,
+		OutputCostPerToken:                  1e-05,
+		OutputCostPerTokenPriority:          2e-05,
+		CacheCreationInputTokenCost:         2.5e-06,
+		CacheCreationInputTokenCostPriority: 5e-06,
+		CacheReadInputTokenCost:             2e-07,
+		CacheReadInputTokenCostPriority:     4e-07,
+		LongContextInputTokenThreshold:      openAIGPT54LongContextInputThreshold,
+		LongContextInputCostMultiplier:      openAIGPT54LongContextInputMultiplier,
+		LongContextOutputCostMultiplier:     openAIGPT54LongContextOutputMultiplier,
+		SupportsServiceTier:                 true,
+		LiteLLMProvider:                     "openai",
+		Mode:                                "chat",
+		SupportsPromptCaching:               true,
+	}
 	openAIGPT6LunaFallbackPricing = &LiteLLMModelPricing{
 		InputCostPerToken:                   1e-07,
 		InputCostPerTokenPriority:           2e-07,
@@ -1068,6 +1087,11 @@ func (s *PricingService) matchOpenAIModel(model string) *LiteLLMModelPricing {
 		logger.With(zap.String("component", "service.pricing")).
 			Info(fmt.Sprintf("[Pricing] OpenAI fallback matched %s -> %s", model, "gpt-6-sol(static)"))
 		return openAIGPT6SolFallbackPricing
+	}
+	if model == "gpt-6.1-sol" || strings.HasPrefix(model, "gpt-6.1-sol-") {
+		logger.With(zap.String("component", "service.pricing")).
+			Info(fmt.Sprintf("[Pricing] OpenAI fallback matched %s -> %s", model, "gpt-6.1-sol(static)"))
+		return openAIGPT61SolFallbackPricing
 	}
 	if model == "gpt-6-luna" || strings.HasPrefix(model, "gpt-6-luna-") {
 		logger.With(zap.String("component", "service.pricing")).

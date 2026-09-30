@@ -346,6 +346,20 @@ func (s *BillingService) initFallbackPricing() {
 		LongContextInputMultiplier:         openAIGPT54LongContextInputMultiplier,
 		LongContextOutputMultiplier:        openAIGPT54LongContextOutputMultiplier,
 	}
+	// gpt-6.1-sol 沿用 gpt-6-sol 卡价；缺条目时会回落 DefaultTestModel 且丢长上下文档。
+	s.fallbackPrices["gpt-6.1-sol"] = &ModelPricing{
+		InputPricePerToken:                 2e-6,
+		InputPricePerTokenPriority:         4e-6,
+		OutputPricePerToken:                10e-6,
+		OutputPricePerTokenPriority:        20e-6,
+		CacheCreationPricePerToken:         2.5e-6,
+		CacheCreationPricePerTokenPriority: 5e-6,
+		CacheReadPricePerToken:             0.2e-6,
+		CacheReadPricePerTokenPriority:     0.4e-6,
+		LongContextInputThreshold:          openAIGPT54LongContextInputThreshold,
+		LongContextInputMultiplier:         openAIGPT54LongContextInputMultiplier,
+		LongContextOutputMultiplier:        openAIGPT54LongContextOutputMultiplier,
+	}
 	s.fallbackPrices["gpt-6-luna"] = &ModelPricing{
 		InputPricePerToken:                 0.1e-6,
 		InputPricePerTokenPriority:         0.2e-6,
@@ -869,6 +883,8 @@ func (s *BillingService) getFallbackPricing(model string) *ModelPricing {
 			return s.fallbackPrices["gpt-6-astra"]
 		case "gpt-6-sol":
 			return s.fallbackPrices["gpt-6-sol"]
+		case "gpt-6.1-sol":
+			return s.fallbackPrices["gpt-6.1-sol"]
 		case "gpt-6-luna":
 			return s.fallbackPrices["gpt-6-luna"]
 		case "gpt-5.6-sol":
@@ -1368,7 +1384,7 @@ func (s *BillingService) applyModelSpecificPricingPolicy(model string, pricing *
 	// Astra uses the same 272k whole-request surcharge as GPT-5.6:
 	// input and cache 2x, output 1.5x. Fill missing rates so channel prices
 	// and older remote files, which only store base token prices, still apply it.
-	if normalized == "gpt-6-astra" || normalized == "gpt-6-sol" || normalized == "gpt-6-luna" {
+	if normalized == "gpt-6-astra" || normalized == "gpt-6-sol" || normalized == "gpt-6-luna" || normalized == "gpt-6.1-sol" {
 		cloned := *pricing
 		if cloned.LongContextInputThreshold <= 0 {
 			cloned.LongContextInputThreshold = openAIGPT54LongContextInputThreshold

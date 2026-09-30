@@ -172,7 +172,7 @@ func (s *ChannelService) fillGrokLongContextDisplay(models []SupportedModel) {
 func (s *ChannelService) fillAstraLongContextDisplay(models []SupportedModel) {
 	for i := range models {
 		normalized := normalizeKnownOpenAICodexModel(models[i].Name)
-		if (normalized != "gpt-6-astra" && normalized != "gpt-6-sol" && normalized != "gpt-6-luna") || models[i].Pricing == nil {
+		if (normalized != "gpt-6-astra" && normalized != "gpt-6-sol" && normalized != "gpt-6-luna" && normalized != "gpt-6.1-sol") || models[i].Pricing == nil {
 			continue
 		}
 		cloned := models[i].Pricing.Clone()
