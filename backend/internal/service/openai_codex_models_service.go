@@ -18,6 +18,8 @@ import (
 
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/httpclient"
+	"github.com/tidwall/gjson"
+	"github.com/tidwall/sjson"
 	"golang.org/x/net/http2"
 	"golang.org/x/sync/singleflight"
 )
@@ -507,6 +509,7 @@ func (s *OpenAIGatewayService) fetchCodexModelsManifestUpstream(ctx context.Cont
 	if request.useAPIKeyUpstream {
 		body = convertOpenAIModelListToCodexManifest(body)
 	}
+	body = patchCodexModelsManifestReasoningLevels(body)
 	if err := validateCodexModelsManifestEnvelope(body); err != nil {
 		return nil, &codexModelsManifestUpstreamError{
 			err: infraerrors.Newf(
@@ -519,6 +522,81 @@ func (s *OpenAIGatewayService) fetchCodexModelsManifestUpstream(ctx context.Cont
 		}
 	}
 	return &CodexModelsManifest{Body: body, ETag: resp.Header.Get("ETag")}, nil
+}
+
+// codexModelsReasoningLevelPatch fills reasoning tiers for newly released
+// models whose upstream manifest lags behind. gpt-6.1-sol shipped while the
+// upstream models generator still classified it as unknown and emitted a
+// single "none" level; Codex clients trust the manifest for their effort
+// picker, so every reasoning option — including max — was hidden even though
+// the upstream chat endpoint accepts the full tier set (verified end-to-end).
+// Entries that already advertise real levels are left untouched, so the patch
+// becomes a no-op once the upstream manifest catches up.
+var codexModelsReasoningLevelPatch = map[string]struct {
+	levels       []codexModelsReasoningLevel
+	defaultLevel string
+}{
+	"gpt-6.1-sol": {
+		levels: []codexModelsReasoningLevel{
+			{Effort: "low", Description: "Fast responses with lighter reasoning"},
+			{Effort: "medium", Description: "Balanced reasoning for most coding tasks"},
+			{Effort: "high", Description: "Greater reasoning depth for coding and agent tasks"},
+			{Effort: "xhigh", Description: "Extra-high reasoning depth for difficult tasks"},
+			{Effort: "max", Description: "Maximum reasoning depth for complex tasks"},
+		},
+		defaultLevel: "medium",
+	},
+}
+
+type codexModelsReasoningLevel struct {
+	Effort      string `json:"effort"`
+	Description string `json:"description"`
+}
+
+// patchCodexModelsManifestReasoningLevels rewrites supported_reasoning_levels
+// (and the default level when it is not one of the patched tiers) for entries
+// listed in codexModelsReasoningLevelPatch. sjson keeps the rest of the
+// upstream payload byte-identical; unparseable bodies are returned unchanged.
+func patchCodexModelsManifestReasoningLevels(body []byte) []byte {
+	entries := gjson.GetBytes(body, "models").Array()
+	if len(entries) == 0 {
+		return body
+	}
+	patched := body
+	for i, entry := range entries {
+		slug := strings.TrimSpace(entry.Get("slug").String())
+		if slug == "" {
+			slug = strings.TrimSpace(entry.Get("id").String())
+		}
+		patch, ok := codexModelsReasoningLevelPatch[slug]
+		if !ok {
+			continue
+		}
+		current := entry.Get("supported_reasoning_levels").Array()
+		if len(current) > 0 && current[0].Get("effort").String() != "none" {
+			continue // upstream already advertises real tiers
+		}
+		next, err := sjson.SetBytes(patched, fmt.Sprintf("models.%d.supported_reasoning_levels", i), patch.levels)
+		if err != nil {
+			return body
+		}
+		defaultLevel := strings.TrimSpace(entry.Get("default_reasoning_level").String())
+		known := false
+		for _, level := range patch.levels {
+			if defaultLevel == level.Effort {
+				known = true
+				break
+			}
+		}
+		if !known {
+			next, err = sjson.SetBytes(next, fmt.Sprintf("models.%d.default_reasoning_level", i), patch.defaultLevel)
+			if err != nil {
+				return body
+			}
+		}
+		patched = next
+	}
+	return patched
 }
 
 // convertOpenAIModelListToCodexManifest rewrites a standard OpenAI

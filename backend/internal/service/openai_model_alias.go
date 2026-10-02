@@ -156,7 +156,12 @@ func isOpenAIGPT56Model(model string) bool {
 
 func supportsOpenAIMaxReasoningEffort(model string) bool {
 	normalized := normalizeKnownOpenAICodexModel(model)
-	return normalized == "gpt-6-astra" || isOpenAIGPT56Model(model)
+	// 6 系 sol 的上游同样接受 max（6.1-sol 已端到端实测）；不加入白名单会让
+	// usage_log 把 max 静默记成 xhigh，用量分析无法区分两档。
+	if normalized == "gpt-6-astra" || normalized == "gpt-6-sol" || normalized == "gpt-6.1-sol" {
+		return true
+	}
+	return isOpenAIGPT56Model(model)
 }
 
 func appendUsageBillingModelCandidate(candidates []string, seen map[string]struct{}, model string) []string {
