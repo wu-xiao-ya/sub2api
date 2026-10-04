@@ -573,7 +573,7 @@ func (s *UpstreamBillingProbeService) probeLoadedAccount(ctx context.Context, ac
 	defer cancel()
 	req = req.WithContext(probeCtx)
 	reqCtx := req.Context()
-	if account.Platform == PlatformOpenAI {
+	if account.Platform == PlatformOpenAI || account.Platform == PlatformGrok {
 		reqCtx = WithHTTPUpstreamProfile(reqCtx, HTTPUpstreamProfileOpenAI)
 	}
 	req = req.WithContext(WithHTTPUpstreamRedirectsDisabled(reqCtx))
@@ -623,7 +623,10 @@ func (s *UpstreamBillingProbeService) buildUpstreamBillingProbeRequest(ctx conte
 	}
 	baseURL := ""
 	switch account.Platform {
-	case PlatformOpenAI:
+	case PlatformOpenAI, PlatformGrok:
+		// Grok 的中转账号是 OpenAI 兼容 relay（base_url 存 credentials.base_url），
+		// 上游倍率探测走同一套 /v1/sub2api/billing 端点；没有这个 case 时 grok
+		// 账号永远探测不到倍率，利润报表按全价记账。
 		baseURL = account.GetOpenAIBaseURL()
 		if baseURL == "" {
 			baseURL = "https://api.openai.com"
@@ -647,7 +650,7 @@ func (s *UpstreamBillingProbeService) buildUpstreamBillingProbeRequest(ctx conte
 	}
 	req.Header.Set("Accept", "application/json")
 	switch account.Platform {
-	case PlatformOpenAI:
+	case PlatformOpenAI, PlatformGrok:
 		req.Header.Set("Authorization", "Bearer "+apiKey)
 	case PlatformAnthropic:
 		setAnthropicAPIKeyAuthHeader(req.Header, account, apiKey)
@@ -874,12 +877,13 @@ func decodeUpstreamBillingProbeSnapshot(extra map[string]any) *UpstreamBillingPr
 }
 
 func isAutomaticUpstreamBillingProbeAccount(account *Account) bool {
-	return account != nil && account.Platform == PlatformOpenAI && account.Type == AccountTypeAPIKey
+	return account != nil && account.Type == AccountTypeAPIKey &&
+		(account.Platform == PlatformOpenAI || account.Platform == PlatformGrok)
 }
 
 func isManualUpstreamBillingProbeAccount(account *Account) bool {
 	return account != nil && account.Type == AccountTypeAPIKey &&
-		(account.Platform == PlatformOpenAI || account.Platform == PlatformAnthropic)
+		(account.Platform == PlatformOpenAI || account.Platform == PlatformAnthropic || account.Platform == PlatformGrok)
 }
 
 func upstreamBillingProbeEnabled(account *Account) bool {

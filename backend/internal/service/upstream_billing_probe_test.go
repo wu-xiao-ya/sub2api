@@ -1062,3 +1062,51 @@ func TestUpstreamBillingProbeLeaderLockCoversStaggeredInstancesInCadenceWindow(t
 	require.NoError(t, staggered.RunDue(context.Background()))
 	require.Equal(t, int64(1), upstream.calls.Load(), "a staggered instance must not start a second batch inside the cadence window")
 }
+
+func TestUpstreamBillingProbeSupportsGrokAPIKeyAccounts(t *testing.T) {
+	account := &Account{
+		ID:          219,
+		Platform:    PlatformGrok,
+		Type:        AccountTypeAPIKey,
+		Status:      StatusActive,
+		Concurrency: 2,
+		Credentials: map[string]any{
+			"api_key":  "sk-grok-sensitive",
+			"base_url": "https://monkeyapi.net",
+		},
+	}
+	repo := &upstreamBillingProbeAccountRepo{accounts: map[int64]*Account{account.ID: account}}
+	upstream := &httpUpstreamRecorder{resp: &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     http.Header{"Content-Type": []string{"application/json"}},
+		Body: io.NopCloser(strings.NewReader(`{
+			"object":"sub2api.key_billing",
+			"schema_version":1,
+			"billing_scope":"token",
+			"group_rate_multiplier":0.04,
+			"resolved_rate_multiplier":0.04,
+			"peak_rate_enabled":false,
+			"effective_rate_multiplier":0.04,
+			"observed_at":"2026-10-02T01:00:00Z"
+		}`)),
+	}}
+	svc := newUpstreamBillingProbeTestService(repo, upstream, &upstreamBillingProbeSettingRepo{})
+
+	snapshot, err := svc.ProbeAccount(context.Background(), account.ID)
+
+	require.NoError(t, err)
+	require.Equal(t, UpstreamBillingProbeStatusOK, snapshot.Status)
+	require.Equal(t, 0.04, snapshot.Data["effective_rate_multiplier"])
+	require.Equal(t, "https://monkeyapi.net/v1/sub2api/billing", upstream.lastReq.URL.String())
+	require.Equal(t, "Bearer sk-grok-sensitive", upstream.lastReq.Header.Get("Authorization"))
+	require.True(t, HTTPUpstreamRedirectsDisabled(upstream.lastReq.Context()))
+}
+
+func TestUpstreamBillingProbeGrokEligibility(t *testing.T) {
+	grokAPIKey := &Account{ID: 1, Platform: PlatformGrok, Type: AccountTypeAPIKey}
+	grokOAuth := &Account{ID: 2, Platform: PlatformGrok, Type: AccountTypeOAuth}
+	require.True(t, isAutomaticUpstreamBillingProbeAccount(grokAPIKey))
+	require.True(t, isManualUpstreamBillingProbeAccount(grokAPIKey))
+	require.False(t, isAutomaticUpstreamBillingProbeAccount(grokOAuth))
+	require.False(t, isManualUpstreamBillingProbeAccount(grokOAuth))
+}
