@@ -951,6 +951,8 @@ func (s *PricingService) matchByModelFamily(model string) *LiteLLMModelPricing {
 	// 因子串关系误匹配 "claude-opus-4-7"（opus-4.7 系列）。
 	// 注意：原 map 实现存在 Go map 迭代随机性导致的同类 bug，此处改为有序切片修复。
 	families := []modelFamily{
+		{name: "sonnet-5-5", match: []string{"claude-sonnet-5-5", "claude-sonnet-5.5"}, pricing: []string{"claude-sonnet-5-5", "claude-sonnet-5.5", "claude-sonnet-5"}},
+		{name: "sonnet-5", match: []string{"claude-sonnet-5"}, pricing: []string{"claude-sonnet-5", "claude-sonnet-5-5"}},
 		{name: "opus-4.7", match: []string{"claude-opus-4-7", "claude-opus-4.7"}, pricing: []string{"claude-opus-4-7", "claude-opus-4.7", "claude-opus-4-6"}},
 		{name: "opus-4.6", match: []string{"claude-opus-4-6", "claude-opus-4.6"}},
 		{name: "opus-4.5", match: []string{"claude-opus-4-5", "claude-opus-4.5"}},
@@ -994,6 +996,10 @@ func (s *PricingService) matchByModelFamily(model string) *LiteLLMModelPricing {
 			}
 		case strings.Contains(model, "sonnet"):
 			switch {
+			case strings.Contains(model, "5-5") || strings.Contains(model, "5.5"):
+				fallbackName = "sonnet-5-5"
+			case strings.Contains(model, "sonnet-5"):
+				fallbackName = "sonnet-5"
 			case strings.Contains(model, "4.5") || strings.Contains(model, "4-5"):
 				fallbackName = "sonnet-4.5"
 			case strings.Contains(model, "3-5") || strings.Contains(model, "3.5"):

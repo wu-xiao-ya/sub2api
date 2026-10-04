@@ -273,10 +273,24 @@ func (s *BillingService) initFallbackPricing() {
 		OutputPricePerTokenPriority:        40e-6,
 		CacheCreationPricePerToken:         5e-6,
 		CacheCreationPricePerTokenPriority: 10e-6,
+		CacheCreation5mPrice:               5e-6,
 		CacheCreation1hPrice:               8e-6,
 		CacheReadPricePerToken:             0.2e-6,
 		CacheReadPricePerTokenPriority:     0.4e-6,
 		SupportsCacheBreakdown:             true,
+	}
+
+	// Claude Sonnet 5.5 官方价（USD/token），与 Sonnet 5 同档：$2/$10，
+	// 缓存写 5m $2.50（输入 1.25 倍）、1h $4（2 倍）、缓存读 $0.20。
+	// 优先级档未单独定价，走默认 2 倍系数。
+	s.fallbackPrices["claude-sonnet-5-5"] = &ModelPricing{
+		InputPricePerToken:         2e-6,
+		OutputPricePerToken:        10e-6,
+		CacheCreationPricePerToken: 2.5e-6,
+		CacheCreation5mPrice:       2.5e-6,
+		CacheCreation1hPrice:       4e-6,
+		CacheReadPricePerToken:     0.2e-6,
+		SupportsCacheBreakdown:     true,
 	}
 
 	// Gemini 3.1 Pro
@@ -739,6 +753,10 @@ func (s *BillingService) getFallbackPricing(model string) *ModelPricing {
 		return s.fallbackPrices["claude-3-opus"]
 	}
 	if strings.Contains(modelLower, "sonnet") {
+		// Sonnet 5 与 5.5 同档（$2/$10）；"sonnet-5" 前缀不会误伤 4.x/3.5 命名。
+		if strings.Contains(modelLower, "sonnet-5") {
+			return s.fallbackPrices["claude-sonnet-5-5"]
+		}
 		if strings.Contains(modelLower, "4") && !strings.Contains(modelLower, "3") {
 			return s.fallbackPrices["claude-sonnet-4"]
 		}
