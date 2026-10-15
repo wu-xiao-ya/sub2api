@@ -1,0 +1,233 @@
+package service
+
+import (
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"errors"
+	"fmt"
+	"math"
+	"strings"
+
+	"github.com/shopspring/decimal"
+)
+
+var ErrUsageBillingRequestIDRequired = errors.New("usage billing request_id is required")
+var ErrUsageBillingRequestConflict = errors.New("usage billing request fingerprint conflict")
+
+// UsageBillingCommand describes one billable request that must be applied at most once.
+type UsageBillingCommand struct {
+	RequestID          string
+	APIKeyID           int64
+	RequestFingerprint string
+	RequestPayloadHash string
+
+	UserID                 int64
+	AccountID              int64
+	SubscriptionID         *int64
+	SubscriptionPurchaseID *int64
+	AccountType            string
+	Model                  string
+	ServiceTier            string
+	ReasoningEffort        string
+	BillingType            int8
+	InputTokens            int
+	OutputTokens           int
+	CacheCreationTokens    int
+	CacheReadTokens        int
+	ImageCount             int
+	MediaType              string
+
+	BalanceCost         float64
+	SubscriptionCost    float64
+	APIKeyQuotaCost     float64
+	APIKeyRateLimitCost float64
+	AccountQuotaCost    float64
+
+	ContributorOwnerUserID      int64
+	ContributorRewardAccountID  int64
+	ContributorRewardGroupID    int64
+	ContributorRewardMultiplier float64
+	ContributorRewardTotalCost  float64
+	ContributorRewardActualCost float64
+	ContributorRewardAmount     float64
+}
+
+func (c *UsageBillingCommand) Normalize() {
+	if c == nil {
+		return
+	}
+	c.RequestID = strings.TrimSpace(c.RequestID)
+	if strings.TrimSpace(c.RequestFingerprint) == "" {
+		c.RequestFingerprint = buildUsageBillingFingerprint(c)
+	}
+	// Keep the idempotency fingerprint based on the original values so an
+	// upgrade cannot turn a retry into a request fingerprint conflict.
+	c.quantizeMonetaryFields()
+}
+
+// UsageBillingMonetaryScale matches users.balance and api_keys.quota_used.
+const UsageBillingMonetaryScale = 8
+
+// quantizeMonetaryFields makes every database mutation use the same NUMERIC
+// precision. Without this, PostgreSQL can round balance deductions and quota
+// increments in opposite directions at half-way values.
+func (c *UsageBillingCommand) quantizeMonetaryFields() {
+	c.BalanceCost = QuantizeUsageBillingAmount(c.BalanceCost)
+	c.SubscriptionCost = QuantizeUsageBillingAmount(c.SubscriptionCost)
+	c.APIKeyQuotaCost = QuantizeUsageBillingAmount(c.APIKeyQuotaCost)
+	c.APIKeyRateLimitCost = QuantizeUsageBillingAmount(c.APIKeyRateLimitCost)
+	c.AccountQuotaCost = QuantizeUsageBillingAmount(c.AccountQuotaCost)
+	c.ContributorRewardMultiplier = QuantizeUsageBillingAmount(c.ContributorRewardMultiplier)
+	c.ContributorRewardTotalCost = QuantizeUsageBillingAmount(c.ContributorRewardTotalCost)
+	c.ContributorRewardActualCost = QuantizeUsageBillingAmount(c.ContributorRewardActualCost)
+	c.ContributorRewardAmount = QuantizeUsageBillingAmount(c.ContributorRewardAmount)
+}
+
+// QuantizeUsageBillingAmount uses PostgreSQL NUMERIC-compatible decimal
+// rounding rather than binary floating-point multiplication and rounding.
+func QuantizeUsageBillingAmount(v float64) float64 {
+	if v == 0 || math.IsNaN(v) || math.IsInf(v, 0) {
+		return v
+	}
+	quantized, _ := decimal.NewFromFloat(v).Round(UsageBillingMonetaryScale).Float64()
+	return quantized
+}
+
+func buildUsageBillingFingerprint(c *UsageBillingCommand) string {
+	if c == nil {
+		return ""
+	}
+	raw := fmt.Sprintf(
+		"%d|%d|%d|%s|%s|%s|%s|%d|%d|%d|%d|%d|%d|%s|%d|%d|%0.10f|%0.10f|%0.10f|%0.10f|%0.10f|%d|%d|%d|%0.10f|%0.10f|%0.10f|%0.10f",
+		c.UserID,
+		c.AccountID,
+		c.APIKeyID,
+		strings.TrimSpace(c.AccountType),
+		strings.TrimSpace(c.Model),
+		strings.TrimSpace(c.ServiceTier),
+		strings.TrimSpace(c.ReasoningEffort),
+		c.BillingType,
+		c.InputTokens,
+		c.OutputTokens,
+		c.CacheCreationTokens,
+		c.CacheReadTokens,
+		c.ImageCount,
+		strings.TrimSpace(c.MediaType),
+		valueOrZero(c.SubscriptionID),
+		valueOrZero(c.SubscriptionPurchaseID),
+		c.BalanceCost,
+		c.SubscriptionCost,
+		c.APIKeyQuotaCost,
+		c.APIKeyRateLimitCost,
+		c.AccountQuotaCost,
+		c.ContributorOwnerUserID,
+		c.ContributorRewardAccountID,
+		c.ContributorRewardGroupID,
+		c.ContributorRewardMultiplier,
+		c.ContributorRewardTotalCost,
+		c.ContributorRewardActualCost,
+		c.ContributorRewardAmount,
+	)
+	if payloadHash := strings.TrimSpace(c.RequestPayloadHash); payloadHash != "" {
+		raw += "|" + payloadHash
+	}
+	sum := sha256.Sum256([]byte(raw))
+	return hex.EncodeToString(sum[:])
+}
+
+func HashUsageRequestPayload(payload []byte) string {
+	if len(payload) == 0 {
+		return ""
+	}
+	sum := sha256.Sum256(payload)
+	return hex.EncodeToString(sum[:])
+}
+
+func valueOrZero(v *int64) int64 {
+	if v == nil {
+		return 0
+	}
+	return *v
+}
+
+// AccountQuotaState holds the post-increment quota state returned by the DB transaction.
+// All values are post-update (i.e., already include the increment).
+type AccountQuotaState struct {
+	TotalUsed   float64
+	TotalLimit  float64
+	DailyUsed   float64
+	DailyLimit  float64
+	WeeklyUsed  float64
+	WeeklyLimit float64
+}
+
+type UsageBillingApplyResult struct {
+	Applied                       bool
+	APIKeyQuotaExhausted          bool
+	NewBalance                    *float64           // post-deduction balance (nil = no balance deduction)
+	BalanceOverdrafted            bool               // true when the sufficient-balance guard missed and debt was still recorded
+	QuotaState                    *AccountQuotaState // post-increment quota state (nil = no quota increment)
+	ConsumptionConcurrencyChanged bool
+	ConsumptionConcurrencyDelta   int
+	ConsumptionLifetimeUSD        float64
+	ConsumptionConcurrencyTier    int
+	ContributorRewardApplied      bool
+	ContributorRewardOwnerUserID  int64
+	ContributorRewardAmount       float64
+}
+
+// BatchImageBalanceHoldCommand describes an idempotent balance hold operation.
+type BatchImageBalanceHoldCommand struct {
+	RequestID          string
+	APIKeyID           int64
+	RequestFingerprint string
+	RequestPayloadHash string
+	UserID             int64
+	BatchID            string
+	HoldAmount         float64
+	ActualAmount       float64
+}
+
+func (c *BatchImageBalanceHoldCommand) Normalize() {
+	if c == nil {
+		return
+	}
+	c.RequestID = strings.TrimSpace(c.RequestID)
+	c.BatchID = strings.TrimSpace(c.BatchID)
+	if strings.TrimSpace(c.RequestFingerprint) == "" {
+		c.RequestFingerprint = buildBatchImageBalanceHoldFingerprint(c)
+	}
+}
+
+func buildBatchImageBalanceHoldFingerprint(c *BatchImageBalanceHoldCommand) string {
+	if c == nil {
+		return ""
+	}
+	raw := fmt.Sprintf(
+		"%d|%d|%s|%0.10f|%0.10f",
+		c.UserID,
+		c.APIKeyID,
+		strings.TrimSpace(c.BatchID),
+		c.HoldAmount,
+		c.ActualAmount,
+	)
+	if payloadHash := strings.TrimSpace(c.RequestPayloadHash); payloadHash != "" {
+		raw += "|" + payloadHash
+	}
+	sum := sha256.Sum256([]byte(raw))
+	return hex.EncodeToString(sum[:])
+}
+
+type BatchImageBalanceHoldResult struct {
+	Applied       bool
+	NewBalance    *float64
+	FrozenBalance *float64
+}
+
+type UsageBillingRepository interface {
+	Apply(ctx context.Context, cmd *UsageBillingCommand) (*UsageBillingApplyResult, error)
+	ReserveBatchImageBalance(ctx context.Context, cmd *BatchImageBalanceHoldCommand) (*BatchImageBalanceHoldResult, error)
+	CaptureBatchImageBalance(ctx context.Context, cmd *BatchImageBalanceHoldCommand) (*BatchImageBalanceHoldResult, error)
+	ReleaseBatchImageBalance(ctx context.Context, cmd *BatchImageBalanceHoldCommand) (*BatchImageBalanceHoldResult, error)
+}

@@ -1,0 +1,1 @@
+function f(e){return e>=1e6?`${(e/1e6).toFixed(1)}M`:e>=1e3?`${(e/1e3).toFixed(1)}K`:e.toLocaleString()}function o(e){if(!Number.isFinite(e))return"0.00";const t=e.toFixed(8).replace(/(\.\d*?[1-9])0+$|\.0+$/,"$1"),[i,r=""]=t.split(".");return r.length===0?`${i}.00`:r.length===1?`${i}.${r}0`:t}export{f as a,o as f};

@@ -1,0 +1,290 @@
+package service
+
+import (
+	"context"
+	"strconv"
+	"testing"
+	"time"
+
+	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
+	"github.com/dgraph-io/ristretto"
+	"github.com/stretchr/testify/require"
+)
+
+type groupRepoNoop struct{}
+
+func (groupRepoNoop) Create(context.Context, *Group) error { panic("unexpected Create call") }
+func (groupRepoNoop) GetByID(context.Context, int64) (*Group, error) {
+	panic("unexpected GetByID call")
+}
+func (groupRepoNoop) GetByIDLite(context.Context, int64) (*Group, error) {
+	panic("unexpected GetByIDLite call")
+}
+func (groupRepoNoop) Update(context.Context, *Group) error { panic("unexpected Update call") }
+func (groupRepoNoop) Delete(context.Context, int64) error  { panic("unexpected Delete call") }
+func (groupRepoNoop) DeleteCascade(context.Context, int64) ([]int64, error) {
+	panic("unexpected DeleteCascade call")
+}
+func (groupRepoNoop) List(context.Context, pagination.PaginationParams) ([]Group, *pagination.PaginationResult, error) {
+	panic("unexpected List call")
+}
+func (groupRepoNoop) ListWithFilters(context.Context, pagination.PaginationParams, string, string, string, *bool) ([]Group, *pagination.PaginationResult, error) {
+	panic("unexpected ListWithFilters call")
+}
+func (groupRepoNoop) ListActive(context.Context) ([]Group, error) {
+	panic("unexpected ListActive call")
+}
+func (groupRepoNoop) ListActiveByPlatform(context.Context, string) ([]Group, error) {
+	panic("unexpected ListActiveByPlatform call")
+}
+func (groupRepoNoop) ExistsByName(context.Context, string) (bool, error) {
+	panic("unexpected ExistsByName call")
+}
+func (groupRepoNoop) GetAccountCount(context.Context, int64) (int64, int64, error) {
+	panic("unexpected GetAccountCount call")
+}
+func (groupRepoNoop) DeleteAccountGroupsByGroupID(context.Context, int64) (int64, error) {
+	panic("unexpected DeleteAccountGroupsByGroupID call")
+}
+func (groupRepoNoop) GetAccountIDsByGroupIDs(context.Context, []int64) ([]int64, error) {
+	panic("unexpected GetAccountIDsByGroupIDs call")
+}
+func (groupRepoNoop) BindAccountsToGroup(context.Context, int64, []int64) error {
+	panic("unexpected BindAccountsToGroup call")
+}
+func (groupRepoNoop) UpdateSortOrders(context.Context, []GroupSortOrderUpdate) error {
+	panic("unexpected UpdateSortOrders call")
+}
+
+type subscriptionGroupRepoStub struct {
+	groupRepoNoop
+	group *Group
+}
+
+func (s *subscriptionGroupRepoStub) GetByID(context.Context, int64) (*Group, error) {
+	return s.group, nil
+}
+
+type userSubRepoNoop struct{}
+
+func (userSubRepoNoop) Create(context.Context, *UserSubscription) error {
+	panic("unexpected Create call")
+}
+func (userSubRepoNoop) GetByID(context.Context, int64) (*UserSubscription, error) {
+	panic("unexpected GetByID call")
+}
+func (userSubRepoNoop) GetByIDIncludeDeleted(context.Context, int64) (*UserSubscription, error) {
+	panic("unexpected GetByIDIncludeDeleted call")
+}
+func (userSubRepoNoop) GetByUserIDAndGroupID(context.Context, int64, int64) (*UserSubscription, error) {
+	panic("unexpected GetByUserIDAndGroupID call")
+}
+func (userSubRepoNoop) GetActiveByUserIDAndGroupID(context.Context, int64, int64) (*UserSubscription, error) {
+	panic("unexpected GetActiveByUserIDAndGroupID call")
+}
+func (userSubRepoNoop) Update(context.Context, *UserSubscription) error {
+	panic("unexpected Update call")
+}
+func (userSubRepoNoop) Delete(context.Context, int64) error { panic("unexpected Delete call") }
+func (userSubRepoNoop) Restore(context.Context, int64, string) (*UserSubscription, error) {
+	panic("unexpected Restore call")
+}
+func (userSubRepoNoop) ListByUserID(context.Context, int64) ([]UserSubscription, error) {
+	panic("unexpected ListByUserID call")
+}
+func (userSubRepoNoop) ListActiveByUserID(context.Context, int64) ([]UserSubscription, error) {
+	panic("unexpected ListActiveByUserID call")
+}
+func (userSubRepoNoop) ListByGroupID(context.Context, int64, pagination.PaginationParams) ([]UserSubscription, *pagination.PaginationResult, error) {
+	panic("unexpected ListByGroupID call")
+}
+func (userSubRepoNoop) List(context.Context, pagination.PaginationParams, *int64, *int64, string, string, string, string) ([]UserSubscription, *pagination.PaginationResult, error) {
+	panic("unexpected List call")
+}
+func (userSubRepoNoop) ExistsByUserIDAndGroupID(context.Context, int64, int64) (bool, error) {
+	panic("unexpected ExistsByUserIDAndGroupID call")
+}
+func (userSubRepoNoop) ExistsActiveByUserIDAndGroupID(context.Context, int64, int64) (bool, error) {
+	panic("unexpected ExistsActiveByUserIDAndGroupID call")
+}
+func (userSubRepoNoop) ExtendExpiry(context.Context, int64, time.Time) error {
+	panic("unexpected ExtendExpiry call")
+}
+func (userSubRepoNoop) UpdateStatus(context.Context, int64, string) error {
+	panic("unexpected UpdateStatus call")
+}
+func (userSubRepoNoop) UpdateNotes(context.Context, int64, string) error {
+	panic("unexpected UpdateNotes call")
+}
+func (userSubRepoNoop) ActivateWindows(context.Context, int64, time.Time) error {
+	panic("unexpected ActivateWindows call")
+}
+func (userSubRepoNoop) ResetUsageWindows(context.Context, int64, bool, bool, bool, time.Time) error {
+	panic("unexpected ResetUsageWindows call")
+}
+func (userSubRepoNoop) ResetDailyUsage(context.Context, int64, *time.Time, time.Time) error {
+	panic("unexpected ResetDailyUsage call")
+}
+func (userSubRepoNoop) ResetWeeklyUsage(context.Context, int64, *time.Time, time.Time) error {
+	panic("unexpected ResetWeeklyUsage call")
+}
+func (userSubRepoNoop) ResetMonthlyUsage(context.Context, int64, *time.Time, time.Time) error {
+	panic("unexpected ResetMonthlyUsage call")
+}
+func (userSubRepoNoop) IncrementUsage(context.Context, int64, float64) error {
+	panic("unexpected IncrementUsage call")
+}
+func (userSubRepoNoop) BatchUpdateExpiredStatus(context.Context) (int64, error) {
+	panic("unexpected BatchUpdateExpiredStatus call")
+}
+
+type subscriptionUserSubRepoStub struct {
+	userSubRepoNoop
+
+	nextID      int64
+	byID        map[int64]*UserSubscription
+	byUserGroup map[string]*UserSubscription
+	createCalls int
+}
+
+func newSubscriptionUserSubRepoStub() *subscriptionUserSubRepoStub {
+	return &subscriptionUserSubRepoStub{
+		nextID:      1,
+		byID:        make(map[int64]*UserSubscription),
+		byUserGroup: make(map[string]*UserSubscription),
+	}
+}
+
+func (s *subscriptionUserSubRepoStub) key(userID, groupID int64) string {
+	return strconvFormatInt(userID) + ":" + strconvFormatInt(groupID)
+}
+
+func (s *subscriptionUserSubRepoStub) seed(sub *UserSubscription) {
+	if sub == nil {
+		return
+	}
+	cp := *sub
+	if cp.ID == 0 {
+		cp.ID = s.nextID
+		s.nextID++
+	}
+	s.byID[cp.ID] = &cp
+	s.byUserGroup[s.key(cp.UserID, cp.GroupID)] = &cp
+}
+
+func (s *subscriptionUserSubRepoStub) ExistsByUserIDAndGroupID(_ context.Context, userID, groupID int64) (bool, error) {
+	_, ok := s.byUserGroup[s.key(userID, groupID)]
+	return ok, nil
+}
+
+func (s *subscriptionUserSubRepoStub) GetByUserIDAndGroupID(_ context.Context, userID, groupID int64) (*UserSubscription, error) {
+	sub := s.byUserGroup[s.key(userID, groupID)]
+	if sub == nil {
+		return nil, ErrSubscriptionNotFound
+	}
+	cp := *sub
+	return &cp, nil
+}
+
+func (s *subscriptionUserSubRepoStub) Create(_ context.Context, sub *UserSubscription) error {
+	if sub == nil {
+		return nil
+	}
+	s.createCalls++
+	cp := *sub
+	if cp.ID == 0 {
+		cp.ID = s.nextID
+		s.nextID++
+	}
+	sub.ID = cp.ID
+	s.byID[cp.ID] = &cp
+	s.byUserGroup[s.key(cp.UserID, cp.GroupID)] = &cp
+	return nil
+}
+
+func (s *subscriptionUserSubRepoStub) GetByID(_ context.Context, id int64) (*UserSubscription, error) {
+	sub := s.byID[id]
+	if sub == nil {
+		return nil, ErrSubscriptionNotFound
+	}
+	cp := *sub
+	return &cp, nil
+}
+
+func (s *subscriptionUserSubRepoStub) Update(_ context.Context, sub *UserSubscription) error {
+	if sub == nil {
+		return ErrSubscriptionNilInput
+	}
+	existing := s.byID[sub.ID]
+	if existing == nil {
+		return ErrSubscriptionNotFound
+	}
+	oldKey := s.key(existing.UserID, existing.GroupID)
+	cp := *sub
+	s.byID[cp.ID] = &cp
+	if oldKey != s.key(cp.UserID, cp.GroupID) {
+		delete(s.byUserGroup, oldKey)
+	}
+	s.byUserGroup[s.key(cp.UserID, cp.GroupID)] = &cp
+	return nil
+}
+
+// TestAssignSubscriptionFailClosedWithoutRepositoryCalls asserts the retired
+// native assignment endpoint fails closed without touching any repository
+// (both stub repositories panic on any call).
+func TestAssignSubscriptionFailClosedWithoutRepositoryCalls(t *testing.T) {
+	svc := NewSubscriptionService(groupRepoNoop{}, userSubRepoNoop{}, nil, nil, nil)
+	sub, err := svc.AssignSubscription(context.Background(), &AssignSubscriptionInput{
+		UserID:       1001,
+		GroupID:      1,
+		ValidityDays: 30,
+		Notes:        "assignment",
+	})
+	require.Nil(t, sub)
+	require.ErrorIs(t, err, ErrNativeSubscriptionRetired)
+}
+
+// TestBulkAssignSubscriptionFailClosedWithoutRepositoryCalls asserts the
+// retired native bulk-assignment endpoint fails closed without repository I/O.
+func TestBulkAssignSubscriptionFailClosedWithoutRepositoryCalls(t *testing.T) {
+	svc := NewSubscriptionService(groupRepoNoop{}, userSubRepoNoop{}, nil, nil, nil)
+	result, err := svc.BulkAssignSubscription(context.Background(), &BulkAssignSubscriptionInput{
+		UserIDs:      []int64{1, 2},
+		GroupID:      1,
+		ValidityDays: 30,
+		AssignedBy:   9,
+		Notes:        "same-note",
+	})
+	require.Nil(t, result)
+	require.ErrorIs(t, err, ErrNativeSubscriptionRetired)
+}
+
+// TestInvalidateSubCacheSync_RemovesCachedEntry covers the harmless remaining
+// L1 cache invalidation helper, which performs no repository I/O.
+func TestInvalidateSubCacheSync_RemovesCachedEntry(t *testing.T) {
+	cache, err := ristretto.NewCache(&ristretto.Config{NumCounters: 1_000, MaxCost: 100, BufferItems: 64})
+	require.NoError(t, err)
+	t.Cleanup(cache.Close)
+
+	svc := &SubscriptionService{subCacheL1: cache}
+	key := subCacheKey(7, 9)
+	require.True(t, cache.Set(key, &UserSubscription{ID: 42}, 1))
+	cache.Wait()
+
+	svc.InvalidateSubCacheSync(7, 9)
+	_, cached := cache.Get(key)
+	require.False(t, cached, "InvalidateSubCacheSync must remove the cached subscription")
+}
+
+// TestNormalizeAssignValidityDays keeps the pure helper test for the harmless
+// remaining normalizeAssignValidityDays function.
+func TestNormalizeAssignValidityDays(t *testing.T) {
+	require.Equal(t, 30, normalizeAssignValidityDays(0))
+	require.Equal(t, 30, normalizeAssignValidityDays(-5))
+	require.Equal(t, MaxValidityDays, normalizeAssignValidityDays(MaxValidityDays+100))
+	require.Equal(t, 7, normalizeAssignValidityDays(7))
+}
+
+func strconvFormatInt(v int64) string {
+	return strconv.FormatInt(v, 10)
+}
