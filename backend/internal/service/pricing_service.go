@@ -544,6 +544,12 @@ func (s *PricingService) parsePricingData(body []byte) (map[string]*LiteLLMModel
 		// expose absolute prices above 272K tokens. Normalize the latter so
 		// downstream billing and available-channel display see one shape.
 		applyAbove272KLongContextPricing(pricing, &entry)
+		// Site policy takes precedence over both remote long-context schemas.
+		if normalizeKnownOpenAICodexModel(modelName) == "gpt-6.1-sol" {
+			pricing.LongContextInputTokenThreshold = 0
+			pricing.LongContextInputCostMultiplier = 0
+			pricing.LongContextOutputCostMultiplier = 0
+		}
 		if entry.OutputCostPerImage != nil {
 			pricing.OutputCostPerImage = *entry.OutputCostPerImage
 		}

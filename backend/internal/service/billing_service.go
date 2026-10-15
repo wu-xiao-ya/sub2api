@@ -1389,6 +1389,14 @@ func (s *BillingService) applyModelSpecificPricingPolicy(model string, pricing *
 		return nil
 	}
 	normalized := normalizeKnownOpenAICodexModel(model)
+	// Also normalize stale cached or channel-resolved cards without mutating them.
+	if normalized == "gpt-6.1-sol" {
+		cloned := *pricing
+		cloned.LongContextInputThreshold = 0
+		cloned.LongContextInputMultiplier = 0
+		cloned.LongContextOutputMultiplier = 0
+		return &cloned
+	}
 	if isGrok46Family(model) || isGrok47Family(model) {
 		pricing = applyGrok46CacheReadPricing(pricing)
 	}

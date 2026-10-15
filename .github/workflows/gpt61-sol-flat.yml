@@ -1,0 +1,41 @@
+name: GPT61 Sol Flat Billing
+
+on:
+  push:
+    branches: [codex/gpt61-sol-no-long-context-20261015]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-and-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+      - name: Verify model-specific billing and display policy
+        run: go test -tags=unit ./internal/service -run '^TestGPT61Sol' -count=1
+      - name: Build current production snapshot with unchanged embedded UI
+        env:
+          CGO_ENABLED: "0"
+          GOOS: linux
+          GOARCH: amd64
+        run: |
+          mkdir -p ../artifacts
+          go build -tags embed -trimpath -ldflags "-s -w -X main.Version=0.1.162-sol61-flat -X main.Commit=${GITHUB_SHA} -X main.BuildType=release" -o ../artifacts/sub2api ./cmd/server
+          cd ../artifacts
+          sha256sum sub2api > sub2api.sha256
+          gzip -n -9 sub2api
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sub2api-sol61-flat-linux-amd64
+          path: artifacts/
+          retention-days: 14
