@@ -1,4 +1,4 @@
-name: GPT61 Sol Flat Billing
+name: Build Custom Sub2API Image
 
 on:
   push:
