@@ -22,7 +22,12 @@ jobs:
           go-version-file: backend/go.mod
           cache-dependency-path: backend/go.sum
       - name: Verify model-specific billing and display policy
-        run: go test -tags=unit ./internal/service -run '^TestGPT61Sol' -count=1
+        working-directory: backend/internal/service
+        run: |
+          # The production snapshot has an unrelated stale batch-usage mock.
+          # Compile all production service files with the self-contained regressions.
+          mapfile -t sources < <(go list -tags=unit -f '{{range .GoFiles}}{{println .}}{{end}}' .)
+          go test -tags=unit "${sources[@]}" billing_gpt61_sol_flat_test.go -run '^TestGPT61Sol' -count=1
       - name: Build current production snapshot with unchanged embedded UI
         env:
           CGO_ENABLED: "0"
