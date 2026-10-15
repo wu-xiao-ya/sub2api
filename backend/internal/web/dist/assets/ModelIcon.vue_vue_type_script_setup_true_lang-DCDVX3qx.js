@@ -1,0 +1,1 @@
+import{B as o,a}from"./BrandIcon-DrH6XV8v.js";import{d as n,B as s,C as r,u as c}from"./vendor-vue-C0Y4xjOo.js";const i=n({__name:"ModelIcon",props:{model:{},size:{default:"18px"}},setup(e){return(d,l)=>(s(),r(o,{class:"model-icon",brand:c(a)(e.model),size:e.size},null,8,["brand","size"]))}});export{i as _};
