@@ -1036,6 +1036,9 @@ func TestLoadDefaultDashboardAggregationConfig(t *testing.T) {
 	if cfg.DashboardAgg.BackfillMaxDays != 31 {
 		t.Fatalf("DashboardAgg.BackfillMaxDays = %d, want 31", cfg.DashboardAgg.BackfillMaxDays)
 	}
+	if !cfg.DashboardAgg.Retention.Enabled {
+		t.Fatal("DashboardAgg.Retention.Enabled = false, want true")
+	}
 	if cfg.DashboardAgg.Retention.UsageLogsDays != 90 {
 		t.Fatalf("DashboardAgg.Retention.UsageLogsDays = %d, want 90", cfg.DashboardAgg.Retention.UsageLogsDays)
 	}
@@ -1069,6 +1072,22 @@ func TestValidateDashboardAggregationConfigDisabled(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "dashboard_aggregation.interval_seconds") {
 		t.Fatalf("Validate() expected interval_seconds error, got: %v", err)
+	}
+}
+
+func TestLoadDashboardRetentionDisabledKeepsAggregationEnabled(t *testing.T) {
+	resetViperWithJWTSecret(t)
+	t.Setenv("DASHBOARD_AGGREGATION_RETENTION_ENABLED", "false")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+	if !cfg.DashboardAgg.Enabled {
+		t.Fatal("Disabling retention must not disable dashboard aggregation")
+	}
+	if cfg.DashboardAgg.Retention.Enabled {
+		t.Fatal("Retention environment override was not applied")
 	}
 }
 

@@ -11,19 +11,20 @@ import (
 )
 
 type dashboardAggregationRepoTestStub struct {
-	aggregateCalls       int
-	recomputeCalls       int
-	cleanupUsageCalls    int
-	cleanupDedupCalls    int
-	ensurePartitionCalls int
-	lastStart            time.Time
-	lastEnd              time.Time
-	watermark            time.Time
-	aggregateErr         error
-	cleanupAggregatesErr error
-	cleanupUsageErr      error
-	cleanupDedupErr      error
-	ensurePartitionErr   error
+	aggregateCalls        int
+	recomputeCalls        int
+	cleanupUsageCalls     int
+	cleanupAggregateCalls int
+	cleanupDedupCalls     int
+	ensurePartitionCalls  int
+	lastStart             time.Time
+	lastEnd               time.Time
+	watermark             time.Time
+	aggregateErr          error
+	cleanupAggregatesErr  error
+	cleanupUsageErr       error
+	cleanupDedupErr       error
+	ensurePartitionErr    error
 }
 
 func (s *dashboardAggregationRepoTestStub) AggregateRange(ctx context.Context, start, end time.Time) error {
@@ -47,6 +48,7 @@ func (s *dashboardAggregationRepoTestStub) UpdateAggregationWatermark(ctx contex
 }
 
 func (s *dashboardAggregationRepoTestStub) CleanupAggregates(ctx context.Context, hourlyCutoff, dailyCutoff time.Time) error {
+	s.cleanupAggregateCalls++
 	return s.cleanupAggregatesErr
 }
 
@@ -74,6 +76,7 @@ func TestDashboardAggregationService_RunScheduledAggregation_EpochUsesRetentionS
 			IntervalSeconds: 60,
 			LookbackSeconds: 120,
 			Retention: config.DashboardAggregationRetentionConfig{
+				Enabled:       true,
 				UsageLogsDays: 1,
 				HourlyDays:    1,
 				DailyDays:     1,
@@ -94,6 +97,7 @@ func TestDashboardAggregationService_CleanupRetentionFailure_DoesNotRecord(t *te
 		repo: repo,
 		cfg: config.DashboardAggregationConfig{
 			Retention: config.DashboardAggregationRetentionConfig{
+				Enabled:       true,
 				UsageLogsDays: 1,
 				HourlyDays:    1,
 				DailyDays:     1,
@@ -114,6 +118,7 @@ func TestDashboardAggregationService_CleanupDedupFailure_DoesNotRecord(t *testin
 		repo: repo,
 		cfg: config.DashboardAggregationConfig{
 			Retention: config.DashboardAggregationRetentionConfig{
+				Enabled:       true,
 				UsageLogsDays: 1,
 				HourlyDays:    1,
 				DailyDays:     1,
@@ -136,6 +141,7 @@ func TestDashboardAggregationService_PartitionFailure_DoesNotAggregate(t *testin
 			IntervalSeconds: 60,
 			LookbackSeconds: 120,
 			Retention: config.DashboardAggregationRetentionConfig{
+				Enabled:               true,
 				UsageLogsDays:         1,
 				UsageBillingDedupDays: 2,
 				HourlyDays:            1,
@@ -148,6 +154,34 @@ func TestDashboardAggregationService_PartitionFailure_DoesNotAggregate(t *testin
 
 	require.Equal(t, 1, repo.ensurePartitionCalls)
 	require.Equal(t, 1, repo.aggregateCalls)
+}
+
+func TestDashboardAggregationService_RetentionDisabled_StillAggregates(t *testing.T) {
+	repo := &dashboardAggregationRepoTestStub{watermark: time.Now().UTC().Add(-5 * time.Minute)}
+	svc := &DashboardAggregationService{
+		repo: repo,
+		cfg: config.DashboardAggregationConfig{
+			Enabled:         true,
+			IntervalSeconds: 60,
+			LookbackSeconds: 120,
+			Retention: config.DashboardAggregationRetentionConfig{
+				Enabled:               false,
+				UsageLogsDays:         90,
+				UsageBillingDedupDays: 365,
+				HourlyDays:            180,
+				DailyDays:             730,
+			},
+		},
+	}
+
+	svc.runScheduledAggregation()
+
+	require.Equal(t, 1, repo.aggregateCalls)
+	require.Equal(t, 1, repo.ensurePartitionCalls)
+	require.Zero(t, repo.cleanupAggregateCalls)
+	require.Zero(t, repo.cleanupUsageCalls)
+	require.Zero(t, repo.cleanupDedupCalls)
+	require.Nil(t, svc.lastRetentionCleanup.Load())
 }
 
 func TestDashboardAggregationService_TriggerBackfill_TooLarge(t *testing.T) {
