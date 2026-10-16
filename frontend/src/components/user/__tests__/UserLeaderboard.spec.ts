@@ -5,6 +5,10 @@ import UserLeaderboard from '../UserLeaderboard.vue'
 
 vi.mock('@/api/leaderboard', () => ({ getLeaderboard: vi.fn() }))
 vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }))
+vi.mock('@/utils/format', () => ({
+  formatCompactNumber: (value: number) => String(value),
+  formatCostFixed: (value: number, digits: number) => value.toFixed(digits),
+}))
 
 const response = (name = 'Visible user'): LeaderboardResponse => ({
   period: 'today', start_date: '2026-10-16', end_date: '2026-10-16',

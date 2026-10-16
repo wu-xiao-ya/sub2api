@@ -1,0 +1,1 @@
+import{B as s,r as a}from"./BrandIcon-CxY_A1Lw.js";import{d as o,B as n,C as t,u as m}from"./vendor-vue-C0Y4xjOo.js";const d=o({__name:"PlatformIcon",props:{platform:{},size:{default:"sm"}},setup(e){const r={xs:12,sm:14,md:16,lg:20};return(c,l)=>(n(),t(s,{brand:m(a)(e.platform),size:r[e.size]},null,8,["brand","size"]))}});export{d as _};

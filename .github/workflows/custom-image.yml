@@ -36,7 +36,7 @@ jobs:
         working-directory: frontend
         run: |
           npm run build -- --outDir ../frontend-release-dist
-          cp -a ../frontend-release-dist/. ../backend/internal/web/dist/
+          node scripts/merge-release-assets.mjs
       - name: Verify history preservation and unchanged billing
         working-directory: backend/internal/service
         run: |

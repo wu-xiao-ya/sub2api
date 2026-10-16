@@ -100,6 +100,9 @@ func (s *LeaderboardService) GetLeaderboard(
 		displayName := maskLeaderboardEmail(email)
 		if username != nil && strings.TrimSpace(*username) != "" {
 			displayName = strings.TrimSpace(*username)
+			if strings.ContainsRune(displayName, '@') {
+				displayName = maskLeaderboardEmail(displayName)
+			}
 		}
 
 		// Generate consistent avatar based on user ID
