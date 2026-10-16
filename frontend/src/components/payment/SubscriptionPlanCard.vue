@@ -1,0 +1,163 @@
+<template>
+  <div
+    :class="[
+      'group relative flex flex-col overflow-hidden rounded-2xl border transition-all',
+      'hover:shadow-xl hover:-translate-y-0.5',
+      borderClass,
+      'bg-white dark:bg-dark-800',
+    ]"
+  >
+    <!-- Colored top accent bar -->
+    <div :class="['h-1.5', accentClass]" />
+
+    <div class="flex flex-1 flex-col p-4">
+      <!-- Header: name + badge + price -->
+      <div class="mb-3 flex items-start justify-between gap-2">
+        <div class="min-w-0 flex-1">
+          <div class="flex items-center gap-2">
+            <h3 class="truncate text-base font-bold text-gray-900 dark:text-white">{{ plan.name }}</h3>
+            <span :class="['shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium', badgeLightClass]">
+              {{ tierLabel }}
+            </span>
+          </div>
+          <p v-if="plan.description" class="mt-0.5 text-xs leading-relaxed text-gray-500 dark:text-dark-400 line-clamp-2">
+            {{ plan.description }}
+          </p>
+        </div>
+        <div class="shrink-0 text-right">
+          <div class="flex items-baseline gap-1">
+            <span class="text-xs text-gray-400 dark:text-dark-500">{{ planCurrencySymbol }}</span>
+            <span :class="['text-2xl font-extrabold tracking-tight', textClass]">{{ plan.price }}</span>
+            <span v-if="plan.currency" class="text-xs font-medium text-gray-400 dark:text-dark-500">{{ plan.currency }}</span>
+          </div>
+          <span class="text-[11px] text-gray-400 dark:text-dark-500">/ {{ validitySuffix }}</span>
+          <div v-if="plan.original_price" class="mt-0.5 flex items-center justify-end gap-1.5">
+            <span class="text-xs text-gray-400 line-through dark:text-dark-500">{{ planCurrencySymbol }}{{ plan.original_price }}<template v-if="plan.currency"> {{ plan.currency }}</template></span>
+            <span :class="['rounded px-1 py-0.5 text-[10px] font-semibold', discountClass]">{{ discountText }}</span>
+          </div>
+        </div>
+      </div>
+
+      <div v-if="includedGroups.length" class="mb-3 flex flex-wrap gap-1.5">
+        <span
+          v-for="group in includedGroups"
+          :key="group.id"
+          class="inline-flex max-w-full items-center gap-1 rounded-md border border-gray-200 px-2 py-0.5 text-[11px] text-gray-600 dark:border-dark-600 dark:text-dark-300"
+        >
+          <PlatformIcon :platform="group.platform" size="xs" />
+          <span class="min-w-0 truncate">{{ group.name }}</span>
+        </span>
+      </div>
+
+      <!-- Shared purchase snapshot -->
+      <div class="mb-3 grid grid-cols-2 gap-x-3 gap-y-1 rounded-lg bg-gray-50 px-3 py-2 text-xs dark:bg-dark-700/50">
+        <div class="flex items-center justify-between">
+          <span class="text-gray-400 dark:text-dark-500">{{ t('payment.admin.includedGroups') }}</span>
+          <span class="font-medium text-gray-700 dark:text-gray-300">{{ includedGroupCount }}</span>
+        </div>
+        <div class="flex items-center justify-between">
+          <span class="text-gray-400 dark:text-dark-500">{{ t('payment.admin.concurrency') }}</span>
+          <span class="font-medium text-gray-700 dark:text-gray-300">{{ plan.concurrency_entitlement ?? 0 }}</span>
+        </div>
+        <div v-for="quota in quotaRows" :key="quota.key" class="flex items-center justify-between">
+          <span class="text-gray-400 dark:text-dark-500">{{ quota.label }}</span>
+          <span class="font-medium text-gray-700 dark:text-gray-300">{{ quota.value }}</span>
+        </div>
+        <div v-if="quotaRows.length === 0" class="col-span-2 flex items-center justify-between">
+          <span class="text-gray-400 dark:text-dark-500">{{ t('payment.planCard.quota') }}</span>
+          <span class="font-medium text-gray-700 dark:text-gray-300">{{ t('payment.planCard.unlimited') }}</span>
+        </div>
+      </div>
+
+      <!-- Features list (compact) -->
+      <div v-if="plan.features.length > 0" class="mb-3 space-y-1">
+        <div v-for="feature in plan.features" :key="feature" class="flex items-start gap-1.5">
+          <svg :class="['mt-0.5 h-3.5 w-3.5 flex-shrink-0', iconClass]" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+          </svg>
+          <span class="text-xs text-gray-600 dark:text-gray-300">{{ feature }}</span>
+        </div>
+      </div>
+
+      <div class="flex-1" />
+
+      <!-- Subscribe Button -->
+      <button
+        type="button"
+        :class="['w-full rounded-xl py-2.5 text-sm font-semibold transition-all active:scale-[0.98]', btnClass]"
+        @click="emit('select', plan)"
+      >
+        {{ t('payment.subscribeNow') }}
+      </button>
+    </div>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
+import type { SubscriptionPlan } from '@/types/payment'
+import { currencySymbol } from '@/components/payment/currency'
+import PlatformIcon from '@/components/common/PlatformIcon.vue'
+import {
+  platformAccentBarClass,
+  platformBadgeLightClass,
+  platformBorderClass,
+  platformTextClass,
+  platformIconClass,
+  platformButtonClass,
+  platformDiscountClass,
+} from '@/utils/platformColors'
+
+const props = defineProps<{ plan: SubscriptionPlan }>()
+const emit = defineEmits<{ select: [plan: SubscriptionPlan] }>()
+const { t } = useI18n()
+
+const platform = computed(() => props.plan.group_platform || '')
+
+// Derived color classes from central config
+const accentClass = computed(() => platformAccentBarClass(platform.value))
+const borderClass = computed(() => platformBorderClass(platform.value))
+const badgeLightClass = computed(() => platformBadgeLightClass(platform.value))
+const textClass = computed(() => platformTextClass(platform.value))
+const iconClass = computed(() => platformIconClass(platform.value))
+const btnClass = computed(() => platformButtonClass(platform.value))
+const discountClass = computed(() => platformDiscountClass(platform.value))
+const tierLabel = computed(() => {
+  const tier = props.plan.tier_code || 'standard'
+  const key = `payment.admin.tier${tier.charAt(0).toUpperCase()}${tier.slice(1)}`
+  return t(key)
+})
+
+const discountText = computed(() => {
+  if (!props.plan.original_price || props.plan.original_price <= 0) return ''
+  const pct = Math.round((1 - props.plan.price / props.plan.original_price) * 100)
+  return pct > 0 ? `-${pct}%` : ''
+})
+
+const includedGroups = computed(() => (props.plan.groups || []).filter((group) => group.id > 0))
+
+const includedGroupCount = computed(() => {
+  if (includedGroups.value.length > 0) {
+    return includedGroups.value.length
+  }
+  const ids = props.plan.group_ids?.length ? props.plan.group_ids : [props.plan.group_id]
+  return new Set(ids.filter((id) => id > 0)).size
+})
+
+const quotaRows = computed(() => [
+  { key: 'lifetime', label: t('payment.admin.lifetimeQuota'), amount: props.plan.lifetime_quota_usd },
+  { key: 'daily', label: t('payment.admin.dailyQuota'), amount: props.plan.daily_quota_usd },
+  { key: 'weekly', label: t('payment.admin.weeklyQuota'), amount: props.plan.weekly_quota_usd },
+  { key: 'monthly', label: t('payment.admin.monthlyQuota'), amount: props.plan.monthly_quota_usd },
+].filter((item) => (item.amount ?? 0) > 0).map((item) => ({ ...item, value: `$${Number(item.amount).toFixed(2)}` })))
+
+const planCurrencySymbol = computed(() => currencySymbol(props.plan.currency || 'USD'))
+
+const validitySuffix = computed(() => {
+  const u = props.plan.validity_unit || 'day'
+  if (u === 'month') return t('payment.perMonth')
+  if (u === 'year') return t('payment.perYear')
+  return `${props.plan.validity_days}${t('payment.days')}`
+})
+</script>

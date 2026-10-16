@@ -1,0 +1,7 @@
+frontend/node_modules/
+frontend-release-dist/
+artifacts/
+*.tsbuildinfo
+frontend/vite.config.js
+frontend/vite.config.d.ts
+frontend/audit.json

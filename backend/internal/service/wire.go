@@ -509,8 +509,8 @@ func ProvideScheduledTestRunnerService(
 	return svc
 }
 
-// ProvideIntelligenceProbeService creates and starts the GPT intelligence
-// degradation probe runner (pelican SVG test).
+// ProvideIntelligenceProbeService keeps historical probe data accessible to
+// internal tooling without starting the retired runner.
 func ProvideIntelligenceProbeService(
 	repo IntelligenceProbeRepository,
 	settingService *SettingService,
@@ -519,14 +519,7 @@ func ProvideIntelligenceProbeService(
 	lockCache LeaderLockCache,
 	db *sql.DB,
 ) *IntelligenceProbeService {
-	svc := NewIntelligenceProbeService(repo, settingService, apiKeyService)
-	gatewayURL := "http://127.0.0.1:8080"
-	if cfg != nil && cfg.Server.Port > 0 {
-		gatewayURL = fmt.Sprintf("http://127.0.0.1:%d", cfg.Server.Port)
-	}
-	svc.SetRuntimeDependencies(gatewayURL, lockCache, db)
-	svc.Start()
-	return svc
+	return NewIntelligenceProbeService(repo, settingService, apiKeyService)
 }
 
 // ProvideOpsScheduledReportService creates and starts OpsScheduledReportService.

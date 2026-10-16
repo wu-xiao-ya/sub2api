@@ -2,7 +2,7 @@ name: Build Custom Sub2API Image
 
 on:
   push:
-    branches: [codex/usage-history-preservation-20261016]
+    branches: [codex/leaderboard-probe-retirement-20261016]
   workflow_dispatch:
 
 permissions:
@@ -21,28 +21,46 @@ jobs:
         with:
           go-version-file: backend/go.mod
           cache-dependency-path: backend/go.sum
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci --no-audit --no-fund
+      - name: Verify leaderboard and feature retirement
+        working-directory: frontend
+        run: npm run test:run -- src/components/user/__tests__/UserLeaderboard.spec.ts src/__tests__/intelligenceRetirement.spec.ts --maxWorkers=2 --minWorkers=1
+      - name: Build frontend and preserve cached versioned assets
+        working-directory: frontend
+        run: |
+          npm run build -- --outDir ../frontend-release-dist
+          cp -a ../frontend-release-dist/. ../backend/internal/web/dist/
       - name: Verify history preservation and unchanged billing
         working-directory: backend/internal/service
         run: |
           # The production snapshot has an unrelated stale batch-usage mock.
           # Compile all production service files with the self-contained regressions.
           mapfile -t sources < <(go list -tags=unit -f '{{range .GoFiles}}{{println .}}{{end}}' .)
-          go test -tags=unit "${sources[@]}" billing_gpt61_sol_flat_test.go dashboard_aggregation_service_test.go -run '^Test(GPT61Sol|DashboardAggregationService_)' -count=1
+          go test -tags=unit "${sources[@]}" billing_gpt61_sol_flat_test.go dashboard_aggregation_service_test.go leaderboard_service_test.go intelligence_probe_retirement_test.go intelligence_probe_test.go -run '^Test(GPT61Sol|DashboardAggregationService_|Leaderboard|IntelligenceProbe)' -count=1
+      - name: Verify leaderboard authentication and calendar ranges
+        run: go test ./internal/handler/user -count=1
       - name: Verify configuration defaults and retention override
         run: go test ./internal/config -run '^(TestLoadDefaultDashboardAggregationConfig|TestLoadDashboardRetentionDisabledKeepsAggregationEnabled)$' -count=1
-      - name: Build current production snapshot with unchanged embedded UI
+      - name: Build production candidate
         env:
           CGO_ENABLED: "0"
           GOOS: linux
           GOARCH: amd64
         run: |
           mkdir -p ../artifacts
-          go build -tags embed -trimpath -ldflags "-s -w -X main.Version=0.1.162-history-preserve -X main.Commit=${GITHUB_SHA} -X main.BuildType=release" -o ../artifacts/sub2api ./cmd/server
+          go build -tags embed -trimpath -ldflags "-s -w -X main.Version=0.1.163-leaderboard -X main.Commit=${GITHUB_SHA} -X main.BuildType=release" -o ../artifacts/sub2api ./cmd/server
           cd ../artifacts
           sha256sum sub2api > sub2api.sha256
           gzip -n -9 sub2api
       - uses: actions/upload-artifact@v4
         with:
-          name: sub2api-history-preserve-linux-amd64
+          name: sub2api-leaderboard-linux-amd64
           path: artifacts/
           retention-days: 14

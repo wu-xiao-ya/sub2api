@@ -5,7 +5,10 @@ import (
 	"crypto/md5"
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
+
+	"github.com/Wei-Shaw/sub2api/internal/pkg/usagesource"
 )
 
 // LeaderboardService handles leaderboard business logic
@@ -22,14 +25,14 @@ func NewLeaderboardService(db *sql.DB) *LeaderboardService {
 
 // LeaderboardEntry represents a single entry in the leaderboard
 type LeaderboardEntry struct {
-	Rank         int     `json:"rank"`
-	UserID       int64   `json:"user_id"`
-	DisplayName  string  `json:"display_name"`
-	Avatar       string  `json:"avatar,omitempty"`
-	TotalTokens  int64   `json:"total_tokens"`
-	Requests     int64   `json:"requests"`
-	Cost         float64 `json:"cost"`
-	IsCurrentUser bool   `json:"is_current_user"`
+	Rank          int     `json:"rank"`
+	UserID        int64   `json:"user_id"`
+	DisplayName   string  `json:"display_name"`
+	Avatar        string  `json:"avatar,omitempty"`
+	TotalTokens   int64   `json:"total_tokens"`
+	Requests      int64   `json:"requests"`
+	Cost          float64 `json:"cost"`
+	IsCurrentUser bool    `json:"is_current_user"`
 }
 
 // GetLeaderboard returns the leaderboard for the specified time range
@@ -37,41 +40,47 @@ func (s *LeaderboardService) GetLeaderboard(
 	ctx context.Context,
 	startTime, endTime time.Time,
 	limit int,
-	currentUserID interface{},
+	currentUserID int64,
 ) ([]LeaderboardEntry, error) {
-	// Query usage stats grouped by user
+	if s == nil || s.db == nil {
+		return nil, fmt.Errorf("leaderboard database is unavailable")
+	}
+	if limit < 1 || limit > 100 || !endTime.After(startTime) {
+		return nil, fmt.Errorf("invalid leaderboard range or limit")
+	}
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
 	query := `
-		SELECT 
+		SELECT
 			u.id as user_id,
 			u.email,
 			u.username,
-			COALESCE(SUM(ul.prompt_tokens + ul.completion_tokens + ul.cache_read_tokens), 0) as total_tokens,
+			COALESCE(SUM(ul.input_tokens + ul.output_tokens + ul.cache_creation_tokens + ul.cache_read_tokens), 0) as total_tokens,
 			COUNT(*) as requests,
 			COALESCE(SUM(ul.actual_cost), 0) as cost
-		FROM users u
-		LEFT JOIN usage_logs ul ON ul.user_id = u.id 
-			AND ul.created_at >= $1 
-			AND ul.created_at < $2
+		FROM usage_logs ul
+		JOIN users u ON u.id = ul.user_id
 		WHERE u.status = 'active'
+			AND u.deleted_at IS NULL
+			AND COALESCE(u.is_monitoring_user, false) = false
+			AND (ul.usage_source IS NULL OR ul.usage_source <> $4)
+			AND ul.created_at >= $1
+			AND ul.created_at < $2
 		GROUP BY u.id, u.email, u.username
-		HAVING COALESCE(SUM(ul.prompt_tokens + ul.completion_tokens + ul.cache_read_tokens), 0) > 0
-		ORDER BY total_tokens DESC
+		HAVING COALESCE(SUM(ul.input_tokens + ul.output_tokens + ul.cache_creation_tokens + ul.cache_read_tokens), 0) > 0
+		ORDER BY total_tokens DESC, u.id ASC
 		LIMIT $3
 	`
 
-	rows, err := s.db.QueryContext(ctx, query, startTime, endTime, limit)
+	rows, err := s.db.QueryContext(ctx, query, startTime, endTime, limit, usagesource.ChannelMonitor)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query leaderboard: %w", err)
 	}
 	defer rows.Close()
 
-	var entries []LeaderboardEntry
+	entries := make([]LeaderboardEntry, 0, limit)
 	rank := 1
-	
-	var currentUID int64
-	if uid, ok := currentUserID.(int64); ok {
-		currentUID = uid
-	}
 
 	for rows.Next() {
 		var (
@@ -89,14 +98,14 @@ func (s *LeaderboardService) GetLeaderboard(
 
 		// Mask email for privacy: t***v@gmail.com
 		displayName := maskLeaderboardEmail(email)
-		if username != nil && *username != "" {
-			displayName = *username
+		if username != nil && strings.TrimSpace(*username) != "" {
+			displayName = strings.TrimSpace(*username)
 		}
 
 		// Generate consistent avatar based on user ID
 		avatar := generateAvatar(userID)
 
-		isCurrentUser := (currentUID > 0 && userID == currentUID)
+		isCurrentUser := currentUserID > 0 && userID == currentUserID
 
 		entries = append(entries, LeaderboardEntry{
 			Rank:          rank,
@@ -109,6 +118,9 @@ func (s *LeaderboardService) GetLeaderboard(
 			IsCurrentUser: isCurrentUser,
 		})
 		rank++
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to read leaderboard: %w", err)
 	}
 
 	return entries, nil
@@ -135,7 +147,7 @@ func maskLeaderboardEmail(email string) string {
 	}
 
 	// Keep first and last character of local part
-	local := email[:atPos]
+	local := []rune(email[:atPos])
 	domain := email[atPos:]
 
 	if len(local) <= 2 {
