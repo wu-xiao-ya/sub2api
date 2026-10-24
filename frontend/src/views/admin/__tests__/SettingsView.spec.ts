@@ -20,6 +20,7 @@ const {
   updateUpstreamBillingProbeSettings,
   getGroups,
   listProxies,
+  getAllProxies,
   getProviders,
   updateProvider,
   createProvider,
@@ -47,6 +48,7 @@ const {
   updateUpstreamBillingProbeSettings: vi.fn().mockImplementation(async (payload) => payload),
   getGroups: vi.fn(),
   listProxies: vi.fn(),
+  getAllProxies: vi.fn().mockResolvedValue([]),
   getProviders: vi.fn(),
   updateProvider: vi.fn(),
   createProvider: vi.fn(),
@@ -83,6 +85,7 @@ vi.mock("@/api", () => ({
     },
     proxies: {
       list: listProxies,
+      getAll: getAllProxies,
     },
     payment: {
       getProviders,
@@ -528,6 +531,7 @@ function mountView() {
         GroupBadge: true,
         GroupOptionItem: true,
         ProxySelector: true,
+        ImageUpstreamCostPanel: true,
         ImageUpload: ImageUploadStub,
         BackupSettings: true,
       },

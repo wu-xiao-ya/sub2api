@@ -66,6 +66,23 @@ var (
 		Mode:                                "chat",
 		SupportsPromptCaching:               true,
 	}
+	openAIGPT61SolFallbackPricing = &LiteLLMModelPricing{
+		InputCostPerToken:                   2e-06,
+		InputCostPerTokenPriority:           4e-06,
+		OutputCostPerToken:                  1e-05,
+		OutputCostPerTokenPriority:          2e-05,
+		CacheCreationInputTokenCost:         2.5e-06,
+		CacheCreationInputTokenCostPriority: 5e-06,
+		CacheReadInputTokenCost:             1e-07,
+		CacheReadInputTokenCostPriority:     2e-07,
+		LongContextInputTokenThreshold:      openAIGPT54LongContextInputThreshold,
+		LongContextInputCostMultiplier:      openAIGPT54LongContextInputMultiplier,
+		LongContextOutputCostMultiplier:     openAIGPT54LongContextOutputMultiplier,
+		SupportsServiceTier:                 true,
+		LiteLLMProvider:                     "openai",
+		Mode:                                "chat",
+		SupportsPromptCaching:               true,
+	}
 	openAIGPT6SolFallbackPricing = &LiteLLMModelPricing{
 		InputCostPerToken:                   2e-06,
 		InputCostPerTokenPriority:           4e-06,
@@ -1075,6 +1092,14 @@ func (s *PricingService) matchOpenAIModel(model string) *LiteLLMModelPricing {
 				Info(fmt.Sprintf("[Pricing] OpenAI fallback matched %s -> %s", model, "gpt-5.1-codex"))
 			return pricing
 		}
+	}
+
+	// GPT-6.1 Sol 先按规范基名取远程价，缺失时用站点静态兜底价。
+	if normalized := normalizeKnownOpenAICodexModel(model); normalized == "gpt-6.1-sol" {
+		if pricing, ok := s.pricingData[normalized]; ok {
+			return pricing
+		}
+		return openAIGPT61SolFallbackPricing
 	}
 
 	// 尝试的回退变体

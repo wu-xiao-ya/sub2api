@@ -11,4 +11,5 @@ func TestDefaultModelsIncludeBareGPT56Alias(t *testing.T) {
 	require.Contains(t, DefaultModelIDs(), "gpt-6-astra")
 	require.Contains(t, DefaultModelIDs(), "gpt-6-sol")
 	require.Contains(t, DefaultModelIDs(), "gpt-6-luna")
+	require.Contains(t, DefaultModelIDs(), "gpt-6.1-sol")
 }

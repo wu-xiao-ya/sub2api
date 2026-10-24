@@ -116,6 +116,7 @@ func TestBillingService_GPT56CacheWritePricingUsesOfficialMultiplier(t *testing.
 		{model: "gpt-5.6-sol", input: 5e-6, inputPriority: 10e-6, output: 30e-6, outputPriority: 60e-6, cacheRead: 0.5e-6, cacheReadPriority: 1e-6},
 		{model: "gpt-5.6-terra", input: 2e-6, inputPriority: 4e-6, output: 12e-6, outputPriority: 24e-6, cacheRead: 0.2e-6, cacheReadPriority: 0.4e-6},
 		{model: "gpt-5.6-luna", input: 0.2e-6, inputPriority: 0.4e-6, output: 1.2e-6, outputPriority: 2.4e-6, cacheRead: 0.02e-6, cacheReadPriority: 0.04e-6},
+		{model: "gpt-6.1-sol", input: 2e-6, inputPriority: 4e-6, output: 10e-6, outputPriority: 20e-6, cacheRead: 0.1e-6, cacheReadPriority: 0.2e-6},
 	}
 	for _, tt := range tests {
 		t.Run(tt.model, func(t *testing.T) {
@@ -135,7 +136,7 @@ func TestBillingService_GPT56CacheWritePricingUsesOfficialMultiplier(t *testing.
 			require.NoError(t, err)
 			require.InDelta(t, tt.input*1.25, pricing.CacheCreationPricePerToken, 1e-12)
 			require.InDelta(t, tt.inputPriority*1.25, pricing.CacheCreationPricePerTokenPriority, 1e-12)
-			if tt.model == "gpt-6-astra" {
+			if tt.model == "gpt-6-astra" || tt.model == "gpt-6.1-sol" {
 				require.Zero(t, pricing.LongContextInputThreshold)
 			} else {
 				require.Equal(t, 272000, pricing.LongContextInputThreshold)
