@@ -163,6 +163,7 @@ export default {
     apiKeys: 'API Keys',
     batchImage: 'Batch Images',
     usage: 'Usage',
+    leaderboard: 'Leaderboard',
     redeem: 'Redeem',
     affiliate: 'Affiliate Rebates',
     accountContributions: 'Account Contributions',

@@ -1469,6 +1469,23 @@
         <ProxySelector v-model="form.proxy_id" :proxies="proxies" />
       </div>
 
+      <div v-if="!isSparkShadow">
+        <div class="mb-1 flex items-center justify-between gap-3">
+          <div>
+            <label class="input-label mb-0">{{ t('admin.accounts.useRelayRoute') }}</label>
+            <p class="input-hint">{{ t('admin.accounts.useRelayRouteHint') }}</p>
+            <p v-if="!trafficRelayConfigured" class="input-hint text-amber-600 dark:text-amber-400">
+              {{ t('admin.accounts.useRelayRouteDisabled') }}
+            </p>
+          </div>
+          <Toggle
+            v-model="form.use_relay_route"
+            :disabled="!trafficRelayConfigured && !form.use_relay_route"
+            :aria-label="t('admin.accounts.useRelayRoute')"
+          />
+        </div>
+      </div>
+
       <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <div>
           <label class="input-label">{{ t('admin.accounts.concurrency') }}</label>
@@ -2959,6 +2976,16 @@ const {
 } = useQuotaNotifyState()
 
 // Load global feature states once
+const trafficRelayConfigured = ref(false)
+async function loadTrafficRelayState() {
+  trafficRelayConfigured.value = false
+  try {
+    const settings = await adminAPI.settings.getSettings()
+    trafficRelayConfigured.value = !!settings.traffic_relay_enabled && Number(settings.traffic_relay_proxy_id || 0) > 0
+  } catch {
+    trafficRelayConfigured.value = false
+  }
+}
 adminAPI.settings.getWebSearchEmulationConfig().then(cfg => {
   webSearchGlobalEnabled.value = cfg?.enabled === true && (cfg?.providers?.length ?? 0) > 0
 }).catch(() => { webSearchGlobalEnabled.value = false })
@@ -3247,6 +3274,7 @@ const form = reactive({
   name: '',
   notes: '',
   proxy_id: null as number | null,
+  use_relay_route: false,
   concurrency: 1,
   load_factor: null as number | null,
   priority: 1,
@@ -3345,6 +3373,7 @@ const syncFormFromAccount = (newAccount: Account | null) => {
   form.name = newAccount.name
   form.notes = newAccount.notes || ''
   form.proxy_id = newAccount.proxy_id
+  form.use_relay_route = !!newAccount.use_relay_route
   form.concurrency = newAccount.concurrency
   form.load_factor = newAccount.load_factor ?? null
   form.priority = newAccount.priority
@@ -3688,6 +3717,7 @@ watch(
       return
     }
     if (!wasShow || newAccount !== previousAccount) {
+      void loadTrafficRelayState()
       syncFormFromAccount(newAccount)
       loadTLSProfiles()
     }

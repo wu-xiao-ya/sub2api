@@ -141,9 +141,10 @@ func TestChannelMonitorModeV2Guard(t *testing.T) {
 			wantCode:   "CHANNEL_MONITOR_DISABLED",
 		},
 		{
-			name:       "mode v1 allows hybrid passive monitor",
+			name:       "mode v1 blocks with mode mismatch",
 			svc:        newChannelMonitorModeSettings(true, service.ChannelMonitorModeV1),
-			wantStatus: http.StatusOK,
+			wantStatus: http.StatusForbidden,
+			wantCode:   "CHANNEL_MONITOR_MODE_MISMATCH",
 		},
 		{
 			name:       "mode v2 allows",

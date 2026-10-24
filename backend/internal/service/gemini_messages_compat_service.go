@@ -605,12 +605,12 @@ func (s *GeminiMessagesCompatService) Forward(ctx context.Context, c *gin.Contex
 		return nil, s.writeClaudeError(c, http.StatusBadRequest, "invalid_request_error", err.Error())
 	}
 	geminiReq = ensureGeminiFunctionCallThoughtSignatures(geminiReq)
+	includeThoughts := req.Stream && claudeRequestEnablesThinking(body)
+	geminiReq = applyGeminiCompatThinkingConfig(geminiReq, body, mappedModel, includeThoughts)
 	originalClaudeBody := body
 
 	proxyURL := ""
-	if account.ProxyID != nil && account.Proxy != nil {
-		proxyURL = account.Proxy.URL()
-	}
+	proxyURL = ResolveAccountProxyURL(account)
 
 	var requestIDHeader string
 	var buildReq func(ctx context.Context) (*http.Request, string, error)
@@ -779,7 +779,7 @@ func (s *GeminiMessagesCompatService) Forward(ctx context.Context, c *gin.Contex
 		}
 		requestIDHeader = idHeader
 
-		resp, err = s.httpUpstream.Do(upstreamReq, proxyURL, account.ID, account.Concurrency)
+		resp, err = s.httpUpstream.Do(WithAccountOutbound(upstreamReq, account, proxyURL), proxyURL, account.ID, account.Concurrency)
 		if err != nil {
 			safeErr := sanitizeUpstreamErrorMessage(err.Error())
 			appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
@@ -833,25 +833,28 @@ func (s *GeminiMessagesCompatService) Forward(ctx context.Context, c *gin.Contex
 
 				var strippedClaudeBody []byte
 				stageName := ""
+				// 降级函数会把思考块改写成正文，Gemini 侧先删掉历史思考块再降级。
+				retrySourceBody := dropClaudeHistoryThinkingBlocks(originalClaudeBody)
 				// 路径说明：本处上游是 Gemini，但被剥离的 body 是 Anthropic 格式。传 originalModel
 				// （客户端原 Anthropic model）而非 mappedModel（上游 Gemini model），让剥离逻辑按
 				// 客户端请求的 Anthropic 子协议族判定（详见 ResolveThinkingProtocol 文档）。
 				switch signatureRetryStage {
 				case 0:
 					// Stage 1: disable thinking + thinking->text
-					strippedClaudeBody = FilterThinkingBlocksForRetry(originalClaudeBody, originalModel)
+					strippedClaudeBody = FilterThinkingBlocksForRetry(retrySourceBody, originalModel)
 					stageName = "thinking-only"
 					signatureRetryStage = 1
 				default:
 					// Stage 2: additionally downgrade tool_use/tool_result blocks to text
-					strippedClaudeBody = FilterSignatureSensitiveBlocksForRetry(originalClaudeBody, originalModel)
+					strippedClaudeBody = FilterSignatureSensitiveBlocksForRetry(retrySourceBody, originalModel)
 					stageName = "thinking+tools"
 					signatureRetryStage = 2
 				}
 				retryGeminiReq, txErr := convertClaudeMessagesToGeminiGenerateContent(strippedClaudeBody)
 				if txErr == nil {
 					logger.LegacyPrintf("service.gemini_messages_compat", "Gemini account %d: detected signature-related 400, retrying with downgraded Claude blocks (%s)", account.ID, stageName)
-					geminiReq = retryGeminiReq
+					// 降级只改写历史块，思考参数沿用客户端原始请求。
+					geminiReq = applyGeminiCompatThinkingConfig(retryGeminiReq, originalClaudeBody, mappedModel, includeThoughts)
 					// Consume one retry budget attempt and continue with the updated request payload.
 					sleepGeminiBackoff(1)
 					continue
@@ -1100,6 +1103,8 @@ func (s *GeminiMessagesCompatService) Forward(ctx context.Context, c *gin.Contex
 		ImageCount:     imageCount,
 		ImageSize:      imageSize,
 		ImageInputSize: imageInputSize,
+		// 计费档位取实际发给上游的思考参数。
+		ReasoningEffort: extractGeminiReasoningEffortFromBody(geminiReq),
 	}, nil
 }
 
@@ -1147,9 +1152,7 @@ func (s *GeminiMessagesCompatService) ForwardNative(ctx context.Context, c *gin.
 	}
 
 	proxyURL := ""
-	if account.ProxyID != nil && account.Proxy != nil {
-		proxyURL = account.Proxy.URL()
-	}
+	proxyURL = ResolveAccountProxyURL(account)
 
 	useUpstreamStream := stream
 	upstreamAction := action
@@ -1305,7 +1308,7 @@ func (s *GeminiMessagesCompatService) ForwardNative(ctx context.Context, c *gin.
 		}
 		requestIDHeader = idHeader
 
-		resp, err = s.httpUpstream.Do(upstreamReq, proxyURL, account.ID, account.Concurrency)
+		resp, err = s.httpUpstream.Do(WithAccountOutbound(upstreamReq, account, proxyURL), proxyURL, account.ID, account.Concurrency)
 		if err != nil {
 			safeErr := sanitizeUpstreamErrorMessage(err.Error())
 			appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
@@ -1336,6 +1339,13 @@ func (s *GeminiMessagesCompatService) ForwardNative(ctx context.Context, c *gin.
 			}
 			setOpsUpstreamError(c, 0, safeErr, "")
 			return nil, s.writeGoogleError(c, http.StatusBadGateway, "Upstream request failed after retries: "+safeErr)
+		}
+
+		// 引用缓存不存在、上游网关持有缓存的账号不可用应先于错误策略识别：错误策略会写临时不可调度，
+		// 重试与换号也无法恢复。
+		if passthrough, rebuilt := s.cachedContentPassthroughInLoop(ctx, account, resp); passthrough {
+			resp = rebuilt
+			break
 		}
 
 		// 错误策略优先：匹配则跳过重试直接处理。
@@ -1429,6 +1439,17 @@ func (s *GeminiMessagesCompatService) ForwardNative(ctx context.Context, c *gin.
 
 	if resp.StatusCode >= 400 {
 		respBody := s.readUpstreamErrorBody(resp)
+		if isGeminiCachedContentNotFound(resp.StatusCode, respBody) {
+			return nil, s.writeGeminiCachedContentNotFound(c, account, resp, respBody, requestID, isOAuth)
+		}
+		// 上游网关的限流 / 不可用只针对其持有缓存的账号：不改本账号状态，交由绑定请求的耗尽处理透传。
+		if isGeminiBoundCacheUpstreamPassthrough(ctx, account, resp.StatusCode) {
+			return nil, &UpstreamFailoverError{
+				StatusCode:               resp.StatusCode,
+				ResponseBody:             respBody,
+				BoundUpstreamPassthrough: true,
+			}
+		}
 		// Best-effort fallback for OAuth tokens missing AI Studio scopes when calling countTokens.
 		// This avoids Gemini SDKs failing hard during preflight token counting.
 		// Checked before error policy so it always works regardless of custom error codes.
@@ -1618,16 +1639,17 @@ func (s *GeminiMessagesCompatService) ForwardNative(ctx context.Context, c *gin.
 	imageCount := resolveGeminiImageCount(c, originalModel, mappedModel)
 
 	return &ForwardResult{
-		RequestID:      requestID,
-		Usage:          *usage,
-		Model:          originalModel,
-		UpstreamModel:  mappedModel,
-		Stream:         stream,
-		Duration:       time.Since(startTime),
-		FirstTokenMs:   firstTokenMs,
-		ImageCount:     imageCount,
-		ImageSize:      imageSize,
-		ImageInputSize: imageInputSize,
+		RequestID:       requestID,
+		Usage:           *usage,
+		Model:           originalModel,
+		UpstreamModel:   mappedModel,
+		Stream:          stream,
+		Duration:        time.Since(startTime),
+		FirstTokenMs:    firstTokenMs,
+		ImageCount:      imageCount,
+		ImageSize:       imageSize,
+		ImageInputSize:  imageInputSize,
+		ReasoningEffort: extractGeminiReasoningEffortFromBody(body),
 	}, nil
 }
 
@@ -1649,6 +1671,61 @@ func (s *GeminiMessagesCompatService) checkErrorPolicyInLoop(
 	}
 	policy := s.rateLimitService.CheckErrorPolicy(ctx, account, resp.StatusCode, body, mappedModel)
 	return policy != ErrorPolicyNone, rebuilt
+}
+
+// cachedContentPassthroughInLoop 在重试循环内识别「引用缓存不存在」与「上游网关持有缓存的账号不可用」：
+// 两者都不能靠重试或换号恢复，须先于错误策略返回，避免写临时不可调度。
+func (s *GeminiMessagesCompatService) cachedContentPassthroughInLoop(ctx context.Context, account *Account, resp *http.Response) (passthrough bool, rebuilt *http.Response) {
+	if isGeminiBoundCacheUpstreamPassthrough(ctx, account, resp.StatusCode) {
+		return true, resp
+	}
+	switch resp.StatusCode {
+	case http.StatusBadRequest, http.StatusForbidden, http.StatusNotFound:
+	default:
+		return false, resp
+	}
+	body := s.readUpstreamErrorBody(resp)
+	_ = resp.Body.Close()
+	rebuilt = &http.Response{
+		StatusCode: resp.StatusCode,
+		Header:     resp.Header.Clone(),
+		Body:       io.NopCloser(bytes.NewReader(body)),
+	}
+	return isGeminiCachedContentNotFound(resp.StatusCode, body), rebuilt
+}
+
+// writeGeminiCachedContentNotFound 记录上游原始错误，并向客户端统一返回缓存不存在的 403：
+// 各上游响应形态不同，Vertex 的文案还含上游缓存资源 ID。失败由请求引用的缓存决定，ops 按客户端请求错误统计。
+func (s *GeminiMessagesCompatService) writeGeminiCachedContentNotFound(c *gin.Context, account *Account, resp *http.Response, respBody []byte, requestID string, isOAuth bool) error {
+	respBody = unwrapIfNeeded(isOAuth, respBody)
+	upstreamMsg := strings.TrimSpace(extractUpstreamErrorMessage(respBody))
+	upstreamMsg = sanitizeUpstreamErrorMessage(upstreamMsg)
+	upstreamDetail := ""
+	if s.cfg != nil && s.cfg.Gateway.LogUpstreamErrorBody {
+		maxBytes := s.cfg.Gateway.LogUpstreamErrorBodyMaxBytes
+		if maxBytes <= 0 {
+			maxBytes = 2048
+		}
+		upstreamDetail = truncateString(string(respBody), maxBytes)
+	}
+	setOpsUpstreamError(c, resp.StatusCode, upstreamMsg, upstreamDetail)
+	appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
+		Platform:           account.Platform,
+		AccountID:          account.ID,
+		AccountName:        account.Name,
+		UpstreamStatusCode: resp.StatusCode,
+		UpstreamRequestID:  requestID,
+		Kind:               "http_error",
+		Message:            upstreamMsg,
+		Detail:             upstreamDetail,
+	})
+	MarkOpsRequestScopedError(c, "permission_error")
+	MarkResponseCommitted(c)
+	c.Data(http.StatusForbidden, "application/json", []byte(GeminiCachedContentNotFoundResponse))
+	if upstreamMsg == "" {
+		return fmt.Errorf("gemini upstream error: %d", resp.StatusCode)
+	}
+	return fmt.Errorf("gemini upstream error: %d message=%s", resp.StatusCode, upstreamMsg)
 }
 
 func (s *GeminiMessagesCompatService) shouldRetryGeminiUpstreamError(account *Account, statusCode int) bool {
@@ -2011,6 +2088,7 @@ func (s *GeminiMessagesCompatService) handleStreamingResponse(c *gin.Context, re
 	openBlockIndex := -1
 	openBlockType := ""
 	seenText := ""
+	seenThought := ""
 	openToolIndex := -1
 	openToolID := ""
 	openToolName := ""
@@ -2054,6 +2132,56 @@ func (s *GeminiMessagesCompatService) handleStreamingResponse(c *gin.Context, re
 
 		parts := extractGeminiParts(geminiResp)
 		for _, part := range parts {
+			if text, ok := part["text"].(string); ok && isGeminiThoughtPart(part) {
+				delta, newSeen := computeGeminiTextDelta(seenThought, text)
+				seenThought = newSeen
+				if delta == "" {
+					continue
+				}
+				if openToolIndex >= 0 {
+					writeSSE(c.Writer, "content_block_stop", map[string]any{
+						"type":  "content_block_stop",
+						"index": openToolIndex,
+					})
+					openToolIndex = -1
+					openToolName = ""
+					seenToolJSON = ""
+				}
+				if openBlockType != "thinking" {
+					if openBlockIndex >= 0 {
+						writeSSE(c.Writer, "content_block_stop", map[string]any{
+							"type":  "content_block_stop",
+							"index": openBlockIndex,
+						})
+					}
+					openBlockType = "thinking"
+					openBlockIndex = nextBlockIndex
+					nextBlockIndex++
+					writeSSE(c.Writer, "content_block_start", map[string]any{
+						"type":  "content_block_start",
+						"index": openBlockIndex,
+						"content_block": map[string]any{
+							"type":      "thinking",
+							"thinking":  "",
+							"signature": "",
+						},
+					})
+				}
+				if firstTokenMs == nil {
+					ms := int(time.Since(startTime).Milliseconds())
+					firstTokenMs = &ms
+				}
+				writeSSE(c.Writer, "content_block_delta", map[string]any{
+					"type":  "content_block_delta",
+					"index": openBlockIndex,
+					"delta": map[string]any{
+						"type":     "thinking_delta",
+						"thinking": delta,
+					},
+				})
+				flusher.Flush()
+				continue
+			}
 			if text, ok := part["text"].(string); ok && text != "" {
 				// Close an open tool_use block before starting text, mirroring
 				// the functionCall branch (which closes open text blocks) and
@@ -2661,9 +2789,7 @@ func (s *GeminiMessagesCompatService) ForwardAIStudioGET(ctx context.Context, ac
 	fullURL := strings.TrimRight(normalizedBaseURL, "/") + path
 
 	var proxyURL string
-	if account.ProxyID != nil && account.Proxy != nil {
-		proxyURL = account.Proxy.URL()
-	}
+	proxyURL = ResolveAccountProxyURL(account)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fullURL, nil)
 	if err != nil {
@@ -2690,7 +2816,7 @@ func (s *GeminiMessagesCompatService) ForwardAIStudioGET(ctx context.Context, ac
 		return nil, fmt.Errorf("unsupported account type: %s", account.Type)
 	}
 
-	resp, err := s.httpUpstream.Do(req, proxyURL, account.ID, account.Concurrency)
+	resp, err := s.httpUpstream.Do(WithAccountOutbound(req, account, proxyURL), proxyURL, account.ID, account.Concurrency)
 	if err != nil {
 		return nil, err
 	}
@@ -3170,6 +3296,7 @@ func convertClaudeMessagesToGeminiContents(messages any, toolUseIDToName map[str
 		}
 
 		parts := make([]any, 0)
+		droppedThinking := false
 		switch content := mm["content"].(type) {
 		case string:
 			// 字符串形式的 content，保留所有内容（包括空白）
@@ -3181,6 +3308,11 @@ func convertClaudeMessagesToGeminiContents(messages any, toolUseIDToName map[str
 			for _, block := range content {
 				bm, ok := block.(map[string]any)
 				if !ok {
+					continue
+				}
+				// 历史思考块不回传给 Gemini：Gemini 的思考连续性由 thoughtSignature 承载。
+				if bt, _ := bm["type"].(string); bt == "thinking" || bt == "redacted_thinking" {
+					droppedThinking = true
 					continue
 				}
 				bt, _ := bm["type"].(string)
@@ -3249,6 +3381,10 @@ func convertClaudeMessagesToGeminiContents(messages any, toolUseIDToName map[str
 			}
 		default:
 			// ignore
+		}
+		// 只含思考块的消息去掉思考后为空，整条跳过（Gemini 拒收空 parts）。
+		if droppedThinking && len(parts) == 0 {
+			continue
 		}
 
 		out = append(out, map[string]any{

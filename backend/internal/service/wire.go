@@ -441,6 +441,13 @@ func ProvideOpsSystemLogSink(opsRepo OpsRepository) *OpsSystemLogSink {
 	return sink
 }
 
+// ProvideGeminiCachedContentService 创建 Gemini 显式缓存服务并启动到期修改的后台回滚恢复协程。
+func ProvideGeminiCachedContentService(repo GeminiCachedContentRepository, compat *GeminiMessagesCompatService, cfg *config.Config) *GeminiCachedContentService {
+	svc := NewGeminiCachedContentService(repo, compat, cfg)
+	svc.Start()
+	return svc
+}
+
 // ProvideAuditLogService 创建操作审计日志服务并启动异步写入与保留期清理协程。
 // 停止逻辑挂在 cmd/server 的 provideCleanup。
 func ProvideAuditLogService(repo AuditLogRepository, settingService *SettingService) *AuditLogService {
@@ -629,11 +636,13 @@ func ProvideOpsIngressRejectAggregator(opsRepo OpsRepository, opsService *OpsSer
 	return aggregator
 }
 
-// ProvideSettingService wires SettingService with group reader and proxy repo.
-func ProvideSettingService(settingRepo SettingRepository, groupRepo GroupRepository, proxyRepo ProxyRepository, cfg *config.Config) *SettingService {
+// ProvideSettingService wires SettingService with group reader, proxy repo and
+// the usage-log reader used to seed image upstream cost candidates.
+func ProvideSettingService(settingRepo SettingRepository, groupRepo GroupRepository, proxyRepo ProxyRepository, usageLogRepo UsageLogRepository, cfg *config.Config) *SettingService {
 	svc := NewSettingService(settingRepo, cfg)
 	svc.SetDefaultSubscriptionGroupReader(groupRepo)
 	svc.SetProxyRepository(proxyRepo)
+	svc.SetUsageLogRepository(usageLogRepo)
 	if err := svc.LoadForwardedClientIPSettings(context.Background()); err != nil {
 		logger.LegacyPrintf("service.setting", "Warning: load forwarded client IP settings failed: %v", err)
 	}
@@ -750,12 +759,15 @@ var ProviderSet = wire.NewSet(
 	ProvideAccountContributionService,
 	ProvideAccountTestService,
 	ProvideUpstreamBillingProbeService,
+	ProvideUpstreamRatioSyncService,
 	ProvideSettingService,
+	NewAccountOutboundService,
 	NewDataManagementService,
 	ProvideBackupService,
 	ProvideOpsSystemLogSink,
 	ProvideOpsService,
 	ProvideOpsIngressRejectAggregator,
+	ProvideGeminiCachedContentService,
 	ProvideAuditLogService,
 	ProvideOpsMetricsCollector,
 	ProvideOpsAggregationService,
@@ -809,8 +821,10 @@ var ProviderSet = wire.NewSet(
 	ProvideChannelMonitorRunner,
 	ProvideChannelMonitorV2Service,
 	ProvideChannelMonitorV2Aggregator,
+	ProvideChannelPerformanceService,
 	NewChannelMonitorRequestTemplateService,
 	ProvideUserPlatformQuotaUsageFlusher,
+	NewLeaderboardService,
 )
 
 // ProvideUserPlatformQuotaUsageFlusher 创建并启动 UserPlatformQuotaUsageFlusher。
@@ -897,6 +911,14 @@ func ProvideChannelMonitorRunner(svc *ChannelMonitorService, settingService *Set
 
 // ProvideChannelMonitorV2Service wires V2 privacy/runtime settings while
 // keeping it independent from the existing active monitor service.
+func ProvideChannelPerformanceService(repo ChannelPerformanceRepository, db *sql.DB) *ChannelPerformanceService {
+	svc := NewChannelPerformanceService(repo)
+	if os.Getenv("CHANNEL_PERFORMANCE_DISABLE_WORKER") != "1" {
+		svc.startRuntime(db)
+	}
+	return svc
+}
+
 func ProvideChannelMonitorV2Service(repo ChannelMonitorV2Repository, settingService *SettingService) *ChannelMonitorV2Service {
 	svc := NewChannelMonitorV2Service(repo)
 	svc.SetRuntimeReader(settingService)
@@ -904,7 +926,7 @@ func ProvideChannelMonitorV2Service(repo ChannelMonitorV2Repository, settingServ
 }
 
 // ProvideChannelMonitorV2Aggregator starts passive aggregation for real user
-// traffic. In the hybrid monitor, this runs alongside V1 active diagnostics.
+// traffic. It is enabled only when the global monitor mode is V2.
 func ProvideChannelMonitorV2Aggregator(repo ChannelMonitorV2Repository, db *sql.DB, settingService *SettingService) *ChannelMonitorV2Aggregator {
 	aggregator := NewChannelMonitorV2Aggregator(repo, db, settingService)
 	if os.Getenv("CHANNEL_MONITOR_V2_DISABLE_AGGREGATOR") == "1" {

@@ -178,6 +178,20 @@ func (_u *AccountUpdate) ClearProxyFallbackOriginID() *AccountUpdate {
 	return _u
 }
 
+// SetUseRelayRoute sets the "use_relay_route" field.
+func (_u *AccountUpdate) SetUseRelayRoute(v bool) *AccountUpdate {
+	_u.mutation.SetUseRelayRoute(v)
+	return _u
+}
+
+// SetNillableUseRelayRoute sets the "use_relay_route" field if the given value is not nil.
+func (_u *AccountUpdate) SetNillableUseRelayRoute(v *bool) *AccountUpdate {
+	if v != nil {
+		_u.SetUseRelayRoute(*v)
+	}
+	return _u
+}
+
 // SetConcurrency sets the "concurrency" field.
 func (_u *AccountUpdate) SetConcurrency(v int) *AccountUpdate {
 	_u.mutation.ResetConcurrency()
@@ -947,6 +961,9 @@ func (_u *AccountUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if _u.mutation.ProxyFallbackOriginIDCleared() {
 		_spec.ClearField(account.FieldProxyFallbackOriginID, field.TypeInt64)
 	}
+	if value, ok := _u.mutation.UseRelayRoute(); ok {
+		_spec.SetField(account.FieldUseRelayRoute, field.TypeBool, value)
+	}
 	if value, ok := _u.mutation.Concurrency(); ok {
 		_spec.SetField(account.FieldConcurrency, field.TypeInt, value)
 	}
@@ -1451,6 +1468,20 @@ func (_u *AccountUpdateOne) AddProxyFallbackOriginID(v int64) *AccountUpdateOne 
 // ClearProxyFallbackOriginID clears the value of the "proxy_fallback_origin_id" field.
 func (_u *AccountUpdateOne) ClearProxyFallbackOriginID() *AccountUpdateOne {
 	_u.mutation.ClearProxyFallbackOriginID()
+	return _u
+}
+
+// SetUseRelayRoute sets the "use_relay_route" field.
+func (_u *AccountUpdateOne) SetUseRelayRoute(v bool) *AccountUpdateOne {
+	_u.mutation.SetUseRelayRoute(v)
+	return _u
+}
+
+// SetNillableUseRelayRoute sets the "use_relay_route" field if the given value is not nil.
+func (_u *AccountUpdateOne) SetNillableUseRelayRoute(v *bool) *AccountUpdateOne {
+	if v != nil {
+		_u.SetUseRelayRoute(*v)
+	}
 	return _u
 }
 
@@ -2252,6 +2283,9 @@ func (_u *AccountUpdateOne) sqlSave(ctx context.Context) (_node *Account, err er
 	}
 	if _u.mutation.ProxyFallbackOriginIDCleared() {
 		_spec.ClearField(account.FieldProxyFallbackOriginID, field.TypeInt64)
+	}
+	if value, ok := _u.mutation.UseRelayRoute(); ok {
+		_spec.SetField(account.FieldUseRelayRoute, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.Concurrency(); ok {
 		_spec.SetField(account.FieldConcurrency, field.TypeInt, value)

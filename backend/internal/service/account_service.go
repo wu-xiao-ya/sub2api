@@ -150,6 +150,7 @@ type AccountBulkUpdate struct {
 	LoadFactor     *int
 	Status         *string
 	Schedulable    *bool
+	UseRelayRoute  *bool
 	Credentials    map[string]any
 	Extra          map[string]any
 	ProbeEnabled   *bool
@@ -169,6 +170,7 @@ type CreateAccountRequest struct {
 	GroupIDs           []int64        `json:"group_ids"`
 	ExpiresAt          *time.Time     `json:"expires_at"`
 	AutoPauseOnExpired *bool          `json:"auto_pause_on_expired"`
+	UseRelayRoute      *bool          `json:"use_relay_route"`
 }
 
 // UpdateAccountRequest 更新账号请求
@@ -184,6 +186,7 @@ type UpdateAccountRequest struct {
 	GroupIDs           *[]int64        `json:"group_ids"`
 	ExpiresAt          *time.Time      `json:"expires_at"`
 	AutoPauseOnExpired *bool           `json:"auto_pause_on_expired"`
+	UseRelayRoute      *bool           `json:"use_relay_route"`
 }
 
 // AccountService 账号管理服务
@@ -231,6 +234,9 @@ func (s *AccountService) Create(ctx context.Context, req CreateAccountRequest) (
 		account.AutoPauseOnExpired = *req.AutoPauseOnExpired
 	} else {
 		account.AutoPauseOnExpired = true
+	}
+	if req.UseRelayRoute != nil {
+		account.UseRelayRoute = *req.UseRelayRoute
 	}
 
 	if err := s.accountRepo.Create(ctx, account); err != nil {
@@ -339,6 +345,9 @@ func (s *AccountService) Update(ctx context.Context, id int64, req UpdateAccount
 	}
 	if req.AutoPauseOnExpired != nil {
 		account.AutoPauseOnExpired = *req.AutoPauseOnExpired
+	}
+	if req.UseRelayRoute != nil {
+		account.UseRelayRoute = *req.UseRelayRoute
 	}
 
 	// 先验证分组是否存在（在任何写操作之前）

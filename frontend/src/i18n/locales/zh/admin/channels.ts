@@ -178,9 +178,12 @@ export default {
         ruleModelPricing: '模型定价',
         noGroupsInChannel: '上方平台标签页中未选择分组',
         unnamed: '未命名',
+        unpricedGroupModels: '分组已有、尚未定价',
+        unpricedGroupModelsHint: '点击模型即可加入本渠道定价并填入默认价格。可用渠道只展示渠道定价中的模型；图片模型没有默认定价时不会插入空行。',
+        addUnpricedGroupModel: '加入定价',
         syncLatestModels: '同步最新模型',
         syncingModels: '同步中...',
-        syncModelsSuccess: '已同步 {count} 个新模型',
+        syncModelsSuccess: '已加入渠道定价 {count} 个新模型，并填入默认价格',
         syncModelsAlreadyUpToDate: '模型列表已是最新',
         syncModelsError: '同步模型失败'
       }

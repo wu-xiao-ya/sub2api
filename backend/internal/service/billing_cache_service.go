@@ -540,6 +540,11 @@ func (s *BillingCacheService) InvalidateAPIKeyRateLimit(ctx context.Context, key
 // resets expired windows in-memory and triggers async DB reset,
 // and returns an error if any window limit is exceeded.
 func (s *BillingCacheService) checkAPIKeyRateLimits(ctx context.Context, apiKey *APIKey) error {
+	return s.checkAPIKeyRateLimitsWithPending(ctx, apiKey, 0)
+}
+
+// checkAPIKeyRateLimitsWithPending 在窗口用量上叠加 pending（即将扣除的金额）后检查限速窗口。
+func (s *BillingCacheService) checkAPIKeyRateLimitsWithPending(ctx context.Context, apiKey *APIKey, pending float64) error {
 	if s.cache == nil {
 		// No cache: fall back to reading from DB directly
 		if s.apiKeyRateLimitLoader == nil {
@@ -550,7 +555,7 @@ func (s *BillingCacheService) checkAPIKeyRateLimits(ctx context.Context, apiKey 
 			return nil // Don't block requests on DB errors
 		}
 		return s.evaluateRateLimits(ctx, apiKey, data.Usage5h, data.Usage1d, data.Usage7d,
-			data.Window5hStart, data.Window1dStart, data.Window7dStart)
+			data.Window5hStart, data.Window1dStart, data.Window7dStart, pending)
 	}
 
 	cacheData, err := s.cache.GetAPIKeyRateLimit(ctx, apiKey.ID)
@@ -595,11 +600,11 @@ func (s *BillingCacheService) checkAPIKeyRateLimits(ctx context.Context, apiKey 
 		t := time.Unix(cacheData.Window7d, 0)
 		w7d = &t
 	}
-	return s.evaluateRateLimits(ctx, apiKey, cacheData.Usage5h, cacheData.Usage1d, cacheData.Usage7d, w5h, w1d, w7d)
+	return s.evaluateRateLimits(ctx, apiKey, cacheData.Usage5h, cacheData.Usage1d, cacheData.Usage7d, w5h, w1d, w7d, pending)
 }
 
-// evaluateRateLimits checks usage against limits, triggering async resets for expired windows.
-func (s *BillingCacheService) evaluateRateLimits(ctx context.Context, apiKey *APIKey, usage5h, usage1d, usage7d float64, w5h, w1d, w7d *time.Time) error {
+// evaluateRateLimits checks usage (plus pending) against limits, triggering async resets for expired windows.
+func (s *BillingCacheService) evaluateRateLimits(ctx context.Context, apiKey *APIKey, usage5h, usage1d, usage7d float64, w5h, w1d, w7d *time.Time, pending float64) error {
 	needsReset := false
 
 	// Reset expired windows in-memory for check purposes
@@ -641,14 +646,17 @@ func (s *BillingCacheService) evaluateRateLimits(ctx context.Context, apiKey *AP
 		}()
 	}
 
-	// Check limits
-	if apiKey.RateLimit5h > 0 && usage5h >= apiKey.RateLimit5h {
+	// Check limits：已有用量本身达到上限照旧拒绝；叠加本次待扣金额后超出上限同样拒绝。
+	exceeds := func(usage, limit float64) bool {
+		return limit > 0 && (usage >= limit || usage+pending > limit)
+	}
+	if exceeds(usage5h, apiKey.RateLimit5h) {
 		return ErrAPIKeyRateLimit5hExceeded
 	}
-	if apiKey.RateLimit1d > 0 && usage1d >= apiKey.RateLimit1d {
+	if exceeds(usage1d, apiKey.RateLimit1d) {
 		return ErrAPIKeyRateLimit1dExceeded
 	}
-	if apiKey.RateLimit7d > 0 && usage7d >= apiKey.RateLimit7d {
+	if exceeds(usage7d, apiKey.RateLimit7d) {
 		return ErrAPIKeyRateLimit7dExceeded
 	}
 	return nil
@@ -742,6 +750,19 @@ func (s *BillingCacheService) CheckBillingEligibility(ctx context.Context, user 
 	if apiKey != nil && apiKey.HasRateLimits() {
 		if err := s.checkAPIKeyRateLimits(ctx, apiKey); err != nil {
 			return err
+		}
+	}
+	if apiKey != nil && apiKey.RoutedMember != nil {
+		if apiKey.RoutedMember.IsExpired() {
+			return ErrAPIKeyExpired
+		}
+		if apiKey.RoutedMember.IsQuotaExhausted() {
+			return ErrAPIKeyQuotaExhausted
+		}
+		if apiKey.RoutedMember.HasRateLimits() {
+			if err := s.checkAPIKeyRateLimits(ctx, apiKey.RoutedMember); err != nil {
+				return err
+			}
 		}
 	}
 

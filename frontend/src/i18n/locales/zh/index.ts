@@ -5,8 +5,11 @@ import channelMonitorV2 from './channelMonitorV2'
 import batchImage from './batchImage'
 import admin from './admin'
 import misc from './misc'
+import serverMonitor from './serverMonitor'
+import leaderboard from './leaderboard'
 
 export default {
+  ...serverMonitor,
   ...landing,
   ...common,
   ...dashboard,
@@ -14,4 +17,5 @@ export default {
   ...batchImage,
   admin,
   ...misc,
+  ...leaderboard,
 }

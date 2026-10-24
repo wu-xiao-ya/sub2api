@@ -194,6 +194,25 @@ func TestGetModelPricing_GLM53FlashUsesDomesticNumericPrice(t *testing.T) {
 	require.InDelta(t, 0.23e-6, got.CacheReadPricePerToken, 1e-12)
 }
 
+func TestGetModelPricing_DeepSeekNewModelsUseDomesticNumericPrice(t *testing.T) {
+	svc := newTestBillingService()
+
+	for _, model := range []string{"deepseek-flash", "deepseek-v4.1-flash", "deepseek-v4-flash", "deepseek-v4-flash-vision-exp"} {
+		got, err := svc.GetModelPricing(model)
+		require.NoError(t, err, model)
+		require.NotNil(t, got, model)
+		require.InDelta(t, 1e-6, got.InputPricePerToken, 1e-12, model)
+		require.InDelta(t, 4e-6, got.OutputPricePerToken, 1e-12, model)
+		require.InDelta(t, 0.02e-6, got.CacheReadPricePerToken, 1e-12, model)
+	}
+
+	pro, err := svc.GetModelPricing("deepseek-v4-pro")
+	require.NoError(t, err)
+	require.InDelta(t, 4.5e-6, pro.InputPricePerToken, 1e-12)
+	require.InDelta(t, 13.5e-6, pro.OutputPricePerToken, 1e-12)
+	require.InDelta(t, 0.15e-6, pro.CacheReadPricePerToken, 1e-12)
+}
+
 func TestGetModelPricing_UnknownClaudeModelFallsBackToSonnet(t *testing.T) {
 	svc := newTestBillingService()
 
@@ -492,23 +511,37 @@ func TestGetFallbackPricing_FamilyMatching(t *testing.T) {
 		{
 			name:              "deepseek v4 flash",
 			model:             "deepseek-v4-flash",
-			expectedInput:     0.22e-6,
-			expectedOutput:    floatPtr(0.66e-6),
-			expectedCacheRead: floatPtr(0.007e-6),
+			expectedInput:     0.15e-6,
+			expectedOutput:    floatPtr(0.60e-6),
+			expectedCacheRead: floatPtr(0.003e-6),
+		},
+		{
+			name:              "deepseek v4.1 flash",
+			model:             "deepseek-v4.1-flash",
+			expectedInput:     0.15e-6,
+			expectedOutput:    floatPtr(0.60e-6),
+			expectedCacheRead: floatPtr(0.003e-6),
+		},
+		{
+			name:              "deepseek flash official name",
+			model:             "deepseek-flash",
+			expectedInput:     0.15e-6,
+			expectedOutput:    floatPtr(0.60e-6),
+			expectedCacheRead: floatPtr(0.003e-6),
 		},
 		{
 			name:              "deepseek chat alias → flash",
 			model:             "deepseek-chat",
-			expectedInput:     0.22e-6,
-			expectedOutput:    floatPtr(0.66e-6),
-			expectedCacheRead: floatPtr(0.007e-6),
+			expectedInput:     0.15e-6,
+			expectedOutput:    floatPtr(0.60e-6),
+			expectedCacheRead: floatPtr(0.003e-6),
 		},
 		{
 			name:              "deepseek reasoner alias → flash",
 			model:             "deepseek-reasoner",
-			expectedInput:     0.22e-6,
-			expectedOutput:    floatPtr(0.66e-6),
-			expectedCacheRead: floatPtr(0.007e-6),
+			expectedInput:     0.15e-6,
+			expectedOutput:    floatPtr(0.60e-6),
+			expectedCacheRead: floatPtr(0.003e-6),
 		},
 
 		// ---- 智谱 GLM（z.ai USD 口径）----
@@ -1147,12 +1180,50 @@ func TestCalculateCostWithLongContext_PropagatesError(t *testing.T) {
 	require.Contains(t, err.Error(), "pricing not found")
 }
 
+func requireGrok200kLongContext(t *testing.T, pricing *ModelPricing) {
+	t.Helper()
+	require.NotNil(t, pricing)
+	require.Equal(t, grokLongContextInputThreshold, pricing.LongContextInputThreshold)
+	require.InDelta(t, grokLongContextInputMultiplier, pricing.LongContextInputMultiplier, 1e-12)
+	require.InDelta(t, grokLongContextOutputMultiplier, pricing.LongContextOutputMultiplier, 1e-12)
+	require.True(t, pricing.LongContextThresholdInclusive)
+}
+
+func TestCalculateCost_Grok46LongContextBoundaryIsInclusive(t *testing.T) {
+	svc := newTestBillingService()
+	below := UsageTokens{InputTokens: 150000, CacheReadTokens: 49999, OutputTokens: 10}
+	cost, err := svc.CalculateCost("grok-4.6", below, 1)
+	require.NoError(t, err)
+	require.False(t, cost.LongContextBillingApplied)
+	require.InDelta(t, 150000*2e-6, cost.InputCost, 1e-12)
+	require.InDelta(t, 49999*0.5e-6, cost.CacheReadCost, 1e-12)
+	require.InDelta(t, 10*6e-6, cost.OutputCost, 1e-12)
+
+	at := UsageTokens{InputTokens: 150000, CacheReadTokens: 50000, OutputTokens: 10}
+	cost, err = svc.CalculateCost("grok-4.6", at, 1)
+	require.NoError(t, err)
+	require.True(t, cost.LongContextBillingApplied)
+	require.InDelta(t, 150000*2e-6*2, cost.InputCost, 1e-12)
+	require.InDelta(t, 50000*0.5e-6*2, cost.CacheReadCost, 1e-12)
+	require.InDelta(t, 10*6e-6*2, cost.OutputCost, 1e-12)
+}
+
+func TestCalculateCost_Grok45AndBuildApply200kLongContext(t *testing.T) {
+	svc := newTestBillingService()
+	tokens := UsageTokens{InputTokens: 200000, OutputTokens: 20}
+	for _, model := range []string{"grok-4.5", "grok-4.3", "grok-build-0.1"} {
+		cost, err := svc.CalculateCost(model, tokens, 1)
+		require.NoError(t, err, model)
+		require.True(t, cost.LongContextBillingApplied, model)
+	}
+}
+
 func TestGetModelPricing_Grok45And46OfficialFallback(t *testing.T) {
 	svc := newTestBillingService()
 
 	for _, model := range []string{
 		"grok", "grok-latest", "grok-4.5", "grok-4.5-latest", "grok-build-latest",
-		"grok-4.6", "grok-4.6-latest",
+		"grok-4.6", "grok-4.6-latest", "grok-4-6", "grok-4-6-latest",
 	} {
 		model := model
 		t.Run(model, func(t *testing.T) {
@@ -1162,6 +1233,7 @@ func TestGetModelPricing_Grok45And46OfficialFallback(t *testing.T) {
 			require.InDelta(t, 6e-6, pricing.OutputPricePerToken, 1e-12)
 			require.InDelta(t, 0.5e-6, pricing.CacheReadPricePerToken, 1e-12)
 			require.False(t, pricing.SupportsCacheBreakdown)
+			requireGrok200kLongContext(t, pricing)
 		})
 	}
 }
@@ -1170,23 +1242,58 @@ func TestGetModelPricing_Grok46UsesGrok45DynamicPricing(t *testing.T) {
 	pricingSvc := &PricingService{
 		pricingData: map[string]*LiteLLMModelPricing{
 			"grok-4.5": {
-				InputCostPerToken:       2e-6,
-				OutputCostPerToken:      6e-6,
-				CacheReadInputTokenCost: 0.5e-6,
+				InputCostPerToken:               2e-6,
+				OutputCostPerToken:              6e-6,
+				CacheReadInputTokenCost:         0.3e-6,
+				CacheReadInputTokenCostPriority: 0.3e-6,
 			},
 			"grok-4.6": {
-				InputCostPerToken:  99e-6,
-				OutputCostPerToken: 99e-6,
+				InputCostPerToken:       99e-6,
+				OutputCostPerToken:      99e-6,
+				CacheReadInputTokenCost: 0.3e-6,
 			},
 		},
 	}
 	svc := NewBillingService(&config.Config{}, pricingSvc)
 
-	pricing, err := svc.GetModelPricing("grok-4.6")
+	for _, model := range []string{"grok-4.6", "grok-4.6-latest", "grok-4-6"} {
+		pricing, err := svc.GetModelPricing(model)
+		require.NoError(t, err, model)
+		require.InDelta(t, 2e-6, pricing.InputPricePerToken, 1e-12, model)
+		require.InDelta(t, 6e-6, pricing.OutputPricePerToken, 1e-12, model)
+		require.InDelta(t, 0.5e-6, pricing.CacheReadPricePerToken, 1e-12, model)
+		require.InDelta(t, 0.5e-6, pricing.CacheReadPricePerTokenPriority, 1e-12, model)
+		requireGrok200kLongContext(t, pricing)
+	}
+
+	grok45, err := svc.GetModelPricing("grok-4.5")
 	require.NoError(t, err)
-	require.InDelta(t, 2e-6, pricing.InputPricePerToken, 1e-12)
-	require.InDelta(t, 6e-6, pricing.OutputPricePerToken, 1e-12)
-	require.InDelta(t, 0.5e-6, pricing.CacheReadPricePerToken, 1e-12)
+	require.InDelta(t, 0.3e-6, grok45.CacheReadPricePerToken, 1e-12)
+}
+
+func TestCalculateCost_Grok46PinsCacheReadOverLiteLLMOfficial30(t *testing.T) {
+	pricingSvc := &PricingService{
+		pricingData: map[string]*LiteLLMModelPricing{
+			"grok-4.5": {
+				InputCostPerToken:       2e-6,
+				OutputCostPerToken:      6e-6,
+				CacheReadInputTokenCost: 0.3e-6,
+			},
+		},
+	}
+	svc := NewBillingService(&config.Config{}, pricingSvc)
+
+	short, err := svc.CalculateCost("grok-4.6", UsageTokens{InputTokens: 423, CacheReadTokens: 20000, OutputTokens: 326}, 0.135)
+	require.NoError(t, err)
+	require.False(t, short.LongContextBillingApplied)
+	require.InDelta(t, 20000*0.5e-6, short.CacheReadCost, 1e-12)
+	require.InDelta(t, (423*2e-6+20000*0.5e-6+326*6e-6)*0.135, short.ActualCost, 1e-12)
+
+	longCost, err := svc.CalculateCost("grok-4.6", UsageTokens{InputTokens: 423, CacheReadTokens: 258048, OutputTokens: 326}, 0.135)
+	require.NoError(t, err)
+	require.True(t, longCost.LongContextBillingApplied)
+	require.InDelta(t, 258048*0.5e-6*2, longCost.CacheReadCost, 1e-12)
+	require.InDelta(t, (423*2e-6*2+258048*0.5e-6*2+326*6e-6*2)*0.135, longCost.ActualCost, 1e-12)
 }
 
 func TestCalculateSearchCost_DefaultAndExplicitFree(t *testing.T) {
@@ -1213,6 +1320,7 @@ func TestGetModelPricing_UnknownGrokTextFallsBackToGrok45(t *testing.T) {
 		require.InDelta(t, baseline.InputPricePerToken, pricing.InputPricePerToken, 1e-12, model)
 		require.InDelta(t, baseline.OutputPricePerToken, pricing.OutputPricePerToken, 1e-12, model)
 		require.InDelta(t, baseline.CacheReadPricePerToken, pricing.CacheReadPricePerToken, 1e-12, model)
+		requireGrok200kLongContext(t, pricing)
 	}
 
 	for _, model := range []string{
@@ -1281,6 +1389,7 @@ func TestGetModelPricing_GrokCatalogFallbacks(t *testing.T) {
 				require.InDelta(t, tt.input, pricing.InputPricePerToken, 1e-12, "model %s input", model)
 				require.InDelta(t, tt.cacheRead, pricing.CacheReadPricePerToken, 1e-12, "model %s cached input", model)
 				require.InDelta(t, tt.output, pricing.OutputPricePerToken, 1e-12, "model %s output", model)
+				requireGrok200kLongContext(t, pricing)
 			}
 		})
 	}
@@ -1706,6 +1815,27 @@ func TestComputeTokenBreakdown_ExplicitZeroImagePrice_NoFallback(t *testing.T) {
 	require.Equal(t, 0.0, bd.ImageOutputCost)
 	// textOutputTokens = 200 - 50 = 150
 	require.InDelta(t, 150*15e-6, bd.OutputCost, 1e-12)
+}
+
+func TestGPT6SolAndLunaFallbackCards(t *testing.T) {
+	svc := newTestBillingService()
+
+	sol, err := svc.CalculateCost("gpt-6-sol", UsageTokens{InputTokens: 100_000, OutputTokens: 1_000_000}, 1)
+	require.NoError(t, err)
+	require.InDelta(t, 0.2, sol.InputCost, 1e-9)
+	require.InDelta(t, 10, sol.OutputCost, 1e-9)
+	require.False(t, sol.LongContextBillingApplied)
+
+	solLong, err := svc.CalculateCost("gpt-6-sol", UsageTokens{InputTokens: 272001, OutputTokens: 1000}, 1)
+	require.NoError(t, err)
+	require.True(t, solLong.LongContextBillingApplied)
+	require.InDelta(t, 272001*2e-6*2, solLong.InputCost, 1e-9)
+	require.InDelta(t, 1000*10e-6*1.5, solLong.OutputCost, 1e-9)
+
+	luna, err := svc.CalculateCost("gpt-6-luna-max", UsageTokens{InputTokens: 100_000, OutputTokens: 1_000_000}, 1)
+	require.NoError(t, err)
+	require.InDelta(t, 0.01, luna.InputCost, 1e-9)
+	require.InDelta(t, 0.5, luna.OutputCost, 1e-9)
 }
 
 func TestComputeTokenBreakdown_NonExplicitZeroImagePrice_FallsBackToOutput(t *testing.T) {

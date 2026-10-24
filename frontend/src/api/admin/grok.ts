@@ -60,6 +60,7 @@ export interface GrokSSOToOAuthRequest {
   name?: string
   notes?: string | null
   proxy_id?: number | null
+  use_relay_route?: boolean
   group_ids?: number[]
   pool_group_id?: number | null
   credentials?: Record<string, unknown>

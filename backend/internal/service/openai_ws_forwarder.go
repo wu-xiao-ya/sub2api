@@ -210,6 +210,9 @@ type OpenAIWSIngressHooks struct {
 	// InitialRequestModel 是首帧渠道映射前的请求模型，只用于 usage metadata
 	// 的 reasoning effort 后缀推导，禁止用于上游请求或计费模型。
 	InitialRequestModel string
+	RequestReceived     func(payload []byte, fallbackModel string, receivedAt time.Time)
+	ClientCancelled     func()
+	PerformanceResult   func(result *OpenAIForwardResult, err error)
 	BeforeTurn          func(turn int) error
 	BeforeRequest       func(turn int, payload []byte, originalModel string) error
 	AfterTurn           func(turn int, result *OpenAIForwardResult, turnErr error)

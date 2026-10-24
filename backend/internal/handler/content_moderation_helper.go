@@ -23,6 +23,16 @@ func contentModerationErrorCode(decision *service.ContentModerationDecision) str
 	return "content_policy_violation"
 }
 
+// clientRequestedModel 返回计费归属的客户端请求模型名。本地没有 composite 路由的
+// 公共模型覆盖层，公共模型恒等于请求里的 model。
+func clientRequestedModel(c *gin.Context, fallback string) string {
+	return strings.TrimSpace(fallback)
+}
+
+func clientRequestedUsageFields(c *gin.Context, mapping service.ChannelMappingResult, fallbackModel, upstreamModel string) service.ChannelUsageFields {
+	return mapping.ToUsageFields(clientRequestedModel(c, fallbackModel), upstreamModel)
+}
+
 func runContentModeration(c *gin.Context, reqLog *zap.Logger, svc *service.ContentModerationService, apiKey *service.APIKey, subject middleware2.AuthSubject, protocol string, model string, body []byte) *service.ContentModerationDecision {
 	if svc == nil || c == nil || c.Request == nil {
 		return nil

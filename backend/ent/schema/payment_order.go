@@ -50,6 +50,10 @@ func (PaymentOrder) Fields() []ent.Field {
 		field.Float("fee_rate").
 			SchemaType(map[string]string{dialect.Postgres: "decimal(10,4)"}).
 			Default(0),
+		// 充值赠金/折扣：BonusAmount 记录按实付金额命中阶梯后赠送（或折扣折算）的额度，不包含在 Amount 内的实充部分之外重复计算。
+		field.Float("bonus_amount").
+			SchemaType(map[string]string{dialect.Postgres: "decimal(20,2)"}).
+			Default(0),
 		field.String("recharge_code").
 			MaxLen(64),
 

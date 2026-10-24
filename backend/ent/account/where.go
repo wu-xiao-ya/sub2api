@@ -100,6 +100,11 @@ func ProxyFallbackOriginID(v int64) predicate.Account {
 	return predicate.Account(sql.FieldEQ(FieldProxyFallbackOriginID, v))
 }
 
+// UseRelayRoute applies equality check predicate on the "use_relay_route" field. It's identical to UseRelayRouteEQ.
+func UseRelayRoute(v bool) predicate.Account {
+	return predicate.Account(sql.FieldEQ(FieldUseRelayRoute, v))
+}
+
 // Concurrency applies equality check predicate on the "concurrency" field. It's identical to ConcurrencyEQ.
 func Concurrency(v int) predicate.Account {
 	return predicate.Account(sql.FieldEQ(FieldConcurrency, v))
@@ -698,6 +703,16 @@ func ProxyFallbackOriginIDIsNil() predicate.Account {
 // ProxyFallbackOriginIDNotNil applies the NotNil predicate on the "proxy_fallback_origin_id" field.
 func ProxyFallbackOriginIDNotNil() predicate.Account {
 	return predicate.Account(sql.FieldNotNull(FieldProxyFallbackOriginID))
+}
+
+// UseRelayRouteEQ applies the EQ predicate on the "use_relay_route" field.
+func UseRelayRouteEQ(v bool) predicate.Account {
+	return predicate.Account(sql.FieldEQ(FieldUseRelayRoute, v))
+}
+
+// UseRelayRouteNEQ applies the NEQ predicate on the "use_relay_route" field.
+func UseRelayRouteNEQ(v bool) predicate.Account {
+	return predicate.Account(sql.FieldNEQ(FieldUseRelayRoute, v))
 }
 
 // ConcurrencyEQ applies the EQ predicate on the "concurrency" field.

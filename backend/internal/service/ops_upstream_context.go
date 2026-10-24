@@ -51,6 +51,14 @@ const (
 	OpsClientBusinessLimitedReasonAPIKeyGroupUnassigned  = "api_key_group_unassigned"
 	OpsClientBusinessLimitedReasonLocalFeatureGate       = "local_feature_gate"
 	OpsClientBusinessLimitedReasonLocalPolicyDenied      = "local_policy_denied"
+
+	// OpsLocalErrorTypeKey / OpsLocalErrorCodeKey 记录网关以 Google 错误格式回写的错误类型与错误码：
+	// Google 错误体没有 type 字段，ops_error_logger 据此按与 Claude / OpenAI 格式错误相同的口径分类。
+	OpsLocalErrorTypeKey = "ops_local_error_type"
+	OpsLocalErrorCodeKey = "ops_local_error_code"
+	// OpsRequestScopedErrorKey 标记失败由请求内容决定（如引用的显式缓存不存在）：只按错误类型分类，
+	// 上游错误上下文保留为明细但不参与归因。
+	OpsRequestScopedErrorKey = "ops_request_scoped_error"
 )
 
 func MarkResponseCommitted(c *gin.Context) { c.Set(ResponseCommittedKey, true) }
@@ -91,6 +99,42 @@ func HasOpsClientBusinessLimited(c *gin.Context) bool {
 	}
 	marked, _ := v.(bool)
 	return marked
+}
+
+// SetOpsLocalErrorType 登记响应错误体缺少的错误类型与错误码，并清除请求级失败标记；errType 为空表示不登记。
+func SetOpsLocalErrorType(c *gin.Context, errType, code string) {
+	if c == nil {
+		return
+	}
+	c.Set(OpsLocalErrorTypeKey, strings.TrimSpace(errType))
+	c.Set(OpsLocalErrorCodeKey, strings.TrimSpace(code))
+	c.Set(OpsRequestScopedErrorKey, false)
+}
+
+// OpsLocalErrorType 返回 SetOpsLocalErrorType 登记的错误类型与错误码；未登记时返回空串。
+func OpsLocalErrorType(c *gin.Context) (errType, code string) {
+	if c == nil {
+		return "", ""
+	}
+	errType = c.GetString(OpsLocalErrorTypeKey)
+	if errType == "" {
+		return "", ""
+	}
+	return errType, c.GetString(OpsLocalErrorCodeKey)
+}
+
+// MarkOpsRequestScopedError 登记错误类型，并标记失败由请求内容决定：上游错误上下文不参与 ops 归因。
+func MarkOpsRequestScopedError(c *gin.Context, errType string) {
+	if c == nil {
+		return
+	}
+	SetOpsLocalErrorType(c, errType, "")
+	c.Set(OpsRequestScopedErrorKey, true)
+}
+
+// IsOpsRequestScopedError 判断 MarkOpsRequestScopedError 是否标记了本次请求的失败。
+func IsOpsRequestScopedError(c *gin.Context) bool {
+	return c != nil && c.GetBool(OpsRequestScopedErrorKey)
 }
 
 // OpsStreamError 描述网关在「响应状态已固化为 200」之后（keepalive ping 或部分数据

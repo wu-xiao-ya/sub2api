@@ -49,7 +49,8 @@ func (f *AntigravityQuotaFetcher) FetchQuota(ctx context.Context, account *Accou
 	accessToken := account.GetCredential("access_token")
 	projectID := account.GetCredential("project_id")
 
-	client, err := antigravity.NewClient(proxyURL)
+	ctx = withAccountOperationRoute(ctx, account, proxyURL)
+	client, err := newAccountAntigravityClient(ctx, proxyURL)
 	if err != nil {
 		return nil, fmt.Errorf("create antigravity client failed: %w", err)
 	}

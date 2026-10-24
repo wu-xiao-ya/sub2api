@@ -1,6 +1,6 @@
 <template>
   <AppLayout>
-    <div class="space-y-4 pb-12">
+    <div class="console-page space-y-4 pb-8">
       <nav
         class="flex flex-wrap items-center gap-3 border-b border-gray-100 pb-3 dark:border-dark-700"
         role="tablist"

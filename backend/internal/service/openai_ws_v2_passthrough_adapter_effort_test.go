@@ -19,6 +19,17 @@ func TestWSPassthroughUsageMeta_InitFromFirstFrame_MappedModelCandidate(t *testi
 	require.Equal(t, "max", *got, "mapped model gpt-5.6-sol should preserve max")
 }
 
+func TestWSPassthroughUsageMeta_InitFromFirstFrame_AstraPreservesMax(t *testing.T) {
+	body := []byte(`{"type":"response.create","model":"gpt-6-astra","reasoning":{"effort":"max"}}`)
+
+	meta := newOpenAIWSPassthroughUsageMeta("gpt-6-astra", body)
+	meta.initFromFirstFrame(body, "gpt-6-astra")
+
+	got := meta.reasoningEffort.Load()
+	require.NotNil(t, got)
+	require.Equal(t, "max", *got)
+}
+
 func TestWSPassthroughUsageMeta_InitFromFirstFrame_NonGPT56FallsBackToXHigh(t *testing.T) {
 	body := []byte(`{"type":"response.create","model":"gpt-5.4","reasoning":{"effort":"max"}}`)
 

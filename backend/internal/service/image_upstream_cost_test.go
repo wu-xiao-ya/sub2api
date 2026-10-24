@@ -63,10 +63,12 @@ func TestImageUpstreamCostPerImage_DefaultAndRoundTrip(t *testing.T) {
 	require.Equal(t, "0.00025", repo.values[SettingKeyImageUpstreamCostPerImage])
 	require.InDelta(t, 0.00025, svc.GetImageUpstreamCostPerImage(context.Background()), 1e-12)
 	require.Equal(t, &ImageUpstreamCostSettings{
-		CostPerImage:     0.00025,
-		AccountOverrides: []ImageUpstreamCostAccountOverride{},
-		BillingMode:      string(BillingModeImage),
-		Unit:             "USD/image",
+		CostPerImage:          0.00025,
+		AccountOverrides:      []ImageUpstreamCostAccountOverride{},
+		ModelOverrides:        []ImageUpstreamCostModelOverride{},
+		AccountModelOverrides: []ImageUpstreamCostAccountModelOverride{},
+		BillingMode:           string(BillingModeImage),
+		Unit:                  "USD/image",
 	}, svc.GetImageUpstreamCostSettings(context.Background()))
 }
 
@@ -88,7 +90,7 @@ func TestImageUpstreamCostAccountOverridesRoundTrip(t *testing.T) {
 		{AccountID: 68, CostPerImage: 0.1},
 	}
 
-	require.NoError(t, svc.UpdateImageUpstreamCostSettings(context.Background(), nil, &overrides))
+	require.NoError(t, svc.UpdateImageUpstreamCostSettings(context.Background(), nil, &overrides, nil, nil, nil))
 	require.JSONEq(t, `{"68":0.1,"69":0.01}`, repo.values[SettingKeyImageUpstreamCostByAccount])
 	require.Equal(t, []ImageUpstreamCostAccountOverride{
 		{AccountID: 68, CostPerImage: 0.1},
@@ -104,8 +106,8 @@ func TestImageUpstreamCostAccountOverridesRejectInvalidValues(t *testing.T) {
 		{AccountID: 68, CostPerImage: 0.1},
 		{AccountID: 68, CostPerImage: 0.01},
 	}
-	require.Error(t, svc.UpdateImageUpstreamCostSettings(context.Background(), nil, &duplicate))
+	require.Error(t, svc.UpdateImageUpstreamCostSettings(context.Background(), nil, &duplicate, nil, nil, nil))
 
 	invalid := []ImageUpstreamCostAccountOverride{{AccountID: 0, CostPerImage: 0.1}}
-	require.Error(t, svc.UpdateImageUpstreamCostSettings(context.Background(), nil, &invalid))
+	require.Error(t, svc.UpdateImageUpstreamCostSettings(context.Background(), nil, &invalid, nil, nil, nil))
 }

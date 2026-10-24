@@ -838,7 +838,8 @@ func (p *openAIWSConnPool) acquire(ctx context.Context, req openAIWSAcquireReque
 
 retryAcquire:
 	accountID := req.Account.ID
-	betaFeatures := normalizeOpenAIWSBetaFeatures(req.Headers)
+	req.ProxyURL = resolveRequestedAccountOutbound(ctx, req.Account, req.ProxyURL).ProxyURL
+	betaFeatures := accountWSCompatibilityKey(req.Account, req.Headers, req.ProxyURL)
 	effectiveMaxConns := p.effectiveMaxConnsByAccount(req.Account)
 	if effectiveMaxConns <= 0 {
 		return nil, errOpenAIWSConnQueueFull
@@ -1653,7 +1654,7 @@ func (p *openAIWSConnPool) dialConn(ctx context.Context, req openAIWSAcquireRequ
 			return nil, err
 		}
 	}
-	conn, status, handshakeHeaders, err := p.clientDialer.Dial(ctx, req.WSURL, headers, req.ProxyURL)
+	conn, status, handshakeHeaders, usedProxy, err := dialAccountWebSocket(ctx, p.clientDialer, req.Account, req.WSURL, headers, req.ProxyURL)
 	if err != nil {
 		var handshakeErr *openAIWSHandshakeError
 		var responseBody []byte
@@ -1676,7 +1677,7 @@ func (p *openAIWSConnPool) dialConn(ctx context.Context, req openAIWSAcquireRequ
 	}
 	id := p.nextConnID(req.Account.ID)
 	pooledConn := newOpenAIWSConn(id, req.Account.ID, conn, handshakeHeaders)
-	pooledConn.betaFeatures = normalizeOpenAIWSBetaFeatures(req.Headers)
+	pooledConn.betaFeatures = accountWSCompatibilityKey(req.Account, req.Headers, usedProxy)
 	return pooledConn, nil
 }
 

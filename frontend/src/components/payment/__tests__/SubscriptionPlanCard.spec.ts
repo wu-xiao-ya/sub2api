@@ -23,6 +23,10 @@ function mountPlanCard(overrides: Partial<SubscriptionPlan> = {}) {
         name: 'Pro plan', description: '', price: 10, currency: '', features: [], validity_days: 30,
         validity_unit: 'day', for_sale: true, sort_order: 0, concurrency_entitlement: 4,
         lifetime_quota_usd: 100, daily_quota_usd: 10, weekly_quota_usd: 50, monthly_quota_usd: 100,
+        groups: [
+          { id: 10, name: 'GPT Line', platform: 'openai' },
+          { id: 11, name: 'Claude Line', platform: 'anthropic' },
+        ],
         ...overrides,
       },
     },
@@ -34,13 +38,15 @@ describe('SubscriptionPlanCard', () => {
     const text = mountPlanCard().text()
     expect(text).toContain('Pro')
     expect(text).toContain('Included groups2')
+    expect(text).toContain('GPT Line')
+    expect(text).toContain('Claude Line')
     expect(text).toContain('Concurrency4')
     expect(text).toContain('Lifetime$100.00')
     expect(text).toContain('Daily$10.00')
   })
 
   it('falls back to the compatibility primary group when group_ids is missing', () => {
-    expect(mountPlanCard({ group_ids: undefined }).text()).toContain('Included groups1')
+    expect(mountPlanCard({ group_ids: undefined, groups: undefined }).text()).toContain('Included groups1')
   })
 
   it('uses the configured currency symbol while preserving USD defaults', () => {

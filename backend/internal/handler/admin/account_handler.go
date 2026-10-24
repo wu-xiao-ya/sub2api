@@ -63,11 +63,17 @@ type AccountHandler struct {
 	tokenCacheInvalidator   service.TokenCacheInvalidator
 	grokImportProber        grokImportProber
 	upstreamBillingProbe    *service.UpstreamBillingProbeService
+	upstreamRatioSync       *service.UpstreamRatioSyncService
 }
 
 // SetUpstreamBillingProbeService attaches the optional remote billing probe service.
 func (h *AccountHandler) SetUpstreamBillingProbeService(probe *service.UpstreamBillingProbeService) {
 	h.upstreamBillingProbe = probe
+}
+
+// SetUpstreamRatioSyncService attaches the optional new-api ratio sync service.
+func (h *AccountHandler) SetUpstreamRatioSyncService(sync *service.UpstreamRatioSyncService) {
+	h.upstreamRatioSync = sync
 }
 
 // NewAccountHandler creates a new admin account handler
@@ -122,6 +128,7 @@ type CreateAccountRequest struct {
 	GroupIDs                []int64        `json:"group_ids"`
 	ExpiresAt               *int64         `json:"expires_at"`
 	AutoPauseOnExpired      *bool          `json:"auto_pause_on_expired"`
+	UseRelayRoute           *bool          `json:"use_relay_route"`
 	ProbeEnabled            *bool          `json:"upstream_billing_probe_enabled"`
 	ConfirmMixedChannelRisk *bool          `json:"confirm_mixed_channel_risk"` // 用户确认混合渠道风险
 }
@@ -144,6 +151,7 @@ type UpdateAccountRequest struct {
 	GroupIDs                *[]int64       `json:"group_ids"`
 	ExpiresAt               *int64         `json:"expires_at"`
 	AutoPauseOnExpired      *bool          `json:"auto_pause_on_expired"`
+	UseRelayRoute           *bool          `json:"use_relay_route"`
 	ConfirmMixedChannelRisk *bool          `json:"confirm_mixed_channel_risk"` // 用户确认混合渠道风险
 }
 
@@ -160,6 +168,7 @@ type BulkUpdateAccountsRequest struct {
 	LoadFactor              *int                      `json:"load_factor"`
 	Status                  string                    `json:"status" binding:"omitempty,oneof=active inactive error"`
 	Schedulable             *bool                     `json:"schedulable"`
+	UseRelayRoute           *bool                     `json:"use_relay_route"`
 	GroupIDs                *[]int64                  `json:"group_ids"`
 	Credentials             map[string]any            `json:"credentials"`
 	Extra                   map[string]any            `json:"extra"`
@@ -958,6 +967,7 @@ func (h *AccountHandler) Create(c *gin.Context) {
 			GroupIDs:              req.GroupIDs,
 			ExpiresAt:             req.ExpiresAt,
 			AutoPauseOnExpired:    req.AutoPauseOnExpired,
+			UseRelayRoute:         req.UseRelayRoute,
 			ProbeEnabled:          req.ProbeEnabled,
 			SkipMixedChannelCheck: skipCheck,
 		})
@@ -1087,6 +1097,7 @@ func (h *AccountHandler) Update(c *gin.Context) {
 		GroupIDs:              req.GroupIDs,
 		ExpiresAt:             req.ExpiresAt,
 		AutoPauseOnExpired:    req.AutoPauseOnExpired,
+		UseRelayRoute:         req.UseRelayRoute,
 		SkipMixedChannelCheck: skipCheck,
 	})
 	if err != nil {
@@ -1874,6 +1885,7 @@ func (h *AccountHandler) BatchCreate(c *gin.Context) {
 				GroupIDs:              item.GroupIDs,
 				ExpiresAt:             item.ExpiresAt,
 				AutoPauseOnExpired:    item.AutoPauseOnExpired,
+				UseRelayRoute:         item.UseRelayRoute,
 				SkipMixedChannelCheck: skipCheck,
 			})
 			if err != nil {
@@ -2064,6 +2076,7 @@ func (h *AccountHandler) BulkUpdate(c *gin.Context) {
 		req.PoolGroupID != nil ||
 		req.Status != "" ||
 		req.Schedulable != nil ||
+		req.UseRelayRoute != nil ||
 		req.GroupIDs != nil ||
 		len(req.Credentials) > 0 ||
 		len(req.Extra) > 0 ||
@@ -2086,6 +2099,7 @@ func (h *AccountHandler) BulkUpdate(c *gin.Context) {
 		LoadFactor:            req.LoadFactor,
 		Status:                req.Status,
 		Schedulable:           req.Schedulable,
+		UseRelayRoute:         req.UseRelayRoute,
 		GroupIDs:              req.GroupIDs,
 		Credentials:           req.Credentials,
 		Extra:                 req.Extra,

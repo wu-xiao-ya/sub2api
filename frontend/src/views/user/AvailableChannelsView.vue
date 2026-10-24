@@ -1,6 +1,6 @@
 <template>
   <AppLayout>
-    <div class="mx-auto flex w-full max-w-[1800px] flex-col gap-5">
+    <div class="console-page flex flex-col gap-5">
       <section class="flex flex-col gap-1">
         <h1 class="text-xl font-semibold text-gray-900 dark:text-white">{{ t('availableChannels.title') }}</h1>
         <p class="text-sm text-gray-500 dark:text-dark-400">{{ t('availableChannels.description') }}</p>
@@ -79,9 +79,9 @@
         </div>
       </section>
 
-      <div class="grid items-start gap-5 xl:grid-cols-[15.5rem_minmax(0,1fr)]">
-        <aside class="xl:sticky xl:top-6">
-          <div class="rounded-lg border border-gray-200 bg-white p-4 dark:border-dark-700 dark:bg-dark-800">
+      <div class="grid items-start gap-6 xl:grid-cols-[13rem_minmax(0,1fr)]">
+        <aside class="min-w-0 xl:sticky xl:top-20">
+          <div class="border-b border-gray-200 pb-4 dark:border-dark-700 xl:border-b-0 xl:border-r xl:pr-5">
             <div class="flex items-center justify-between gap-3">
               <span class="text-sm font-semibold text-gray-900 dark:text-white">
                 {{ t('availableChannels.filtersTitle') }}
@@ -97,7 +97,7 @@
             </div>
 
             <section class="mt-5">
-              <h2 class="text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-dark-500">
+              <h2 class="text-xs font-medium text-gray-400 dark:text-dark-500">
                 {{ t('availableChannels.providersTitle') }}
               </h2>
               <div class="mt-2 space-y-1">
@@ -120,7 +120,7 @@
             </section>
 
             <section v-if="groupOptions.length > 0" class="mt-5 border-t border-gray-100 pt-5 dark:border-dark-700">
-              <h2 class="text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-dark-500">
+              <h2 class="text-xs font-medium text-gray-400 dark:text-dark-500">
                 {{ t('availableChannels.groupsFilterTitle') }}
               </h2>
               <div class="mt-2 max-h-72 space-y-1 overflow-y-auto pr-1">
@@ -142,7 +142,7 @@
             </section>
 
             <section v-if="billingOptions.length > 0" class="mt-5 border-t border-gray-100 pt-5 dark:border-dark-700">
-              <h2 class="text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-dark-500">
+              <h2 class="text-xs font-medium text-gray-400 dark:text-dark-500">
                 {{ t('availableChannels.billingFilterTitle') }}
               </h2>
               <div class="mt-2 space-y-1">
@@ -182,7 +182,20 @@
             </span>
           </div>
 
+          <div class="mb-3 flex flex-wrap items-center justify-between gap-2 text-xs text-gray-500 dark:text-dark-400">
+            <span>{{ t('availableChannels.performance.updated') }}: {{ performanceData?.updated_at ? new Date(performanceData.updated_at).toLocaleString() : '\u2014' }}</span>
+            <label class="flex items-center gap-2">{{ t('availableChannels.performance.refresh') }}
+              <select v-model.number="performanceSeconds" class="input !h-8 w-28 !py-1">
+                <option :value="0">{{ t('availableChannels.performance.off') }}</option>
+                <option v-for="seconds in [5, 15, 30, 60]" :key="seconds" :value="seconds">{{ seconds }} s</option>
+              </select>
+            </label>
+          </div>
+          <p v-if="performanceData?.incomplete_since" class="mb-3 text-xs text-amber-700 dark:text-amber-400">{{ t('availableChannels.performance.partial') }}</p>
           <ModelPlazaGrid
+            :performance="performanceByKey"
+            :performance-error="performanceError"
+            @performance="selectedPerformance = $event"
             :items="filteredItems"
             :loading="loading"
             :empty-label="emptyLabel"
@@ -193,6 +206,7 @@
         </section>
       </div>
     </div>
+    <PerformancePanel v-if="selectedPerformance" :key="selectedPerformance.key" :item="selectedPerformance" @close="selectedPerformance = null" />
   </AppLayout>
 </template>
 
@@ -204,6 +218,10 @@ import Icon from '@/components/icons/Icon.vue'
 import PlatformIcon from '@/components/common/PlatformIcon.vue'
 import Select, { type SelectOption } from '@/components/common/Select.vue'
 import ModelPlazaGrid from '@/components/channels/ModelPlazaGrid.vue'
+import PerformancePanel from '@/components/channels/PerformancePanel.vue'
+import { useChannelPerformance } from '@/composables/useChannelPerformance'
+import type { PerformanceFilter } from '@/api/channelPerformance'
+import type { ModelPlazaItem } from '@/components/channels/modelPlaza'
 import userChannelsAPI, { type UserAvailableChannel } from '@/api/channels'
 import userGroupsAPI from '@/api/groups'
 import { useAppStore } from '@/stores/app'
@@ -227,6 +245,12 @@ const tokenScale = ref<1_000 | 1_000_000>(1_000_000)
 const sortMode = ref('default')
 
 const modelItems = computed(() => buildModelPlazaItems(channels.value))
+const selectedPerformance = ref<ModelPlazaItem | null>(null)
+const performanceSeconds = ref(30)
+const performanceFilters = computed<PerformanceFilter>(() => ({ range: '24h' }))
+const performanceEnabled = computed(() => modelItems.value.length > 0 && !selectedPerformance.value)
+const { data: performanceData, error: performanceError } = useChannelPerformance(performanceFilters, performanceEnabled, performanceSeconds)
+const performanceByKey = computed(() => Object.fromEntries((performanceData.value?.items ?? []).map(item => [item.key, item])))
 
 const platformOptions = computed(() => {
   const counts = new Map<string, number>()

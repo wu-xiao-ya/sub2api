@@ -53,6 +53,8 @@ const (
 	// PlatformKiro is retained for unsupported-platform threshold tests and legacy
 	// account rows. Scheduling-threshold evaluation never pauses kiro accounts.
 	PlatformKiro = "kiro"
+	// PlatformComposite 是只做模型别名路由的复合分组平台标识；其计费按实际转发的具体模型解析。
+	PlatformComposite = "composite"
 )
 
 // IsOpenAICompatiblePlatform reports whether a platform uses the OpenAI
@@ -306,22 +308,25 @@ const (
 	SettingKeyGoogleOAuthFrontendRedirectURL = "google_oauth_frontend_redirect_url"
 
 	// OEM设置
-	SettingKeySiteName                         = "site_name"              // 网站名称
-	SettingKeySiteLogo                         = "site_logo"              // 网站Logo (base64)
-	SettingKeySiteSubtitle                     = "site_subtitle"          // 网站副标题
-	SettingKeyAPIBaseURL                       = "api_base_url"           // API端点地址（用于客户端配置和导入）
-	SettingKeyContactInfo                      = "contact_info"           // 客服联系方式
-	SettingKeyDocURL                           = "doc_url"                // 文档链接
-	SettingKeyHomeContent                      = "home_content"           // 首页内容（支持 Markdown/HTML，或 URL 作为 iframe src）
-	SettingKeyHideCcsImportButton              = "hide_ccs_import_button" // 是否隐藏 API Keys 页面的导入 CCS 按钮
-	SettingKeyAPIEndpointProbeInterval         = "api_endpoint_probe_interval_seconds"
-	SettingKeyPurchaseSubscriptionEnabled      = "purchase_subscription_enabled" // 是否展示"购买订阅"页面入口
-	SettingKeyPurchaseSubscriptionURL          = "purchase_subscription_url"     // "购买订阅"页面 URL（作为 iframe src）
-	SettingKeyTableDefaultPageSize             = "table_default_page_size"       // 表格默认每页条数
-	SettingKeyTablePageSizeOptions             = "table_page_size_options"       // 表格可选每页条数（JSON 数组）
-	SettingKeyCustomMenuItems                  = "custom_menu_items"             // 自定义菜单项（JSON 数组）
-	SettingKeyCustomEndpoints                  = "custom_endpoints"              // 自定义端点列表（JSON 数组）
-	SettingKeyMainlandAccessRestrictionEnabled = "mainland_access_restriction_enabled"
+	SettingKeySiteName                          = "site_name"              // 网站名称
+	SettingKeySiteLogo                          = "site_logo"              // 网站Logo (base64)
+	SettingKeySiteSubtitle                      = "site_subtitle"          // 网站副标题
+	SettingKeyAPIBaseURL                        = "api_base_url"           // API端点地址（用于客户端配置和导入）
+	SettingKeyContactInfo                       = "contact_info"           // 客服联系方式
+	SettingKeyDocURL                            = "doc_url"                // 文档链接
+	SettingKeyHomeContent                       = "home_content"           // 首页内容（支持 Markdown/HTML，或 URL 作为 iframe src）
+	SettingKeyHideCcsImportButton               = "hide_ccs_import_button" // 是否隐藏 API Keys 页面的导入 CCS 按钮
+	SettingKeyAPIEndpointProbeInterval          = "api_endpoint_probe_interval_seconds"
+	SettingKeyPurchaseSubscriptionEnabled       = "purchase_subscription_enabled" // 是否展示"购买订阅"页面入口
+	SettingKeyPurchaseSubscriptionURL           = "purchase_subscription_url"     // "购买订阅"页面 URL（作为 iframe src）
+	SettingKeyTableDefaultPageSize              = "table_default_page_size"       // 表格默认每页条数
+	SettingKeyTablePageSizeOptions              = "table_page_size_options"       // 表格可选每页条数（JSON 数组）
+	SettingKeyCustomMenuItems                   = "custom_menu_items"             // 自定义菜单项（JSON 数组）
+	SettingKeyCustomEndpoints                   = "custom_endpoints"              // 自定义端点列表（JSON 数组）
+	SettingKeyMainlandAccessRestrictionEnabled  = "mainland_access_restriction_enabled"
+	SettingKeyTrafficRelayEnabled               = "traffic_relay_enabled"
+	SettingKeyTrafficRelayProxyID               = "traffic_relay_proxy_id"
+	SettingKeyTrafficRelayUnavailableTTLSeconds = "traffic_relay_unavailable_ttl_seconds"
 
 	// 默认配置
 	SettingKeyDefaultConcurrency   = "default_concurrency"    // 新用户默认并发量
@@ -420,9 +425,8 @@ const (
 	// When false: runner skips scheduling and user-facing endpoints return an empty list.
 	SettingKeyChannelMonitorEnabled = "channel_monitor_enabled"
 
-	// SettingKeyChannelMonitorMode controls which user-facing monitor view is
-	// preferred. The hybrid implementation keeps active probes running in both
-	// modes while V2 adds passive real-request aggregation.
+	// SettingKeyChannelMonitorMode selects the exclusive monitor implementation:
+	// v1 uses active probes, while v2 aggregates real gateway traffic only.
 	SettingKeyChannelMonitorMode = "channel_monitor_mode"
 
 	ChannelMonitorModeV1 = "v1"
@@ -466,6 +470,10 @@ const (
 	// for probing remote Sub2API API-key billing metadata.
 	SettingKeyUpstreamBillingProbeSettings = "upstream_billing_probe_settings"
 
+	// SettingKeyUpstreamRatioSyncSettings stores the global enable switch, interval and
+	// quota-per-unit conversion for syncing per-model ratios from new-api style upstreams.
+	SettingKeyUpstreamRatioSyncSettings = "upstream_ratio_sync_settings"
+
 	// SettingKeyImageUpstreamCostPerImage stores the configurable upstream cost
 	// used by cost/profit reporting for one generated image.
 	SettingKeyImageUpstreamCostPerImage = "image_upstream_cost_per_image"
@@ -473,6 +481,24 @@ const (
 	// SettingKeyImageUpstreamCostByAccount stores account-specific image
 	// upstream-cost overrides as a JSON object keyed by account ID.
 	SettingKeyImageUpstreamCostByAccount = "image_upstream_cost_by_account"
+
+	// SettingKeyImageUpstreamCostByModel stores per-model image upstream cost as
+	// a JSON object keyed by model then billing tier, e.g.
+	// {"gpt-image-2":{"1K":0.08,"2K":0.12,"4K":0.24}}. It ranks between the
+	// account-level override and the global default.
+	SettingKeyImageUpstreamCostByModel = "image_upstream_cost_by_model"
+
+	// SettingKeyImageUpstreamCostByAccountModel stores account-and-model image
+	// upstream cost as a JSON object keyed by account ID, then model, then tier,
+	// e.g. {"228":{"gpt-image-2":{"2K":0.10}}}. It has the highest priority.
+	SettingKeyImageUpstreamCostByAccountModel = "image_upstream_cost_by_account_model"
+
+	// SettingKeyImageCostIgnoreUpstreamRateSnapshot controls whether the
+	// absolute per-image upstream cost is still multiplied by the upstream
+	// billing rate snapshot. Image cost is denominated in USD per image, so a
+	// token-oriented rate multiplier has no meaning there. "true" ignores the
+	// snapshot; any other value keeps the historical behavior.
+	SettingKeyImageCostIgnoreUpstreamRateSnapshot = "image_cost_ignore_upstream_rate_snapshot"
 
 	// =========================
 	// Overload Cooldown (529)

@@ -1,0 +1,116 @@
+name: Console Visual Candidate
+
+on:
+  push:
+    branches: [codex/upstream-v020-selective]
+    paths:
+      - 'frontend/**'
+      - 'backend/**'
+      - '.github/workflows/channel-performance-validation.yml'
+      - '.github/workflows/console-candidate.yml'
+      - '.github/scripts/console-candidate-smoke.sh'
+      - '.github/scripts/performance-*.mjs'
+  workflow_dispatch:
+    inputs:
+      verified_commit:
+        description: 'Optional verified image commit for test-only iterations; app source must match. No new image is published.'
+        type: string
+        required: false
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: console-candidate-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  traffic-relay-validation:
+    uses: ./.github/workflows/traffic-relay-validation.yml
+  performance-validation:
+    if: ${{ !inputs.verified_commit }}
+    uses: ./.github/workflows/channel-performance-validation.yml
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: pnpm/action-setup@v4
+        with:
+          version: '11'
+          run_install: false
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run typecheck
+      - run: pnpm exec vitest run src/components/account/__tests__ src/components/common/__tests__/Toggle.spec.ts --maxWorkers=2 --minWorkers=1
+      - run: pnpm exec vitest run src/utils/__tests__/brandRegistry.spec.ts src/components/user/dashboard/__tests__ src/views/user/__tests__ src/components/layout/__tests__ src/components/channels/__tests__ src/features/channel-monitor-v2/__tests__ src/components/common/__tests__/BaseDialog.spec.ts src/components/common/__tests__/PlatformTypeBadge.grok.spec.ts src/views/admin/__tests__/ChannelMonitorView.grok.spec.ts --maxWorkers=2 --minWorkers=1
+  image:
+    needs: [frontend, performance-validation, traffic-relay-validation]
+    if: ${{ !cancelled() && needs.frontend.result == 'success' && needs['traffic-relay-validation'].result == 'success' && (needs['performance-validation'].result == 'success' || (inputs.verified_commit != '' && needs['performance-validation'].result == 'skipped')) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install isolated browser test runtime
+        run: |
+          npm install --prefix "$RUNNER_TEMP/performance-browser" --no-save --package-lock=false --ignore-scripts playwright@1.62.1
+          node "$RUNNER_TEMP/performance-browser/node_modules/playwright/cli.js" install --with-deps chromium
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build isolated candidate
+        if: ${{ !inputs.verified_commit }}
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64
+          load: true
+          push: false
+          tags: sub2api-console-candidate:local
+          build-args: |
+            VERSION=0.1.162-console-candidate
+            COMMIT=${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Reuse identical verified application for test-only iteration
+        if: ${{ inputs.verified_commit != '' }}
+        env:
+          VERIFIED_COMMIT: ${{ inputs.verified_commit }}
+        run: |
+          [[ "$VERIFIED_COMMIT" =~ ^[0-9a-f]{40}$ ]] || exit 1
+          git fetch --depth=1 origin "$VERIFIED_COMMIT"
+          git diff --exit-code "$VERIFIED_COMMIT" HEAD -- backend frontend Dockerfile .dockerignore
+          image="ghcr.io/${{ github.repository_owner }}/sub2api:console-$VERIFIED_COMMIT"
+          docker pull "$image"
+          docker tag "$image" sub2api-console-candidate:local
+          printf 'Test-only run reuses verified application `%s`; no new image will be published.\n' "$image" >> "$GITHUB_STEP_SUMMARY"
+      - name: Verify database startup and embedded UI through both entry paths
+        env:
+          PLAYWRIGHT_PACKAGE_JSON: ${{ runner.temp }}/performance-browser/package.json
+        run: bash .github/scripts/console-candidate-smoke.sh
+      - name: Publish verified candidate only
+        if: ${{ !inputs.verified_commit }}
+        env:
+          CANDIDATE: ghcr.io/${{ github.repository_owner }}/sub2api:console-${{ github.sha }}
+        run: |
+          docker tag sub2api-console-candidate:local "$CANDIDATE"
+          docker push "$CANDIDATE"
+          printf 'Verified candidate: `%s`\nProduction was not deployed.\n' "$CANDIDATE" >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload smoke evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: console-candidate-smoke
+          path: /tmp/console-candidate-smoke/

@@ -219,14 +219,14 @@ func normalizeOpenAICodexCompactReasoningEffortForAccount(c *gin.Context, accoun
 }
 
 func normalizeOpenAICodexCompactReasoningEffort(body []byte, effectiveModel string) ([]byte, bool, error) {
-	if !isOpenAIGPT56Model(effectiveModel) ||
+	if (!isOpenAIGPT56Model(effectiveModel) && !isOpenAIGPT61SolModel(effectiveModel)) ||
 		!strings.EqualFold(strings.TrimSpace(gjson.GetBytes(body, "reasoning.effort").String()), "max") {
 		return body, false, nil
 	}
 
 	// Codex Ultra 在客户端编排层会下发 max；ChatGPT compact 端点目前只接受到
-	// xhigh。这里只降级 OpenAI OAuth 的 GPT-5.6 compact 子请求，普通 Responses、
-	// API Key 请求和其他平台的 OAuth 请求保留 max。
+	// xhigh。这里只降级 OpenAI OAuth 的 GPT-5.6 / GPT-6.1 Sol compact 子请求，
+	// 普通 Responses、API Key 请求和其他平台的 OAuth 请求保留 max。
 	normalized, err := sjson.SetBytes(body, "reasoning.effort", "xhigh")
 	if err != nil {
 		return body, false, fmt.Errorf("normalize codex compact reasoning effort: %w", err)
@@ -805,6 +805,14 @@ func openAIFastPolicyUserMatches(ruleUserIDs []int64, userID int64) bool {
 	return false
 }
 
+func openAIGroupForcesFast(ctx context.Context, account *Account) bool {
+	if ctx == nil || account == nil || account.Platform != PlatformOpenAI {
+		return false
+	}
+	group, _ := ctx.Value(ctxkey.Group).(*Group)
+	return IsGroupContextValid(group) && groupSupportsOpenAIFast(group.Platform) && group.ForceOpenAIFast
+}
+
 // openAIFastPolicyCtxKey 是 context 中预取的 OpenAIFastPolicySettings 缓存
 // 键，仅用于 WebSocket 长会话内多帧复用同一份策略快照，避免每帧 DB 命中。
 //
@@ -849,6 +857,13 @@ func openAIFastPolicySettingsFromContext(ctx context.Context) *OpenAIFastPolicyS
 func (s *OpenAIGatewayService) applyOpenAIFastPolicyToBody(ctx context.Context, account *Account, model string, body []byte) ([]byte, error) {
 	if len(body) == 0 {
 		return body, nil
+	}
+	if openAIGroupForcesFast(ctx, account) {
+		updated, err := sjson.SetBytes(body, "service_tier", OpenAIFastTierPriority)
+		if err != nil {
+			return body, fmt.Errorf("force group service_tier priority on body: %w", err)
+		}
+		body = updated
 	}
 	rawTier := gjson.GetBytes(body, "service_tier").String()
 	if rawTier == "" {
@@ -960,6 +975,13 @@ func (s *OpenAIGatewayService) applyOpenAIFastPolicyToWSResponseCreate(
 	// upstream reject it rather than guessing at our layer.
 	if frameType != "response.create" {
 		return frame, nil, nil
+	}
+	if openAIGroupForcesFast(ctx, account) {
+		updated, err := sjson.SetBytes(frame, "service_tier", OpenAIFastTierPriority)
+		if err != nil {
+			return frame, nil, fmt.Errorf("force group service_tier priority in ws frame: %w", err)
+		}
+		frame = updated
 	}
 	rawTier := gjson.GetBytes(frame, "service_tier").String()
 	if rawTier == "" {
@@ -1298,7 +1320,7 @@ func normalizeOpenAIReasoningEffort(raw string) string {
 }
 
 func normalizeOpenAIReasoningEffortForModel(raw, model string) string {
-	if strings.EqualFold(strings.TrimSpace(raw), "max") && isOpenAIGPT56Model(model) {
+	if strings.EqualFold(strings.TrimSpace(raw), "max") && supportsOpenAIMaxReasoningEffort(model) {
 		return "max"
 	}
 	return normalizeOpenAIReasoningEffort(raw)

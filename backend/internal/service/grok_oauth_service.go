@@ -199,11 +199,16 @@ func (s *GrokOAuthService) ExchangeCode(ctx context.Context, input *GrokExchange
 }
 
 func (s *GrokOAuthService) RefreshToken(ctx context.Context, refreshToken, proxyURL, clientID string) (*GrokTokenInfo, error) {
+	if s.oauthClient == nil {
+		return nil, infraerrors.New(http.StatusInternalServerError, "GROK_OAUTH_CLIENT_NOT_CONFIGURED", "oauth client is not configured")
+	}
 	refreshToken = strings.TrimSpace(refreshToken)
 	if refreshToken == "" {
 		return nil, infraerrors.New(http.StatusBadRequest, "GROK_OAUTH_NO_REFRESH_TOKEN", "refresh_token is required")
 	}
-	tokenResp, err := s.oauthClient.RefreshToken(ctx, refreshToken, proxyURL, clientID)
+	tokenResp, _, err := accountOutboundOperation(ctx, proxyURL, func(route string) (*xai.TokenResponse, error) {
+		return s.oauthClient.RefreshToken(ctx, refreshToken, route, clientID)
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -228,6 +233,9 @@ func (s *GrokOAuthService) ValidateRefreshToken(ctx context.Context, refreshToke
 // ValidateSSOToken converts a Web SSO cookie into Build OAuth tokens.
 // The raw sso_token is never stored on GrokTokenInfo or account credentials.
 func (s *GrokOAuthService) ValidateSSOToken(ctx context.Context, ssoToken string, proxyID *int64) (*GrokTokenInfo, error) {
+	if s.oauthClient == nil {
+		return nil, infraerrors.New(http.StatusInternalServerError, "GROK_OAUTH_CLIENT_NOT_CONFIGURED", "oauth client is not configured")
+	}
 	ssoToken = strings.TrimSpace(ssoToken)
 	if ssoToken == "" {
 		return nil, infraerrors.New(http.StatusBadRequest, "GROK_OAUTH_NO_SSO_TOKEN", "sso_token is required")
@@ -310,7 +318,7 @@ func (s *GrokOAuthService) RefreshAccountToken(ctx context.Context, account *Acc
 	}
 
 	clientID := account.GetCredential("client_id")
-	tokenInfo, err := s.RefreshToken(ctx, refreshToken, proxyURL, clientID)
+	tokenInfo, err := s.RefreshToken(withAccountOperationRoute(ctx, account, proxyURL), refreshToken, proxyURL, clientID)
 	if err != nil {
 		return nil, err
 	}

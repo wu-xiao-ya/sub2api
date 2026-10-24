@@ -75,8 +75,9 @@ func TestPrepDeductResolvesPurchaseByOrderSource(t *testing.T) {
 	require.Zero(t, plan.SubscriptionID)
 }
 
-// A historical order that genuinely has no purchase keeps the legacy path.
-func TestPrepDeductFallsBackToLegacyForHistoricalOrderWithoutPurchase(t *testing.T) {
+// A historical order without a migrated purchase cannot be attributed to a
+// user_subscriptions row any more; the operator must confirm with force.
+func TestPrepDeductRequiresForceForHistoricalOrderWithoutPurchase(t *testing.T) {
 	ctx := context.Background()
 	client := newPaymentConfigServiceTestClient(t)
 	order := newRefundPurchaseOrder(t, ctx, client, 80)
@@ -99,10 +100,18 @@ func TestPrepDeductFallsBackToLegacyForHistoricalOrderWithoutPurchase(t *testing
 	plan := &RefundPlan{OrderID: order.ID, Order: order, RefundAmount: order.Amount}
 
 	early := svc.prepDeduct(ctx, order, plan, false)
-	require.Nil(t, early)
+	require.NotNil(t, early)
+	require.True(t, early.RequireForce)
+	require.False(t, early.Success)
+	require.Contains(t, early.Warning, "no migrated legacy purchase found")
 	require.Zero(t, plan.PurchaseID, "no purchase exists for this historical order")
-	require.Equal(t, 30, plan.SubDaysToDeduct)
-	require.Equal(t, int64(77), plan.SubscriptionID)
+	require.Zero(t, plan.SubDaysToDeduct)
+	require.Zero(t, plan.SubscriptionID)
+
+	forced := svc.prepDeduct(ctx, order, plan, true)
+	require.Nil(t, forced, "force lets an operator proceed deliberately")
+	require.Zero(t, plan.SubDaysToDeduct, "user_subscriptions rows are no longer deducted")
+	require.Zero(t, plan.SubscriptionID)
 }
 
 // An order with neither a purchase nor legacy subscription fields is ambiguous

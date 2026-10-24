@@ -838,6 +838,7 @@ func buildSchedulerMetadataAccount(account service.Account) service.Account {
 		LastUsedAt:              account.LastUsedAt,
 		ExpiresAt:               account.ExpiresAt,
 		AutoPauseOnExpired:      account.AutoPauseOnExpired,
+		UseRelayRoute:           account.UseRelayRoute,
 		Schedulable:             account.Schedulable,
 		RateLimitedAt:           account.RateLimitedAt,
 		RateLimitResetAt:        account.RateLimitResetAt,

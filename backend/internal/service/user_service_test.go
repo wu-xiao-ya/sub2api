@@ -26,6 +26,7 @@ type mockUserRepo struct {
 	updateBalanceErr        error
 	updateBalanceFn         func(ctx context.Context, id int64, amount float64) error
 	deductBalanceFn         func(ctx context.Context, id int64, amount float64) error
+	deductAvailableFn       func(ctx context.Context, id int64, amount float64) (float64, error)
 	getByIDUser             *User
 	getByIDErr              error
 	identities              []UserAuthIdentityRecord
@@ -199,6 +200,12 @@ func (m *mockUserRepo) DeductBalance(ctx context.Context, id int64, amount float
 		return m.deductBalanceFn(ctx, id, amount)
 	}
 	return nil
+}
+func (m *mockUserRepo) DeductAvailableBalance(ctx context.Context, id int64, amount float64) (float64, error) {
+	if m.deductAvailableFn != nil {
+		return m.deductAvailableFn(ctx, id, amount)
+	}
+	return amount, nil
 }
 func (m *mockUserRepo) UpdateConcurrency(context.Context, int64, int) error { return nil }
 func (m *mockUserRepo) ExistsByEmail(context.Context, string) (bool, error) { return false, nil }

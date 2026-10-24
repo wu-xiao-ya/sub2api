@@ -1054,6 +1054,10 @@ export default {
         fallbackHint: 'Non-Claude Code requests will use this group. Leave empty to reject directly.',
         noFallback: 'No Fallback (Reject)'
       },
+      openaiFast: {
+        force: 'Force Fast (priority) for this group',
+        free: 'Bill Fast requests at Standard pricing'
+      },
       openaiMessages: {
         title: 'OpenAI Messages Dispatch',
         allowDispatch: 'Allow /v1/messages dispatch',

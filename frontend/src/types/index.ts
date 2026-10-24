@@ -603,6 +603,8 @@ export interface Group {
   fallback_group_id_on_invalid_request: number | null
   // OpenAI Messages 调度开关（用户侧需要此字段判断是否展示 Claude Code 教程）
   allow_messages_dispatch?: boolean
+  force_openai_fast?: boolean
+  free_openai_fast?: boolean
   default_mapped_model?: string
   messages_dispatch_model_config?: OpenAIMessagesDispatchModelConfig
   require_oauth_only: boolean
@@ -641,6 +643,14 @@ export interface ModelsListConfig {
   models: string[]
 }
 
+export interface ApiKeyMember {
+  id: number
+  name: string
+  group_id: number | null
+  status: string
+  group?: Group
+}
+
 export interface ApiKey {
   id: number
   user_id: number
@@ -648,6 +658,8 @@ export interface ApiKey {
   name: string
   group_id: number | null
   status: 'active' | 'inactive' | 'quota_exhausted' | 'expired'
+  key_kind?: 'group' | 'aggregate'
+  members?: ApiKeyMember[]
   ip_whitelist: string[]
   ip_blacklist: string[]
   last_used_at: string | null
@@ -676,6 +688,8 @@ export interface ApiKey {
 export interface CreateApiKeyRequest {
   name: string
   group_id?: number | null
+  key_kind?: 'group' | 'aggregate'
+  member_key_ids?: number[]
   custom_key?: string // Optional custom API Key
   ip_whitelist?: string[]
   ip_blacklist?: string[]
@@ -690,6 +704,7 @@ export interface UpdateApiKeyRequest {
   name?: string
   group_id?: number | null
   status?: 'active' | 'inactive'
+  member_key_ids?: number[]
   ip_whitelist?: string[]
   ip_blacklist?: string[]
   quota?: number // Quota limit in USD (null = no change, 0 = unlimited)
@@ -743,6 +758,8 @@ export interface CreateGroupRequest {
   supported_model_scopes?: string[]
   models_list_config?: ModelsListConfig
   allow_messages_dispatch?: boolean
+  force_openai_fast?: boolean
+  free_openai_fast?: boolean
   default_mapped_model?: string
   messages_dispatch_model_config?: OpenAIMessagesDispatchModelConfig
   model_routing?: Record<string, number[]> | null
@@ -797,6 +814,8 @@ export interface UpdateGroupRequest {
   supported_model_scopes?: string[]
   models_list_config?: ModelsListConfig
   allow_messages_dispatch?: boolean
+  force_openai_fast?: boolean
+  free_openai_fast?: boolean
   default_mapped_model?: string
   messages_dispatch_model_config?: OpenAIMessagesDispatchModelConfig
   model_routing?: Record<string, number[]> | null
@@ -1033,6 +1052,7 @@ export interface Account {
   last_used_at: string | null
   expires_at: number | null
   auto_pause_on_expired: boolean
+  use_relay_route?: boolean
   created_at: string
   updated_at: string
   proxy?: Proxy
@@ -1310,6 +1330,7 @@ export interface CreateAccountRequest {
   group_ids?: number[]
   expires_at?: number | null
   auto_pause_on_expired?: boolean
+  use_relay_route?: boolean
   upstream_billing_probe_enabled?: boolean
   confirm_mixed_channel_risk?: boolean
 }
@@ -1331,6 +1352,7 @@ export interface UpdateAccountRequest {
   group_ids?: number[]
   expires_at?: number | null
   auto_pause_on_expired?: boolean
+  use_relay_route?: boolean
   confirm_mixed_channel_risk?: boolean
 }
 
@@ -1426,6 +1448,7 @@ export interface AdminDataAccount {
   rate_multiplier?: number | null
   expires_at?: number | null
   auto_pause_on_expired?: boolean
+  use_relay_route?: boolean
 }
 
 export interface AdminDataImportError {
@@ -1461,6 +1484,7 @@ export interface CodexSessionImportRequest {
   load_factor?: number | null
   expires_at?: number | null
   auto_pause_on_expired?: boolean
+  use_relay_route?: boolean
   credential_extras?: Record<string, unknown>
   extra?: Record<string, unknown>
   update_existing?: boolean
@@ -1481,6 +1505,7 @@ export interface OpenAICodexPATCreateRequest {
   load_factor?: number | null
   expires_at?: number | null
   auto_pause_on_expired?: boolean
+  use_relay_route?: boolean
   credential_extras?: Record<string, unknown>
   extra?: Record<string, unknown>
   skip_default_group_bind?: boolean
@@ -1559,6 +1584,7 @@ export interface UsageLog {
   openai_ws_mode?: boolean
   duration_ms: number | null
   first_token_ms: number | null
+  latency_breakdown?: import('@/utils/usageLatencyStages').UsageLatencyBreakdown | null
 
   // 图片生成字段
   image_count: number

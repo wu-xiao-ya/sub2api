@@ -147,7 +147,7 @@
     >
       <div class="channel-dialog-body">
         <!-- Tab Bar -->
-        <div class="flex items-center border-b border-gray-200 dark:border-dark-700 flex-shrink-0 -mx-4 sm:-mx-6 px-4 sm:px-6 -mt-3 sm:-mt-4">
+        <div class="flex items-center overflow-x-auto border-b border-gray-200 dark:border-dark-700 flex-shrink-0 -mx-4 sm:-mx-6 px-4 sm:px-6 -mt-3 sm:-mt-4">
           <!-- Basic Settings Tab -->
           <button
             type="button"
@@ -432,6 +432,25 @@
                   </button>
                   <button type="button" @click="addPricingEntry(sIdx)" class="text-xs text-primary-600 hover:text-primary-700">
                     + {{ t('common.add', 'Add') }}
+                  </button>
+                </div>
+              </div>
+              <div
+                v-if="unpricedGroupModels(section).length > 0"
+                class="mb-2 rounded border border-dashed border-primary-200 bg-primary-50/40 p-2 dark:border-primary-800 dark:bg-primary-900/10"
+              >
+                <p class="mb-1 text-[11px] text-gray-500 dark:text-dark-400">{{ t('admin.channels.form.unpricedGroupModels') }}</p>
+                <p class="mb-2 text-[11px] text-gray-400 dark:text-dark-500">{{ t('admin.channels.form.unpricedGroupModelsHint') }}</p>
+                <div class="flex flex-wrap gap-1">
+                  <button
+                    v-for="model in unpricedGroupModels(section)"
+                    :key="model"
+                    type="button"
+                    class="rounded-md border border-gray-200 bg-white px-2 py-0.5 text-xs text-gray-700 hover:border-primary-400 hover:text-primary-700 disabled:opacity-50 dark:border-dark-600 dark:bg-dark-800 dark:text-gray-200"
+                    :disabled="addingGroupModel === section.platform + ':' + model"
+                    @click="addPricedGroupModel(sIdx, model)"
+                  >
+                    {{ model }}
                   </button>
                 </div>
               </div>
@@ -847,8 +866,8 @@ function toggleGroupInSection(sectionIdx: number, groupId: number) {
 }
 
 // ── Pricing helpers ──
-function addPricingEntry(sectionIdx: number) {
-  form.platforms[sectionIdx].model_pricing.push({
+function emptyPricingEntry(): PricingFormEntry {
+  return {
     models: [],
     billing_mode: 'token',
     input_price: null,
@@ -859,7 +878,92 @@ function addPricingEntry(sectionIdx: number) {
     image_output_price: null,
     per_request_price: null,
     intervals: []
-  })
+  }
+}
+
+function addPricingEntry(sectionIdx: number) {
+  form.platforms[sectionIdx].model_pricing.push(emptyPricingEntry())
+}
+
+function unpricedGroupModels(section: PlatformSection): string[] {
+  const priced = new Set<string>()
+  for (const entry of section.model_pricing) {
+    for (const model of entry.models) {
+      const key = model.trim().toLowerCase()
+      if (key) priced.add(key)
+    }
+  }
+  const names: string[] = []
+  const seen = new Set<string>()
+  for (const groupId of section.group_ids) {
+    const group = allGroups.value.find(item => item.id === groupId)
+    if (!group?.models_list_config?.enabled) continue
+    for (const raw of group.models_list_config.models || []) {
+      const model = raw.trim()
+      const key = model.toLowerCase()
+      if (!model || priced.has(key) || seen.has(key)) continue
+      seen.add(key)
+      names.push(model)
+    }
+  }
+  return names
+}
+
+function looksLikeImageModel(model: string): boolean {
+  return /image|imagine|dall-e/i.test(model)
+}
+
+function applyDefaultPricing(entry: PricingFormEntry, result: {
+  found: boolean
+  input_price?: number
+  output_price?: number
+  cache_write_price?: number
+  cache_read_price?: number
+  image_input_price?: number
+  image_output_price?: number
+}) {
+  if (!result.found) return
+  entry.input_price = perTokenToMTok(result.input_price ?? null)
+  entry.output_price = perTokenToMTok(result.output_price ?? null)
+  entry.cache_write_price = perTokenToMTok(result.cache_write_price ?? null)
+  entry.cache_read_price = perTokenToMTok(result.cache_read_price ?? null)
+  entry.image_input_price = perTokenToMTok(result.image_input_price ?? null)
+  entry.image_output_price = perTokenToMTok(result.image_output_price ?? null)
+}
+
+async function pricedEntryForModel(model: string): Promise<PricingFormEntry | null> {
+  const result = await adminAPI.channels.getModelDefaultPricing(model)
+  if (!result.found && looksLikeImageModel(model)) {
+    return null
+  }
+  const entry = emptyPricingEntry()
+  entry.models = [model]
+  applyDefaultPricing(entry, result)
+  return entry
+}
+
+const addingGroupModel = ref<string | null>(null)
+
+async function addPricedGroupModel(sectionIdx: number, model: string) {
+  const section = form.platforms[sectionIdx]
+  const key = section.platform + ':' + model
+  if (addingGroupModel.value) return
+  if (section.model_pricing.some(entry => entry.models.some(item => item.trim().toLowerCase() === model.toLowerCase()))) {
+    return
+  }
+  addingGroupModel.value = key
+  try {
+    const entry = await pricedEntryForModel(model)
+    if (!entry) {
+      appStore.showError(t('admin.channels.form.unpricedGroupModelsHint'))
+      return
+    }
+    section.model_pricing.push(entry)
+  } catch (error) {
+    appStore.showError(extractApiErrorMessage(error, t('admin.channels.form.syncModelsError')))
+  } finally {
+    addingGroupModel.value = null
+  }
 }
 
 const syncingPlatform = ref<string | null>(null)
@@ -870,30 +974,30 @@ async function syncLatestModels(sectionIdx: number) {
   syncingPlatform.value = platform
   try {
     const result = await adminAPI.channels.syncPricingModels(platform)
-    // Collect all model names already present in this platform's pricing entries
     const existingModels = new Set<string>()
     for (const entry of form.platforms[sectionIdx].model_pricing) {
-      for (const m of entry.models) existingModels.add(m)
+      for (const model of entry.models) {
+        const key = model.trim().toLowerCase()
+        if (key) existingModels.add(key)
+      }
     }
-    const newModels = result.models.filter(m => !existingModels.has(m))
+    const newModels = result.models.filter(model => !existingModels.has(model.trim().toLowerCase()))
     if (newModels.length === 0) {
       appStore.showSuccess(t('admin.channels.form.syncModelsAlreadyUpToDate'))
       return
     }
-    // Add new models as a single new pricing entry (user fills in prices)
-    form.platforms[sectionIdx].model_pricing.push({
-      models: newModels,
-      billing_mode: 'token',
-      input_price: null,
-      output_price: null,
-      cache_write_price: null,
-      cache_read_price: null,
-      image_input_price: null,
-      image_output_price: null,
-      per_request_price: null,
-      intervals: []
-    })
-    appStore.showSuccess(t('admin.channels.form.syncModelsSuccess', { count: newModels.length }))
+    const entries = await Promise.all(newModels.map(pricedEntryForModel))
+    let added = 0
+    for (const entry of entries) {
+      if (!entry) continue
+      form.platforms[sectionIdx].model_pricing.push(entry)
+      added++
+    }
+    if (added === 0) {
+      appStore.showError(t('admin.channels.form.unpricedGroupModelsHint'))
+      return
+    }
+    appStore.showSuccess(t('admin.channels.form.syncModelsSuccess', { count: added }))
   } catch (error) {
     appStore.showError(extractApiErrorMessage(error, t('admin.channels.form.syncModelsError')))
   } finally {

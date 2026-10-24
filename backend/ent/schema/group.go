@@ -234,6 +234,12 @@ func (Group) Fields() []ent.Field {
 		field.Bool("allow_messages_dispatch").
 			Default(false).
 			Comment("是否允许 /v1/messages 调度到此 OpenAI 分组"),
+		field.Bool("force_openai_fast").
+			Default(false).
+			Comment("Force OpenAI or composite groups to use service_tier=priority"),
+		field.Bool("free_openai_fast").
+			Default(false).
+			Comment("Bill Fast requests in OpenAI or composite groups at Standard pricing"),
 		field.Bool("require_oauth_only").
 			Default(false).
 			Comment("仅允许非 apikey 类型账号关联到此分组"),

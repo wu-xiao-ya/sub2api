@@ -71,11 +71,11 @@
     <div v-if="loading" class="flex h-48 items-center justify-center">
       <LoadingSpinner />
     </div>
-    <div v-else-if="displayEndpointStats.length > 0 && chartData" class="flex items-center gap-6">
-      <div class="h-48 w-48">
+    <div v-else-if="displayEndpointStats.length > 0 && chartData" class="flex flex-col items-center gap-4 2xl:flex-row">
+      <div class="h-40 w-40 shrink-0">
         <Doughnut :data="chartData" :options="doughnutOptions" />
       </div>
-      <div class="max-h-48 flex-1 overflow-y-auto">
+      <div class="max-h-56 w-full min-w-0 overflow-auto 2xl:flex-1">
         <table class="w-full text-xs">
           <thead>
             <tr class="text-gray-500 dark:text-gray-400">

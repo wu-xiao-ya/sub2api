@@ -51,33 +51,34 @@ func (h *PaymentHandler) GetPlans(c *gin.Context) {
 	}
 	// Enrich plans with group platform for frontend color coding
 	type planWithPlatform struct {
-		ID                     int64    `json:"id"`
-		GroupID                int64    `json:"group_id"`
-		GroupIDs               []int64  `json:"group_ids"`
-		GroupPlatform          string   `json:"group_platform"`
-		GroupName              string   `json:"group_name"`
-		RateMultiplier         float64  `json:"rate_multiplier"`
-		PeakRateEnabled        bool     `json:"peak_rate_enabled"`
-		PeakStart              string   `json:"peak_start"`
-		PeakEnd                string   `json:"peak_end"`
-		PeakRateMultiplier     float64  `json:"peak_rate_multiplier"`
-		Name                   string   `json:"name"`
-		Description            string   `json:"description"`
-		Price                  float64  `json:"price"`
-		OriginalPrice          *float64 `json:"original_price,omitempty"`
-		Currency               string   `json:"currency,omitempty"`
-		ValidityDays           int      `json:"validity_days"`
-		ValidityUnit           string   `json:"validity_unit"`
-		Features               string   `json:"features"`
-		ProductName            string   `json:"product_name"`
-		ForSale                bool     `json:"for_sale"`
-		SortOrder              int      `json:"sort_order"`
-		TierCode               string   `json:"tier_code"`
-		ConcurrencyEntitlement int      `json:"concurrency_entitlement"`
-		LifetimeQuotaUSD       float64  `json:"lifetime_quota_usd"`
-		DailyQuotaUSD          float64  `json:"daily_quota_usd"`
-		WeeklyQuotaUSD         float64  `json:"weekly_quota_usd"`
-		MonthlyQuotaUSD        float64  `json:"monthly_quota_usd"`
+		ID                     int64                     `json:"id"`
+		GroupID                int64                     `json:"group_id"`
+		GroupIDs               []int64                   `json:"group_ids"`
+		Groups                 []service.PublicPlanGroup `json:"groups"`
+		GroupPlatform          string                    `json:"group_platform"`
+		GroupName              string                    `json:"group_name"`
+		RateMultiplier         float64                   `json:"rate_multiplier"`
+		PeakRateEnabled        bool                      `json:"peak_rate_enabled"`
+		PeakStart              string                    `json:"peak_start"`
+		PeakEnd                string                    `json:"peak_end"`
+		PeakRateMultiplier     float64                   `json:"peak_rate_multiplier"`
+		Name                   string                    `json:"name"`
+		Description            string                    `json:"description"`
+		Price                  float64                   `json:"price"`
+		OriginalPrice          *float64                  `json:"original_price,omitempty"`
+		Currency               string                    `json:"currency,omitempty"`
+		ValidityDays           int                       `json:"validity_days"`
+		ValidityUnit           string                    `json:"validity_unit"`
+		Features               string                    `json:"features"`
+		ProductName            string                    `json:"product_name"`
+		ForSale                bool                      `json:"for_sale"`
+		SortOrder              int                       `json:"sort_order"`
+		TierCode               string                    `json:"tier_code"`
+		ConcurrencyEntitlement int                       `json:"concurrency_entitlement"`
+		LifetimeQuotaUSD       float64                   `json:"lifetime_quota_usd"`
+		DailyQuotaUSD          float64                   `json:"daily_quota_usd"`
+		WeeklyQuotaUSD         float64                   `json:"weekly_quota_usd"`
+		MonthlyQuotaUSD        float64                   `json:"monthly_quota_usd"`
 	}
 	groupInfo := h.configService.GetGroupInfoMap(c.Request.Context(), plans)
 	result := make([]planWithPlatform, 0, len(plans))
@@ -86,6 +87,7 @@ func (h *PaymentHandler) GetPlans(c *gin.Context) {
 		groupIDs, _ := h.configService.ListPlanGroupIDs(c.Request.Context(), p)
 		result = append(result, planWithPlatform{
 			ID: int64(p.ID), GroupID: p.GroupID, GroupIDs: groupIDs,
+			Groups:        service.BuildPublicPlanGroups(groupIDs, groupInfo),
 			GroupPlatform: gi.Platform, GroupName: gi.Name,
 			RateMultiplier: gi.RateMultiplier, PeakRateEnabled: gi.PeakRateEnabled,
 			PeakStart: gi.PeakStart, PeakEnd: gi.PeakEnd, PeakRateMultiplier: gi.PeakRateMultiplier,
@@ -120,6 +122,15 @@ func (h *PaymentHandler) GetCheckoutInfo(c *gin.Context) {
 		response.ErrorFrom(c, err)
 		return
 	}
+	// 移动端当面付深链只在官方支付宝实例下有效，易支付等代理实例无法透传动态码。
+	alipayMobilePrecreateDeepLink := false
+	if cfg.AlipayMobilePrecreateDeepLink {
+		alipayMobilePrecreateDeepLink, err = h.configService.UsesOfficialAlipayVisibleMethod(ctx)
+		if err != nil {
+			response.ErrorFrom(c, err)
+			return
+		}
+	}
 
 	// Fetch plans with group info
 	plans, _ := h.configService.ListPlansForSale(ctx)
@@ -130,6 +141,7 @@ func (h *PaymentHandler) GetCheckoutInfo(c *gin.Context) {
 		groupIDs, _ := h.configService.ListPlanGroupIDs(ctx, p)
 		planList = append(planList, checkoutPlan{
 			ID: int64(p.ID), GroupID: p.GroupID, GroupIDs: groupIDs,
+			Groups:        service.BuildPublicPlanGroups(groupIDs, groupInfo),
 			GroupPlatform: gi.Platform, GroupName: gi.Name,
 			RateMultiplier:  gi.RateMultiplier,
 			PeakRateEnabled: gi.PeakRateEnabled, PeakStart: gi.PeakStart,
@@ -148,66 +160,75 @@ func (h *PaymentHandler) GetCheckoutInfo(c *gin.Context) {
 	}
 
 	response.Success(c, checkoutInfoResponse{
-		Methods:                   limitsResp.Methods,
-		GlobalMin:                 limitsResp.GlobalMin,
-		GlobalMax:                 limitsResp.GlobalMax,
-		Plans:                     planList,
-		BalanceDisabled:           cfg.BalanceDisabled,
-		BalanceRechargeMultiplier: cfg.BalanceRechargeMultiplier,
-		SubscriptionUSDToCNYRate:  cfg.SubscriptionUSDToCNYRate,
-		RechargeFeeRate:           cfg.RechargeFeeRate,
-		HelpText:                  cfg.HelpText,
-		HelpImageURL:              cfg.HelpImageURL,
-		StripePublishableKey:      cfg.StripePublishableKey,
-		AlipayForceQRCode:         cfg.AlipayForceQRCode,
+		Methods:                       limitsResp.Methods,
+		GlobalMin:                     limitsResp.GlobalMin,
+		GlobalMax:                     limitsResp.GlobalMax,
+		Plans:                         planList,
+		BalanceDisabled:               cfg.BalanceDisabled,
+		BalanceRechargeMultiplier:     cfg.BalanceRechargeMultiplier,
+		SubscriptionUSDToCNYRate:      cfg.SubscriptionUSDToCNYRate,
+		RechargeFeeRate:               cfg.RechargeFeeRate,
+		RechargeBonusTiers:            cfg.RechargeBonusTiers,
+		RechargeBonusMode:             cfg.RechargeBonusMode,
+		RechargeBonusNotice:           cfg.RechargeBonusNotice,
+		HelpText:                      cfg.HelpText,
+		HelpImageURL:                  cfg.HelpImageURL,
+		StripePublishableKey:          cfg.StripePublishableKey,
+		AlipayForceQRCode:             cfg.AlipayForceQRCode,
+		AlipayMobilePrecreateDeepLink: alipayMobilePrecreateDeepLink,
 	})
 }
 
 type checkoutInfoResponse struct {
-	Methods                   map[string]service.MethodLimits `json:"methods"`
-	GlobalMin                 float64                         `json:"global_min"`
-	GlobalMax                 float64                         `json:"global_max"`
-	Plans                     []checkoutPlan                  `json:"plans"`
-	BalanceDisabled           bool                            `json:"balance_disabled"`
-	BalanceRechargeMultiplier float64                         `json:"balance_recharge_multiplier"`
-	SubscriptionUSDToCNYRate  float64                         `json:"subscription_usd_to_cny_rate"`
-	RechargeFeeRate           float64                         `json:"recharge_fee_rate"`
-	HelpText                  string                          `json:"help_text"`
-	HelpImageURL              string                          `json:"help_image_url"`
-	StripePublishableKey      string                          `json:"stripe_publishable_key"`
-	AlipayForceQRCode         bool                            `json:"alipay_force_qrcode"`
+	Methods                       map[string]service.MethodLimits `json:"methods"`
+	GlobalMin                     float64                         `json:"global_min"`
+	GlobalMax                     float64                         `json:"global_max"`
+	Plans                         []checkoutPlan                  `json:"plans"`
+	BalanceDisabled               bool                            `json:"balance_disabled"`
+	BalanceRechargeMultiplier     float64                         `json:"balance_recharge_multiplier"`
+	SubscriptionUSDToCNYRate      float64                         `json:"subscription_usd_to_cny_rate"`
+	RechargeFeeRate               float64                         `json:"recharge_fee_rate"`
+	RechargeBonusTiers            []service.RechargeBonusTier     `json:"recharge_bonus_tiers"`
+	RechargeBonusMode             string                          `json:"recharge_bonus_mode"`
+	RechargeBonusNotice           string                          `json:"recharge_bonus_notice"`
+	HelpText                      string                          `json:"help_text"`
+	HelpImageURL                  string                          `json:"help_image_url"`
+	StripePublishableKey          string                          `json:"stripe_publishable_key"`
+	AlipayForceQRCode             bool                            `json:"alipay_force_qrcode"`
+	AlipayMobilePrecreateDeepLink bool                            `json:"alipay_mobile_precreate_deep_link"`
 }
 
 type checkoutPlan struct {
-	ID                     int64    `json:"id"`
-	GroupID                int64    `json:"group_id"`
-	GroupIDs               []int64  `json:"group_ids"`
-	GroupPlatform          string   `json:"group_platform"`
-	GroupName              string   `json:"group_name"`
-	RateMultiplier         float64  `json:"rate_multiplier"`
-	PeakRateEnabled        bool     `json:"peak_rate_enabled"`
-	PeakStart              string   `json:"peak_start"`
-	PeakEnd                string   `json:"peak_end"`
-	PeakRateMultiplier     float64  `json:"peak_rate_multiplier"`
-	DailyLimitUSD          *float64 `json:"daily_limit_usd"`
-	WeeklyLimitUSD         *float64 `json:"weekly_limit_usd"`
-	MonthlyLimitUSD        *float64 `json:"monthly_limit_usd"`
-	ModelScopes            []string `json:"supported_model_scopes"`
-	Name                   string   `json:"name"`
-	Description            string   `json:"description"`
-	Price                  float64  `json:"price"`
-	OriginalPrice          *float64 `json:"original_price,omitempty"`
-	Currency               string   `json:"currency,omitempty"`
-	ValidityDays           int      `json:"validity_days"`
-	ValidityUnit           string   `json:"validity_unit"`
-	Features               []string `json:"features"`
-	ProductName            string   `json:"product_name"`
-	TierCode               string   `json:"tier_code"`
-	ConcurrencyEntitlement int      `json:"concurrency_entitlement"`
-	LifetimeQuotaUSD       float64  `json:"lifetime_quota_usd"`
-	DailyQuotaUSD          float64  `json:"daily_quota_usd"`
-	WeeklyQuotaUSD         float64  `json:"weekly_quota_usd"`
-	MonthlyQuotaUSD        float64  `json:"monthly_quota_usd"`
+	ID                     int64                     `json:"id"`
+	GroupID                int64                     `json:"group_id"`
+	GroupIDs               []int64                   `json:"group_ids"`
+	Groups                 []service.PublicPlanGroup `json:"groups"`
+	GroupPlatform          string                    `json:"group_platform"`
+	GroupName              string                    `json:"group_name"`
+	RateMultiplier         float64                   `json:"rate_multiplier"`
+	PeakRateEnabled        bool                      `json:"peak_rate_enabled"`
+	PeakStart              string                    `json:"peak_start"`
+	PeakEnd                string                    `json:"peak_end"`
+	PeakRateMultiplier     float64                   `json:"peak_rate_multiplier"`
+	DailyLimitUSD          *float64                  `json:"daily_limit_usd"`
+	WeeklyLimitUSD         *float64                  `json:"weekly_limit_usd"`
+	MonthlyLimitUSD        *float64                  `json:"monthly_limit_usd"`
+	ModelScopes            []string                  `json:"supported_model_scopes"`
+	Name                   string                    `json:"name"`
+	Description            string                    `json:"description"`
+	Price                  float64                   `json:"price"`
+	OriginalPrice          *float64                  `json:"original_price,omitempty"`
+	Currency               string                    `json:"currency,omitempty"`
+	ValidityDays           int                       `json:"validity_days"`
+	ValidityUnit           string                    `json:"validity_unit"`
+	Features               []string                  `json:"features"`
+	ProductName            string                    `json:"product_name"`
+	TierCode               string                    `json:"tier_code"`
+	ConcurrencyEntitlement int                       `json:"concurrency_entitlement"`
+	LifetimeQuotaUSD       float64                   `json:"lifetime_quota_usd"`
+	DailyQuotaUSD          float64                   `json:"daily_quota_usd"`
+	WeeklyQuotaUSD         float64                   `json:"weekly_quota_usd"`
+	MonthlyQuotaUSD        float64                   `json:"monthly_quota_usd"`
 }
 
 // parseFeatures splits a newline-separated features string into a string slice.
@@ -494,6 +515,7 @@ type PublicOrderResult struct {
 	Amount              float64    `json:"amount"`
 	PayAmount           float64    `json:"pay_amount"`
 	FeeRate             float64    `json:"fee_rate"`
+	BonusAmount         float64    `json:"bonus_amount"`
 	Currency            string     `json:"currency"`
 	PaymentType         string     `json:"payment_type"`
 	OrderType           string     `json:"order_type"`
@@ -529,6 +551,7 @@ func buildPublicOrderResult(order *dbent.PaymentOrder) PublicOrderResult {
 		Amount:              order.Amount,
 		PayAmount:           order.PayAmount,
 		FeeRate:             order.FeeRate,
+		BonusAmount:         order.BonusAmount,
 		Currency:            service.PaymentOrderCurrency(order),
 		PaymentType:         order.PaymentType,
 		OrderType:           order.OrderType,
@@ -637,6 +660,7 @@ type PaymentOrderResult struct {
 	Amount              float64    `json:"amount"`
 	PayAmount           float64    `json:"pay_amount"`
 	FeeRate             float64    `json:"fee_rate"`
+	BonusAmount         float64    `json:"bonus_amount"`
 	Currency            string     `json:"currency"`
 	PaymentType         string     `json:"payment_type"`
 	OutTradeNo          string     `json:"out_trade_no"`
@@ -675,6 +699,7 @@ func sanitizePaymentOrderForResponse(order *dbent.PaymentOrder) *PaymentOrderRes
 		Amount:              order.Amount,
 		PayAmount:           order.PayAmount,
 		FeeRate:             order.FeeRate,
+		BonusAmount:         order.BonusAmount,
 		Currency:            service.PaymentOrderCurrency(order),
 		PaymentType:         order.PaymentType,
 		OutTradeNo:          order.OutTradeNo,

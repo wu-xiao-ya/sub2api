@@ -184,7 +184,7 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 		return
 	}
 
-	setOpsRequestContext(c, modelName, stream)
+	setOpsRequestContext(c, modelName, stream, body)
 	setOpsEndpointContext(c, "", int16(service.RequestTypeFromLegacy(stream, false)))
 
 	if decision := h.checkSecurityAudit(c, reqLog, apiKey, authSubject, service.ContentModerationProtocolGemini, modelName, body); decision != nil && !decision.AllowNextStage {
@@ -197,6 +197,11 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 	reqModel := modelName // 保存映射前的原始模型名
 	if channelMapping.Mapped {
 		modelName = channelMapping.MappedModel
+	}
+
+	cachedContentBinding, body, ok := h.resolveGeminiCachedContentBinding(c, reqLog, apiKey, modelName, body)
+	if !ok {
+		return
 	}
 
 	// Get subscription (may be nil)
@@ -236,8 +241,11 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 
 	// 3) select account (sticky session based on request body)
 	// 优先使用 Gemini CLI 的会话标识（privileged-user-id + tmp 目录哈希）
-	sessionHash := extractGeminiCLISessionHash(c, body)
-	if sessionHash == "" {
+	sessionHash := ""
+	if cachedContentBinding == nil {
+		sessionHash = extractGeminiCLISessionHash(c, body)
+	}
+	if sessionHash == "" && cachedContentBinding == nil {
 		// Fallback: 使用通用的会话哈希生成逻辑（适用于其他客户端）
 		parsedReq, _ := service.ParseGatewayRequest(service.NewRequestBodyRef(body), domain.PlatformGemini)
 		if parsedReq != nil {
@@ -274,7 +282,7 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 	var geminiPrefixHash string
 	var geminiSessionUUID string
 	var matchedDigestChain string
-	useDigestFallback := sessionBoundAccountID == 0
+	useDigestFallback := sessionBoundAccountID == 0 && cachedContentBinding == nil
 
 	if useDigestFallback {
 		// 解析 Gemini 请求体
@@ -338,7 +346,21 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 	hasBoundSession := sessionKey != "" && sessionBoundAccountID > 0
 	cleanedForUnknownBinding := false
 
-	fs := NewFailoverState(h.maxAccountSwitchesGemini, hasBoundSession)
+	maxAccountSwitches := h.maxAccountSwitchesGemini
+	var cachedContentExclusions map[int64]struct{}
+	if cachedContentBinding != nil {
+		maxAccountSwitches = 0
+		sessionBoundAccountID = cachedContentBinding.AccountID
+		c.Request = c.Request.WithContext(service.WithGeminiCachedContentBound(c.Request.Context()))
+		cachedContentExclusions, err = h.gatewayService.GeminiExplicitCacheExclusions(c.Request.Context(), apiKey.GroupID, cachedContentBinding.AccountID)
+		if err != nil {
+			reqLog.Warn("gemini.cached_content.list_accounts_failed", zap.Error(err))
+			markOpsRoutingCapacityLimited(c)
+			googleError(c, http.StatusServiceUnavailable, "The account holding this cached content is temporarily unavailable")
+			return
+		}
+	}
+	fs := NewFailoverState(maxAccountSwitches, hasBoundSession)
 
 	// 单账号分组提前设置 SingleAccountRetry 标记，让 Service 层首次 503 就不设模型限流标记。
 	// 避免单账号分组收到 503 (MODEL_CAPACITY_EXHAUSTED) 时设 29s 限流，导致后续请求连续快速失败。
@@ -348,8 +370,30 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 	}
 
 	for {
-		selection, err := h.gatewayService.SelectAccountWithLoadAwareness(c.Request.Context(), apiKey.GroupID, sessionKey, modelName, fs.FailedAccountIDs, "", int64(0)) // Gemini 不使用会话限制
+		excludedAccountIDs := fs.FailedAccountIDs
+		if cachedContentExclusions != nil {
+			excludedAccountIDs = mergeAccountIDSets(cachedContentExclusions, fs.FailedAccountIDs)
+		}
+		selection, err := h.gatewayService.SelectAccountWithLoadAwareness(c.Request.Context(), apiKey.GroupID, sessionKey, modelName, excludedAccountIDs, "", int64(0)) // Gemini 不使用会话限制
+		if err == nil && cachedContentBinding != nil && selection.Account.ID != cachedContentBinding.AccountID {
+			if selection.Acquired && selection.ReleaseFunc != nil {
+				selection.ReleaseFunc()
+			}
+			err = service.ErrNoAvailableAccounts
+		}
 		if err != nil {
+			if cachedContentBinding != nil {
+				if failoverClientGone(c) {
+					return
+				}
+				if fs.LastFailoverErr != nil {
+					h.handleGeminiCachedContentFailoverExhausted(c, fs.LastFailoverErr)
+					return
+				}
+				markOpsRoutingCapacityLimited(c)
+				googleError(c, http.StatusServiceUnavailable, "The account holding this cached content is temporarily unavailable")
+				return
+			}
 			if len(fs.FailedAccountIDs) == 0 {
 				cls := classifyNoAccountErrorFromGin(c, h.gatewayService, apiKey, modelName, modelName, service.PlatformGemini)
 				if !cls.ModelNotFound {
@@ -377,6 +421,14 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 			}
 		}
 		account := selection.Account
+		if cachedContentBinding != nil && account.ID != cachedContentBinding.AccountID {
+			if selection.Acquired && selection.ReleaseFunc != nil {
+				selection.ReleaseFunc()
+			}
+			markOpsRoutingCapacityLimited(c)
+			googleError(c, http.StatusServiceUnavailable, "The account holding this cached content is temporarily unavailable")
+			return
+		}
 		setOpsSelectedAccount(c, account.ID, account.Platform)
 
 		// 检测账号切换：如果粘性会话绑定的账号与当前选择的账号不同，清除 thoughtSignature
@@ -449,8 +501,10 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 				geminiConcurrency.DecrementAccountWaitCount(c.Request.Context(), account.ID)
 				accountWaitCounted = false
 			}
-			if err := h.gatewayService.BindStickySession(c.Request.Context(), apiKey.GroupID, sessionKey, account.ID); err != nil {
-				reqLog.Warn("gemini.bind_sticky_session_failed", zap.Int64("account_id", account.ID), zap.Error(err))
+			if cachedContentBinding == nil {
+				if err := h.gatewayService.BindStickySession(c.Request.Context(), apiKey.GroupID, sessionKey, account.ID); err != nil {
+					reqLog.Warn("gemini.bind_sticky_session_failed", zap.Int64("account_id", account.ID), zap.Error(err))
+				}
 			}
 		}
 		// 账号槽位/等待计数需要在超时或断开时安全回收
@@ -489,6 +543,10 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 				case FailoverContinue:
 					continue
 				case FailoverExhausted:
+					if cachedContentBinding != nil {
+						h.handleGeminiCachedContentFailoverExhausted(c, fs.LastFailoverErr)
+						return
+					}
 					h.handleGeminiFailoverExhausted(c, fs.LastFailoverErr)
 					return
 				case FailoverCanceled:
@@ -647,6 +705,16 @@ type pathParseError struct{ msg string }
 func (e *pathParseError) Error() string { return e.msg }
 
 func googleError(c *gin.Context, status int, message string) {
+	googleErrorWithType(c, status, googleClientErrorType(status), "", message)
+}
+
+// googlePlatformError 写出不归属客户端参数错误的错误（例如本地限流、上游失败）。
+func googlePlatformError(c *gin.Context, status int, message string) {
+	googleErrorWithType(c, status, "", "", message)
+}
+
+func googleErrorWithType(c *gin.Context, status int, errType, code, message string) {
+	service.SetOpsLocalErrorType(c, errType, code)
 	c.JSON(status, gin.H{
 		"error": gin.H{
 			"code":    status,
@@ -654,6 +722,28 @@ func googleError(c *gin.Context, status int, message string) {
 			"status":  googleapi.HTTPStatusToGoogleStatus(status),
 		},
 	})
+}
+
+func googleClientErrorType(status int) string {
+	switch status {
+	case http.StatusBadRequest, http.StatusRequestEntityTooLarge:
+		return "invalid_request_error"
+	case http.StatusUnauthorized:
+		return "authentication_error"
+	case http.StatusForbidden:
+		return "permission_error"
+	case http.StatusNotFound:
+		return "not_found_error"
+	default:
+		return ""
+	}
+}
+
+// googleConcurrencyError 写出并发槽位错误；本地 concurrencyErrorResponse 只返回
+// (status, code, message)，code 同时作为错误类型参与运维分类。
+func googleConcurrencyError(c *gin.Context, err error, slotType string) {
+	status, code, message := concurrencyErrorResponse(err, slotType)
+	googleErrorWithType(c, status, code, "", message)
 }
 
 func writeUpstreamResponse(c *gin.Context, res *service.UpstreamHTTPResult) {

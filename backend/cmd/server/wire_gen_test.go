@@ -67,6 +67,7 @@ func TestProvideCleanup_WithMinimalDependencies_NoPanic(t *testing.T) {
 		proxyExpirySvc,
 		&service.UsageCleanupService{},
 		idempotencyCleanupSvc,
+		nil, // geminiCachedContent
 		&service.BatchImageCleanupService{},
 		nil, // batchImageWorker
 		pricingSvc,
@@ -85,6 +86,7 @@ func TestProvideCleanup_WithMinimalDependencies_NoPanic(t *testing.T) {
 		nil, // paymentOrderExpiry
 		nil, // channelMonitorRunner
 		nil, // channelMonitorV2Aggregator
+		nil, // channelPerformance
 		nil, // quotaFlusher
 		nil, // upstreamBillingProbe
 		nil, // auditLog

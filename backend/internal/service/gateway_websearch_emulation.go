@@ -185,26 +185,31 @@ func (s *GatewayService) handleWebSearchEmulation(
 }
 
 func doWebSearch(ctx context.Context, account *Account, query string) (*websearch.SearchResponse, string, error) {
-	proxyURL := resolveAccountProxyURL(account)
+	proxyURL := AccountDefaultProxyURL(account)
+	ctx = withAccountOperationRoute(ctx, account, proxyURL)
 	mgr := getWebSearchManager()
 	if mgr == nil {
 		return nil, "", fmt.Errorf("web search emulation: manager not initialized")
 	}
-	resp, providerName, err := mgr.SearchWithBestProvider(ctx, websearch.SearchRequest{
-		Query: query, MaxResults: webSearchDefaultMaxResults, ProxyURL: proxyURL,
+	type searchResult struct {
+		response *websearch.SearchResponse
+		provider string
+	}
+	result, _, err := accountOutboundOperation(ctx, proxyURL, func(route string) (searchResult, error) {
+		resp, provider, err := mgr.SearchWithBestProvider(ctx, websearch.SearchRequest{
+			Query: query, MaxResults: webSearchDefaultMaxResults, ProxyURL: route,
+		})
+		return searchResult{response: resp, provider: provider}, err
 	})
 	if err != nil {
 		slog.Error("web search emulation: search failed", "error", err)
 		return nil, "", fmt.Errorf("web search emulation: %w", err)
 	}
-	return resp, providerName, nil
+	return result.response, result.provider, nil
 }
 
 func resolveAccountProxyURL(account *Account) string {
-	if account.ProxyID != nil && account.Proxy != nil {
-		return account.Proxy.URL()
-	}
-	return ""
+	return ResolveAccountProxyURL(account)
 }
 
 // --- SSE streaming response ---

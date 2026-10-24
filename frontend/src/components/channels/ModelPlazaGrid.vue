@@ -34,6 +34,9 @@
       :item="item"
       :user-group-rates="userGroupRates"
       :token-scale="tokenScale"
+      :performance="performance?.[item.key]"
+      :performance-error="performanceError"
+      @performance="emit('performance', $event)"
       @toggle-group="emit('toggleGroup', $event)"
     />
   </div>
@@ -44,6 +47,7 @@ import { useI18n } from 'vue-i18n'
 import EmptyState from '@/components/common/EmptyState.vue'
 import ModelPlazaCard from './ModelPlazaCard.vue'
 import type { ModelPlazaItem } from './modelPlaza'
+import type { PerformanceMetric } from '@/api/channelPerformance'
 
 defineProps<{
   items: ModelPlazaItem[]
@@ -51,10 +55,13 @@ defineProps<{
   emptyLabel: string
   userGroupRates: Record<number, number>
   tokenScale: number
+  performance?: Record<string, PerformanceMetric>
+  performanceError?: boolean
 }>()
 
 const emit = defineEmits<{
   toggleGroup: [groupID: number]
+  performance: [item: ModelPlazaItem]
 }>()
 
 const { t } = useI18n()

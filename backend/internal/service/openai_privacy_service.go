@@ -45,24 +45,20 @@ func disableOpenAITraining(ctx context.Context, clientFactory PrivacyClientFacto
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 
-	client, err := clientFactory(proxyURL)
-	if err != nil {
-		slog.Warn("openai_privacy_client_error", "error", err.Error())
-		return PrivacyModeFailed
-	}
-
-	resp, err := client.R().
-		SetContext(ctx).
-		SetHeader("Authorization", "Bearer "+accessToken).
-		SetHeader("Origin", "https://chatgpt.com").
-		SetHeader("Referer", "https://chatgpt.com/").
-		SetHeader("Accept", "application/json").
-		SetHeader("sec-fetch-mode", "cors").
-		SetHeader("sec-fetch-site", "same-origin").
-		SetHeader("sec-fetch-dest", "empty").
-		SetQueryParam("feature", "training_allowed").
-		SetQueryParam("value", "false").
-		Patch(openAISettingsURL)
+	resp, err := accountPrivacyOperation(ctx, clientFactory, proxyURL, func(client *req.Client) (*req.Response, error) {
+		return client.R().
+			SetContext(ctx).
+			SetHeader("Authorization", "Bearer "+accessToken).
+			SetHeader("Origin", "https://chatgpt.com").
+			SetHeader("Referer", "https://chatgpt.com/").
+			SetHeader("Accept", "application/json").
+			SetHeader("sec-fetch-mode", "cors").
+			SetHeader("sec-fetch-site", "same-origin").
+			SetHeader("sec-fetch-dest", "empty").
+			SetQueryParam("feature", "training_allowed").
+			SetQueryParam("value", "false").
+			Patch(openAISettingsURL)
+	})
 
 	if err != nil {
 		slog.Warn("openai_privacy_request_error", "error", err.Error())
@@ -110,21 +106,17 @@ func fetchChatGPTAccountInfo(ctx context.Context, clientFactory PrivacyClientFac
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 
-	client, err := clientFactory(proxyURL)
-	if err != nil {
-		slog.Debug("chatgpt_account_check_client_error", "error", err.Error())
-		return nil
-	}
-
 	var result map[string]any
-	resp, err := client.R().
-		SetContext(ctx).
-		SetHeader("Authorization", "Bearer "+accessToken).
-		SetHeader("Origin", "https://chatgpt.com").
-		SetHeader("Referer", "https://chatgpt.com/").
-		SetHeader("Accept", "application/json").
-		SetSuccessResult(&result).
-		Get(chatGPTAccountsCheckURL)
+	resp, err := accountPrivacyOperation(ctx, clientFactory, proxyURL, func(client *req.Client) (*req.Response, error) {
+		return client.R().
+			SetContext(ctx).
+			SetHeader("Authorization", "Bearer "+accessToken).
+			SetHeader("Origin", "https://chatgpt.com").
+			SetHeader("Referer", "https://chatgpt.com/").
+			SetHeader("Accept", "application/json").
+			SetSuccessResult(&result).
+			Get(chatGPTAccountsCheckURL)
+	})
 
 	if err != nil {
 		slog.Debug("chatgpt_account_check_request_error", "error", err.Error())
@@ -219,27 +211,23 @@ func fetchChatGPTSubscriptionExpiresAt(ctx context.Context, clientFactory Privac
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 
-	client, err := clientFactory(proxyURL)
-	if err != nil {
-		slog.Debug("chatgpt_subscription_client_error", "error", err.Error())
-		return ""
-	}
-
 	var result struct {
 		PlanType    string `json:"plan_type"`
 		ActiveUntil string `json:"active_until"`
 		WillRenew   bool   `json:"will_renew"`
 		ID          string `json:"id"`
 	}
-	resp, err := client.R().
-		SetContext(ctx).
-		SetHeader("Authorization", "Bearer "+accessToken).
-		SetHeader("Origin", "https://chatgpt.com").
-		SetHeader("Referer", "https://chatgpt.com/").
-		SetHeader("Accept", "application/json").
-		SetSuccessResult(&result).
-		SetQueryParam("account_id", accountID).
-		Get(chatGPTSubscriptionsURL)
+	resp, err := accountPrivacyOperation(ctx, clientFactory, proxyURL, func(client *req.Client) (*req.Response, error) {
+		return client.R().
+			SetContext(ctx).
+			SetHeader("Authorization", "Bearer "+accessToken).
+			SetHeader("Origin", "https://chatgpt.com").
+			SetHeader("Referer", "https://chatgpt.com/").
+			SetHeader("Accept", "application/json").
+			SetSuccessResult(&result).
+			SetQueryParam("account_id", accountID).
+			Get(chatGPTSubscriptionsURL)
+	})
 	if err != nil {
 		slog.Debug("chatgpt_subscription_request_error", "error", err.Error())
 		return ""

@@ -43,6 +43,7 @@ function mountDialog(paymentConfig: Record<string, unknown> | null) {
         Select: true,
         Icon: true,
         GroupBadge: true,
+        PlatformIcon: true,
       },
     },
   })
@@ -73,5 +74,43 @@ describe('PlanEditDialog subscription CNY payment preview', () => {
 
     expect(wrapper.text()).not.toContain('preview')
     expect(wrapper.text()).not.toContain('¥71.43')
+  })
+})
+
+describe('PlanEditDialog mixed platform groups', () => {
+  it('lists non-openai groups and warns when image groups are selected', async () => {
+    const wrapper = mount(PlanEditDialog, {
+      props: {
+        show: true,
+        plan: null,
+        groups: [
+          { id: 1, name: 'GPT Line', platform: 'openai', rate_multiplier: 1, allow_image_generation: false },
+          { id: 2, name: 'Claude Line', platform: 'anthropic', rate_multiplier: 1, allow_image_generation: false },
+          { id: 3, name: 'Gemini Image', platform: 'gemini', rate_multiplier: 1, allow_image_generation: true },
+        ] as any,
+        paymentConfig: null,
+      },
+      global: {
+        stubs: {
+          BaseDialog: {
+            props: ['show'],
+            template: '<div v-if="show"><slot /><slot name="footer" /></div>',
+          },
+          Select: true,
+          Icon: true,
+          GroupBadge: true,
+          PlatformIcon: true,
+        },
+      },
+    })
+
+    expect(wrapper.text()).toContain('GPT Line')
+    expect(wrapper.text()).toContain('Claude Line')
+    expect(wrapper.text()).toContain('Gemini Image')
+    expect(wrapper.text()).not.toContain('payment.admin.imageGroupsWarning')
+
+    const boxes = wrapper.findAll('input[type="checkbox"]')
+    await boxes[2].setValue(true)
+    expect(wrapper.text()).toContain('payment.admin.imageGroupsWarning')
   })
 })

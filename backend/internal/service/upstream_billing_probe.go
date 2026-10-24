@@ -556,7 +556,6 @@ func (s *UpstreamBillingProbeService) probeLoadedAccount(ctx context.Context, ac
 	if apiKey == "" {
 		return s.persistProbeFailure(ctx, account, intervalMinutes, now, 0, "missing_api_key", 0)
 	}
-	proxyURL := ""
 	if account.ProxyID != nil {
 		if account.Proxy == nil {
 			return s.persistProbeFailure(ctx, account, intervalMinutes, now, 0, "proxy_unavailable", 0)
@@ -564,8 +563,8 @@ func (s *UpstreamBillingProbeService) probeLoadedAccount(ctx context.Context, ac
 		if account.Proxy.ID != *account.ProxyID {
 			return nil, ErrUpstreamBillingProbeIdentityChanged
 		}
-		proxyURL = account.Proxy.URL()
 	}
+	proxyURL := ResolveAccountProxyURL(account)
 	req, tlsProfile, err := s.buildUpstreamBillingProbeRequest(ctx, account, apiKey)
 	if err != nil {
 		return s.persistProbeFailure(ctx, account, intervalMinutes, now, 0, err.Error(), 0)
@@ -578,7 +577,7 @@ func (s *UpstreamBillingProbeService) probeLoadedAccount(ctx context.Context, ac
 		reqCtx = WithHTTPUpstreamProfile(reqCtx, HTTPUpstreamProfileOpenAI)
 	}
 	req = req.WithContext(WithHTTPUpstreamRedirectsDisabled(reqCtx))
-	resp, err := s.accountTestService.httpUpstream.DoWithTLS(req, proxyURL, account.ID, account.Concurrency, tlsProfile)
+	resp, err := s.accountTestService.httpUpstream.DoWithTLS(WithAccountOutbound(req, account, proxyURL), proxyURL, account.ID, account.Concurrency, tlsProfile)
 	if err != nil {
 		return s.persistProbeFailure(ctx, account, intervalMinutes, now, 0, "request_failed", 0)
 	}

@@ -37,6 +37,7 @@ func canonicalizeOpenAIModelAliasSpelling(model string) string {
 		from string
 		to   string
 	}{
+		{"gpt-astra", "gpt-6-astra"},
 		{"gpt-5.4mini", "gpt-5.4-mini"},
 		{"gpt-5.4nano", "gpt-5.4-nano"},
 		{"gpt-5.3-codexspark", "gpt-5.3-codex-spark"},
@@ -65,6 +66,35 @@ func normalizeKnownOpenAICodexModel(model string) string {
 	}
 
 	switch {
+	case normalized == "gpt-6-astra":
+		return "gpt-6-astra"
+	case strings.HasPrefix(normalized, "gpt-6-astra-"):
+		suffix := strings.TrimPrefix(normalized, "gpt-6-astra-")
+		if suffix == "max" || suffix == "preview" || isKnownCodexModelSuffix(suffix) {
+			return "gpt-6-astra"
+		}
+		return ""
+	case normalized == "gpt-6-sol" || strings.HasPrefix(normalized, "gpt-6-sol-"):
+		suffix := strings.TrimPrefix(normalized, "gpt-6-sol")
+		suffix = strings.TrimPrefix(suffix, "-")
+		if suffix == "" || suffix == "max" || suffix == "preview" || isKnownCodexModelSuffix(suffix) {
+			return "gpt-6-sol"
+		}
+		return ""
+	case normalized == "gpt-6.1-sol" || strings.HasPrefix(normalized, "gpt-6.1-sol-"):
+		suffix := strings.TrimPrefix(normalized, "gpt-6.1-sol")
+		suffix = strings.TrimPrefix(suffix, "-")
+		if suffix == "" || suffix == "max" || suffix == "preview" || isKnownCodexModelSuffix(suffix) {
+			return "gpt-6.1-sol"
+		}
+		return ""
+	case normalized == "gpt-6-luna" || strings.HasPrefix(normalized, "gpt-6-luna-"):
+		suffix := strings.TrimPrefix(normalized, "gpt-6-luna")
+		suffix = strings.TrimPrefix(suffix, "-")
+		if suffix == "" || suffix == "max" || suffix == "preview" || isKnownCodexModelSuffix(suffix) {
+			return "gpt-6-luna"
+		}
+		return ""
 	case strings.Contains(normalized, "gpt-5.6-sol"):
 		return "gpt-5.6-sol"
 	case strings.Contains(normalized, "gpt-5.6-terra"):
@@ -122,6 +152,16 @@ func isOpenAIGPT56Model(model string) bool {
 		}
 	}
 	return false
+}
+
+// isOpenAIGPT61SolModel 判断是否 GPT-6.1-Sol 系列模型（含大小写/路径/后缀变体）。
+func isOpenAIGPT61SolModel(model string) bool {
+	return normalizeKnownOpenAICodexModel(model) == "gpt-6.1-sol"
+}
+
+func supportsOpenAIMaxReasoningEffort(model string) bool {
+	normalized := normalizeKnownOpenAICodexModel(model)
+	return normalized == "gpt-6-astra" || normalized == "gpt-6.1-sol" || isOpenAIGPT56Model(model)
 }
 
 func appendUsageBillingModelCandidate(candidates []string, seen map[string]struct{}, model string) []string {

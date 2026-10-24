@@ -3,7 +3,7 @@
     <div class="flex items-center justify-end gap-3 flex-wrap">
       <div
         role="tablist"
-        class="inline-flex p-0.5 rounded-xl bg-gray-100 dark:bg-dark-800 border border-gray-200/60 dark:border-dark-700/60 text-xs"
+        class="inline-flex p-0.5 rounded-md bg-gray-100 dark:bg-dark-800 border border-gray-200/60 dark:border-dark-700/60 text-xs"
       >
         <button
           v-for="opt in windowOptions"
@@ -22,7 +22,7 @@
       </div>
 
       <span
-        class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold tracking-wider uppercase"
+        class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium"
         :class="overallChipClass"
       >
         <span

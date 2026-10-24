@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-const deepSeekOffPeakMultiplier = 0.5
+const deepSeekPeakMultiplier = 2.0
 
 var chinaStandardTime = time.FixedZone("Asia/Shanghai", 8*60*60)
 
@@ -17,10 +17,16 @@ func domesticNumericPricing(model string) *ModelPricing {
 	model = normalizeDomesticPricingModel(model)
 
 	switch model {
-	case "deepseek-v4-flash", "deepseek-v4-flash-0731", "deepseek-v4-flash-vision-exp":
-		return tokenPricing(3, 9, 0.1)
+	case "deepseek-flash",
+		"deepseek-v4.1-flash",
+		"deepseek-v4-flash",
+		"deepseek-v4-flash-0731",
+		"deepseek-v4-flash-vision-exp",
+		"deepseek-chat",
+		"deepseek-reasoner":
+		return tokenPricing(1, 4, 0.02)
 	case "deepseek-v4-pro", "deepseek-v4-pro-0813":
-		return tokenPricing(9, 27, 0.3)
+		return tokenPricing(4.5, 13.5, 0.15)
 	case "glm-5.1", "glm-5.2", "glm-5.3":
 		return tokenPricing(8, 28, 2)
 	case "glm-5.3-flash":
@@ -49,6 +55,10 @@ func domesticNumericPricing(model string) *ModelPricing {
 		return tokenPricing(1, 4, 0.25)
 	case "qwen3.7-max", "qwen3.8-max":
 		return tokenPricing(12, 36, 1.2)
+	case "qwen3.8-flash":
+		pricing := tokenPricing(0.8, 2.7, 0.1)
+		pricing.CacheCreationPricePerToken = 1.25e-6
+		return pricing
 	case "qwen3.7-plus":
 		pricing := tokenPricing(2, 8, 0.4)
 		pricing.LongContextInputThreshold = 256000
@@ -60,30 +70,32 @@ func domesticNumericPricing(model string) *ModelPricing {
 	}
 }
 
-// DeepSeek V4 publishes peak prices and charges half price outside the two
+// DeepSeek publishes a standard (off-peak) card and charges 2x during the two
 // Beijing-time peak windows: [09:00,12:00) and [14:00,18:00).
 func applyDomesticTimePricingAt(model string, pricing *ModelPricing, now time.Time) *ModelPricing {
-	if pricing == nil || !isDeepSeekV4PricingModel(model) || isDeepSeekPeakTime(now) {
+	if pricing == nil || !isDeepSeekV4PricingModel(model) || !isDeepSeekPeakTime(now) {
 		return pricing
 	}
 
 	cloned := *pricing
-	cloned.InputPricePerToken *= deepSeekOffPeakMultiplier
-	cloned.InputPricePerTokenPriority *= deepSeekOffPeakMultiplier
-	cloned.OutputPricePerToken *= deepSeekOffPeakMultiplier
-	cloned.OutputPricePerTokenPriority *= deepSeekOffPeakMultiplier
-	cloned.CacheCreationPricePerToken *= deepSeekOffPeakMultiplier
-	cloned.CacheCreationPricePerTokenPriority *= deepSeekOffPeakMultiplier
-	cloned.CacheReadPricePerToken *= deepSeekOffPeakMultiplier
-	cloned.CacheReadPricePerTokenPriority *= deepSeekOffPeakMultiplier
-	cloned.CacheCreation5mPrice *= deepSeekOffPeakMultiplier
-	cloned.CacheCreation1hPrice *= deepSeekOffPeakMultiplier
+	cloned.InputPricePerToken *= deepSeekPeakMultiplier
+	cloned.InputPricePerTokenPriority *= deepSeekPeakMultiplier
+	cloned.OutputPricePerToken *= deepSeekPeakMultiplier
+	cloned.OutputPricePerTokenPriority *= deepSeekPeakMultiplier
+	cloned.CacheCreationPricePerToken *= deepSeekPeakMultiplier
+	cloned.CacheCreationPricePerTokenPriority *= deepSeekPeakMultiplier
+	cloned.CacheReadPricePerToken *= deepSeekPeakMultiplier
+	cloned.CacheReadPricePerTokenPriority *= deepSeekPeakMultiplier
+	cloned.CacheCreation5mPrice *= deepSeekPeakMultiplier
+	cloned.CacheCreation1hPrice *= deepSeekPeakMultiplier
 	return &cloned
 }
 
 func isDeepSeekV4PricingModel(model string) bool {
 	switch normalizeDomesticPricingModel(model) {
-	case "deepseek-v4-flash",
+	case "deepseek-flash",
+		"deepseek-v4.1-flash",
+		"deepseek-v4-flash",
 		"deepseek-v4-flash-0731",
 		"deepseek-v4-flash-vision-exp",
 		"deepseek-v4-pro",
@@ -136,6 +148,10 @@ func applyDomesticNumericPricing(model string, pricing *ModelPricing) *ModelPric
 	cloned.InputPricePerTokenPriority = 0
 	cloned.OutputPricePerTokenPriority = 0
 	cloned.CacheReadPricePerTokenPriority = 0
+	if override.CacheCreationPricePerToken > 0 {
+		cloned.CacheCreationPricePerToken = override.CacheCreationPricePerToken
+		cloned.CacheCreationPricePerTokenPriority = 0
+	}
 	cloned.LongContextInputThreshold = override.LongContextInputThreshold
 	cloned.LongContextInputMultiplier = override.LongContextInputMultiplier
 	cloned.LongContextOutputMultiplier = override.LongContextOutputMultiplier

@@ -41,6 +41,8 @@ type Account struct {
 	ProxyID *int64 `json:"proxy_id,omitempty"`
 	// Original proxy id replaced by expiry-fallback; for manual revert. NULL = not in fallback.
 	ProxyFallbackOriginID *int64 `json:"proxy_fallback_origin_id,omitempty"`
+	// Prefer the system traffic relay outbound; fall back to this account's own proxy or direct connect.
+	UseRelayRoute bool `json:"use_relay_route,omitempty"`
 	// Concurrency holds the value of the "concurrency" field.
 	Concurrency int `json:"concurrency,omitempty"`
 	// LoadFactor holds the value of the "load_factor" field.
@@ -181,7 +183,7 @@ func (*Account) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case account.FieldCredentials, account.FieldExtra:
 			values[i] = new([]byte)
-		case account.FieldAutoPauseOnExpired, account.FieldSchedulable:
+		case account.FieldUseRelayRoute, account.FieldAutoPauseOnExpired, account.FieldSchedulable:
 			values[i] = new(sql.NullBool)
 		case account.FieldRateMultiplier:
 			values[i] = new(sql.NullFloat64)
@@ -285,6 +287,12 @@ func (_m *Account) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.ProxyFallbackOriginID = new(int64)
 				*_m.ProxyFallbackOriginID = value.Int64
+			}
+		case account.FieldUseRelayRoute:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field use_relay_route", values[i])
+			} else if value.Valid {
+				_m.UseRelayRoute = value.Bool
 			}
 		case account.FieldConcurrency:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
@@ -559,6 +567,9 @@ func (_m *Account) String() string {
 		builder.WriteString("proxy_fallback_origin_id=")
 		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
+	builder.WriteString(", ")
+	builder.WriteString("use_relay_route=")
+	builder.WriteString(fmt.Sprintf("%v", _m.UseRelayRoute))
 	builder.WriteString(", ")
 	builder.WriteString("concurrency=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Concurrency))

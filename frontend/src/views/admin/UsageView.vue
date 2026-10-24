@@ -192,6 +192,7 @@ import { formatReasoningEffort } from '@/utils/format'
 import { resolveUsageRequestType, requestTypeToLegacyStream } from '@/utils/usageRequestType'
 import { isImageUsage } from '@/utils/billingMode'
 import { calculateLatencyMetrics, formatOutputSpeed } from '@/utils/latencyMetrics'
+import { latencyCSVValues } from '@/utils/usageLatencyStages'
 import AppLayout from '@/components/layout/AppLayout.vue'; import Pagination from '@/components/common/Pagination.vue'; import Select from '@/components/common/Select.vue'; import DateRangePicker from '@/components/common/DateRangePicker.vue'
 import UsageStatsCards from '@/components/admin/usage/UsageStatsCards.vue'; import UsageFilters from '@/components/admin/usage/UsageFilters.vue'
 import UsageTable from '@/components/admin/usage/UsageTable.vue'; import UsageExportProgress from '@/components/admin/usage/UsageExportProgress.vue'
@@ -579,6 +580,7 @@ const exportToExcel = async () => {
       t('admin.usage.inputCost'), t('admin.usage.outputCost'),
       t('admin.usage.cacheReadCost'), t('admin.usage.cacheCreationCost'),
       t('usage.rate'), t('usage.accountMultiplier'), t('usage.promotion'), t('usage.promotionBaseRate'), t('usage.promotionFinalRate'), t('usage.promotionPricePercent'), t('usage.original'), t('usage.userBilled'), t('usage.accountBilled'),
+      'Latency version', 'First response (ms)', 'First event (ms)', 'First output (ms)', 'First text (ms)', 'Stage total (ms)',
       t('usage.firstToken'), t('usage.duration'), t('usage.latencyGeneration'), t('usage.latencyOutputSpeed'),
       t('admin.usage.requestId'), t('usage.userAgent'), t('admin.usage.ipAddress')
     ]
@@ -601,6 +603,7 @@ const exportToExcel = async () => {
         log.promotion_name || '', log.base_rate_multiplier?.toPrecision(4) || '', log.rate_multiplier?.toPrecision(4) || '', promotionPricePercent(log),
         log.total_cost?.toFixed(6) || '0.000000', log.actual_cost?.toFixed(6) || '0.000000',
         ((log.account_stats_cost ?? log.total_cost) * (log.account_rate_multiplier ?? 1)).toFixed(6),
+        ...latencyCSVValues(log.latency_breakdown, log.duration_ms),
         log.first_token_ms ?? '', log.duration_ms, usageLatencyExport(log).generationMs ?? '',
         formatOutputSpeed(usageLatencyExport(log).outputSpeed).replace(/ Token\/s$/, ''),
         log.request_id || '', log.user_agent || '', log.ip_address || ''

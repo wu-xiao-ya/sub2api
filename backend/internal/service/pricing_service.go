@@ -52,6 +52,54 @@ var (
 		Mode:                                "chat",
 		SupportsPromptCaching:               true,
 	}
+	openAIGPT6AstraFallbackPricing = &LiteLLMModelPricing{
+		InputCostPerToken:                   1e-05,
+		InputCostPerTokenPriority:           2e-05,
+		OutputCostPerToken:                  5e-05,
+		OutputCostPerTokenPriority:          1e-04,
+		CacheCreationInputTokenCost:         1.25e-05,
+		CacheCreationInputTokenCostPriority: 2.5e-05,
+		CacheReadInputTokenCost:             1e-06,
+		CacheReadInputTokenCostPriority:     2e-06,
+		SupportsServiceTier:                 true,
+		LiteLLMProvider:                     "openai",
+		Mode:                                "chat",
+		SupportsPromptCaching:               true,
+	}
+	openAIGPT6SolFallbackPricing = &LiteLLMModelPricing{
+		InputCostPerToken:                   2e-06,
+		InputCostPerTokenPriority:           4e-06,
+		OutputCostPerToken:                  1e-05,
+		OutputCostPerTokenPriority:          2e-05,
+		CacheCreationInputTokenCost:         2.5e-06,
+		CacheCreationInputTokenCostPriority: 5e-06,
+		CacheReadInputTokenCost:             2e-07,
+		CacheReadInputTokenCostPriority:     4e-07,
+		LongContextInputTokenThreshold:      openAIGPT54LongContextInputThreshold,
+		LongContextInputCostMultiplier:      openAIGPT54LongContextInputMultiplier,
+		LongContextOutputCostMultiplier:     openAIGPT54LongContextOutputMultiplier,
+		SupportsServiceTier:                 true,
+		LiteLLMProvider:                     "openai",
+		Mode:                                "chat",
+		SupportsPromptCaching:               true,
+	}
+	openAIGPT6LunaFallbackPricing = &LiteLLMModelPricing{
+		InputCostPerToken:                   1e-07,
+		InputCostPerTokenPriority:           2e-07,
+		OutputCostPerToken:                  5e-07,
+		OutputCostPerTokenPriority:          1e-06,
+		CacheCreationInputTokenCost:         1.25e-07,
+		CacheCreationInputTokenCostPriority: 2.5e-07,
+		CacheReadInputTokenCost:             1e-08,
+		CacheReadInputTokenCostPriority:     2e-08,
+		LongContextInputTokenThreshold:      openAIGPT54LongContextInputThreshold,
+		LongContextInputCostMultiplier:      openAIGPT54LongContextInputMultiplier,
+		LongContextOutputCostMultiplier:     openAIGPT54LongContextOutputMultiplier,
+		SupportsServiceTier:                 true,
+		LiteLLMProvider:                     "openai",
+		Mode:                                "chat",
+		SupportsPromptCaching:               true,
+	}
 	openAIGPT56TerraFallbackPricing = &LiteLLMModelPricing{
 		InputCostPerToken:                   2e-06,
 		InputCostPerTokenPriority:           4e-06,
@@ -116,6 +164,7 @@ type LiteLLMModelPricing struct {
 	CacheCreationInputTokenCostAbove1hr float64 `json:"cache_creation_input_token_cost_above_1hr"`
 	CacheReadInputTokenCost             float64 `json:"cache_read_input_token_cost"`
 	CacheReadInputTokenCostPriority     float64 `json:"cache_read_input_token_cost_priority"`
+	CacheStorageCostPerTokenPerHour     float64 `json:"cache_storage_cost_per_token_per_hour"`
 	LongContextInputTokenThreshold      int     `json:"long_context_input_token_threshold,omitempty"`
 	LongContextInputCostMultiplier      float64 `json:"long_context_input_cost_multiplier,omitempty"`
 	LongContextOutputCostMultiplier     float64 `json:"long_context_output_cost_multiplier,omitempty"`
@@ -153,6 +202,7 @@ type LiteLLMRawEntry struct {
 	CacheReadInputTokenCost             *float64 `json:"cache_read_input_token_cost"`
 	CacheReadInputTokenCostAbove272K    *float64 `json:"cache_read_input_token_cost_above_272k_tokens"`
 	CacheReadInputTokenCostPriority     *float64 `json:"cache_read_input_token_cost_priority"`
+	CacheStorageCostPerTokenPerHour     *float64 `json:"cache_storage_cost_per_token_per_hour"`
 	LongContextInputTokenThreshold      *int     `json:"long_context_input_token_threshold"`
 	LongContextInputCostMultiplier      *float64 `json:"long_context_input_cost_multiplier"`
 	LongContextOutputCostMultiplier     *float64 `json:"long_context_output_cost_multiplier"`
@@ -440,7 +490,7 @@ func (s *PricingService) parsePricingData(body []byte) (map[string]*LiteLLMModel
 		}
 
 		// 只保留有有效价格的条目
-		if entry.InputCostPerToken == nil && entry.OutputCostPerToken == nil && entry.OutputCostPerImage == nil && entry.OutputCostPerImageToken == nil && entry.InputCostPerImageToken == nil {
+		if entry.InputCostPerToken == nil && entry.OutputCostPerToken == nil && entry.OutputCostPerImage == nil && entry.OutputCostPerImageToken == nil && entry.InputCostPerImageToken == nil && entry.CacheStorageCostPerTokenPerHour == nil {
 			continue
 		}
 
@@ -479,6 +529,9 @@ func (s *PricingService) parsePricingData(body []byte) (map[string]*LiteLLMModel
 		if entry.CacheReadInputTokenCostPriority != nil {
 			pricing.CacheReadInputTokenCostPriority = *entry.CacheReadInputTokenCostPriority
 		}
+		if entry.CacheStorageCostPerTokenPerHour != nil {
+			pricing.CacheStorageCostPerTokenPerHour = *entry.CacheStorageCostPerTokenPerHour
+		}
 		if entry.LongContextInputTokenThreshold != nil {
 			pricing.LongContextInputTokenThreshold = *entry.LongContextInputTokenThreshold
 		}
@@ -493,6 +546,14 @@ func (s *PricingService) parsePricingData(body []byte) (map[string]*LiteLLMModel
 		// expose absolute prices above 272K tokens. Normalize the latter so
 		// downstream billing and available-channel display see one shape.
 		applyAbove272KLongContextPricing(pricing, &entry)
+		// Site policy takes precedence over both remote long-context schemas:
+		// GPT-6 Astra and GPT-6.1 Sol never apply the 272k whole-request uplift.
+		switch normalizeKnownOpenAICodexModel(modelName) {
+		case "gpt-6-astra", "gpt-6.1-sol":
+			pricing.LongContextInputTokenThreshold = 0
+			pricing.LongContextInputCostMultiplier = 0
+			pricing.LongContextOutputCostMultiplier = 0
+		}
 		if entry.OutputCostPerImage != nil {
 			pricing.OutputCostPerImage = *entry.OutputCostPerImage
 		}
@@ -625,12 +686,12 @@ func applyOfficialDeepSeekPricingOverrides(data map[string]*LiteLLMModelPricing)
 	}
 
 	const (
-		flashInput  = 3e-6
-		flashCached = 0.1e-6
-		flashOutput = 9e-6
-		proInput    = 9e-6
-		proCached   = 0.3e-6
-		proOutput   = 27e-6
+		flashInput  = 1e-6
+		flashCached = 0.02e-6
+		flashOutput = 4e-6
+		proInput    = 4.5e-6
+		proCached   = 0.15e-6
+		proOutput   = 13.5e-6
 	)
 
 	apply := func(model string, input, cached, output float64) {
@@ -656,9 +717,12 @@ func applyOfficialDeepSeekPricingOverrides(data map[string]*LiteLLMModelPricing)
 		}
 	}
 
+	apply("deepseek-flash", flashInput, flashCached, flashOutput)
+	apply("deepseek-v4.1-flash", flashInput, flashCached, flashOutput)
 	apply("deepseek-v4-flash", flashInput, flashCached, flashOutput)
+	apply("deepseek-v4-flash-vision-exp", flashInput, flashCached, flashOutput)
 	apply("deepseek-v4-pro", proInput, proCached, proOutput)
-	// Keep legacy aliases usable while applying the current compatible V4 card.
+	// Keep legacy aliases usable while applying the current compatible Flash card.
 	apply("deepseek-chat", flashInput, flashCached, flashOutput)
 	apply("deepseek-reasoner", flashInput, flashCached, flashOutput)
 }
@@ -789,6 +853,12 @@ func (s *PricingService) buildModelLookupCandidates(modelLower string) []string 
 		lastSegment(modelLower),
 		lastSegment(strings.TrimPrefix(modelLower, "models/")),
 	)
+	// A tier-specific entry should take precedence when the pricing catalog gains
+	// one later. Antigravity's Gemini thinking tiers share the base rate, so the
+	// normalized base remains the fallback after the exact aliases.
+	if isGeminiThinkingTierAlias(lastSegment(modelLower)) {
+		candidates = append(candidates[1:], candidates[0])
+	}
 
 	seen := make(map[string]struct{}, len(candidates))
 	out := make([]string, 0, len(candidates))
@@ -836,7 +906,28 @@ func normalizeModelNameForPricing(model string) string {
 		}
 		return canonical
 	}
+	return normalizeGeminiThinkingTierAlias(model)
+}
+
+// normalizeGeminiThinkingTierAlias maps Antigravity's Gemini thinking-tier
+// model IDs to the public base model. The tier controls reasoning behavior, not
+// the published token rate, so this keeps -high/-low/-medium and -tiered
+// requests on the corresponding base model's price card.
+func normalizeGeminiThinkingTierAlias(model string) string {
+	for _, baseModel := range []string{"gemini-3.6-flash", "gemini-3.7-flash", "gemini-3.8-flash", "gemini-4-argon"} {
+		for _, tier := range []string{"-high", "-low", "-medium", "-tiered"} {
+			if model == baseModel+tier {
+				return baseModel
+			}
+		}
+	}
 	return model
+}
+
+// isGeminiThinkingTierAlias reports whether model is an Antigravity Gemini
+// thinking-tier alias of a priced base model.
+func isGeminiThinkingTierAlias(model string) bool {
+	return normalizeGeminiThinkingTierAlias(model) != model
 }
 
 func lastSegment(model string) string {
@@ -1009,6 +1100,21 @@ func (s *PricingService) matchOpenAIModel(model string) *LiteLLMModelPricing {
 		logger.With(zap.String("component", "service.pricing")).
 			Info(fmt.Sprintf("[Pricing] OpenAI fallback matched %s -> %s", model, "gpt-5.6-sol(static)"))
 		return openAIGPT56SolFallbackPricing
+	}
+	if model == "gpt-6-astra" || strings.HasPrefix(model, "gpt-6-astra-") {
+		logger.With(zap.String("component", "service.pricing")).
+			Info(fmt.Sprintf("[Pricing] OpenAI fallback matched %s -> %s", model, "gpt-6-astra(static)"))
+		return openAIGPT6AstraFallbackPricing
+	}
+	if model == "gpt-6-sol" || strings.HasPrefix(model, "gpt-6-sol-") {
+		logger.With(zap.String("component", "service.pricing")).
+			Info(fmt.Sprintf("[Pricing] OpenAI fallback matched %s -> %s", model, "gpt-6-sol(static)"))
+		return openAIGPT6SolFallbackPricing
+	}
+	if model == "gpt-6-luna" || strings.HasPrefix(model, "gpt-6-luna-") {
+		logger.With(zap.String("component", "service.pricing")).
+			Info(fmt.Sprintf("[Pricing] OpenAI fallback matched %s -> %s", model, "gpt-6-luna(static)"))
+		return openAIGPT6LunaFallbackPricing
 	}
 	if strings.HasPrefix(model, "gpt-5.6-terra") {
 		logger.With(zap.String("component", "service.pricing")).

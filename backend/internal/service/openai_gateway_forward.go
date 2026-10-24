@@ -303,12 +303,23 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 			markDecodedModified()
 			logger.LegacyPrintf("service.openai_gateway", "[OpenAI] Normalized /responses image_generation tool payload")
 		}
-		if normalizeOpenAIResponsesImageOnlyModel(decoded) {
-			markDecodedModified()
-			if model, ok := decoded["model"].(string); ok {
-				upstreamModel = strings.TrimSpace(model)
+		if normalizeOpenAIResponsesImageOnlyModelNeedsRewrite(decoded) {
+			// 图片专用模型经 /v1/responses 进来需要改写成"文本主模型 + image_generation
+			// 工具"。上游未验证支持该组合时直接拒绝，避免静默改写成 gpt-5.4-mini 后
+			// 上游 503（生产 2026-09-21 分组 47 的 60 次 502 即此路径）。
+			if account.Type == AccountTypeAPIKey && !account.SupportsOpenAIResponsesImageGeneration() {
+				message := "The requested image model cannot be served through /v1/responses on this account. Please call /v1/images/generations (or /v1/images/edits) instead."
+				setOpsUpstreamError(c, http.StatusBadRequest, message, "")
+				c.JSON(http.StatusBadRequest, gin.H{"error": gin.H{"type": "invalid_request_error", "message": message, "param": "model"}})
+				return nil, fmt.Errorf("apikey account %d is not verified for /responses image_generation; use /v1/images endpoints", account.ID)
 			}
-			logger.LegacyPrintf("service.openai_gateway", "[OpenAI] Normalized /responses image-only model request inbound_model=%s image_model=%s upstream_model=%s", requestView.Model, billingModel, upstreamModel)
+			if normalizeOpenAIResponsesImageOnlyModel(decoded) {
+				markDecodedModified()
+				if model, ok := decoded["model"].(string); ok {
+					upstreamModel = strings.TrimSpace(model)
+				}
+				logger.LegacyPrintf("service.openai_gateway", "[OpenAI] Normalized /responses image-only model request inbound_model=%s image_model=%s upstream_model=%s", requestView.Model, billingModel, upstreamModel)
+			}
 		}
 		if err := validateOpenAIResponsesImageModel(decoded, upstreamModel); err != nil {
 			setOpsUpstreamError(c, http.StatusBadRequest, err.Error(), "")
@@ -442,7 +453,14 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 		}
 	}
 
-	if rawTier := requestView.ServiceTier; rawTier != "" {
+	rawTier := requestView.ServiceTier
+	if openAIGroupForcesFast(ctx, account) {
+		rawTier = OpenAIFastTierPriority
+		if requestView.ServiceTier != OpenAIFastTierPriority {
+			markPatchSet("service_tier", OpenAIFastTierPriority)
+		}
+	}
+	if rawTier != "" {
 		if normTier := normalizedOpenAIServiceTierValue(rawTier); normTier != "" {
 			action, errMsg := s.evaluateOpenAIFastPolicy(ctx, account, upstreamModel, normTier)
 			switch action {
@@ -777,13 +795,11 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 
 		// Get proxy URL
 		proxyURL := ""
-		if account.ProxyID != nil && account.Proxy != nil {
-			proxyURL = account.Proxy.URL()
-		}
+		proxyURL = ResolveAccountProxyURL(account)
 
 		// Send request
 		upstreamStart := time.Now()
-		resp, err := s.httpUpstream.Do(upstreamReq, proxyURL, account.ID, account.Concurrency)
+		resp, err := s.httpUpstream.Do(WithAccountOutbound(upstreamReq, account, proxyURL), proxyURL, account.ID, account.Concurrency)
 		SetOpsLatencyMs(c, OpsUpstreamLatencyMsKey, time.Since(upstreamStart).Milliseconds())
 		if headerGuard != nil && headerGuard.stopHeaderWait() {
 			if resp != nil && resp.Body != nil {

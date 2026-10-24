@@ -99,9 +99,6 @@ func (s *PaymentConfigService) validatePlanGroups(ctx context.Context, primary i
 		if !ok || item.DeletedAt != nil {
 			return nil, infraerrors.NotFound("PLAN_GROUP_NOT_FOUND", fmt.Sprintf("group %d not found", id))
 		}
-		if !strings.EqualFold(strings.TrimSpace(item.Platform), PlatformOpenAI) {
-			return nil, infraerrors.BadRequest("PLAN_GROUP_PLATFORM_INVALID", fmt.Sprintf("group %d must use the openai platform", id))
-		}
 	}
 	return ids, nil
 }
@@ -115,7 +112,7 @@ func (s *PaymentConfigService) replacePlanGroups(ctx context.Context, planID int
 	}
 	for _, id := range ids {
 		if _, err := s.sqlDB.ExecContext(ctx,
-			"INSERT INTO subscription_plan_groups (plan_id, group_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+			"INSERT INTO subscription_plan_groups (plan_id, group_id, created_at) VALUES ($1, $2, CURRENT_TIMESTAMP) ON CONFLICT DO NOTHING",
 			planID, id,
 		); err != nil {
 			return err
@@ -214,14 +211,57 @@ type PlanGroupInfo struct {
 	ModelScopes        []string `json:"supported_model_scopes"`
 }
 
+// PublicPlanGroup is the user-visible group snapshot attached to a plan.
+type PublicPlanGroup struct {
+	ID       int64  `json:"id"`
+	Name     string `json:"name"`
+	Platform string `json:"platform"`
+}
+
+// BuildPublicPlanGroups keeps checkout/plan payloads aligned with the
+// administrator-selected group list, including mixed platforms.
+func BuildPublicPlanGroups(groupIDs []int64, info map[int64]PlanGroupInfo) []PublicPlanGroup {
+	if len(groupIDs) == 0 {
+		return []PublicPlanGroup{}
+	}
+	out := make([]PublicPlanGroup, 0, len(groupIDs))
+	for _, id := range groupIDs {
+		gi := info[id]
+		name := strings.TrimSpace(gi.Name)
+		if name == "" {
+			name = fmt.Sprintf("#%d", id)
+		}
+		out = append(out, PublicPlanGroup{ID: id, Name: name, Platform: gi.Platform})
+	}
+	return out
+}
+
+func mustListPlanGroupIDs(s *PaymentConfigService, ctx context.Context, plan *dbent.SubscriptionPlan) []int64 {
+	if s == nil || plan == nil {
+		return nil
+	}
+	ids, err := s.ListPlanGroupIDs(ctx, plan)
+	if err != nil {
+		return nil
+	}
+	return ids
+}
+
 // GetGroupInfoMap returns a map of group_id → PlanGroupInfo for the given plans.
 func (s *PaymentConfigService) GetGroupInfoMap(ctx context.Context, plans []*dbent.SubscriptionPlan) map[int64]PlanGroupInfo {
 	ids := make([]int64, 0, len(plans))
 	seen := make(map[int64]bool)
+	add := func(id int64) {
+		if id <= 0 || seen[id] {
+			return
+		}
+		seen[id] = true
+		ids = append(ids, id)
+	}
 	for _, p := range plans {
-		if !seen[p.GroupID] {
-			seen[p.GroupID] = true
-			ids = append(ids, p.GroupID)
+		add(p.GroupID)
+		for _, id := range mustListPlanGroupIDs(s, ctx, p) {
+			add(id)
 		}
 	}
 	if len(ids) == 0 {

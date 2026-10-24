@@ -1517,6 +1517,16 @@
           v-if="createForm.platform === 'openai'"
           class="border-t border-gray-200 dark:border-dark-400 pt-4 mt-4"
         >
+          <div class="mb-4 space-y-3">
+            <label class="flex items-center justify-between gap-4 text-sm text-gray-600 dark:text-gray-400">
+              <span>{{ t("admin.groups.openaiFast.force") }}</span>
+              <input v-model="createForm.force_openai_fast" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-primary-600" />
+            </label>
+            <label class="flex items-center justify-between gap-4 text-sm text-gray-600 dark:text-gray-400">
+              <span>{{ t("admin.groups.openaiFast.free") }}</span>
+              <input v-model="createForm.free_openai_fast" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-primary-600" />
+            </label>
+          </div>
           <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
             {{ t("admin.groups.openaiMessages.title") }}
           </h4>
@@ -3143,6 +3153,16 @@
           v-if="editForm.platform === 'openai'"
           class="border-t border-gray-200 dark:border-dark-400 pt-4 mt-4"
         >
+          <div class="mb-4 space-y-3">
+            <label class="flex items-center justify-between gap-4 text-sm text-gray-600 dark:text-gray-400">
+              <span>{{ t("admin.groups.openaiFast.force") }}</span>
+              <input v-model="editForm.force_openai_fast" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-primary-600" />
+            </label>
+            <label class="flex items-center justify-between gap-4 text-sm text-gray-600 dark:text-gray-400">
+              <span>{{ t("admin.groups.openaiFast.free") }}</span>
+              <input v-model="editForm.free_openai_fast" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-primary-600" />
+            </label>
+          </div>
           <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
             {{ t("admin.groups.openaiMessages.title") }}
           </h4>
@@ -4330,6 +4350,8 @@ const createForm = reactive({
   fallback_group_id_on_invalid_request: null as number | null,
   // OpenAI Messages 调度配置（仅 openai 平台使用）
   allow_messages_dispatch: false,
+  force_openai_fast: false,
+  free_openai_fast: false,
   opus_mapped_model: createMessagesDispatchDefaults.opus_mapped_model,
   sonnet_mapped_model: createMessagesDispatchDefaults.sonnet_mapped_model,
   haiku_mapped_model: createMessagesDispatchDefaults.haiku_mapped_model,
@@ -4683,6 +4705,8 @@ const editForm = reactive({
   fallback_group_id_on_invalid_request: null as number | null,
   // OpenAI Messages 调度配置（仅 openai 平台使用）
   allow_messages_dispatch: false,
+  force_openai_fast: false,
+  free_openai_fast: false,
   default_mapped_model: '',
   opus_mapped_model: editMessagesDispatchDefaults.opus_mapped_model,
   sonnet_mapped_model: editMessagesDispatchDefaults.sonnet_mapped_model,
@@ -5187,6 +5211,8 @@ const handleCreateGroup = async () => {
               exact_model_mappings: createForm.exact_model_mappings,
             })
           : undefined,
+      force_openai_fast: createForm.force_openai_fast,
+      free_openai_fast: createForm.free_openai_fast,
     };
     // v-model.number 清空输入框时产生 ""，转为 null 让后端设为无限制
     const emptyToNull = (v: any) => (v === "" ? null : v);
@@ -5316,6 +5342,8 @@ const handleEdit = async (group: AdminGroup) => {
   editForm.exact_model_mappings =
     messagesDispatchFormState.exact_model_mappings;
   editForm.require_oauth_only = group.require_oauth_only ?? false;
+  editForm.force_openai_fast = group.force_openai_fast ?? false;
+  editForm.free_openai_fast = group.free_openai_fast ?? false;
   editForm.require_privacy_set = group.require_privacy_set ?? false;
   editForm.model_routing_enabled = group.model_routing_enabled || false;
   editForm.supported_model_scopes = group.supported_model_scopes || [
@@ -5411,6 +5439,8 @@ const handleUpdateGroup = async () => {
               exact_model_mappings: editForm.exact_model_mappings,
             })
           : undefined,
+      force_openai_fast: editForm.force_openai_fast,
+      free_openai_fast: editForm.free_openai_fast,
     };
     // v-model.number 清空输入框时产生 ""，转为 null 让后端设为无限制
     const emptyToNull = (v: any) => (v === "" ? null : v);

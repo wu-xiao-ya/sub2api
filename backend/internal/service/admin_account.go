@@ -320,6 +320,7 @@ func (s *adminServiceImpl) DuplicateAccount(ctx context.Context, id int64, actor
 		GroupIDs:              groupIDs,
 		ExpiresAt:             expiresAt,
 		AutoPauseOnExpired:    &autoPauseOnExpired,
+		UseRelayRoute:         &source.UseRelayRoute,
 		SkipDefaultGroupBind:  true,
 		SkipMixedChannelCheck: true,
 	}
@@ -425,18 +426,24 @@ func buildAccountForCreate(input *CreateAccountInput, accountExtra map[string]an
 	// Probe state is system-managed. New accounts always start with auto probe disabled.
 	delete(accountExtra, UpstreamBillingProbeEnabledExtraKey)
 	delete(accountExtra, UpstreamBillingProbeExtraKey)
+	// Ratio sync state is also system-managed; enabling happens through the dedicated
+	// admin endpoints after the account exists.
+	delete(accountExtra, UpstreamRatioSyncEnabledExtraKey)
+	delete(accountExtra, UpstreamRatioSyncGroupExtraKey)
+	delete(accountExtra, UpstreamRatioSyncExtraKey)
 	account := &Account{
-		Name:        input.Name,
-		Notes:       normalizeAccountNotes(input.Notes),
-		Platform:    input.Platform,
-		Type:        input.Type,
-		Credentials: input.Credentials,
-		Extra:       accountExtra,
-		ProxyID:     input.ProxyID,
-		Concurrency: normalizeAccountConcurrency(input.Platform, input.Type, input.Concurrency),
-		Priority:    input.Priority,
-		Status:      StatusActive,
-		Schedulable: true,
+		Name:          input.Name,
+		Notes:         normalizeAccountNotes(input.Notes),
+		Platform:      input.Platform,
+		Type:          input.Type,
+		Credentials:   input.Credentials,
+		Extra:         accountExtra,
+		ProxyID:       input.ProxyID,
+		Concurrency:   normalizeAccountConcurrency(input.Platform, input.Type, input.Concurrency),
+		Priority:      input.Priority,
+		Status:        StatusActive,
+		Schedulable:   true,
+		UseRelayRoute: input.UseRelayRoute != nil && *input.UseRelayRoute,
 	}
 	if input.ProbeEnabled != nil && *input.ProbeEnabled {
 		if !isAutomaticUpstreamBillingProbeAccount(account) {
@@ -634,6 +641,7 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 		}
 	}
 	wasOveragesEnabled := account.IsOveragesEnabled()
+	previousRatioSyncBaseURL := strings.TrimSpace(account.GetCredential("base_url"))
 
 	if input.Name != "" {
 		account.Name = input.Name
@@ -669,8 +677,28 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 			}
 			requestedProbeEnabledUpdate = &enabled
 		}
+		var requestedRatioSyncEnabledUpdate *bool
+		if raw, ok := normalizedExtra[UpstreamRatioSyncEnabledExtraKey]; ok {
+			enabled, ok := raw.(bool)
+			if !ok {
+				return nil, infraerrors.BadRequest("INVALID_UPSTREAM_RATIO_SYNC_ENABLED", "upstream_ratio_sync_enabled must be a boolean")
+			}
+			requestedRatioSyncEnabledUpdate = &enabled
+		}
+		var requestedRatioSyncGroupUpdate *string
+		if raw, ok := normalizedExtra[UpstreamRatioSyncGroupExtraKey]; ok {
+			group, ok := raw.(string)
+			if !ok {
+				return nil, infraerrors.BadRequest("INVALID_UPSTREAM_RATIO_SYNC_GROUP", "upstream_ratio_sync_group must be a string")
+			}
+			group = strings.TrimSpace(group)
+			requestedRatioSyncGroupUpdate = &group
+		}
 		delete(normalizedExtra, UpstreamBillingProbeEnabledExtraKey)
 		delete(normalizedExtra, UpstreamBillingProbeExtraKey)
+		delete(normalizedExtra, UpstreamRatioSyncEnabledExtraKey)
+		delete(normalizedExtra, UpstreamRatioSyncGroupExtraKey)
+		delete(normalizedExtra, UpstreamRatioSyncExtraKey)
 		// 保留配额用量字段，防止编辑账号时意外重置
 		for _, key := range []string{
 			"quota_used",
@@ -681,6 +709,9 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 			grokBillingExtraKey,
 			UpstreamBillingProbeEnabledExtraKey,
 			UpstreamBillingProbeExtraKey,
+			UpstreamRatioSyncEnabledExtraKey,
+			UpstreamRatioSyncGroupExtraKey,
+			UpstreamRatioSyncExtraKey,
 		} {
 			if v, ok := account.Extra[key]; ok {
 				normalizedExtra[key] = v
@@ -694,6 +725,24 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 			}
 		}
 		account.Extra = normalizedExtra
+		if requestedRatioSyncEnabledUpdate != nil {
+			if isUpstreamRatioSyncAccount(account) {
+				account.Extra[UpstreamRatioSyncEnabledExtraKey] = *requestedRatioSyncEnabledUpdate
+			} else {
+				delete(account.Extra, UpstreamRatioSyncEnabledExtraKey)
+			}
+		}
+		if requestedRatioSyncGroupUpdate != nil {
+			if isUpstreamRatioSyncAccount(account) {
+				group := *requestedRatioSyncGroupUpdate
+				if group == "" {
+					group = "default"
+				}
+				account.Extra[UpstreamRatioSyncGroupExtraKey] = group
+			} else {
+				delete(account.Extra, UpstreamRatioSyncGroupExtraKey)
+			}
+		}
 		if account.Platform == PlatformAntigravity && wasOveragesEnabled && !account.IsOveragesEnabled() {
 			delete(account.Extra, "antigravity_credits_overages") // 清理旧版 overages 运行态
 			// 清除 AICredits 限流 key
@@ -722,6 +771,14 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 			account.ProxyID = input.ProxyID
 		}
 		account.Proxy = nil // 清除关联对象，防止 GORM Save 时根据 Proxy.ID 覆盖 ProxyID
+	}
+	if input.UseRelayRoute != nil && !account.IsCredentialShadow() {
+		account.UseRelayRoute = *input.UseRelayRoute
+	}
+	if strings.TrimSpace(account.GetCredential("base_url")) != previousRatioSyncBaseURL && account.Extra != nil {
+		// A new upstream host invalidates the synced ratio table; the next
+		// sync cycle repopulates it from scratch.
+		delete(account.Extra, UpstreamRatioSyncExtraKey)
 	}
 	if !reflect.DeepEqual(previousProbeIdentity, upstreamBillingProbeIdentity(account)) && account.Extra != nil {
 		delete(account.Extra, UpstreamBillingProbeExtraKey)
@@ -816,8 +873,8 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 
 	// 将 proxy 变更传播到 spark 影子账号（同步；Update 内部已触发调度快照）。
 	// 影子自身 proxy 不可独立编辑(见上),故对影子的更新不触发传播。
-	if input.ProxyID != nil && !account.IsCredentialShadow() {
-		if err := s.propagateProxyToShadows(ctx, id, account.ProxyID); err != nil {
+	if (input.ProxyID != nil || input.UseRelayRoute != nil) && !account.IsCredentialShadow() {
+		if err := s.propagateProxyToShadows(ctx, id, account.ProxyID, account.UseRelayRoute); err != nil {
 			return nil, err
 		}
 	}
@@ -874,6 +931,10 @@ func (s *adminServiceImpl) BulkUpdateAccounts(ctx context.Context, input *BulkUp
 	// Managed probe state may only enter through the dedicated typed field below.
 	delete(input.Extra, UpstreamBillingProbeEnabledExtraKey)
 	delete(input.Extra, UpstreamBillingProbeExtraKey)
+	// Ratio sync state is managed through the dedicated admin endpoints.
+	delete(input.Extra, UpstreamRatioSyncEnabledExtraKey)
+	delete(input.Extra, UpstreamRatioSyncGroupExtraKey)
+	delete(input.Extra, UpstreamRatioSyncExtraKey)
 
 	if len(input.AccountIDs) == 0 && input.Filters != nil {
 		accountIDs, err := s.resolveBulkUpdateTargetIDs(ctx, input.Filters)
@@ -907,7 +968,7 @@ func (s *adminServiceImpl) BulkUpdateAccounts(ctx context.Context, input *BulkUp
 
 	// 预取所有目标账号，供凭据守卫/代理守卫/混合渠道检查共用，避免多次 DB 查询。
 	var cachedTargets []*Account
-	if len(input.Credentials) > 0 || input.ProxyID != nil || needMixedChannelCheck || hasLongContextBillingUpdate || input.ProbeEnabled != nil {
+	if len(input.Credentials) > 0 || input.ProxyID != nil || input.UseRelayRoute != nil || needMixedChannelCheck || hasLongContextBillingUpdate || input.ProbeEnabled != nil {
 		loaded, err := s.accountRepo.GetByIDs(ctx, input.AccountIDs)
 		if err != nil {
 			return nil, err
@@ -957,11 +1018,20 @@ func (s *adminServiceImpl) BulkUpdateAccounts(ctx context.Context, input *BulkUp
 	// 影子账号 proxy 恒继承母账号(与单账号 UpdateAccount 守卫对齐——外审第4轮 P1):批量携带 proxy
 	// 时目标不得含影子,否则影子会获得独立 proxy、破坏继承不变量(网关按所选影子自身 proxy 出站,
 	// 要等母账号下次改 proxy 才覆盖→漂移)。含影子即整体拒绝,提示从选择中剔除影子。
-	if input.ProxyID != nil {
+	if input.ProxyID != nil || input.UseRelayRoute != nil {
+		found := make(map[int64]bool, len(cachedTargets))
 		for _, acc := range cachedTargets {
+			if acc != nil {
+				found[acc.ID] = true
+			}
 			if acc != nil && acc.IsCredentialShadow() {
 				return nil, infraerrors.Newf(http.StatusBadRequest, "SPARK_SHADOW_PROXY_INHERITED",
-					"spark shadow account %d proxy is inherited from its parent and cannot be set in bulk; manage it on the parent account", acc.ID)
+					"spark shadow account %d proxy and relay route are inherited from its parent and cannot be set in bulk; manage them on the parent account", acc.ID)
+			}
+		}
+		for _, id := range input.AccountIDs {
+			if !found[id] {
+				return nil, ErrAccountNotFound
 			}
 		}
 	}
@@ -1064,6 +1134,9 @@ func (s *adminServiceImpl) BulkUpdateAccounts(ctx context.Context, input *BulkUp
 	if input.Schedulable != nil {
 		repoUpdates.Schedulable = input.Schedulable
 	}
+	if input.UseRelayRoute != nil {
+		repoUpdates.UseRelayRoute = input.UseRelayRoute
+	}
 
 	// Run bulk update for column/jsonb fields first.
 	if _, err := s.accountRepo.BulkUpdate(ctx, input.AccountIDs, repoUpdates); err != nil {
@@ -1071,13 +1144,27 @@ func (s *adminServiceImpl) BulkUpdateAccounts(ctx context.Context, input *BulkUp
 	}
 
 	// 将 proxy 变更传播到每个目标账号的 spark 影子账号
-	if repoUpdates.ProxyID != nil {
-		var effectiveProxyID *int64
-		if *repoUpdates.ProxyID != 0 {
-			effectiveProxyID = repoUpdates.ProxyID
+	if repoUpdates.ProxyID != nil || repoUpdates.UseRelayRoute != nil {
+		targetsByID := make(map[int64]*Account, len(cachedTargets))
+		for _, acc := range cachedTargets {
+			if acc != nil {
+				targetsByID[acc.ID] = acc
+			}
 		}
 		for _, accountID := range input.AccountIDs {
-			if err := s.propagateProxyToShadows(ctx, accountID, effectiveProxyID); err != nil {
+			acc := targetsByID[accountID]
+			effectiveProxyID := acc.ProxyID
+			if repoUpdates.ProxyID != nil {
+				effectiveProxyID = nil
+				if *repoUpdates.ProxyID != 0 {
+					effectiveProxyID = repoUpdates.ProxyID
+				}
+			}
+			useRelay := acc.UseRelayRoute
+			if repoUpdates.UseRelayRoute != nil {
+				useRelay = *repoUpdates.UseRelayRoute
+			}
+			if err := s.propagateProxyToShadows(ctx, accountID, effectiveProxyID, useRelay); err != nil {
 				return nil, err
 			}
 		}
@@ -1270,7 +1357,7 @@ func (s *adminServiceImpl) RevertAccountProxyFallback(ctx context.Context, id in
 	if err != nil {
 		return fmt.Errorf("get account after proxy revert: %w", err)
 	}
-	return s.propagateProxyToShadows(ctx, id, account.ProxyID)
+	return s.propagateProxyToShadows(ctx, id, account.ProxyID, account.UseRelayRoute)
 }
 
 // CreateShadow 为指定 OpenAI OAuth 母账号创建 spark 维度影子账号（一母一影）。
@@ -1359,6 +1446,7 @@ func (s *adminServiceImpl) CreateShadow(ctx context.Context, parentID int64, opt
 		ParentAccountID: &parentID,
 		QuotaDimension:  QuotaDimensionSpark,
 		ProxyID:         parent.ProxyID,
+		UseRelayRoute:   parent.UseRelayRoute,
 		Priority:        priority,
 		Concurrency:     concurrency,
 		Schedulable:     true,
@@ -1399,20 +1487,21 @@ func (s *adminServiceImpl) CreateShadow(ctx context.Context, parentID int64, opt
 // It is called synchronously so that proxy changes are immediately consistent;
 // accountRepo.Update triggers the scheduler outbox + cache propagation internally.
 // Calling this for a non-parent account is a harmless no-op.
-func (s *adminServiceImpl) propagateProxyToShadows(ctx context.Context, parentID int64, proxyID *int64) error {
-	return propagateAccountProxyToShadows(ctx, s.accountRepo, parentID, proxyID)
+func (s *adminServiceImpl) propagateProxyToShadows(ctx context.Context, parentID int64, proxyID *int64, useRelayRoute bool) error {
+	return propagateAccountProxyToShadows(ctx, s.accountRepo, parentID, proxyID, useRelayRoute)
 }
 
 // propagateAccountProxyToShadows 把母账号的 proxy 同步到其所有 spark 影子(影子 proxy 恒继承母账号)。
 // 供 AdminService 编辑路径与 CRS 同步路径共用——后者改动母账号 proxy 后必须同样传播,否则影子保留
 // 旧 proxy 出现出站漂移(外审第8轮)。
-func propagateAccountProxyToShadows(ctx context.Context, repo AccountRepository, parentID int64, proxyID *int64) error {
+func propagateAccountProxyToShadows(ctx context.Context, repo AccountRepository, parentID int64, proxyID *int64, useRelayRoute bool) error {
 	shadows, err := repo.ListShadowsByParent(ctx, parentID)
 	if err != nil {
 		return fmt.Errorf("list spark shadows for proxy propagation: %w", err)
 	}
 	for _, shadow := range shadows {
 		shadow.ProxyID = proxyID
+		shadow.UseRelayRoute = useRelayRoute
 		if err := repo.Update(ctx, shadow); err != nil {
 			return fmt.Errorf("update spark shadow %d proxy: %w", shadow.ID, err)
 		}
@@ -1571,7 +1660,7 @@ func (s *adminServiceImpl) EnsureOpenAIPrivacy(ctx context.Context, account *Acc
 		}
 	}
 
-	mode := disableOpenAITraining(ctx, s.privacyClientFactory, token, proxyURL)
+	mode := disableOpenAITraining(withAccountOperationRoute(ctx, account, proxyURL), s.privacyClientFactory, token, proxyURL)
 	if mode == "" {
 		return ""
 	}
@@ -1605,7 +1694,7 @@ func (s *adminServiceImpl) ForceOpenAIPrivacy(ctx context.Context, account *Acco
 		}
 	}
 
-	mode := disableOpenAITraining(ctx, s.privacyClientFactory, token, proxyURL)
+	mode := disableOpenAITraining(withAccountOperationRoute(ctx, account, proxyURL), s.privacyClientFactory, token, proxyURL)
 	if mode == "" {
 		return ""
 	}
@@ -1648,7 +1737,7 @@ func (s *adminServiceImpl) EnsureAntigravityPrivacy(ctx context.Context, account
 		}
 	}
 
-	mode := setAntigravityPrivacy(ctx, token, projectID, proxyURL)
+	mode := setAntigravityPrivacy(withAccountOperationRoute(ctx, account, proxyURL), token, projectID, proxyURL)
 	if mode == "" {
 		return ""
 	}
@@ -1681,7 +1770,7 @@ func (s *adminServiceImpl) ForceAntigravityPrivacy(ctx context.Context, account 
 		}
 	}
 
-	mode := setAntigravityPrivacy(ctx, token, projectID, proxyURL)
+	mode := setAntigravityPrivacy(withAccountOperationRoute(ctx, account, proxyURL), token, projectID, proxyURL)
 	if mode == "" {
 		return ""
 	}

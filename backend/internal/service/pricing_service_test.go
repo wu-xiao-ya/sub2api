@@ -86,20 +86,20 @@ func TestApplyOfficialDeepSeekPricingOverrides(t *testing.T) {
 
 	applyOfficialDeepSeekPricingOverrides(data)
 
-	for _, model := range []string{"deepseek-v4-flash", "deepseek-chat", "deepseek-reasoner"} {
+	for _, model := range []string{"deepseek-flash", "deepseek-v4.1-flash", "deepseek-v4-flash", "deepseek-v4-flash-vision-exp", "deepseek-chat", "deepseek-reasoner"} {
 		pricing := data[model]
 		require.NotNil(t, pricing, model)
-		require.InDelta(t, 3e-6, pricing.InputCostPerToken, 1e-15, model)
-		require.InDelta(t, 9e-6, pricing.OutputCostPerToken, 1e-15, model)
-		require.InDelta(t, 0.1e-6, pricing.CacheReadInputTokenCost, 1e-15, model)
+		require.InDelta(t, 1e-6, pricing.InputCostPerToken, 1e-15, model)
+		require.InDelta(t, 4e-6, pricing.OutputCostPerToken, 1e-15, model)
+		require.InDelta(t, 0.02e-6, pricing.CacheReadInputTokenCost, 1e-15, model)
 		require.Equal(t, "deepseek", pricing.LiteLLMProvider, model)
 	}
 
 	pro := data["deepseek-v4-pro"]
 	require.NotNil(t, pro)
-	require.InDelta(t, 9e-6, pro.InputCostPerToken, 1e-15)
-	require.InDelta(t, 27e-6, pro.OutputCostPerToken, 1e-15)
-	require.InDelta(t, 0.3e-6, pro.CacheReadInputTokenCost, 1e-15)
+	require.InDelta(t, 4.5e-6, pro.InputCostPerToken, 1e-15)
+	require.InDelta(t, 13.5e-6, pro.OutputCostPerToken, 1e-15)
+	require.InDelta(t, 0.15e-6, pro.CacheReadInputTokenCost, 1e-15)
 }
 
 func TestBillingService_GPT56CacheWritePricingUsesOfficialMultiplier(t *testing.T) {
@@ -112,6 +112,7 @@ func TestBillingService_GPT56CacheWritePricingUsesOfficialMultiplier(t *testing.
 		cacheRead         float64
 		cacheReadPriority float64
 	}{
+		{model: "gpt-6-astra", input: 10e-6, inputPriority: 20e-6, output: 50e-6, outputPriority: 100e-6, cacheRead: 1e-6, cacheReadPriority: 2e-6},
 		{model: "gpt-5.6-sol", input: 5e-6, inputPriority: 10e-6, output: 30e-6, outputPriority: 60e-6, cacheRead: 0.5e-6, cacheReadPriority: 1e-6},
 		{model: "gpt-5.6-terra", input: 2e-6, inputPriority: 4e-6, output: 12e-6, outputPriority: 24e-6, cacheRead: 0.2e-6, cacheReadPriority: 0.4e-6},
 		{model: "gpt-5.6-luna", input: 0.2e-6, inputPriority: 0.4e-6, output: 1.2e-6, outputPriority: 2.4e-6, cacheRead: 0.02e-6, cacheReadPriority: 0.04e-6},
@@ -134,9 +135,13 @@ func TestBillingService_GPT56CacheWritePricingUsesOfficialMultiplier(t *testing.
 			require.NoError(t, err)
 			require.InDelta(t, tt.input*1.25, pricing.CacheCreationPricePerToken, 1e-12)
 			require.InDelta(t, tt.inputPriority*1.25, pricing.CacheCreationPricePerTokenPriority, 1e-12)
-			require.Equal(t, 272000, pricing.LongContextInputThreshold)
-			require.InDelta(t, 2.0, pricing.LongContextInputMultiplier, 1e-12)
-			require.InDelta(t, 1.5, pricing.LongContextOutputMultiplier, 1e-12)
+			if tt.model == "gpt-6-astra" {
+				require.Zero(t, pricing.LongContextInputThreshold)
+			} else {
+				require.Equal(t, 272000, pricing.LongContextInputThreshold)
+				require.InDelta(t, 2.0, pricing.LongContextInputMultiplier, 1e-12)
+				require.InDelta(t, 1.5, pricing.LongContextOutputMultiplier, 1e-12)
+			}
 
 			tokens := UsageTokens{InputTokens: 700, OutputTokens: 50, CacheCreationTokens: 200, CacheReadTokens: 100}
 			standard, err := svc.CalculateCostWithServiceTier(tt.model, tokens, 1, "")
@@ -256,6 +261,7 @@ func TestDefaultPricingIncludesOfficialGPT56Rates(t *testing.T) {
 		input, cached, cacheWrite, output                                 float64
 		inputPriority, cachedPriority, cacheWritePriority, outputPriority float64
 	}{
+		{model: "gpt-6-astra", input: 10e-6, cached: 1e-6, cacheWrite: 12.5e-6, output: 50e-6, inputPriority: 20e-6, cachedPriority: 2e-6, cacheWritePriority: 25e-6, outputPriority: 100e-6},
 		{model: "gpt-5.6-sol", input: 5e-6, cached: 0.5e-6, cacheWrite: 6.25e-6, output: 30e-6, inputPriority: 10e-6, cachedPriority: 1e-6, cacheWritePriority: 12.5e-6, outputPriority: 60e-6},
 		{model: "gpt-5.6-terra", input: 2e-6, cached: 0.2e-6, cacheWrite: 2.5e-6, output: 12e-6, inputPriority: 4e-6, cachedPriority: 0.4e-6, cacheWritePriority: 5e-6, outputPriority: 24e-6},
 		{model: "gpt-5.6-luna", input: 0.2e-6, cached: 0.02e-6, cacheWrite: 0.25e-6, output: 1.2e-6, inputPriority: 0.4e-6, cachedPriority: 0.04e-6, cacheWritePriority: 0.5e-6, outputPriority: 2.4e-6},
@@ -276,11 +282,99 @@ func TestDefaultPricingIncludesOfficialGPT56Rates(t *testing.T) {
 			require.InDelta(t, tt.cachedPriority, pricing.CacheReadPricePerTokenPriority, 1e-12)
 			require.InDelta(t, tt.cacheWritePriority, pricing.CacheCreationPricePerTokenPriority, 1e-12)
 			require.InDelta(t, tt.outputPriority, pricing.OutputPricePerTokenPriority, 1e-12)
-			require.Equal(t, 272000, pricing.LongContextInputThreshold)
-			require.InDelta(t, 2.0, pricing.LongContextInputMultiplier, 1e-12)
-			require.InDelta(t, 1.5, pricing.LongContextOutputMultiplier, 1e-12)
+			if tt.model == "gpt-6-astra" {
+				require.Zero(t, pricing.LongContextInputThreshold)
+				require.Zero(t, pricing.LongContextInputMultiplier)
+				require.Zero(t, pricing.LongContextOutputMultiplier)
+			} else {
+				require.Equal(t, 272000, pricing.LongContextInputThreshold)
+				require.InDelta(t, 2.0, pricing.LongContextInputMultiplier, 1e-12)
+				require.InDelta(t, 1.5, pricing.LongContextOutputMultiplier, 1e-12)
+			}
 		})
 	}
+}
+
+func TestDefaultPricingIncludesGemini38FlashRates(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("..", "..", "resources", "model-pricing", "model_prices_and_context_window.json"))
+	require.NoError(t, err)
+
+	pricingSvc := &PricingService{}
+	pricingData, err := pricingSvc.parsePricingData(data)
+	require.NoError(t, err)
+	var metadata map[string]struct {
+		MaxInputTokens int `json:"max_input_tokens"`
+	}
+	require.NoError(t, json.Unmarshal(data, &metadata))
+
+	pricing := pricingData["gemini-3.8-flash"]
+	require.NotNil(t, pricing)
+	require.InDelta(t, 0.75e-6, pricing.InputCostPerToken, 1e-15)
+	require.InDelta(t, 3.75e-6, pricing.OutputCostPerToken, 1e-15)
+	require.InDelta(t, 0.075e-6, pricing.CacheReadInputTokenCost, 1e-15)
+	require.Equal(t, 1048576, metadata["gemini-3.8-flash"].MaxInputTokens)
+}
+
+func TestPricingService_Gemini4ArgonThinkingTiersUseBasePricing(t *testing.T) {
+	basePricing := &LiteLLMModelPricing{InputCostPerToken: 2e-6, OutputCostPerToken: 10e-6, CacheReadInputTokenCost: 0.1e-6}
+	cyberPricing := &LiteLLMModelPricing{InputCostPerToken: 4e-6, OutputCostPerToken: 20e-6, CacheReadInputTokenCost: 0.2e-6}
+	svc := &PricingService{pricingData: map[string]*LiteLLMModelPricing{
+		"gemini-4-argon":                  basePricing,
+		"gemini-4-argon-cyber-permissive": cyberPricing,
+	}}
+
+	for _, model := range []string{
+		"gemini-4-argon",
+		"gemini-4-argon-high",
+		"gemini-4-argon-low",
+		"gemini-4-argon-medium",
+		"models/gemini-4-argon-high",
+		"projects/p/locations/global/publishers/google/models/gemini-4-argon",
+	} {
+		t.Run(model, func(t *testing.T) {
+			require.Same(t, basePricing, svc.GetModelPricing(model))
+		})
+	}
+	// The cyber variant keeps its own rate card instead of inheriting the
+	// promotional Argon base price. The short "gemini-4-argon-cyber" spelling is
+	// resolved by the billing fallback table, not the catalog.
+	require.Same(t, cyberPricing, svc.GetModelPricing("gemini-4-argon-cyber-permissive"))
+}
+
+func TestDefaultPricingIncludesGemini4ArgonRates(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("..", "..", "resources", "model-pricing", "model_prices_and_context_window.json"))
+	require.NoError(t, err)
+
+	pricingSvc := &PricingService{}
+	pricingData, err := pricingSvc.parsePricingData(data)
+	require.NoError(t, err)
+	pricingSvc.pricingData = pricingData
+
+	for _, tc := range []struct {
+		model               string
+		provider            string
+		input, output, read float64
+	}{
+		{"gemini-4-argon", "gemini", 2e-6, 10e-6, 0.1e-6},
+		{"gemini-4-argon-high", "gemini", 2e-6, 10e-6, 0.1e-6},
+		{"gemini-4-argon-cyber-permissive", "vertex_ai-language-models", 4e-6, 20e-6, 0.2e-6},
+	} {
+		t.Run(tc.model, func(t *testing.T) {
+			pricing := pricingSvc.GetModelPricing(tc.model)
+			require.NotNil(t, pricing)
+			require.Equal(t, tc.provider, pricing.LiteLLMProvider)
+			require.InDelta(t, tc.input, pricing.InputCostPerToken, 1e-15)
+			require.InDelta(t, tc.output, pricing.OutputCostPerToken, 1e-15)
+			require.InDelta(t, tc.read, pricing.CacheReadInputTokenCost, 1e-15)
+			// Priority 档为标准价的 1.8 倍；单一价档不分提示词长度，显式缓存不可用故无存储价。
+			require.InDelta(t, tc.input*1.8, pricing.InputCostPerTokenPriority, 1e-15)
+			require.InDelta(t, tc.output*1.8, pricing.OutputCostPerTokenPriority, 1e-15)
+			require.InDelta(t, tc.read*1.8, pricing.CacheReadInputTokenCostPriority, 1e-15)
+			require.Zero(t, pricing.LongContextInputTokenThreshold)
+			require.Zero(t, pricing.CacheStorageCostPerTokenPerHour)
+		})
+	}
+	require.Contains(t, pricingSvc.ListModelNamesByProvider("gemini"), "gemini-4-argon")
 }
 
 func TestGPT56DedicatedFallbacksUseOfficialRates(t *testing.T) {
@@ -288,6 +382,7 @@ func TestGPT56DedicatedFallbacksUseOfficialRates(t *testing.T) {
 		model                             string
 		input, cached, cacheWrite, output float64
 	}{
+		{model: "gpt-6-astra", input: 10e-6, cached: 1e-6, cacheWrite: 12.5e-6, output: 50e-6},
 		{model: "gpt-5.6-sol", input: 5e-6, cached: 0.5e-6, cacheWrite: 6.25e-6, output: 30e-6},
 		{model: "gpt-5.6-terra", input: 2e-6, cached: 0.2e-6, cacheWrite: 2.5e-6, output: 12e-6},
 		{model: "gpt-5.6-luna", input: 0.2e-6, cached: 0.02e-6, cacheWrite: 0.25e-6, output: 1.2e-6},
@@ -301,24 +396,30 @@ func TestGPT56DedicatedFallbacksUseOfficialRates(t *testing.T) {
 			svc := NewBillingService(&config.Config{}, pricingSvc)
 			pricing, err := svc.GetModelPricing(tt.model + "-preview")
 			require.NoError(t, err)
-			assertGPT56FallbackPricing(t, pricing, tt.input, tt.cached, tt.cacheWrite, tt.output)
+			assertGPT56FallbackPricing(t, tt.model, pricing, tt.input, tt.cached, tt.cacheWrite, tt.output)
 		})
 
 		t.Run(tt.model+"/billing_service", func(t *testing.T) {
 			svc := NewBillingService(&config.Config{}, nil)
 			pricing, err := svc.GetModelPricing(tt.model)
 			require.NoError(t, err)
-			assertGPT56FallbackPricing(t, pricing, tt.input, tt.cached, tt.cacheWrite, tt.output)
+			assertGPT56FallbackPricing(t, tt.model, pricing, tt.input, tt.cached, tt.cacheWrite, tt.output)
 		})
 	}
 }
 
-func assertGPT56FallbackPricing(t *testing.T, pricing *ModelPricing, input, cached, cacheWrite, output float64) {
+func assertGPT56FallbackPricing(t *testing.T, model string, pricing *ModelPricing, input, cached, cacheWrite, output float64) {
 	t.Helper()
 	require.InDelta(t, input, pricing.InputPricePerToken, 1e-12)
 	require.InDelta(t, cached, pricing.CacheReadPricePerToken, 1e-12)
 	require.InDelta(t, cacheWrite, pricing.CacheCreationPricePerToken, 1e-12)
 	require.InDelta(t, output, pricing.OutputPricePerToken, 1e-12)
+	if model == "gpt-6-astra" {
+		require.Zero(t, pricing.LongContextInputThreshold)
+		require.Zero(t, pricing.LongContextInputMultiplier)
+		require.Zero(t, pricing.LongContextOutputMultiplier)
+		return
+	}
 	require.Equal(t, 272000, pricing.LongContextInputThreshold)
 	require.InDelta(t, 2.0, pricing.LongContextInputMultiplier, 1e-12)
 	require.InDelta(t, 1.5, pricing.LongContextOutputMultiplier, 1e-12)

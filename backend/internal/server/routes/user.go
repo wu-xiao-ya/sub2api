@@ -81,6 +81,8 @@ func RegisterUserRoutes(
 		channels := authenticated.Group("/channels")
 		{
 			channels.GET("/available", h.AvailableChannel.List)
+			channels.GET("/performance", h.AvailableChannel.Performance)
+			channels.GET("/performance/detail", h.AvailableChannel.PerformanceDetail)
 		}
 
 		// 使用记录
@@ -130,6 +132,9 @@ func RegisterUserRoutes(
 			monitors.GET("/:id/status", h.ChannelMonitor.GetStatus)
 			monitors.GET("/:id/image", h.ChannelMonitor.Image)
 		}
+
+		// 用量排行榜
+		authenticated.GET("/leaderboard", h.Leaderboard.GetLeaderboard)
 
 		// 共享号池：用户提交、查看贡献账号和收益
 		contributions := authenticated.Group("/account-contributions")

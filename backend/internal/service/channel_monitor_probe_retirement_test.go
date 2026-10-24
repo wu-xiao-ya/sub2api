@@ -16,10 +16,10 @@ func TestNormalizeChannelMonitorMode(t *testing.T) {
 	require.Equal(t, ChannelMonitorModeV1, normalizeChannelMonitorMode(" V1 "))
 }
 
-func TestChannelMonitorRuntimeAllowsBothMonitorLayers(t *testing.T) {
+func TestChannelMonitorRuntimeUsesExclusiveMonitorModes(t *testing.T) {
 	require.False(t, (ChannelMonitorRuntime{Enabled: false, Mode: ChannelMonitorModeV1}).ActiveProbesAllowed())
 	require.True(t, (ChannelMonitorRuntime{Enabled: true, Mode: ChannelMonitorModeV1}).ActiveProbesAllowed())
-	require.True(t, (ChannelMonitorRuntime{Enabled: true, Mode: ChannelMonitorModeV2}).ActiveProbesAllowed())
-	require.True(t, (ChannelMonitorRuntime{Enabled: true, Mode: ChannelMonitorModeV1}).PassiveAggregationAllowed())
+	require.False(t, (ChannelMonitorRuntime{Enabled: true, Mode: ChannelMonitorModeV2}).ActiveProbesAllowed())
+	require.False(t, (ChannelMonitorRuntime{Enabled: true, Mode: ChannelMonitorModeV1}).PassiveAggregationAllowed())
 	require.True(t, (ChannelMonitorRuntime{Enabled: true, Mode: ChannelMonitorModeV2}).PassiveAggregationAllowed())
 }

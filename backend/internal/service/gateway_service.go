@@ -583,6 +583,8 @@ type ForwardResult struct {
 	LatencyBreakdown *UsageLatencyBreakdown
 	ClientDisconnect bool // 客户端是否在流式传输过程中断开
 	ReasoningEffort  *string
+	// CacheStorageTokenHours is explicit context-cache storage (tokens × hours).
+	CacheStorageTokenHours float64
 
 	// 图片生成计费字段（图片生成模型使用）
 	ImageCount         int    // 生成的图片数量
@@ -635,6 +637,7 @@ type UpstreamFailoverError struct {
 	ResponseBody             []byte      // 上游响应体，用于错误透传规则匹配
 	ResponseHeaders          http.Header // 上游响应头，用于透传 cf-ray/cf-mitigated/content-type 等诊断信息
 	ForceCacheBilling        bool        // Antigravity 粘性会话切换时设为 true
+	BoundUpstreamPassthrough bool        // 绑定显式缓存的请求在上游网关账号收到 429/5xx 时原样回写
 	RetryableOnSameAccount   bool        // 临时性错误（如 Google 间歇性 400、空响应），应在同一账号上重试 N 次再切换
 	SafeToFailoverAfterWrite bool        // 仅写出 SSE 注释等非语义字节时，仍可在同一客户端流中切换账号
 	Stage                    GatewayFailureStage
@@ -1243,10 +1246,8 @@ func (s *GatewayService) DoGrokNativeResponsesJSON(ctx context.Context, account 
 	applyGrokCLIHeaders(upstreamReq.Header)
 	account.ApplyHeaderOverrides(upstreamReq.Header)
 	proxyURL := ""
-	if account.ProxyID != nil && account.Proxy != nil {
-		proxyURL = account.Proxy.URL()
-	}
-	resp, err := s.httpUpstream.Do(upstreamReq, proxyURL, account.ID, account.Concurrency)
+	proxyURL = ResolveAccountProxyURL(account)
+	resp, err := s.httpUpstream.Do(WithAccountOutbound(upstreamReq, account, proxyURL), proxyURL, account.ID, account.Concurrency)
 	if err != nil {
 		return nil, &UpstreamFailoverError{StatusCode: http.StatusBadGateway, Reason: GatewayFailureReason("grok_search_transport")}
 	}

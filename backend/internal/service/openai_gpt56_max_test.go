@@ -24,6 +24,12 @@ func TestNormalizeOpenAIReasoningEffortForGPT56(t *testing.T) {
 		{name: "Sol 保留 max", raw: "max", model: "gpt-5.6-sol", want: "max"},
 		{name: "Terra 保留 max", raw: "max", model: "openai/gpt-5.6-terra", want: "max"},
 		{name: "Luna 后缀保留 max", raw: "max", model: "gpt-5.6-luna-2026-07-09", want: "max"},
+		{name: "Astra 保留 max", raw: "max", model: "gpt-6-astra", want: "max"},
+		{name: "Astra 兼容别名保留 max", raw: "max", model: "gpt-astra", want: "max"},
+		{name: "6.1 Sol 保留 max", raw: "max", model: "gpt-6.1-sol", want: "max"},
+		{name: "6.1 Sol 后缀保留 max", raw: "max", model: "gpt-6.1-sol-max", want: "max"},
+		{name: "6.1 Sol 路径前缀保留 max", raw: "max", model: "openai/gpt-6.1-sol-high", want: "max"},
+		{name: "6 Sol 沿用 xhigh", raw: "max", model: "gpt-6-sol", want: "xhigh"},
 		{name: "其他模型沿用 xhigh", raw: "max", model: "deepseek-v4-pro", want: "xhigh"},
 	}
 
@@ -44,6 +50,17 @@ func TestNormalizeOpenAICodexCompactReasoningEffortDowngradesMax(t *testing.T) {
 	require.Equal(t, "gpt-5.6-sol", gjson.GetBytes(normalized, "model").String())
 	require.Equal(t, "xhigh", gjson.GetBytes(normalized, "reasoning.effort").String())
 	require.Equal(t, "auto", gjson.GetBytes(normalized, "reasoning.summary").String())
+}
+
+func TestNormalizeOpenAICodexCompactReasoningEffortDowngradesGPT61SolMax(t *testing.T) {
+	body := []byte(`{"model":"gpt-6.1-sol","input":"compact me","reasoning":{"effort":"max","summary":"auto"}}`)
+
+	normalized, changed, err := normalizeOpenAICodexCompactReasoningEffort(body, "gpt-6.1-sol")
+
+	require.NoError(t, err)
+	require.True(t, changed)
+	require.Equal(t, "gpt-6.1-sol", gjson.GetBytes(normalized, "model").String())
+	require.Equal(t, "xhigh", gjson.GetBytes(normalized, "reasoning.effort").String())
 }
 
 func TestNormalizeOpenAICodexCompactReasoningEffortForAccountScopesCompatibility(t *testing.T) {

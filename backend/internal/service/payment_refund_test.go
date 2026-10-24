@@ -210,7 +210,7 @@ func TestValidateRefundProviderResponseAcceptsPending(t *testing.T) {
 	require.Error(t, validateRefundProviderResponse(nil))
 }
 
-func TestFinishRefundPendingMarksOrderPendingAndRollsBackDeduction(t *testing.T) {
+func TestFinishRefundPendingMarksOrderPendingAndHoldsDeduction(t *testing.T) {
 	ctx := context.Background()
 	client := newPaymentConfigServiceTestClient(t)
 
@@ -244,7 +244,6 @@ func TestFinishRefundPendingMarksOrderPendingAndRollsBackDeduction(t *testing.T)
 	var rolledBack float64
 	userRepo := &mockUserRepo{}
 	userRepo.updateBalanceFn = func(ctx context.Context, id int64, amount float64) error {
-		require.Equal(t, user.ID, id)
 		rolledBack += amount
 		return nil
 	}
@@ -268,8 +267,10 @@ func TestFinishRefundPendingMarksOrderPendingAndRollsBackDeduction(t *testing.T)
 	require.NotNil(t, result)
 	require.False(t, result.Success)
 	require.Contains(t, result.Warning, "pending confirmation")
-	require.Equal(t, 40.0, rolledBack)
-	require.Zero(t, plan.BalanceToDeduct)
+	// 挂起期间扣减保留，等待 QueryAndFinalizeRefund 收敛。
+	require.Zero(t, rolledBack)
+	require.Equal(t, 40.0, plan.BalanceToDeduct)
+	require.True(t, plan.deductionHeld)
 
 	reloaded, err := client.PaymentOrder.Get(ctx, order.ID)
 	require.NoError(t, err)
@@ -324,7 +325,7 @@ func TestFinishRefundSuccessStatusesFinalize(t *testing.T) {
 				Save(ctx)
 			require.NoError(t, err)
 
-			svc := &PaymentService{entClient: client}
+			svc := &PaymentService{entClient: client, userRepo: &mockUserRepo{}}
 			plan := &RefundPlan{
 				OrderID:         order.ID,
 				Order:           order,
@@ -380,9 +381,9 @@ func TestQueryAndFinalizeRefundFinalizesProviderStatuses(t *testing.T) {
 			svc := &PaymentService{
 				entClient:    client,
 				loadBalancer: &captureLoadBalancer{},
-				userRepo: &mockUserRepo{deductBalanceFn: func(ctx context.Context, id int64, amount float64) error {
+				userRepo: &mockUserRepo{deductAvailableFn: func(ctx context.Context, id int64, amount float64) (float64, error) {
 					deducted += amount
-					return nil
+					return amount, nil
 				}},
 			}
 			restore := replacePaymentProviderFactoryForTest(t, &refundQueryProviderTestDouble{

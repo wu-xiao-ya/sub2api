@@ -287,7 +287,9 @@ func (s *OAuthService) exchangeCodeForToken(ctx context.Context, code, codeVerif
 
 // RefreshToken refreshes an OAuth token
 func (s *OAuthService) RefreshToken(ctx context.Context, refreshToken string, proxyURL string) (*TokenInfo, error) {
-	tokenResp, err := s.oauthClient.RefreshToken(ctx, refreshToken, proxyURL)
+	tokenResp, _, err := accountOutboundOperation(ctx, proxyURL, func(route string) (*oauth.TokenResponse, error) {
+		return s.oauthClient.RefreshToken(ctx, refreshToken, route)
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -317,7 +319,7 @@ func (s *OAuthService) RefreshAccountToken(ctx context.Context, account *Account
 		}
 	}
 
-	return s.RefreshToken(ctx, refreshToken, proxyURL)
+	return s.RefreshToken(withAccountOperationRoute(ctx, account, proxyURL), refreshToken, proxyURL)
 }
 
 // Stop stops the session store cleanup goroutine

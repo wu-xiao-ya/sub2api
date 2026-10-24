@@ -11,8 +11,9 @@ import (
 // 优先级（先命中为准）：
 //  1. 自定义规则（始终尝试，不依赖 ApplyPricingToAccountStats 开关）
 //  2. ApplyPricingToAccountStats 启用时，直接使用本次请求的客户计费（倍率前的 totalCost）
-//  3. 模型定价文件（LiteLLM）中上游模型的默认价格
-//  4. nil → 走默认公式（total_cost × account_rate_multiplier）
+//  3. new-api 上游倍率同步表（账号已开启同步且快照新鲜时，按上游真实口径折算）
+//  4. 模型定价文件（LiteLLM）中上游模型的默认价格
+//  5. nil → 走默认公式（total_cost × account_rate_multiplier）
 //
 // upstreamModel 是最终发往上游的模型 ID。
 // totalCost 是本次请求的客户计费（倍率前），用于优先级 2。
@@ -51,7 +52,14 @@ func resolveAccountStatsCost(
 		return &cost
 	}
 
-	// 优先级 3：模型定价文件（LiteLLM）默认价格
+	// 优先级 3：new-api 上游倍率同步表（仅限已同步且新鲜的账号）
+	if billingService != nil {
+		if cost := billingService.upstreamRatioSyncCost(accountID, upstreamModel, tokens, requestCount); cost != nil {
+			return cost
+		}
+	}
+
+	// 优先级 4：模型定价文件（LiteLLM）默认价格
 	if billingService != nil {
 		return tryModelFilePricing(billingService, upstreamModel, tokens)
 	}
@@ -72,6 +80,9 @@ func tryModelFilePricing(billingService *BillingService, model string, tokens Us
 		}
 		return &breakdown.TotalCost
 	}
+	// The fallback cost basis must use the same time-of-day policy as billing.
+	// Custom account rules and explicit channel prices are resolved before this path.
+	pricing = applyDomesticTimePricingAt(model, pricing, billingService.currentTime())
 	cost := float64(tokens.InputTokens)*pricing.InputPricePerToken +
 		float64(tokens.OutputTokens)*pricing.OutputPricePerToken +
 		float64(tokens.CacheCreationTokens)*pricing.CacheCreationPricePerToken +

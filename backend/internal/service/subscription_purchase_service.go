@@ -124,16 +124,16 @@ func (s *SubscriptionService) ValidateSharedPurchase(purchase *SharedSubscriptio
 	if purchase == nil || !purchase.ExpiresAt.After(time.Now()) {
 		return ErrSharedSubscriptionNotFound
 	}
-	if purchase.LifetimeQuotaUSD > 0 && purchase.LifetimeUsageUSD+additionalCost > purchase.LifetimeQuotaUSD {
+	if purchase.LifetimeQuotaUSD > 0 && (purchase.LifetimeUsageUSD >= purchase.LifetimeQuotaUSD || purchase.LifetimeUsageUSD+additionalCost > purchase.LifetimeQuotaUSD) {
 		return ErrMonthlyLimitExceeded
 	}
-	if purchase.DailyQuotaUSD > 0 && purchase.DailyUsageUSD+additionalCost > purchase.DailyQuotaUSD {
+	if purchase.DailyQuotaUSD > 0 && (purchase.DailyUsageUSD >= purchase.DailyQuotaUSD || purchase.DailyUsageUSD+additionalCost > purchase.DailyQuotaUSD) {
 		return ErrDailyLimitExceeded
 	}
-	if purchase.WeeklyQuotaUSD > 0 && purchase.WeeklyUsageUSD+additionalCost > purchase.WeeklyQuotaUSD {
+	if purchase.WeeklyQuotaUSD > 0 && (purchase.WeeklyUsageUSD >= purchase.WeeklyQuotaUSD || purchase.WeeklyUsageUSD+additionalCost > purchase.WeeklyQuotaUSD) {
 		return ErrWeeklyLimitExceeded
 	}
-	if purchase.MonthlyQuotaUSD > 0 && purchase.MonthlyUsageUSD+additionalCost > purchase.MonthlyQuotaUSD {
+	if purchase.MonthlyQuotaUSD > 0 && (purchase.MonthlyUsageUSD >= purchase.MonthlyQuotaUSD || purchase.MonthlyUsageUSD+additionalCost > purchase.MonthlyQuotaUSD) {
 		return ErrMonthlyLimitExceeded
 	}
 	return nil

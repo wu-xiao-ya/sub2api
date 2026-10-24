@@ -53,14 +53,7 @@ func (s *PaymentService) CreateOrder(ctx context.Context, req CreateOrderRequest
 	if s.notificationEmailService != nil {
 		s.notificationEmailService.RememberRecipientLocale(ctx, req.UserID, user.Email, req.Locale)
 	}
-	orderAmount := req.Amount
-	limitAmount := req.Amount
-	if plan != nil {
-		orderAmount = plan.Price
-		limitAmount = plan.Price
-	} else if req.OrderType == payment.OrderTypeBalance {
-		orderAmount = calculateCreditedBalance(req.Amount, cfg.BalanceRechargeMultiplier)
-	}
+	// 币种必须先于金额确定：赠金阶梯按支付币种的实付金额命中。
 	feeRate := cfg.RechargeFeeRate
 	methodCurrency := payment.DefaultPaymentCurrency
 	if s.configService != nil {
@@ -68,6 +61,19 @@ func (s *PaymentService) CreateOrder(ctx context.Context, req CreateOrderRequest
 		if err != nil {
 			return nil, err
 		}
+	}
+	orderAmount := req.Amount
+	limitAmount := req.Amount
+	bonusAmount := 0.0
+	if plan != nil {
+		orderAmount = plan.Price
+		limitAmount = plan.Price
+	} else if req.OrderType == payment.OrderTypeBalance {
+		// 币种未定时按默认币种报价，选中实例币种不同时在下方重算。
+		quote := quoteRechargeBonus(cfg, req.Amount, methodCurrency)
+		limitAmount = quote.PayBase
+		bonusAmount = quote.Bonus
+		orderAmount = quote.Credited
 	}
 	payAmountStr, payAmount, err := calculateCreateOrderPayAmountForOrderType(limitAmount, feeRate, methodCurrency, req.OrderType, cfg.SubscriptionUSDToCNYRate)
 	if err != nil {
@@ -100,7 +106,7 @@ func (s *PaymentService) CreateOrder(ctx context.Context, req CreateOrderRequest
 	if oauthResp != nil {
 		return oauthResp, nil
 	}
-	order, err := s.createOrderInTx(ctx, req, user, plan, cfg, orderAmount, limitAmount, feeRate, payAmount, sel)
+	order, err := s.createOrderInTx(ctx, req, user, plan, cfg, orderAmount, limitAmount, feeRate, payAmount, bonusAmount, sel)
 	if err != nil {
 		return nil, err
 	}
@@ -115,11 +121,16 @@ func (s *PaymentService) CreateOrder(ctx context.Context, req CreateOrderRequest
 }
 
 func (s *PaymentService) validateOrderInput(ctx context.Context, req CreateOrderRequest, cfg *PaymentConfig) (*dbent.SubscriptionPlan, error) {
-	if req.OrderType == payment.OrderTypeBalance && cfg.BalanceDisabled {
-		return nil, infraerrors.Forbidden("BALANCE_PAYMENT_DISABLED", "balance recharge has been disabled")
-	}
-	if req.OrderType == payment.OrderTypeSubscription {
+	// 订单类型必须走白名单：未知类型会跳过充值开关与倍率计算，履约时却仍按余额到账。
+	switch req.OrderType {
+	case payment.OrderTypeBalance:
+		if cfg.BalanceDisabled {
+			return nil, infraerrors.Forbidden("BALANCE_PAYMENT_DISABLED", "balance recharge has been disabled")
+		}
+	case payment.OrderTypeSubscription:
 		return s.validateSubOrder(ctx, req)
+	default:
+		return nil, infraerrors.BadRequest("INVALID_ORDER_TYPE", "unsupported order type")
 	}
 	if math.IsNaN(req.Amount) || math.IsInf(req.Amount, 0) || req.Amount <= 0 {
 		return nil, infraerrors.BadRequest("INVALID_AMOUNT", "amount must be a positive number")
@@ -146,16 +157,10 @@ func (s *PaymentService) validateSubOrder(ctx context.Context, req CreateOrderRe
 	groupIDs, _ := s.configService.ListPlanGroupIDs(ctx, plan)
 	explicitGroups := s.configService.HasExplicitPlanGroups(ctx, int64(plan.ID))
 	if explicitGroups {
-		if !strings.EqualFold(group.Platform, PlatformOpenAI) {
-			return nil, infraerrors.BadRequest("GROUP_PLATFORM_MISMATCH", "subscription plans only support openai groups")
-		}
 		for _, groupID := range groupIDs {
 			candidate, groupErr := s.groupRepo.GetByID(ctx, groupID)
 			if groupErr != nil || candidate == nil || candidate.Status != payment.EntityStatusActive {
 				return nil, infraerrors.NotFound("GROUP_NOT_FOUND", "a subscription group is no longer available")
-			}
-			if !strings.EqualFold(candidate.Platform, PlatformOpenAI) {
-				return nil, infraerrors.BadRequest("GROUP_PLATFORM_MISMATCH", "subscription plans only support openai groups")
 			}
 		}
 		return plan, nil
@@ -166,7 +171,7 @@ func (s *PaymentService) validateSubOrder(ctx context.Context, req CreateOrderRe
 	return plan, nil
 }
 
-func (s *PaymentService) createOrderInTx(ctx context.Context, req CreateOrderRequest, user *User, plan *dbent.SubscriptionPlan, cfg *PaymentConfig, orderAmount, limitAmount, feeRate, payAmount float64, sel *payment.InstanceSelection) (*dbent.PaymentOrder, error) {
+func (s *PaymentService) createOrderInTx(ctx context.Context, req CreateOrderRequest, user *User, plan *dbent.SubscriptionPlan, cfg *PaymentConfig, orderAmount, limitAmount, feeRate, payAmount, bonusAmount float64, sel *payment.InstanceSelection) (*dbent.PaymentOrder, error) {
 	tx, err := s.entClient.Tx(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("begin transaction: %w", err)
@@ -202,6 +207,7 @@ func (s *PaymentService) createOrderInTx(ctx context.Context, req CreateOrderReq
 		SetAmount(orderAmount).
 		SetPayAmount(payAmount).
 		SetFeeRate(feeRate).
+		SetBonusAmount(bonusAmount).
 		SetRechargeCode("").
 		SetOutTradeNo(outTradeNo).
 		SetPaymentType(req.PaymentType).
@@ -463,6 +469,7 @@ func (s *PaymentService) invokeProvider(ctx context.Context, order *dbent.Paymen
 		IsMobile:    req.IsMobile,
 		ReturnURL:   providerReturnURL,
 	}, sel, outTradeNo, payAmountStr, subject)
+	providerReq.AlipayMobilePrecreate = shouldUseAlipayMobilePrecreate(req, cfg, sel)
 	finishProviderCall := servertiming.ObserveDependency(ctx, "payment")
 	pr, err := prov.CreatePayment(ctx, providerReq)
 	finishProviderCall()
@@ -487,6 +494,7 @@ func (s *PaymentService) invokeProvider(ctx context.Context, order *dbent.Paymen
 	s.writeAuditLog(ctx, order.ID, "ORDER_CREATED", fmt.Sprintf("user:%d", req.UserID), map[string]any{
 		"paymentAmount":  req.Amount,
 		"creditedAmount": order.Amount,
+		"bonusAmount":    order.BonusAmount,
 		"payAmount":      order.PayAmount,
 		"paymentType":    req.PaymentType,
 		"orderType":      req.OrderType,
@@ -498,7 +506,17 @@ func (s *PaymentService) invokeProvider(ctx context.Context, order *dbent.Paymen
 	}
 	resp := buildCreateOrderResponse(order, req, payAmount, sel, pr, resultType)
 	resp.ResumeToken = resumeToken
+	resp.AlipayMobilePrecreateDeepLink = providerReq.AlipayMobilePrecreate && strings.TrimSpace(pr.QRCode) != ""
 	return resp, nil
+}
+
+// shouldUseAlipayMobilePrecreate 只在支付宝实例 + 移动端 + 后台开启开关时改走 precreate 深链。
+func shouldUseAlipayMobilePrecreate(req CreateOrderRequest, cfg *PaymentConfig, sel *payment.InstanceSelection) bool {
+	return cfg != nil &&
+		cfg.AlipayMobilePrecreateDeepLink &&
+		req.IsMobile &&
+		sel != nil &&
+		strings.EqualFold(strings.TrimSpace(sel.ProviderKey), payment.TypeAlipay)
 }
 
 func sanitizeCreatePaymentResponseDetails(pr *payment.CreatePaymentResponse) {
@@ -740,6 +758,7 @@ func buildCreateOrderResponse(order *dbent.PaymentOrder, req CreateOrderRequest,
 	return &CreateOrderResponse{
 		OrderID:      order.ID,
 		Amount:       order.Amount,
+		BonusAmount:  order.BonusAmount,
 		PayAmount:    payAmount,
 		FeeRate:      order.FeeRate,
 		Status:       OrderStatusPending,

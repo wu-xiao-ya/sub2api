@@ -43,9 +43,9 @@ describe('AppSidebar scroll position persistence', () => {
 })
 
 describe('AppSidebar server monitor entry', () => {
-  it('opens the standalone server monitor as an external admin entry', () => {
-    expect(componentSource).toContain("path: '/server-monitor'")
-    expect(componentSource).toContain("externalUrl: '/server-monitor/'")
+  it('opens the native server monitor within the admin session', () => {
+    expect(componentSource).toContain("path: '/admin/server-monitor'")
+    expect(componentSource).not.toContain("externalUrl: '/server-monitor/'")
     expect(componentSource).toContain("label: t('nav.serverMonitor')")
     expect(componentSource).toContain('target="_blank"')
     expect(componentSource).toContain('rel="noopener noreferrer"')

@@ -1,0 +1,254 @@
+{
+  "sourcePackage": "@lobehub/icons-static-svg",
+  "version": "1.95.0",
+  "retrievedOn": "2026-09-13",
+  "note": "MIT covers library artwork; trademarks remain with their owners. Identification only; no endorsement.",
+  "assets": [
+    {
+      "brand": "openai",
+      "slug": "openai",
+      "sha256": "4e632cff724013c645c8b720b8672d9ead39b624e85683741e9db27b63bebf85",
+      "url": "https://unpkg.com/@lobehub/icons-static-svg@1.95.0/icons/openai.svg",
+      "file": "openai.svg",
+      "verification": "visual-match",
+      "reference": "https://developers.openai.com/favicon.svg"
+    },
+    {
+      "brand": "anthropic",
+      "slug": "claude-color",
+      "sha256": "b2d97227dea158445ac384ac2abca1465fab5cf8a094beadfa8f8b6310e74fab",
+      "url": "https://unpkg.com/@lobehub/icons-static-svg@1.95.0/icons/claude-color.svg",
+      "file": "anthropic.svg",
+      "verification": "visual-match",
+      "reference": "https://claude.ai/favicon.ico"
+    },
+    {
+      "brand": "gemini",
+      "slug": "gemini-color",
+      "sha256": "8e2845b4de69939d5fef62c42f51a6cf1aacc7ecd62a273cd3716f58d8dc4f2a",
+      "url": "https://unpkg.com/@lobehub/icons-static-svg@1.95.0/icons/gemini-color.svg",
+      "file": "gemini.svg",
+      "verification": "visual-match",
+      "reference": "https://gemini.google/images/spark_4c.png"
+    },
+    {
+      "brand": "grok",
+      "slug": "grok",
+      "sha256": "08eefa362a8f5b95583ed9a6cb9b202bdb607b4f0f3b634fd5d4dab95f63b49d",
+      "url": "https://unpkg.com/@lobehub/icons-static-svg@1.95.0/icons/grok.svg",
+      "file": "grok.svg",
+      "verification": "visual-match",
+      "reference": "https://apps.apple.com/app/id6670324846",
+      "referenceNote": "Official Grok AI listing: X Corp., sellerUrl https://x.ai/. Glyph matched; monochrome library variant retained, not metallic app tile."
+    },
+    {
+      "brand": "deepseek",
+      "slug": "deepseek-color",
+      "sha256": "551e18e982a07127795a5ada4a8ed3672784e4eb8fd00db052baf0e08bfc00da",
+      "url": "https://unpkg.com/@lobehub/icons-static-svg@1.95.0/icons/deepseek-color.svg",
+      "file": "deepseek.svg",
+      "verification": "visual-match",
+      "reference": "https://www.deepseek.com/favicon.ico"
+    },
+    {
+      "brand": "kimi",
+      "slug": "kimi-color",
+      "sha256": "2cdb437a88102b0322d6993021dd00a3e385a6e9e2c3aaca54346556777e8026",
+      "url": "https://unpkg.com/@lobehub/icons-static-svg@1.95.0/icons/kimi-color.svg",
+      "file": "kimi.svg",
+      "verification": "visual-match",
+      "reference": "https://www.kimi.com/favicon-light.ico"
+    },
+    {
+      "brand": "glm",
+      "slug": "official-favicon",
+      "sha256": "94ff9c00af67774e5178428942a6e0a9952c7e2f3aba4c25f3b05c782841ee4c",
+      "url": "https://bigmodel.cn/static/images/favicon.png",
+      "file": "glm.png",
+      "verification": "official-resource",
+      "reference": "https://bigmodel.cn/"
+    },
+    {
+      "brand": "qwen",
+      "slug": "official-favicon",
+      "sha256": "cd9390bc4209c319121d111f3a1f535b3c7dd909b8f860d41acc9744138d58df",
+      "url": "https://img.alicdn.com/imgextra/i4/O1CN01OXv3EM1FN8t9W4P79_!!6000000000474-2-tps-80-80.png",
+      "file": "qwen.png",
+      "verification": "official-resource",
+      "reference": "https://qwen.ai/"
+    },
+    {
+      "brand": "minimax",
+      "slug": "minimax-color",
+      "sha256": "b71b7092740f2900a7f1d0132ac881ca30680f9ad9b73b13c62d6f4ee6823e2a",
+      "url": "https://unpkg.com/@lobehub/icons-static-svg@1.95.0/icons/minimax-color.svg",
+      "file": "minimax.svg",
+      "verification": "visual-match",
+      "reference": "https://filecdn.minimax.chat/public/969d635c-cab6-45cc-8d61-47c9fe40c81f.png"
+    },
+    {
+      "brand": "mimo",
+      "slug": "xiaomimimo",
+      "sha256": "ed2c497a2b50ab6eb17b129ce596626570f4491287aead217ecc211c30273b22",
+      "url": "https://unpkg.com/@lobehub/icons-static-svg@1.95.0/icons/xiaomimimo.svg",
+      "file": "mimo.svg",
+      "verification": "visual-match",
+      "reference": "https://cdn.cnbj1.fds.api.mi-img.com/aife/mimo-blog-fe/doc_build/static/image/logo.99baaffe.png"
+    },
+    {
+      "brand": "hunyuan",
+      "slug": "hunyuan-color",
+      "sha256": "4f9b507d14afd539d8f83f8eab31f001d5aa1066d863fb1ebac8802c9b01256e",
+      "url": "https://unpkg.com/@lobehub/icons-static-svg@1.95.0/icons/hunyuan-color.svg",
+      "file": "hunyuan.svg",
+      "verification": "visual-match",
+      "reference": "https://hunyuan-blog-web-prod-1258344703.cos.ap-guangzhou.myqcloud.com/logo.svg"
+    },
+    {
+      "brand": "mistral",
+      "slug": "mistral-color",
+      "sha256": "cba814802c5ba6b11adb45acde98443eafe6e690beed2da7ceed585f663596ff",
+      "url": "https://unpkg.com/@lobehub/icons-static-svg@1.95.0/icons/mistral-color.svg",
+      "file": "mistral.svg",
+      "verification": "pending-official-check"
+    },
+    {
+      "brand": "meta",
+      "slug": "meta-color",
+      "sha256": "70839ba05368a41bcc79e038cd27788a3d187c2a2421bb6966647fa65da8a032",
+      "url": "https://unpkg.com/@lobehub/icons-static-svg@1.95.0/icons/meta-color.svg",
+      "file": "meta.svg",
+      "verification": "pending-official-check"
+    },
+    {
+      "brand": "cohere",
+      "slug": "cohere-color",
+      "sha256": "95981a7fb1c1b658b9c179e6ba7302eb2cae84620a63e301091749e6d9a199b6",
+      "url": "https://unpkg.com/@lobehub/icons-static-svg@1.95.0/icons/cohere-color.svg",
+      "file": "cohere.svg",
+      "verification": "pending-official-check"
+    },
+    {
+      "brand": "yi",
+      "slug": "yi-color",
+      "sha256": "1f31948ef8a54e4c4ae212013a55c128398cd77c5674ba26fb6106279c998dde",
+      "url": "https://unpkg.com/@lobehub/icons-static-svg@1.95.0/icons/yi-color.svg",
+      "file": "yi.svg",
+      "verification": "pending-official-check"
+    },
+    {
+      "brand": "doubao",
+      "slug": "doubao-color",
+      "sha256": "de500b438f5b92f04c011180f29ebae341488bdf0892f88696e7e77ae346741f",
+      "url": "https://unpkg.com/@lobehub/icons-static-svg@1.95.0/icons/doubao-color.svg",
+      "file": "doubao.svg",
+      "verification": "pending-official-check"
+    },
+    {
+      "brand": "wenxin",
+      "slug": "wenxin-color",
+      "sha256": "a107d2bbcec73484200f9a2d97c50049c5081749ae0b261b45ec6ffb31bdca51",
+      "url": "https://unpkg.com/@lobehub/icons-static-svg@1.95.0/icons/wenxin-color.svg",
+      "file": "wenxin.svg",
+      "verification": "pending-official-check"
+    },
+    {
+      "brand": "spark",
+      "slug": "spark-color",
+      "sha256": "f64498dcad0d5200c583b6476737f93cc86473aa619911cd6aa9a4b0f2593ec2",
+      "url": "https://unpkg.com/@lobehub/icons-static-svg@1.95.0/icons/spark-color.svg",
+      "file": "spark.svg",
+      "verification": "pending-official-check"
+    },
+    {
+      "brand": "cloudflare",
+      "slug": "cloudflare-color",
+      "sha256": "7afca6862ba7124a10204d37264c04327630f828bb96732a2981eeca7b5897a0",
+      "url": "https://unpkg.com/@lobehub/icons-static-svg@1.95.0/icons/cloudflare-color.svg",
+      "file": "cloudflare.svg",
+      "verification": "pending-official-check"
+    },
+    {
+      "brand": "midjourney",
+      "slug": "midjourney",
+      "sha256": "900c13ad77ce0dce6e6b8b5b4bc545b4fa21ef8b89fade912fcd02cd71ce43b4",
+      "url": "https://unpkg.com/@lobehub/icons-static-svg@1.95.0/icons/midjourney.svg",
+      "file": "midjourney.svg",
+      "verification": "pending-official-check"
+    },
+    {
+      "brand": "perplexity",
+      "slug": "perplexity-color",
+      "sha256": "5af02f1c7d14853dc606f75b565772f902705457d128030618b59dc7d0873cd4",
+      "url": "https://unpkg.com/@lobehub/icons-static-svg@1.95.0/icons/perplexity-color.svg",
+      "file": "perplexity.svg",
+      "verification": "pending-official-check"
+    },
+    {
+      "brand": "jina",
+      "slug": "jina",
+      "sha256": "dba4219a9db5836ff07fc9185edd38d3574a23661c6458df801b493b6b577106",
+      "url": "https://unpkg.com/@lobehub/icons-static-svg@1.95.0/icons/jina.svg",
+      "file": "jina.svg",
+      "verification": "pending-official-check"
+    },
+    {
+      "brand": "openrouter",
+      "slug": "openrouter",
+      "sha256": "b859cfc30a109d93602c7619f22e602ace4b4326f4547cd4c21f0d8adf3d589b",
+      "url": "https://unpkg.com/@lobehub/icons-static-svg@1.95.0/icons/openrouter.svg",
+      "file": "openrouter.svg",
+      "verification": "pending-official-check"
+    },
+    {
+      "brand": "suno",
+      "slug": "suno",
+      "sha256": "d9e6600df0fc03387f47fed28c27cdc669ea403e9429d0507b908019a68a33a2",
+      "url": "https://unpkg.com/@lobehub/icons-static-svg@1.95.0/icons/suno.svg",
+      "file": "suno.svg",
+      "verification": "pending-official-check"
+    },
+    {
+      "brand": "ollama",
+      "slug": "ollama",
+      "sha256": "f104a1296b8ddc437ab0e6089313c4fc61c2bcd327c90ca4ca6d1c1f9103792f",
+      "url": "https://unpkg.com/@lobehub/icons-static-svg@1.95.0/icons/ollama.svg",
+      "file": "ollama.svg",
+      "verification": "pending-official-check"
+    },
+    {
+      "brand": "dify",
+      "slug": "dify-color",
+      "sha256": "c7f04495df0dc05ff3b308bf9b5ef96e1bb1487a3e3330e466806ff1a9ab7dce",
+      "url": "https://unpkg.com/@lobehub/icons-static-svg@1.95.0/icons/dify-color.svg",
+      "file": "dify.svg",
+      "verification": "pending-official-check"
+    },
+    {
+      "brand": "coze",
+      "slug": "coze",
+      "sha256": "87335a413dbf42b9aaaa94e57e0c4c7d9f537dce33e09274bc80c04b3600b2e1",
+      "url": "https://unpkg.com/@lobehub/icons-static-svg@1.95.0/icons/coze.svg",
+      "file": "coze.svg",
+      "verification": "pending-official-check"
+    },
+    {
+      "brand": "ai360",
+      "slug": "ai360-color",
+      "sha256": "258616d5881f5529a8cccd8927aaac3b417965fb6cfb773e0d2cc0aaa444e919",
+      "url": "https://unpkg.com/@lobehub/icons-static-svg@1.95.0/icons/ai360-color.svg",
+      "file": "ai360.svg",
+      "verification": "pending-official-check"
+    },
+    {
+      "brand": "antigravity",
+      "slug": "official-logo",
+      "url": "https://antigravity.google/assets/image/antigravity-logo.png",
+      "sha256": "8f0b95d2d21dbf930b4d100e2fdc4505673e900a731aa56ea633a4b59c312799",
+      "file": "antigravity.png",
+      "verification": "official-resource",
+      "reference": "https://antigravity.google/"
+    }
+  ],
+  "hashFormat": "SHA-256 of PNG bytes, or LF-normalized SVG text with surrounding whitespace trimmed"
+}

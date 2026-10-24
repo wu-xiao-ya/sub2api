@@ -1,0 +1,33 @@
+/* Shared console presentation. Billing, routing and data formats stay in their owners. */
+.console-shell { letter-spacing: 0; }
+.console-main { width: 100%; }
+.console-main > *, .console-page, .console-header > * { min-width: 0; }
+.console-page { margin-inline: auto; width: 100%; max-width: 1800px; }
+.console-shell :where(h1,h2,h3,h4,p,button,label) { letter-spacing: 0; }
+.console-shell :where(h1,h2,h3,h4) { overflow-wrap: anywhere; }
+.console-shell :where(table, .stat-value, .stat-cell, .console-number) { font-variant-numeric: tabular-nums; }
+.console-shell :where(button, a, input, select, textarea):focus-visible { outline: 2px solid #0f766e; outline-offset: 3px; }
+.console-section { @apply border-y border-gray-200 bg-white py-4 dark:border-dark-700 dark:bg-dark-900; }
+.console-toolbar { @apply flex flex-wrap items-center gap-3 border-b border-gray-200 py-3 dark:border-dark-700; }
+.console-metric-grid { @apply gap-x-4 gap-y-0 border-y border-gray-200 dark:border-dark-700; }
+.console-metric-grid .stat-cell { @apply min-w-0 border-b border-gray-100 px-2 py-4 dark:border-dark-800; }
+.stat-cell > div { align-items: flex-start; }
+.stat-cell > div > div:last-child { min-width: 0; overflow-wrap: anywhere; }
+.console-chart { @apply min-w-0 border-t border-gray-200 py-4 dark:border-dark-700; }
+.console-shell .sidebar-link-active { @apply bg-primary-50 text-primary-800 dark:bg-primary-900/20 dark:text-primary-300; background-image: none; box-shadow: none; }
+.console-shell .sidebar-link { border-radius: 6px; }
+.console-shell .sidebar-header { min-height: 64px; }
+.console-shell .tabs { gap: 2px; }
+.console-shell .tab { @apply min-h-8 rounded-md px-3 py-1.5; }
+.console-table-page .table-container { border-radius: 8px; }
+.console-shell :where(.input, .btn, .btn-icon) { max-width: 100%; }
+@media (max-width: 639px) {
+  .console-header > div { flex-wrap: wrap; padding-block: 8px; }
+  .console-header .btn-icon { width: 34px; height: 34px; }
+  .console-main { padding: 16px 12px; }
+  .console-shell .modal-footer { flex-wrap: wrap; }
+  .console-shell .stat-cell .text-xl { font-size: 18px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .console-shell *, .console-shell *::before, .console-shell *::after { scroll-behavior: auto; transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
+}

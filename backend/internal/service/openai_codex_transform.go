@@ -11,6 +11,10 @@ import (
 )
 
 var codexModelMap = map[string]string{
+	"gpt-6-astra":          "gpt-6-astra",
+	"gpt-astra":            "gpt-6-astra",
+	"gpt-6-sol":            "gpt-6-sol",
+	"gpt-6-luna":           "gpt-6-luna",
 	"gpt-5.6-sol":          "gpt-5.6-sol",
 	"gpt-5.6-terra":        "gpt-5.6-terra",
 	"gpt-5.6-luna":         "gpt-5.6-luna",
@@ -59,6 +63,10 @@ var codexVersionModelPrefixes = []struct {
 	prefix string
 	target string
 }{
+	{prefix: "gpt-6-astra", target: "gpt-6-astra"},
+	{prefix: "gpt-6-sol", target: "gpt-6-sol"},
+	{prefix: "gpt-6-luna", target: "gpt-6-luna"},
+	{prefix: "gpt-astra", target: "gpt-6-astra"},
 	{prefix: "gpt-5.6-sol", target: "gpt-5.6-sol"},
 	{prefix: "gpt-5.6-terra", target: "gpt-5.6-terra"},
 	{prefix: "gpt-5.6-luna", target: "gpt-5.6-luna"},
@@ -985,6 +993,16 @@ func validateOpenAIResponsesImageModel(reqBody map[string]any, model string) err
 		return nil
 	}
 	return fmt.Errorf("/v1/responses image_generation requests require a Responses-capable text model; image-only model %q is not allowed", model)
+}
+
+// normalizeOpenAIResponsesImageOnlyModelNeedsRewrite reports whether the request
+// carries an image-only model as the top-level model, i.e. the case where
+// normalizeOpenAIResponsesImageOnlyModel would rewrite the request.
+func normalizeOpenAIResponsesImageOnlyModelNeedsRewrite(reqBody map[string]any) bool {
+	if len(reqBody) == 0 {
+		return false
+	}
+	return isOpenAIImageGenerationModel(strings.TrimSpace(firstNonEmptyString(reqBody["model"])))
 }
 
 func normalizeOpenAIResponsesImageOnlyModel(reqBody map[string]any) bool {

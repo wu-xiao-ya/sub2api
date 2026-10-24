@@ -334,6 +334,7 @@ type GrokSSOToOAuthRequest struct {
 	RateMultiplier     *float64       `json:"rate_multiplier"`
 	ExpiresAt          *int64         `json:"expires_at"`
 	AutoPauseOnExpired *bool          `json:"auto_pause_on_expired"`
+	UseRelayRoute      *bool          `json:"use_relay_route"`
 }
 
 type GrokSSOToOAuthItemResult struct {
@@ -448,6 +449,7 @@ func (h *GrokOAuthHandler) createAccountFromSSOToken(ctx context.Context, req Gr
 		PoolGroupID:        req.PoolGroupID,
 		ExpiresAt:          expiresAt,
 		AutoPauseOnExpired: autoPauseOnExpired,
+		UseRelayRoute:      req.UseRelayRoute,
 	})
 	if err != nil {
 		return grokSSOImportWorkerResult{item: GrokSSOToOAuthItemResult{Index: index, Name: name, Email: tokenInfo.Email, Error: grokSSOImportErrorMessage(err)}}

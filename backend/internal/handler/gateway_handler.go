@@ -39,24 +39,32 @@ var gatewayCompatibilityMetricsLogCounter atomic.Uint64
 
 // GatewayHandler handles API gateway requests
 type GatewayHandler struct {
-	gatewayService            *service.GatewayService
-	openAIGatewayService      *service.OpenAIGatewayService
-	geminiCompatService       *service.GeminiMessagesCompatService
-	antigravityGatewayService *service.AntigravityGatewayService
-	userService               *service.UserService
-	billingCacheService       *service.BillingCacheService
-	usageService              *service.UsageService
-	apiKeyService             *service.APIKeyService
-	usageRecordWorkerPool     *service.UsageRecordWorkerPool
-	errorPassthroughService   *service.ErrorPassthroughService
-	contentModerationService  *service.ContentModerationService
-	securityAuditCoordinator  *securityaudit.Coordinator
-	concurrencyHelper         *ConcurrencyHelper
-	userMsgQueueHelper        *UserMsgQueueHelper
-	maxAccountSwitches        int
-	maxAccountSwitchesGemini  int
-	cfg                       *config.Config
-	settingService            *service.SettingService
+	gatewayService             *service.GatewayService
+	openAIGatewayService       *service.OpenAIGatewayService
+	geminiCompatService        *service.GeminiMessagesCompatService
+	antigravityGatewayService  *service.AntigravityGatewayService
+	userService                *service.UserService
+	billingCacheService        *service.BillingCacheService
+	usageService               *service.UsageService
+	apiKeyService              *service.APIKeyService
+	usageRecordWorkerPool      *service.UsageRecordWorkerPool
+	errorPassthroughService    *service.ErrorPassthroughService
+	contentModerationService   *service.ContentModerationService
+	securityAuditCoordinator   *securityaudit.Coordinator
+	geminiCachedContentService *service.GeminiCachedContentService
+	concurrencyHelper          *ConcurrencyHelper
+	userMsgQueueHelper         *UserMsgQueueHelper
+	maxAccountSwitches         int
+	maxAccountSwitchesGemini   int
+	cfg                        *config.Config
+	settingService             *service.SettingService
+}
+
+func (h *GatewayHandler) AggregateModelSupportChecker() service.AggregateModelSupportChecker {
+	if h == nil {
+		return nil
+	}
+	return h.gatewayService
 }
 
 // NewGatewayHandler creates a new GatewayHandler
@@ -193,7 +201,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 	// 在请求上下文中记录 thinking 状态，供 Antigravity 最终模型 key 推导/模型维度限流使用
 	c.Request = c.Request.WithContext(service.WithThinkingEnabled(c.Request.Context(), parsedReq.ThinkingEnabled, h.metadataBridgeEnabled()))
 
-	setOpsRequestContext(c, reqModel, reqStream)
+	setOpsRequestContext(c, reqModel, reqStream, body)
 	setOpsEndpointContext(c, "", int16(service.RequestTypeFromLegacy(reqStream, false)))
 
 	// 验证 model 必填
@@ -597,6 +605,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 			if err != nil {
 				if len(fs.FailedAccountIDs) == 0 {
 					cls := classifyNoAccountErrorFromGin(c, h.gatewayService, currentAPIKey, reqModel, reqModel, platform)
+					cls = classifySelectionFailureError(err, cls)
 					if !cls.ModelNotFound {
 						markOpsRoutingCapacityLimitedIfNoAvailable(c, err)
 					}
@@ -1002,6 +1011,10 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 // Falls back to default models if no whitelist is configured
 func (h *GatewayHandler) Models(c *gin.Context) {
 	apiKey, _ := middleware2.GetAPIKeyFromContext(c)
+	if apiKey != nil && apiKey.IsAggregate() {
+		writeOpenAIModelsList(c, h.aggregateModels(c.Request.Context(), apiKey))
+		return
+	}
 
 	var groupID *int64
 	var platform string
@@ -1154,6 +1167,31 @@ func grokModelSupportsConfigurableReasoning(modelID string) bool {
 	}
 }
 
+func (h *GatewayHandler) aggregateModels(ctx context.Context, apiKey *service.APIKey) []string {
+	if h == nil || h.gatewayService == nil || apiKey == nil {
+		return nil
+	}
+	seen := make(map[string]struct{})
+	out := make([]string, 0)
+	for _, member := range apiKey.Members {
+		if member == nil || !member.IsMemberUsable() {
+			continue
+		}
+		for _, modelID := range h.gatewayService.ListModelsForGroup(ctx, member.Group) {
+			modelID = strings.TrimSpace(modelID)
+			if modelID == "" {
+				continue
+			}
+			if _, ok := seen[modelID]; ok {
+				continue
+			}
+			seen[modelID] = struct{}{}
+			out = append(out, modelID)
+		}
+	}
+	return out
+}
+
 func writeOpenAIModelsList(c *gin.Context, modelIDs []string) {
 	defaultsByID := make(map[string]openai.Model, len(openai.DefaultModels))
 	for _, model := range openai.DefaultModels {
@@ -1182,10 +1220,16 @@ func writeOpenAIModelsList(c *gin.Context, modelIDs []string) {
 }
 
 func customModelsListSource(platform string, availableModels, fallbackModels []string) []string {
-	if platform == service.PlatformAnthropic && len(availableModels) > 0 {
-		return mergeModelIDs(availableModels, fallbackModels)
+	if len(availableModels) == 0 {
+		return fallbackModels
 	}
-	return availableModels
+	// availableModels only reflects which models the group's accounts happen to
+	// map, not what the upstream can serve. A group that explicitly selects a
+	// model must be able to advertise it, so the platform catalog joins the
+	// candidate source on every platform. Without this, an image group whose
+	// accounts map only text models returns an empty list even when its
+	// selection names gpt-image-*.
+	return mergeModelIDs(availableModels, fallbackModels)
 }
 
 func filterModelsByCustomList(availableModels, fallbackModels, selectedModels []string) []string {

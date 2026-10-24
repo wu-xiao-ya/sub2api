@@ -10,6 +10,7 @@ import type {
   LoginAgreementDocument,
   NotifyEmailEntry,
 } from "@/types";
+import type { RechargeBonusTier } from "@/types/payment";
 
 export interface DefaultSubscriptionSetting {
   group_id: number;
@@ -418,6 +419,9 @@ export interface SystemSettings {
   step_up_enabled: boolean; // 敏感操作 step-up 2FA
   audit_log_retention_days: number; // 审计日志保留天数
   mainland_access_restriction_enabled: boolean;
+  traffic_relay_enabled: boolean;
+  traffic_relay_proxy_id: number;
+  traffic_relay_unavailable_ttl_seconds: number;
   login_agreement_enabled: boolean;
   login_agreement_mode: "modal" | "checkbox" | string;
   login_agreement_updated_at: string;
@@ -652,6 +656,9 @@ export interface SystemSettings {
   payment_balance_recharge_multiplier: number;
   payment_subscription_usd_to_cny_rate: number;
   payment_recharge_fee_rate: number;
+  payment_recharge_bonus_tiers?: RechargeBonusTier[];
+  payment_recharge_bonus_mode?: string;
+  payment_recharge_bonus_notice?: string;
   payment_load_balance_strategy: string;
   payment_product_name_prefix: string;
   payment_product_name_suffix: string;
@@ -663,6 +670,7 @@ export interface SystemSettings {
   payment_cancel_rate_limit_unit: string;
   payment_cancel_rate_limit_window_mode: string;
   payment_alipay_force_qrcode?: boolean;
+  payment_alipay_mobile_precreate_deep_link?: boolean;
   payment_visible_method_alipay_source?: string;
   payment_visible_method_wxpay_source?: string;
   payment_visible_method_alipay_enabled?: boolean;
@@ -737,6 +745,9 @@ export interface UpdateSettingsRequest {
   step_up_enabled?: boolean; // 敏感操作 step-up 2FA
   audit_log_retention_days?: number; // 审计日志保留天数
   mainland_access_restriction_enabled?: boolean;
+  traffic_relay_enabled?: boolean;
+  traffic_relay_proxy_id?: number;
+  traffic_relay_unavailable_ttl_seconds?: number;
   login_agreement_enabled?: boolean;
   login_agreement_mode?: "modal" | "checkbox" | string;
   login_agreement_updated_at?: string;
@@ -937,9 +948,13 @@ export interface UpdateSettingsRequest {
   payment_balance_recharge_multiplier?: number;
   payment_subscription_usd_to_cny_rate?: number;
   payment_recharge_fee_rate?: number;
+  payment_recharge_bonus_tiers?: RechargeBonusTier[];
+  payment_recharge_bonus_mode?: string;
+  payment_recharge_bonus_notice?: string;
   payment_load_balance_strategy?: string;
   payment_product_name_prefix?: string;
   payment_product_name_suffix?: string;
+  payment_alipay_mobile_precreate_deep_link?: boolean;
   payment_help_image_url?: string;
   payment_help_text?: string;
   payment_cancel_rate_limit_enabled?: boolean;
@@ -1478,8 +1493,83 @@ export async function resetWebSearchUsage(payload: {
   );
 }
 
+export interface ImageUpstreamCostAccountOverride {
+  account_id: number;
+  cost_per_image: number;
+}
+
+export interface ImageUpstreamCostModelOverride {
+  model: string;
+  tiers: Record<string, number>;
+}
+
+export interface ImageUpstreamCostAccountModelOverride {
+  account_id: number;
+  model: string;
+  tiers: Record<string, number>;
+}
+
+export interface ImageUpstreamCostSettings {
+  cost_per_image: number;
+  account_overrides: ImageUpstreamCostAccountOverride[];
+  model_overrides: ImageUpstreamCostModelOverride[];
+  account_model_overrides: ImageUpstreamCostAccountModelOverride[];
+  ignore_upstream_rate_snapshot: boolean;
+  billing_mode: string;
+  unit: string;
+}
+
+export interface ImageUpstreamCostUpdateRequest {
+  cost_per_image?: number;
+  account_overrides?: ImageUpstreamCostAccountOverride[];
+  model_overrides?: ImageUpstreamCostModelOverride[];
+  account_model_overrides?: ImageUpstreamCostAccountModelOverride[];
+  ignore_upstream_rate_snapshot?: boolean;
+}
+
+// Upstream cost per generated image, used by cost/profit reporting. This never
+// changes user-facing image prices.
+export async function getImageUpstreamCost(): Promise<ImageUpstreamCostSettings> {
+  const { data } = await apiClient.get<ImageUpstreamCostSettings>(
+    "/admin/settings/image-upstream-cost",
+  );
+  return data;
+}
+
+export async function updateImageUpstreamCost(
+  settings: ImageUpstreamCostUpdateRequest,
+): Promise<ImageUpstreamCostSettings> {
+  const { data } = await apiClient.put<ImageUpstreamCostSettings>(
+    "/admin/settings/image-upstream-cost",
+    settings,
+  );
+  return data;
+}
+
+export interface ImageUpstreamCostAccountCandidate {
+  account_id: number;
+  account_name: string;
+}
+
+export interface ImageUpstreamCostCandidates {
+  models: string[];
+  accounts: ImageUpstreamCostAccountCandidate[];
+}
+
+// Models and accounts seen in real image traffic. A shipped catalog cannot
+// list upstream-only image model IDs, so the pickers are seeded from usage.
+export async function getImageUpstreamCostCandidates(): Promise<ImageUpstreamCostCandidates> {
+  const { data } = await apiClient.get<ImageUpstreamCostCandidates>(
+    "/admin/settings/image-upstream-cost/candidates",
+  );
+  return data;
+}
+
 export const settingsAPI = {
   getSettings,
+  getImageUpstreamCost,
+  updateImageUpstreamCost,
+  getImageUpstreamCostCandidates,
   updateSettings,
   testSmtpConnection,
   sendTestEmail,

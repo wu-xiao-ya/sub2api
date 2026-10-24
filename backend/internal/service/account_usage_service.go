@@ -43,6 +43,11 @@ type UsageLogRepository interface {
 	GetAccountWindowStats(ctx context.Context, accountID int64, startTime time.Time) (*usagestats.AccountStats, error)
 	GetAccountTodayStats(ctx context.Context, accountID int64) (*usagestats.AccountStats, error)
 
+	// Image upstream cost candidates, collected from real usage rather than a
+	// shipped catalog so upstream-only model IDs stay configurable.
+	ListImageGenerationModels(ctx context.Context) ([]string, error)
+	ListImageGenerationAccounts(ctx context.Context) ([]ImageUpstreamCostAccountCandidate, error)
+
 	// Admin dashboard stats
 	GetDashboardStats(ctx context.Context) (*usagestats.DashboardStats, error)
 	GetUsageTrendWithFilters(ctx context.Context, startTime, endTime time.Time, granularity string, userID, apiKeyID, accountID, groupID int64, model string, requestType *int16, stream *bool, billingType *int8) ([]usagestats.TrendDataPoint, error)
@@ -853,19 +858,21 @@ func (s *AccountUsageService) probeOpenAICodexSnapshot(ctx context.Context, acco
 	enforceCodexIdentityHeaders(req.Header)
 	setOpenAIChatGPTAccountHeaders(req.Header, account)
 
-	proxyURL := ""
-	if account.ProxyID != nil && account.Proxy != nil {
-		proxyURL = account.Proxy.URL()
-	}
-	client, err := httppool.GetClient(httppool.Options{
-		ProxyURL:              proxyURL,
-		Timeout:               15 * time.Second,
-		ResponseHeaderTimeout: 10 * time.Second,
+	proxyURL := AccountDefaultProxyURL(account)
+	probeCtx := withAccountOperationRoute(req.Context(), account, proxyURL)
+	resp, _, err := accountOutboundOperation(probeCtx, proxyURL, func(route string) (*http.Response, error) {
+		client, err := httppool.GetClient(httppool.Options{
+			ProxyURL: route, Timeout: 15 * time.Second, ResponseHeaderTimeout: 10 * time.Second,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("build openai probe client: %w", err)
+		}
+		attempt, err := cloneHTTPRequest(req)
+		if err != nil {
+			return nil, err
+		}
+		return client.Do(attempt)
 	})
-	if err != nil {
-		return nil, fmt.Errorf("build openai probe client: %w", err)
-	}
-	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("openai codex probe request failed: %w", err)
 	}
@@ -1535,10 +1542,8 @@ func (s *AccountUsageService) fetchOAuthUsageRaw(ctx context.Context, account *A
 		return nil, fmt.Errorf("no access token available")
 	}
 
-	var proxyURL string
-	if account.ProxyID != nil && account.Proxy != nil {
-		proxyURL = account.Proxy.URL()
-	}
+	proxyURL := AccountDefaultProxyURL(account)
+	ctx = withAccountOperationRoute(ctx, account, proxyURL)
 
 	// 构建完整的选项
 	opts := &ClaudeUsageFetchOptions{
@@ -1555,7 +1560,12 @@ func (s *AccountUsageService) fetchOAuthUsageRaw(ctx context.Context, account *A
 		}
 	}
 
-	return s.usageFetcher.FetchUsageWithOptions(ctx, opts)
+	result, _, err := accountOutboundOperation(ctx, proxyURL, func(route string) (*ClaudeUsageResponse, error) {
+		attempt := *opts
+		attempt.ProxyURL = route
+		return s.usageFetcher.FetchUsageWithOptions(ctx, &attempt)
+	})
+	return result, err
 }
 
 // parseTime 尝试多种格式解析时间

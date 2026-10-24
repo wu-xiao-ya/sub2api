@@ -1117,6 +1117,24 @@ func TestApplyCodexOAuthTransform_KeepsImageGenerationToolForNonSpark(t *testing
 	require.True(t, hasOpenAIImageGenerationTool(reqBody))
 }
 
+func TestNormalizeOpenAIResponsesImageOnlyModelNeedsRewrite(t *testing.T) {
+	require.False(t, normalizeOpenAIResponsesImageOnlyModelNeedsRewrite(map[string]any{"model": "gpt-5.4-mini"}))
+	require.False(t, normalizeOpenAIResponsesImageOnlyModelNeedsRewrite(map[string]any{}))
+	require.True(t, normalizeOpenAIResponsesImageOnlyModelNeedsRewrite(map[string]any{"model": "gpt-image-2"}))
+	require.True(t, normalizeOpenAIResponsesImageOnlyModelNeedsRewrite(map[string]any{"model": " grok-imagine "}))
+}
+
+func TestAccountSupportsOpenAIResponsesImageGeneration(t *testing.T) {
+	require.False(t, (*Account)(nil).SupportsOpenAIResponsesImageGeneration())
+	require.False(t, (&Account{}).SupportsOpenAIResponsesImageGeneration())
+	// The plain Responses probe flag must NOT grant the image combination.
+	require.False(t, (&Account{Extra: map[string]any{"openai_responses_supported": true}}).SupportsOpenAIResponsesImageGeneration())
+	require.True(t, (&Account{Extra: map[string]any{"openai_responses_image_generation_supported": true}}).SupportsOpenAIResponsesImageGeneration())
+	require.True(t, (&Account{Extra: map[string]any{
+		"openai": map[string]any{"openai_responses_image_generation_supported": true},
+	}}).SupportsOpenAIResponsesImageGeneration())
+}
+
 func TestNormalizeOpenAIResponsesImageOnlyModel_BuildsImageToolRequest(t *testing.T) {
 	reqBody := map[string]any{
 		"model":         "gpt-image-2",

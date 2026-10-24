@@ -337,7 +337,7 @@ func TestPrepareUpstreamCallShadowResolve(t *testing.T) {
 		return req.C(), nil
 	})
 
-	_, chatGPTAccountID, _, _, err := svc.prepareUpstreamCall(ctx, 200)
+	_, _, chatGPTAccountID, _, _, err := svc.prepareUpstreamCall(ctx, 200)
 	require.NoError(t, err, "shadow resolve should succeed; got error: %v", err)
 	require.Equal(t, "org-parent123", chatGPTAccountID,
 		"prepareUpstreamCall should use parent's chatgpt_account_id after shadow resolve")

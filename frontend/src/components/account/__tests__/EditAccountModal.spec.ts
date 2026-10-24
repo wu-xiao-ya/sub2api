@@ -1,11 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { defineComponent } from 'vue'
-import { mount } from '@vue/test-utils'
+import { flushPromises, mount } from '@vue/test-utils'
 
-const { updateAccountMock, checkMixedChannelRiskMock, authIsSimpleMode } = vi.hoisted(() => ({
+const { updateAccountMock, checkMixedChannelRiskMock, authIsSimpleMode, relaySettingsMock } = vi.hoisted(() => ({
   updateAccountMock: vi.fn(),
   checkMixedChannelRiskMock: vi.fn(),
-  authIsSimpleMode: { value: true }
+  authIsSimpleMode: { value: true },
+  relaySettingsMock: vi.fn()
 }))
 
 vi.mock('@/stores/app', () => ({
@@ -32,7 +33,7 @@ vi.mock('@/api/admin', () => ({
     },
     settings: {
       getWebSearchEmulationConfig: vi.fn().mockResolvedValue({ enabled: false, providers: [] }),
-      getSettings: vi.fn().mockResolvedValue({})
+      getSettings: relaySettingsMock
     },
     tlsFingerprintProfiles: {
       list: vi.fn().mockResolvedValue([])
@@ -314,6 +315,25 @@ function mountModal(account = buildAccount()) {
 describe('EditAccountModal', () => {
   beforeEach(() => {
     authIsSimpleMode.value = true
+    relaySettingsMock.mockReset().mockResolvedValue({})
+  })
+
+  it('preserves existing relay opt-in while disabled and refreshes configuration on reopen', async () => {
+    const account = { ...buildAccount(), use_relay_route: true }
+    const wrapper = mountModal(account)
+    await flushPromises()
+    const selector = '[role="switch"][aria-label="admin.accounts.useRelayRoute"]'
+    expect(wrapper.get(selector).attributes('aria-checked')).toBe('true')
+    expect(wrapper.get(selector).attributes('disabled')).toBeUndefined()
+    await wrapper.get(selector).trigger('click')
+    expect(wrapper.get(selector).attributes('aria-checked')).toBe('false')
+    expect(wrapper.get(selector).attributes('disabled')).toBeDefined()
+    relaySettingsMock.mockResolvedValue({ traffic_relay_enabled: true, traffic_relay_proxy_id: 7 })
+    await wrapper.setProps({ show: false })
+    await wrapper.setProps({ show: true })
+    await flushPromises()
+    expect(wrapper.get(selector).attributes('disabled')).toBeUndefined()
+    wrapper.unmount()
   })
 
   it('reopening the same account rehydrates the OpenAI whitelist from props', async () => {

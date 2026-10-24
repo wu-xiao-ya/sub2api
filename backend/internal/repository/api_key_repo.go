@@ -84,7 +84,7 @@ func (r *apiKeyRepository) GetByID(ctx context.Context, id int64) (*service.APIK
 		}
 		return nil, err
 	}
-	return apiKeyEntityToService(m), nil
+	return r.serviceAPIKey(ctx, m)
 }
 
 // GetKeyAndOwnerID 根据 API Key ID 获取其 key 与所有者（用户）ID。
@@ -122,7 +122,7 @@ func (r *apiKeyRepository) GetByKey(ctx context.Context, key string) (*service.A
 		}
 		return nil, err
 	}
-	return apiKeyEntityToService(m), nil
+	return r.serviceAPIKey(ctx, m)
 }
 
 func (r *apiKeyRepository) GetByKeyForAuth(ctx context.Context, key string) (*service.APIKey, error) {
@@ -221,7 +221,7 @@ func (r *apiKeyRepository) GetByKeyForAuth(ctx context.Context, key string) (*se
 		}
 		return nil, err
 	}
-	return apiKeyEntityToService(m), nil
+	return r.serviceAPIKey(ctx, m)
 }
 
 func (r *apiKeyRepository) Update(ctx context.Context, key *service.APIKey) error {
@@ -440,6 +440,9 @@ func (r *apiKeyRepository) ListByUserID(ctx context.Context, userID int64, param
 	if err := r.attachLastUsedIPs(ctx, outKeys); err != nil {
 		return nil, nil, err
 	}
+	if err := r.attachAggregateMetadata(ctx, outKeys); err != nil {
+		return nil, nil, err
+	}
 
 	return outKeys, paginationResultFromTotal(int64(total), params), nil
 }
@@ -458,6 +461,9 @@ func (r *apiKeyRepository) ListAllByUserID(ctx context.Context, userID int64, fi
 		outKeys = append(outKeys, *apiKeyEntityToService(keys[i]))
 	}
 	if err := r.attachLastUsedIPs(ctx, outKeys); err != nil {
+		return nil, err
+	}
+	if err := r.attachAggregateMetadata(ctx, outKeys); err != nil {
 		return nil, err
 	}
 	return outKeys, nil
@@ -661,6 +667,9 @@ func (r *apiKeyRepository) SearchAPIKeys(ctx context.Context, userID int64, keyw
 	for i := range keys {
 		outKeys = append(outKeys, *apiKeyEntityToService(keys[i]))
 	}
+	if err := r.attachAggregateMetadata(ctx, outKeys); err != nil {
+		return nil, err
+	}
 	return outKeys, nil
 }
 
@@ -803,7 +812,7 @@ func (r *apiKeyRepository) ResetRateLimitWindows(ctx context.Context, id int64) 
 // GetRateLimitData returns the current rate limit usage and window start times for an API key.
 func (r *apiKeyRepository) GetRateLimitData(ctx context.Context, id int64) (result *service.APIKeyRateLimitData, err error) {
 	rows, err := r.sql.QueryContext(ctx, `
-		SELECT usage_5h, usage_1d, usage_7d, window_5h_start, window_1d_start, window_7d_start
+		SELECT quota_used, usage_5h, usage_1d, usage_7d, window_5h_start, window_1d_start, window_7d_start
 		FROM api_keys
 		WHERE id = $1 AND deleted_at IS NULL`,
 		id)
@@ -819,7 +828,7 @@ func (r *apiKeyRepository) GetRateLimitData(ctx context.Context, id int64) (resu
 		return nil, service.ErrAPIKeyNotFound
 	}
 	data := &service.APIKeyRateLimitData{}
-	if err := rows.Scan(&data.Usage5h, &data.Usage1d, &data.Usage7d, &data.Window5hStart, &data.Window1dStart, &data.Window7dStart); err != nil {
+	if err := rows.Scan(&data.QuotaUsed, &data.Usage5h, &data.Usage1d, &data.Usage7d, &data.Window5hStart, &data.Window1dStart, &data.Window7dStart); err != nil {
 		return nil, err
 	}
 	return data, rows.Err()
@@ -958,6 +967,8 @@ func groupEntityToService(g *dbent.Group) *service.Group {
 		SupportedModelScopes:            g.SupportedModelScopes,
 		SortOrder:                       g.SortOrder,
 		AllowMessagesDispatch:           g.AllowMessagesDispatch,
+		ForceOpenAIFast:                 g.ForceOpenaiFast,
+		FreeOpenAIFast:                  g.FreeOpenaiFast,
 		RequireOAuthOnly:                g.RequireOauthOnly,
 		RequirePrivacySet:               g.RequirePrivacySet,
 		DefaultMappedModel:              g.DefaultMappedModel,

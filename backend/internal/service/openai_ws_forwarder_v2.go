@@ -185,10 +185,7 @@ func (s *OpenAIGatewayService) forwardOpenAIWSV2(
 		PreferredConnID: preferredConnID,
 		ForceNewConn:    forceNewConn,
 		ProxyURL: func() string {
-			if account.ProxyID != nil && account.Proxy != nil {
-				return account.Proxy.URL()
-			}
-			return ""
+			return ResolveAccountProxyURL(account)
 		}(),
 	})
 	if err != nil {
@@ -312,6 +309,7 @@ func (s *OpenAIGatewayService) forwardOpenAIWSV2(
 		return nil, err
 	}
 
+	latencyAttempt := BeginRequestLatencyAttempt(ctx)
 	if err := lease.WriteJSONWithContextTimeout(ctx, payload, s.openAIWSWriteTimeout()); err != nil {
 		lease.MarkBroken()
 		logOpenAIWSModeInfo(
@@ -509,6 +507,7 @@ func (s *OpenAIGatewayService) forwardOpenAIWSV2(
 		}
 
 		eventType, eventResponseID, responseField := parseOpenAIWSEventEnvelope(message)
+		latencyAttempt.ObserveProtocolEvent(string(message), eventType)
 		if eventType == "" {
 			continue
 		}
@@ -762,6 +761,7 @@ func (s *OpenAIGatewayService) forwardOpenAIWSV2(
 		ResponseHeaders:       lease.HandshakeHeaders(),
 		Duration:              time.Since(startTime),
 		FirstTokenMs:          firstTokenMs,
+		LatencyBreakdown:      FinalRequestLatencySnapshot(ctx),
 	}, nil
 }
 

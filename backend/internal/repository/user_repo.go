@@ -808,6 +808,50 @@ func (r *userRepository) DeductBalance(ctx context.Context, id int64, amount flo
 	return nil
 }
 
+// DeductAvailableBalance 只扣当前可用余额（最多扣到 0），返回实际扣减金额。
+// 退款扣减必须走该路径：DeductBalance 允许透支，而退款不能把用户余额打成负数。
+// 单条 SQL 内 FOR UPDATE 锁定再扣减，与并发充值/扣费保持线性一致。
+func (r *userRepository) DeductAvailableBalance(ctx context.Context, id int64, amount float64) (deducted float64, err error) {
+	if amount < 0 {
+		return 0, fmt.Errorf("deduction amount must be nonnegative")
+	}
+	const updateSQL = `
+		WITH target AS (
+			SELECT id, balance FROM users WHERE id = $2 AND deleted_at IS NULL FOR UPDATE
+		),
+		updated AS (
+			UPDATE users AS u
+			SET balance = target.balance - LEAST($1, GREATEST(target.balance, 0)),
+				updated_at = NOW()
+			FROM target
+			WHERE u.id = target.id AND u.deleted_at IS NULL
+			RETURNING target.balance - u.balance AS deducted
+		)
+		SELECT deducted FROM updated
+	`
+	client := clientFromContext(ctx, r.client)
+	rows, err := client.QueryContext(ctx, updateSQL, amount, id)
+	if err != nil {
+		return 0, err
+	}
+	defer func() {
+		_ = rows.Close()
+	}()
+	if !rows.Next() {
+		if rowsErr := rows.Err(); rowsErr != nil {
+			return 0, rowsErr
+		}
+		return 0, service.ErrUserNotFound
+	}
+	if err := rows.Scan(&deducted); err != nil {
+		return 0, err
+	}
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
+	return deducted, nil
+}
+
 func (r *userRepository) UpdateConcurrency(ctx context.Context, id int64, amount int) error {
 	client := clientFromContext(ctx, r.client)
 	n, err := client.User.Update().Where(dbuser.IDEQ(id)).AddConcurrency(amount).Save(ctx)

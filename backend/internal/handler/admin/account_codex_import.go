@@ -35,6 +35,7 @@ type CodexSessionImportRequest struct {
 	LoadFactor              *int           `json:"load_factor"`
 	ExpiresAt               *int64         `json:"expires_at"`
 	AutoPauseOnExpired      *bool          `json:"auto_pause_on_expired"`
+	UseRelayRoute           *bool          `json:"use_relay_route"`
 	CredentialExtras        map[string]any `json:"credential_extras"`
 	Extra                   map[string]any `json:"extra"`
 	UpdateExisting          *bool          `json:"update_existing"`
@@ -286,6 +287,7 @@ func (h *AccountHandler) importCodexSessions(ctx context.Context, req CodexSessi
 				PoolGroupID:        req.PoolGroupID,
 				ExpiresAt:          effectiveExpiresAt,
 				AutoPauseOnExpired: autoPauseOnExpired,
+				UseRelayRoute:      req.UseRelayRoute,
 			}
 			if req.ProxyID != nil {
 				updateInput.ProxyID = req.ProxyID
@@ -345,6 +347,7 @@ func (h *AccountHandler) importCodexSessions(ctx context.Context, req CodexSessi
 			PoolGroupID:           req.PoolGroupID,
 			ExpiresAt:             effectiveExpiresAt,
 			AutoPauseOnExpired:    autoPauseOnExpired,
+			UseRelayRoute:         req.UseRelayRoute,
 			SkipDefaultGroupBind:  skipDefaultGroupBind,
 			SkipMixedChannelCheck: skipMixedChannelCheck,
 		})

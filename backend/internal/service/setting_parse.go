@@ -76,6 +76,9 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 		SettingKeyCustomMenuItems:                           "[]",
 		SettingKeyCustomEndpoints:                           "[]",
 		SettingKeyMainlandAccessRestrictionEnabled:          strconv.FormatBool(s.defaultMainlandAccessRestrictionEnabled()),
+		SettingKeyTrafficRelayEnabled:                       "false",
+		SettingKeyTrafficRelayProxyID:                       "0",
+		SettingKeyTrafficRelayUnavailableTTLSeconds:         "45",
 		SettingKeyWeChatConnectEnabled:                      "false",
 		SettingKeyWeChatConnectAppID:                        "",
 		SettingKeyWeChatConnectAppSecret:                    "",
@@ -303,46 +306,49 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 		}
 	}
 	result := &SystemSettings{
-		RegistrationEnabled:              settings[SettingKeyRegistrationEnabled] == "true",
-		EmailVerifyEnabled:               emailVerifyEnabled,
-		RegistrationEmailSuffixWhitelist: ParseRegistrationEmailSuffixWhitelist(settings[SettingKeyRegistrationEmailSuffixWhitelist]),
-		PromoCodeEnabled:                 settings[SettingKeyPromoCodeEnabled] != "false", // 默认启用
-		PasswordResetEnabled:             emailVerifyEnabled && settings[SettingKeyPasswordResetEnabled] == "true",
-		FrontendURL:                      settings[SettingKeyFrontendURL],
-		InvitationCodeEnabled:            settings[SettingKeyInvitationCodeEnabled] == "true",
-		TotpEnabled:                      settings[SettingKeyTotpEnabled] == "true",
-		SessionBindingEnabled:            settings[SettingKeySessionBindingEnabled] == "true", // 默认关闭
-		StepUpEnabled:                    settings[SettingKeyStepUpEnabled] == "true",         // 默认关闭
-		AuditLogRetentionDays:            parseAuditLogRetentionDays(settings[SettingKeyAuditLogRetentionDays]),
-		MainlandAccessRestrictionEnabled: s.parseMainlandAccessRestrictionEnabled(settings),
-		LoginAgreementEnabled:            settings[SettingKeyLoginAgreementEnabled] == "true",
-		LoginAgreementMode:               normalizeLoginAgreementMode(settings[SettingKeyLoginAgreementMode]),
-		LoginAgreementUpdatedAt:          loginAgreementUpdatedAt,
-		LoginAgreementDocuments:          loginAgreementDocuments,
-		SMTPHost:                         settings[SettingKeySMTPHost],
-		SMTPUsername:                     settings[SettingKeySMTPUsername],
-		SMTPFrom:                         settings[SettingKeySMTPFrom],
-		SMTPFromName:                     settings[SettingKeySMTPFromName],
-		SMTPUseTLS:                       settings[SettingKeySMTPUseTLS] == "true",
-		SMTPPasswordConfigured:           settings[SettingKeySMTPPassword] != "",
-		TurnstileEnabled:                 settings[SettingKeyTurnstileEnabled] == "true",
-		TurnstileSiteKey:                 settings[SettingKeyTurnstileSiteKey],
-		TurnstileSecretKeyConfigured:     settings[SettingKeyTurnstileSecretKey] != "",
-		APIKeyACLTrustForwardedIP:        apiKeyACLTrustForwardedIP,
-		ForwardedClientIPHeaders:         forwardedClientIPHeaders,
-		SiteName:                         s.getStringOrDefault(settings, SettingKeySiteName, "Sub2API"),
-		SiteLogo:                         settings[SettingKeySiteLogo],
-		SiteSubtitle:                     s.getStringOrDefault(settings, SettingKeySiteSubtitle, "Subscription to API Conversion Platform"),
-		APIBaseURL:                       settings[SettingKeyAPIBaseURL],
-		ContactInfo:                      settings[SettingKeyContactInfo],
-		DocURL:                           settings[SettingKeyDocURL],
-		HomeContent:                      settings[SettingKeyHomeContent],
-		HideCcsImportButton:              settings[SettingKeyHideCcsImportButton] == "true",
-		PurchaseSubscriptionEnabled:      settings[SettingKeyPurchaseSubscriptionEnabled] == "true",
-		PurchaseSubscriptionURL:          strings.TrimSpace(settings[SettingKeyPurchaseSubscriptionURL]),
-		CustomMenuItems:                  settings[SettingKeyCustomMenuItems],
-		CustomEndpoints:                  settings[SettingKeyCustomEndpoints],
-		BackendModeEnabled:               settings[SettingKeyBackendModeEnabled] == "true",
+		RegistrationEnabled:               settings[SettingKeyRegistrationEnabled] == "true",
+		EmailVerifyEnabled:                emailVerifyEnabled,
+		RegistrationEmailSuffixWhitelist:  ParseRegistrationEmailSuffixWhitelist(settings[SettingKeyRegistrationEmailSuffixWhitelist]),
+		PromoCodeEnabled:                  settings[SettingKeyPromoCodeEnabled] != "false", // 默认启用
+		PasswordResetEnabled:              emailVerifyEnabled && settings[SettingKeyPasswordResetEnabled] == "true",
+		FrontendURL:                       settings[SettingKeyFrontendURL],
+		InvitationCodeEnabled:             settings[SettingKeyInvitationCodeEnabled] == "true",
+		TotpEnabled:                       settings[SettingKeyTotpEnabled] == "true",
+		SessionBindingEnabled:             settings[SettingKeySessionBindingEnabled] == "true", // 默认关闭
+		StepUpEnabled:                     settings[SettingKeyStepUpEnabled] == "true",         // 默认关闭
+		AuditLogRetentionDays:             parseAuditLogRetentionDays(settings[SettingKeyAuditLogRetentionDays]),
+		MainlandAccessRestrictionEnabled:  s.parseMainlandAccessRestrictionEnabled(settings),
+		TrafficRelayEnabled:               settings[SettingKeyTrafficRelayEnabled] == "true",
+		TrafficRelayProxyID:               parseTrafficRelayProxyID(settings[SettingKeyTrafficRelayProxyID]),
+		TrafficRelayUnavailableTTLSeconds: parseTrafficRelayUnavailableTTLSeconds(settings[SettingKeyTrafficRelayUnavailableTTLSeconds]),
+		LoginAgreementEnabled:             settings[SettingKeyLoginAgreementEnabled] == "true",
+		LoginAgreementMode:                normalizeLoginAgreementMode(settings[SettingKeyLoginAgreementMode]),
+		LoginAgreementUpdatedAt:           loginAgreementUpdatedAt,
+		LoginAgreementDocuments:           loginAgreementDocuments,
+		SMTPHost:                          settings[SettingKeySMTPHost],
+		SMTPUsername:                      settings[SettingKeySMTPUsername],
+		SMTPFrom:                          settings[SettingKeySMTPFrom],
+		SMTPFromName:                      settings[SettingKeySMTPFromName],
+		SMTPUseTLS:                        settings[SettingKeySMTPUseTLS] == "true",
+		SMTPPasswordConfigured:            settings[SettingKeySMTPPassword] != "",
+		TurnstileEnabled:                  settings[SettingKeyTurnstileEnabled] == "true",
+		TurnstileSiteKey:                  settings[SettingKeyTurnstileSiteKey],
+		TurnstileSecretKeyConfigured:      settings[SettingKeyTurnstileSecretKey] != "",
+		APIKeyACLTrustForwardedIP:         apiKeyACLTrustForwardedIP,
+		ForwardedClientIPHeaders:          forwardedClientIPHeaders,
+		SiteName:                          s.getStringOrDefault(settings, SettingKeySiteName, "Sub2API"),
+		SiteLogo:                          settings[SettingKeySiteLogo],
+		SiteSubtitle:                      s.getStringOrDefault(settings, SettingKeySiteSubtitle, "Subscription to API Conversion Platform"),
+		APIBaseURL:                        settings[SettingKeyAPIBaseURL],
+		ContactInfo:                       settings[SettingKeyContactInfo],
+		DocURL:                            settings[SettingKeyDocURL],
+		HomeContent:                       settings[SettingKeyHomeContent],
+		HideCcsImportButton:               settings[SettingKeyHideCcsImportButton] == "true",
+		PurchaseSubscriptionEnabled:       settings[SettingKeyPurchaseSubscriptionEnabled] == "true",
+		PurchaseSubscriptionURL:           strings.TrimSpace(settings[SettingKeyPurchaseSubscriptionURL]),
+		CustomMenuItems:                   settings[SettingKeyCustomMenuItems],
+		CustomEndpoints:                   settings[SettingKeyCustomEndpoints],
+		BackendModeEnabled:                settings[SettingKeyBackendModeEnabled] == "true",
 	}
 	result.TableDefaultPageSize, result.TablePageSizeOptions = parseTablePreferences(
 		settings[SettingKeyTableDefaultPageSize],
@@ -953,6 +959,36 @@ func (s *SettingService) parseMainlandAccessRestrictionEnabled(settings map[stri
 		}
 	}
 	return s.defaultMainlandAccessRestrictionEnabled()
+}
+
+func parseTrafficRelayProxyID(raw string) int64 {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return 0
+	}
+	n, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil || n < 0 {
+		return 0
+	}
+	return n
+}
+
+func parseTrafficRelayUnavailableTTLSeconds(raw string) int {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return 45
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil || n <= 0 {
+		return 45
+	}
+	if n < 5 {
+		return 5
+	}
+	if n > 600 {
+		return 600
+	}
+	return n
 }
 
 func clampAffiliateRebateRate(value float64) float64 {

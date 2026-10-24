@@ -66,7 +66,7 @@ var openAIPersistentTransportErrorMarkers = []string{
 //     "network is unreachable", "no such host") are kept as a cross-platform safety
 //     net even though the typed checks should cover them on modern Go+Linux.
 func classifyOpenAITransportError(err error) openAITransportErrorClass {
-	if err == nil {
+	if err == nil || isRelayRouteFailure(err) {
 		return openAITransportErrorClass{}
 	}
 

@@ -141,6 +141,7 @@ func isRetryableCodexModelsManifestTransportError(err error) bool {
 }
 
 type codexModelsManifestRequest struct {
+	routingAccount      *Account
 	url                 string
 	headers             http.Header
 	proxyURL            string
@@ -310,11 +311,10 @@ func (s *OpenAIGatewayService) FetchCodexModelsManifest(ctx context.Context, acc
 	headers.Set("User-Agent", codexCLIUserAgent)
 
 	proxyURL := ""
-	if account.ProxyID != nil && account.Proxy != nil {
-		proxyURL = account.Proxy.URL()
-	}
+	proxyURL = ResolveAccountProxyURL(account)
 
 	request := codexModelsManifestRequest{
+		routingAccount:      account,
 		url:                 requestURL.String(),
 		headers:             headers,
 		proxyURL:            proxyURL,
@@ -456,7 +456,7 @@ func (s *OpenAIGatewayService) fetchCodexModelsManifestUpstream(ctx context.Cont
 			return nil, infraerrors.New(http.StatusInternalServerError, "OPENAI_CODEX_MODELS_UPSTREAM_NOT_CONFIGURED", "Codex models upstream HTTP client is not configured")
 		}
 		req = req.WithContext(WithHTTPUpstreamProfile(req.Context(), HTTPUpstreamProfileOpenAI))
-		resp, err = s.httpUpstream.Do(req, request.proxyURL, request.accountID, request.accountConcurrency)
+		resp, err = s.httpUpstream.Do(WithAccountOutbound(req, request.routingAccount, request.proxyURL), request.proxyURL, request.accountID, request.accountConcurrency)
 	} else {
 		client, clientErr := httpclient.GetClient(httpclient.Options{
 			ProxyURL:              request.proxyURL,

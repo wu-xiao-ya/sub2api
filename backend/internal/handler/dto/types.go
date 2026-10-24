@@ -56,6 +56,7 @@ type APIKey struct {
 	Name        string     `json:"name"`
 	GroupID     *int64     `json:"group_id"`
 	Status      string     `json:"status"`
+	KeyKind     string     `json:"key_kind"`
 	IPWhitelist []string   `json:"ip_whitelist"`
 	IPBlacklist []string   `json:"ip_blacklist"`
 	LastUsedAt  *time.Time `json:"last_used_at"`
@@ -82,8 +83,17 @@ type APIKey struct {
 	Reset1dAt     *time.Time `json:"reset_1d_at,omitempty"`
 	Reset7dAt     *time.Time `json:"reset_7d_at,omitempty"`
 
-	User  *User  `json:"user,omitempty"`
-	Group *Group `json:"group,omitempty"`
+	User    *User          `json:"user,omitempty"`
+	Group   *Group         `json:"group,omitempty"`
+	Members []APIKeyMember `json:"members,omitempty"`
+}
+
+type APIKeyMember struct {
+	ID      int64  `json:"id"`
+	Name    string `json:"name"`
+	GroupID *int64 `json:"group_id"`
+	Status  string `json:"status"`
+	Group   *Group `json:"group,omitempty"`
 }
 
 type Group struct {
@@ -138,6 +148,8 @@ type Group struct {
 
 	// OpenAI Messages 调度开关（用户侧需要此字段判断是否展示 Claude Code 教程）
 	AllowMessagesDispatch bool `json:"allow_messages_dispatch"`
+	ForceOpenAIFast       bool `json:"force_openai_fast"`
+	FreeOpenAIFast        bool `json:"free_openai_fast"`
 
 	// 账号过滤控制（仅 OpenAI/Antigravity 平台有效）
 	RequireOAuthOnly  bool `json:"require_oauth_only"`
@@ -202,6 +214,7 @@ type Account struct {
 	LastUsedAt              *time.Time      `json:"last_used_at"`
 	ExpiresAt               *int64          `json:"expires_at"`
 	AutoPauseOnExpired      bool            `json:"auto_pause_on_expired"`
+	UseRelayRoute           bool            `json:"use_relay_route"`
 	CreatedAt               time.Time       `json:"created_at"`
 	UpdatedAt               time.Time       `json:"updated_at"`
 
@@ -524,12 +537,13 @@ type UsageLog struct {
 	BaseRateMultiplier        *float64 `json:"base_rate_multiplier,omitempty"`
 	LongContextBillingApplied bool     `json:"long_context_billing_applied"`
 
-	BillingType  int8   `json:"billing_type"`
-	RequestType  string `json:"request_type"`
-	Stream       bool   `json:"stream"`
-	OpenAIWSMode bool   `json:"openai_ws_mode"`
-	DurationMs   *int   `json:"duration_ms"`
-	FirstTokenMs *int   `json:"first_token_ms"`
+	BillingType      int8           `json:"billing_type"`
+	RequestType      string         `json:"request_type"`
+	Stream           bool           `json:"stream"`
+	OpenAIWSMode     bool           `json:"openai_ws_mode"`
+	DurationMs       *int           `json:"duration_ms"`
+	FirstTokenMs     *int           `json:"first_token_ms"`
+	LatencyBreakdown map[string]int `json:"latency_breakdown"`
 
 	// 图片生成字段
 	ImageCount         int            `json:"image_count"`

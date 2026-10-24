@@ -9,6 +9,12 @@ const (
 
 	codexImageGenerationExplicitToolPolicyAllow = "allow"
 	codexImageGenerationExplicitToolPolicyStrip = "strip"
+
+	// featureKeyOpenAIResponsesImageGeneration 标记 APIKey 上游是否支持
+	// "文本主模型 + image_generation 工具"的 Responses 生图组合。自动探测
+	// （openai_responses_supported）只验证普通 Responses 请求，无法覆盖该组合，
+	// 因此这里要求显式人工确认。
+	featureKeyOpenAIResponsesImageGeneration = "openai_responses_image_generation_supported"
 )
 
 func boolOverridePtr(v bool) *bool {
@@ -89,6 +95,26 @@ func (a *Account) CodexImageGenerationBridgeOverride() *bool {
 	}
 	openaiConfig, _ := a.Extra[PlatformOpenAI].(map[string]any)
 	return boolOverrideFromMap(openaiConfig, featureKeyCodexImageGenerationBridge, "codex_image_generation_bridge_enabled")
+}
+
+// SupportsOpenAIResponsesImageGeneration reports whether an OpenAI account has
+// been explicitly verified for the "text main model + image_generation tool"
+// Responses combination. The openai_responses_supported probe only covers plain
+// Responses requests, so an absent flag must not be treated as support.
+func (a *Account) SupportsOpenAIResponsesImageGeneration() bool {
+	if a == nil || a.Extra == nil {
+		return false
+	}
+	if enabled, ok := a.Extra[featureKeyOpenAIResponsesImageGeneration].(bool); ok {
+		return enabled
+	}
+	openaiConfig, _ := a.Extra[PlatformOpenAI].(map[string]any)
+	if openaiConfig != nil {
+		if enabled, ok := openaiConfig[featureKeyOpenAIResponsesImageGeneration].(bool); ok {
+			return enabled
+		}
+	}
+	return false
 }
 
 // CodexImageGenerationExplicitToolPolicy returns the account-level policy for

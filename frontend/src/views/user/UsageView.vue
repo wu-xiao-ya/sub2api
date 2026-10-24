@@ -1,10 +1,10 @@
 <template>
   <AppLayout>
-    <div class="space-y-6">
+    <div class="console-page space-y-6">
       <UsageStatsCards :stats="usageStats" :show-account-cost="false" :strike-standard-cost="true" />
 
       <div class="space-y-4">
-        <div class="card p-4">
+        <div class="console-section px-3">
           <div class="flex flex-wrap items-center gap-4">
             <div class="flex items-center gap-2">
               <span class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ t('admin.dashboard.timeRange') }}:</span>
@@ -66,7 +66,7 @@
         </div>
       </div>
 
-      <div class="card p-6">
+      <div class="console-section px-3 sm:px-4">
         <div class="flex flex-wrap items-end justify-between gap-4">
           <div v-if="activeTab === 'errors'" class="flex flex-1 flex-wrap items-end gap-4">
             <div class="w-full sm:w-auto sm:min-w-[220px]">
@@ -161,12 +161,15 @@
         </div>
       </div>
 
-      <div v-if="errorViewEnabled" class="flex gap-2 border-b border-gray-200 dark:border-dark-700">
+      <div class="flex gap-2 border-b border-gray-200 dark:border-dark-700">
         <button class="tab" :class="{ 'tab-active': activeTab === 'usage' }" @click="activeTab = 'usage'">
           {{ t('usage.tabs.usage') }}
         </button>
-        <button class="tab" :class="{ 'tab-active': activeTab === 'errors' }" @click="switchToErrors">
+        <button v-if="errorViewEnabled" class="tab" :class="{ 'tab-active': activeTab === 'errors' }" @click="switchToErrors">
           {{ t('usage.tabs.errors') }}
+        </button>
+        <button class="tab" :class="{ 'tab-active': activeTab === 'leaderboard' }" @click="activeTab = 'leaderboard'">
+          {{ t('usage.tabs.leaderboard') }}
         </button>
       </div>
 
@@ -195,7 +198,7 @@
       </template>
 
       <UserErrorRequestsTable
-        v-else-if="errorViewEnabled"
+        v-else-if="activeTab === 'errors' && errorViewEnabled"
         :rows="errorRows"
         :total="errorTotal"
         :loading="errorLoading"
@@ -206,6 +209,13 @@
         @update:page="onErrorPage"
         @update:pageSize="onErrorPageSize"
         @ipGeoBatchFailed="handleIpGeoBatchFailed"
+      />
+
+      <UserLeaderboard
+        v-else-if="activeTab === 'leaderboard'"
+        ref="leaderboardRef"
+        :start-date="startDate"
+        :end-date="endDate"
       />
     </div>
   </AppLayout>
@@ -229,10 +239,12 @@ import EndpointDistributionChart from '@/components/charts/EndpointDistributionC
 import TokenUsageTrend from '@/components/charts/TokenUsageTrend.vue'
 import Icon from '@/components/icons/Icon.vue'
 import UserErrorRequestsTable from '@/components/user/UserErrorRequestsTable.vue'
+import UserLeaderboard from '@/components/user/UserLeaderboard.vue'
 import { getPersistedPageSize } from '@/composables/usePersistedPageSize'
 import { formatReasoningEffort } from '@/utils/format'
 import { getBillingModeLabel, getDisplayBillingMode as resolveDisplayBillingMode, isImageUsage } from '@/utils/billingMode'
 import { calculateLatencyMetrics, formatOutputSpeed } from '@/utils/latencyMetrics'
+import { latencyCSVValues } from '@/utils/usageLatencyStages'
 import { resolveUsageRequestType, requestTypeToLegacyStream } from '@/utils/usageRequestType'
 import type {
   ApiKey,
@@ -349,8 +361,9 @@ const modelDistributionMetric = ref<DistributionMetric>('tokens')
 const groupDistributionMetric = ref<DistributionMetric>('tokens')
 const endpointDistributionMetric = ref<DistributionMetric>('tokens')
 const endpointDistributionSource = ref<EndpointSource>('inbound')
-const activeTab = ref<'usage' | 'errors'>('usage')
+const activeTab = ref<'usage' | 'errors' | 'leaderboard'>('usage')
 const errorViewEnabled = computed(() => appStore.cachedPublicSettings?.allow_user_view_error_requests ?? false)
+const leaderboardRef = ref<InstanceType<typeof UserLeaderboard> | null>(null)
 
 const filters = ref<UsageQueryParams>({
   start_date: startDate.value,
@@ -541,6 +554,7 @@ const refreshData = () => {
   void loadModelStats()
   void loadChartData()
   if (activeTab.value === 'errors') void loadErrors()
+  if (activeTab.value === 'leaderboard') leaderboardRef.value?.reload()
 }
 
 const resetFilters = () => {
@@ -668,6 +682,7 @@ const exportToCSV = async () => {
       'Rate Multiplier',
       'Billed Cost',
       'Original Cost',
+      'Latency version', 'First response (ms)', 'First event (ms)', 'First output (ms)', 'First text (ms)', 'Stage total (ms)',
       'First Token (ms)',
       'Duration (ms)',
       'Generation (ms)',
@@ -694,6 +709,7 @@ const exportToCSV = async () => {
       log.rate_multiplier,
       log.actual_cost.toFixed(8),
       log.total_cost.toFixed(8),
+      ...latencyCSVValues(log.latency_breakdown, log.duration_ms),
       log.first_token_ms ?? '',
       log.duration_ms ?? '',
       usageLatencyExport(log).generationMs ?? '',

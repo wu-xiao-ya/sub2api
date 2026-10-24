@@ -426,14 +426,14 @@ type ChannelMonitorRuntime struct {
 	HideThroughput         bool
 }
 
-// The hybrid implementation runs active diagnostics and passive aggregation
-// together. Mode controls the preferred user-facing view, not probe retirement.
+// V1 is the legacy active-probe monitor. V2 is passive-only and must not
+// create upstream traffic of its own.
 func (r ChannelMonitorRuntime) ActiveProbesAllowed() bool {
-	return r.Enabled
+	return r.Enabled && r.Mode == ChannelMonitorModeV1
 }
 
 func (r ChannelMonitorRuntime) PassiveAggregationAllowed() bool {
-	return r.Enabled
+	return r.Enabled && r.Mode == ChannelMonitorModeV2
 }
 
 // GetChannelMonitorRuntime reads the channel monitor feature flags directly from

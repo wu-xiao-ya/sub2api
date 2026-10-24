@@ -2,6 +2,7 @@ package handler
 
 import (
 	"github.com/Wei-Shaw/sub2api/internal/handler/admin"
+	"github.com/Wei-Shaw/sub2api/internal/handler/user"
 	"github.com/Wei-Shaw/sub2api/internal/securityaudit"
 )
 
@@ -56,6 +57,7 @@ type Handlers struct {
 	Announcement        *AnnouncementHandler
 	ChannelMonitor      *ChannelMonitorUserHandler
 	ChannelMonitorV2    *ChannelMonitorV2Handler
+	Leaderboard         *user.LeaderboardHandler
 	Admin               *AdminHandlers
 	Gateway             *GatewayHandler
 	OpenAIGateway       *OpenAIGatewayHandler

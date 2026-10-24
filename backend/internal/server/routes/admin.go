@@ -360,6 +360,9 @@ func registerAccountRoutes(admin *gin.RouterGroup, h *handler.Handlers, stepUpAu
 		accounts.GET("/upstream-billing-probe/settings", h.Admin.Account.GetUpstreamBillingProbeSettings)
 		accounts.PUT("/upstream-billing-probe/settings", h.Admin.Account.UpdateUpstreamBillingProbeSettings)
 		accounts.POST("/upstream-billing-probe/batch", h.Admin.Account.ProbeUpstreamBillingBatch)
+		accounts.GET("/upstream-ratio-sync/settings", h.Admin.Account.GetUpstreamRatioSyncSettings)
+		accounts.PUT("/upstream-ratio-sync/settings", h.Admin.Account.UpdateUpstreamRatioSyncSettings)
+		accounts.POST("/upstream-ratio-sync/batch", h.Admin.Account.SyncUpstreamRatioBatch)
 		accounts.GET("/pool-groups", h.Admin.Account.ListPoolGroups)
 		accounts.POST("/pool-groups", h.Admin.Account.CreatePoolGroup)
 		accounts.PUT("/pool-groups/:id", h.Admin.Account.UpdatePoolGroup)
@@ -374,6 +377,9 @@ func registerAccountRoutes(admin *gin.RouterGroup, h *handler.Handlers, stepUpAu
 		accounts.PUT("/:id", h.Admin.Account.Update)
 		accounts.PUT("/:id/upstream-billing-probe", h.Admin.Account.SetUpstreamBillingProbeEnabled)
 		accounts.POST("/:id/upstream-billing-probe", h.Admin.Account.ProbeUpstreamBilling)
+		accounts.PUT("/:id/upstream-ratio-sync", h.Admin.Account.SetUpstreamRatioSyncEnabled)
+		accounts.POST("/:id/upstream-ratio-sync", h.Admin.Account.SyncUpstreamRatio)
+		accounts.GET("/:id/upstream-ratio-sync", h.Admin.Account.GetUpstreamRatioSyncResult)
 		accounts.DELETE("/:id", h.Admin.Account.Delete)
 		accounts.POST("/:id/test", h.Admin.Account.Test)
 		accounts.POST("/:id/recover-state", h.Admin.Account.RecoverState)
@@ -566,6 +572,7 @@ func registerSettingsRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		adminSettings.PUT("", h.Admin.Setting.UpdateSettings)
 		adminSettings.GET("/image-upstream-cost", h.Admin.Setting.GetImageUpstreamCost)
 		adminSettings.PUT("/image-upstream-cost", h.Admin.Setting.UpdateImageUpstreamCost)
+		adminSettings.GET("/image-upstream-cost/candidates", h.Admin.Setting.GetImageUpstreamCostCandidates)
 		adminSettings.POST("/test-smtp", h.Admin.Setting.TestSMTPConnection)
 		adminSettings.POST("/send-test-email", h.Admin.Setting.SendTestEmail)
 		adminSettings.GET("/email-templates", h.Admin.Setting.ListEmailTemplates)
@@ -657,6 +664,8 @@ func registerBackupRoutes(admin *gin.RouterGroup, h *handler.Handlers, stepUpAut
 }
 
 func registerSystemRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
+	admin.GET("/server-monitor/summary", h.Admin.System.GetServerMonitorSummary)
+	admin.GET("/server-monitor/logs", h.Admin.System.GetServerMonitorLogs)
 	system := admin.Group("/system")
 	{
 		system.GET("/version", h.Admin.System.GetVersion)

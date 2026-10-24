@@ -82,6 +82,7 @@ type DataAccount struct {
 	RateMultiplier     *float64       `json:"rate_multiplier,omitempty"`
 	ExpiresAt          *int64         `json:"expires_at,omitempty"`
 	AutoPauseOnExpired *bool          `json:"auto_pause_on_expired,omitempty"`
+	UseRelayRoute      *bool          `json:"use_relay_route,omitempty"`
 }
 
 type DataImportRequest struct {
@@ -273,6 +274,7 @@ func (h *AccountHandler) ExportData(c *gin.Context) {
 			RateMultiplier:     acc.RateMultiplier,
 			ExpiresAt:          expiresAt,
 			AutoPauseOnExpired: &acc.AutoPauseOnExpired,
+			UseRelayRoute:      &acc.UseRelayRoute,
 		})
 	}
 
@@ -536,6 +538,7 @@ func (h *AccountHandler) importData(ctx context.Context, req DataImportRequest) 
 			GroupIDs:             nil,
 			ExpiresAt:            item.ExpiresAt,
 			AutoPauseOnExpired:   item.AutoPauseOnExpired,
+			UseRelayRoute:        item.UseRelayRoute,
 			SkipDefaultGroupBind: skipDefaultGroupBind,
 		}
 

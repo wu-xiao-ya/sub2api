@@ -731,9 +731,7 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 		return fmt.Errorf("build ws headers: %w", buildHdrErr)
 	}
 	proxyURL := ""
-	if account.ProxyID != nil && account.Proxy != nil {
-		proxyURL = account.Proxy.URL()
-	}
+	proxyURL = ResolveAccountProxyURL(account)
 
 	dialer := s.getOpenAIWSPassthroughDialer()
 	if dialer == nil {
@@ -750,7 +748,7 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 			return fmt.Errorf("refresh ws authentication headers: %w", err)
 		}
 		dialCtx, cancelDial := context.WithTimeout(ctx, s.openAIWSDialTimeout())
-		upstreamConn, statusCode, handshakeHeaders, err = dialer.Dial(dialCtx, wsURL, headers, proxyURL)
+		upstreamConn, statusCode, handshakeHeaders, _, err = dialAccountWebSocket(dialCtx, dialer, account, wsURL, headers, proxyURL)
 		cancelDial()
 		if err == nil {
 			break
@@ -828,6 +826,13 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 	}
 
 	completedTurns := atomic.Int32{}
+	var turnLatencyMu sync.Mutex
+	turnLatencyCtx := firstWebSocketTurnLatencyContext(ctx)
+	turnLatencySnapshot := func() *UsageLatencyBreakdown {
+		turnLatencyMu.Lock()
+		defer turnLatencyMu.Unlock()
+		return FinalRequestLatencySnapshot(turnLatencyCtx)
+	}
 	turnLifecycle := newOpenAIWSPassthroughTurnLifecycle(true)
 	clientFrameConn := &openAIWSClientFrameConn{
 		conn:                 clientConn,
@@ -842,10 +847,14 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 		// capturedSessionModel 的读写都发生在该 goroutine 内，因此无需
 		// 加锁/原子化。
 		filter: func(msgType coderws.MessageType, payload []byte) (out []byte, blocked *OpenAIFastBlockedError, filterErr error) {
+			receivedAt := time.Now()
 			if msgType != coderws.MessageText {
 				return payload, nil, nil
 			}
 			eventType := strings.TrimSpace(gjson.GetBytes(payload, "type").String())
+			if eventType == "response.cancel" && hooks != nil && hooks.ClientCancelled != nil {
+				hooks.ClientCancelled()
+			}
 			isResponseCreate := eventType == "response.create"
 			acceptedTurn := false
 			if isResponseCreate {
@@ -858,6 +867,9 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 						turnLifecycle.cancelResponseCreate()
 					}
 				}()
+				if hooks != nil && hooks.RequestReceived != nil {
+					hooks.RequestReceived(payload, usageMeta.requestModelForFrame(payload), receivedAt)
+				}
 			}
 			if isResponseCreate {
 				if account.IsOpenAIOAuth() && isOpenAIResponsesLiteWebSocketPayload(payload) {
@@ -919,6 +931,9 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 			//     service_tier 时按 default 处理，billing 应如实反映。
 			if policyErr == nil && blocked == nil && isResponseCreate {
 				usageMeta.updateFromResponseCreate(out, model, requestModelForThisFrame)
+				turnLatencyMu.Lock()
+				turnLatencyCtx = withRequestLatencyAt(ctx, receivedAt)
+				turnLatencyMu.Unlock()
 				acceptedTurn = true
 			}
 			return out, blocked, policyErr
@@ -939,6 +954,7 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 	}
 	upstreamFirstMessageSent := false
 	firstWriteCtx, cancelFirstWrite := context.WithTimeout(ctx, s.openAIWSWriteTimeout())
+	BeginRequestLatencyAttempt(turnLatencyCtx)
 	firstWriteErr := relayUpstreamFrameConn.WriteFrame(firstWriteCtx, coderws.MessageText, firstClientMessage)
 	cancelFirstWrite()
 	if firstWriteErr != nil {
@@ -957,6 +973,9 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 				return msgType, payload, readErr
 			}
 			if msgType == coderws.MessageText && strings.TrimSpace(gjson.GetBytes(payload, "type").String()) == "response.create" {
+				turnLatencyMu.Lock()
+				BeginRequestLatencyAttempt(turnLatencyCtx)
+				turnLatencyMu.Unlock()
 				return msgType, payload, nil
 			}
 			if writeErr := upstreamFrameConn.WriteFrame(readCtx, msgType, payload); writeErr != nil {
@@ -1007,6 +1026,7 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 					ResponseHeaders:       cloneHeader(handshakeHeaders),
 					Duration:              turn.Duration,
 					FirstTokenMs:          turn.FirstTokenMs,
+					LatencyBreakdown:      turnLatencySnapshot(),
 				}
 				logOpenAIWSV2Passthrough(
 					"relay_turn_completed account_id=%d turn=%d request_id=%s terminal_event=%s duration_ms=%d first_token_ms=%d input_tokens=%d output_tokens=%d cache_read_tokens=%d",
@@ -1030,11 +1050,20 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 				}
 			},
 			AfterClientWrite: func(msgType coderws.MessageType, payload []byte, writeErr error) {
+				if msgType == coderws.MessageText && hooks != nil && hooks.PerformanceResult != nil &&
+					(openAIWSPassthroughIsTerminalOutput(payload) || gjson.GetBytes(payload, "type").String() == "error") {
+					if factResult := websocketPerformanceResult(payload, turnLatencySnapshot(), usageMeta.serviceTier.Load(), usageMeta.reasoningEffort.Load()); factResult != nil {
+						hooks.PerformanceResult(factResult, writeErr)
+					}
+				}
 				if msgType == coderws.MessageText && openAIWSPassthroughIsTerminalOutput(payload) {
 					turnLifecycle.finishTerminalWrite(writeErr == nil, clientFrameConn.markTurnCompleted)
 				}
 			},
 			BeforeRelayCancel: func(exit openaiwsv2.RelayExit) {
+				if exit.Stage == "read_client" && isPerformanceVoluntaryDisconnect(exit.Err) && hooks != nil && hooks.ClientCancelled != nil {
+					hooks.ClientCancelled()
+				}
 				if context.Cause(ctx) != nil {
 					return
 				}
@@ -1050,6 +1079,10 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 					return nil
 				}
 				eventType, _, _ := parseOpenAIWSEventEnvelope(payload)
+				turnLatencyMu.Lock()
+				latencyAttempt := CurrentRequestLatencyAttempt(turnLatencyCtx)
+				turnLatencyMu.Unlock()
+				latencyAttempt.ObserveProtocolEvent(string(payload), eventType)
 				if isOpenAIWSTerminalEvent(eventType) {
 					s.handleOpenAIWSTerminalTransientFailure(ctx, account, capturedSessionModel, handshakeHeaders, payload)
 				}
@@ -1122,6 +1155,7 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 		ResponseHeaders:       cloneHeader(handshakeHeaders),
 		Duration:              relayResult.Duration,
 		FirstTokenMs:          relayResult.FirstTokenMs,
+		LatencyBreakdown:      turnLatencySnapshot(),
 	}
 
 	turnCount := int(completedTurns.Load())

@@ -88,8 +88,10 @@ type CreateOrderRequest struct {
 }
 
 type CreateOrderResponse struct {
-	OrderID      int64                           `json:"order_id"`
-	Amount       float64                         `json:"amount"`
+	OrderID int64   `json:"order_id"`
+	Amount  float64 `json:"amount"`
+	// BonusAmount 为阶梯赠金（折扣模式下为折算差额），Amount 已包含这部分。
+	BonusAmount  float64                         `json:"bonus_amount"`
 	PayAmount    float64                         `json:"pay_amount"`
 	FeeRate      float64                         `json:"fee_rate"`
 	Status       string                          `json:"status"`
@@ -109,6 +111,8 @@ type CreateOrderResponse struct {
 	ExpiresAt    time.Time                       `json:"expires_at"`
 	PaymentMode  string                          `json:"payment_mode,omitempty"`
 	ResumeToken  string                          `json:"resume_token,omitempty"`
+	// AlipayMobilePrecreateDeepLink 为真时前端可用 qr_code 通过 alipays:// 唤起支付宝 App。
+	AlipayMobilePrecreateDeepLink bool `json:"alipay_mobile_precreate_deep_link,omitempty"`
 }
 
 type OrderListParams struct {
@@ -154,6 +158,11 @@ type RefundPlan struct {
 	// would-expire) instead of the full revocation used for payment_order
 	// purchases. user_subscriptions is never touched on either path.
 	PurchaseLegacyDeduct bool
+	// deductionHeld marks a plan whose deduction was kept (not rolled back)
+	// because the gateway refund is pending confirmation. Such a plan finalizes
+	// without deducting again and returns the held deduction only when the
+	// gateway settles as failed.
+	deductionHeld bool
 }
 
 type RefundResult struct {
@@ -165,28 +174,32 @@ type RefundResult struct {
 }
 
 type DashboardStats struct {
-	TodayAmount   float64 `json:"today_amount"`
-	TotalAmount   float64 `json:"total_amount"`
-	TodayCount    int     `json:"today_count"`
-	TotalCount    int     `json:"total_count"`
-	AvgAmount     float64 `json:"avg_amount"`
-	PendingOrders int     `json:"pending_orders"`
+	TodayAmount   CurrencyAmounts `json:"today_amount"`
+	TotalAmount   CurrencyAmounts `json:"total_amount"`
+	TodayCount    int             `json:"today_count"`
+	TotalCount    int             `json:"total_count"`
+	AvgAmount     CurrencyAmounts `json:"avg_amount"`
+	PendingOrders int             `json:"pending_orders"`
 
 	DailySeries    []DailyStats        `json:"daily_series"`
 	PaymentMethods []PaymentMethodStat `json:"payment_methods"`
-	TopUsers       []TopUserStat       `json:"top_users"`
+	TopUsers       TopUsersByCurrency  `json:"top_users"`
 }
 
+// CurrencyAmounts holds payment amounts keyed by their ISO 4217 currency.
+// Amounts in different currencies must never be added together.
+type CurrencyAmounts map[string]float64
+
 type DailyStats struct {
-	Date   string  `json:"date"`
-	Amount float64 `json:"amount"`
-	Count  int     `json:"count"`
+	Date   string          `json:"date"`
+	Amount CurrencyAmounts `json:"amount"`
+	Count  int             `json:"count"`
 }
 
 type PaymentMethodStat struct {
-	Type   string  `json:"type"`
-	Amount float64 `json:"amount"`
-	Count  int     `json:"count"`
+	Type   string          `json:"type"`
+	Amount CurrencyAmounts `json:"amount"`
+	Count  int             `json:"count"`
 }
 
 type TopUserStat struct {
@@ -194,6 +207,9 @@ type TopUserStat struct {
 	Email  string  `json:"email"`
 	Amount float64 `json:"amount"`
 }
+
+// TopUsersByCurrency contains an independent ranked user list per currency.
+type TopUsersByCurrency map[string][]TopUserStat
 
 // --- Service ---
 

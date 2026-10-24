@@ -221,11 +221,11 @@ func (r *dashboardAggregationRepository) CleanupUsageLogs(ctx context.Context, c
 		res, err := r.sql.ExecContext(ctx, `
 			WITH victims AS (
 				SELECT ctid
-				FROM usage_logs
+				FROM usage_logs ul
 				WHERE created_at < $1
 				LIMIT $2
 			)
-			DELETE FROM usage_logs
+			DELETE FROM usage_logs ul
 			WHERE ctid IN (SELECT ctid FROM victims)
 		`, cutoff.UTC(), usageLogsCleanupBatchSize)
 		if err != nil {
@@ -295,7 +295,7 @@ func (r *dashboardAggregationRepository) insertHourlyActiveUsers(ctx context.Con
 		SELECT DISTINCT
 			date_trunc('hour', created_at AT TIME ZONE $3) AT TIME ZONE $3 AS bucket_start,
 			user_id
-		FROM usage_logs
+		FROM usage_logs ul
 		WHERE created_at >= $1 AND created_at < $2
 		ON CONFLICT DO NOTHING
 	`
@@ -320,21 +320,21 @@ func (r *dashboardAggregationRepository) insertDailyActiveUsers(ctx context.Cont
 
 func (r *dashboardAggregationRepository) upsertHourlyAggregates(ctx context.Context, start, end time.Time) error {
 	tzName := timezone.Name()
-	query := `
+	query := fmt.Sprintf(`
 		WITH hourly AS (
 			SELECT
-				date_trunc('hour', created_at AT TIME ZONE $3) AT TIME ZONE $3 AS bucket_start,
+				date_trunc('hour', ul.created_at AT TIME ZONE $3) AT TIME ZONE $3 AS bucket_start,
 				COUNT(*) AS total_requests,
-				COALESCE(SUM(input_tokens), 0) AS input_tokens,
-				COALESCE(SUM(output_tokens), 0) AS output_tokens,
-				COALESCE(SUM(cache_creation_tokens), 0) AS cache_creation_tokens,
-				COALESCE(SUM(cache_read_tokens), 0) AS cache_read_tokens,
-				COALESCE(SUM(total_cost), 0) AS total_cost,
-				COALESCE(SUM(actual_cost), 0) AS actual_cost,
-				COALESCE(SUM(COALESCE(account_stats_cost, total_cost) * COALESCE(account_rate_multiplier, 1)), 0) AS account_cost,
-				COALESCE(SUM(COALESCE(duration_ms, 0)), 0) AS total_duration_ms
-			FROM usage_logs
-			WHERE created_at >= $1 AND created_at < $2
+				COALESCE(SUM(ul.input_tokens), 0) AS input_tokens,
+				COALESCE(SUM(ul.output_tokens), 0) AS output_tokens,
+				COALESCE(SUM(ul.cache_creation_tokens), 0) AS cache_creation_tokens,
+				COALESCE(SUM(ul.cache_read_tokens), 0) AS cache_read_tokens,
+				COALESCE(SUM(ul.total_cost), 0) AS total_cost,
+				COALESCE(SUM(ul.actual_cost), 0) AS actual_cost,
+				COALESCE(SUM(%s), 0) AS account_cost,
+				COALESCE(SUM(COALESCE(ul.duration_ms, 0)), 0) AS total_duration_ms
+			FROM usage_logs ul
+			WHERE ul.created_at >= $1 AND ul.created_at < $2
 			GROUP BY 1
 		),
 		user_counts AS (
@@ -356,7 +356,8 @@ func (r *dashboardAggregationRepository) upsertHourlyAggregates(ctx context.Cont
 			total_duration_ms,
 			active_users,
 			computed_at
-		)
+		)`, inlineImageAwareAccountCostExpr("ul"))
+	query += `
 		SELECT
 			hourly.bucket_start,
 			hourly.total_requests,

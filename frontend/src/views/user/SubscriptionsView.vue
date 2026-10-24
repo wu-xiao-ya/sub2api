@@ -1,11 +1,11 @@
 <template>
   <AppLayout>
-    <div class="space-y-6">
+    <div class="console-page space-y-6">
       <div v-if="loading" class="flex justify-center py-12" data-testid="subscriptions-loading">
         <div class="h-8 w-8 animate-spin rounded-full border-2 border-primary-500 border-t-transparent" />
       </div>
 
-      <div v-else-if="sharedSubscriptions.length === 0" class="card p-12 text-center">
+      <div v-else-if="sharedSubscriptions.length === 0" class="console-section px-4 py-12 text-center">
         <div class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gray-100 dark:bg-dark-700">
           <Icon name="creditCard" size="xl" class="text-gray-400" />
         </div>
@@ -51,7 +51,7 @@
           <article
             v-for="purchase in sharedSubscriptions"
             :key="purchase.id"
-            class="overflow-hidden rounded-2xl border border-primary-100 bg-white dark:border-primary-900/40 dark:bg-dark-800"
+            class="min-w-0 overflow-hidden rounded-lg border border-gray-200 bg-white dark:border-dark-700 dark:bg-dark-900"
             :data-testid="`shared-subscription-${purchase.id}`"
           >
             <header class="flex items-start justify-between border-b border-gray-100 p-4 dark:border-dark-700">
@@ -83,16 +83,17 @@
                   <span
                     v-for="group in purchase.groups"
                     :key="group.id"
-                    class="rounded-md border border-gray-200 px-2 py-1 text-xs text-gray-600 dark:border-dark-600 dark:text-dark-300"
+                    class="inline-flex max-w-full items-center gap-1.5 rounded-md border border-gray-200 px-2 py-1 text-xs text-gray-600 dark:border-dark-600 dark:text-dark-300"
                   >
-                    {{ group.name }}
+                    <PlatformIcon :platform="group.platform" size="sm" />
+                    <span class="min-w-0 break-words">{{ group.name }}</span>
                   </span>
                 </div>
               </div>
 
               <div v-if="sharedQuotaRows(purchase).length" class="grid gap-3 sm:grid-cols-2">
                 <div v-for="quota in sharedQuotaRows(purchase)" :key="quota.key" class="space-y-1">
-                  <div class="flex items-center justify-between gap-2 text-xs">
+                  <div class="flex flex-wrap items-center justify-between gap-2 text-xs console-number">
                     <span class="text-gray-500 dark:text-dark-400">{{ quota.label }}</span>
                     <span class="font-medium text-gray-700 dark:text-gray-300">
                       {{ formatUsd(quota.used) }} / {{ quota.limit > 0 ? formatUsd(quota.limit) : t('userSubscriptions.unlimited') }}
@@ -154,6 +155,7 @@ import { useRouter } from 'vue-router'
 import subscriptionsAPI, { type SharedSubscription } from '@/api/subscriptions'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import Icon from '@/components/icons/Icon.vue'
+import PlatformIcon from '@/components/common/PlatformIcon.vue'
 import { useAppStore } from '@/stores/app'
 import { formatDateTimeToMinute } from '@/utils/format'
 

@@ -191,7 +191,7 @@ func (p *AntigravityTokenProvider) shouldAttemptBackfill(accountID int64) bool {
 // 同时写 DB 和 Redis 缓存，确保调度器立即跳过该账号。
 // 使用 background context 因为请求 context 可能已超时。
 func (p *AntigravityTokenProvider) markTempUnschedulable(account *Account, refreshErr error) {
-	if p.accountRepo == nil || account == nil {
+	if p.accountRepo == nil || account == nil || isRelayRouteFailure(refreshErr) {
 		return
 	}
 	now := time.Now()

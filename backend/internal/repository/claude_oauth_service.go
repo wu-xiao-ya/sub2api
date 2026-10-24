@@ -268,12 +268,13 @@ func createReqClient(proxyURL string) (*req.Client, error) {
 		ImpersonateChrome().
 		SetCookieJar(nil) // 禁用 CookieJar
 
-	trimmed, _, err := proxyurl.Parse(proxyURL)
+	trimmed, parsed, err := proxyurl.Parse(proxyURL)
 	if err != nil {
 		return nil, err
 	}
 	if trimmed != "" {
 		client.SetProxyURL(trimmed)
+		configureReqRelayTransport(client, parsed)
 	}
 
 	return instrumentReqClient(client), nil

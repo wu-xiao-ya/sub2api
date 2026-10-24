@@ -74,10 +74,13 @@ func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_KeepLeaseAcrossT
 
 	serverErrCh := make(chan error, 1)
 	turnTerminalCh := make(chan string, 2)
+	turnLatencyCh := make(chan *UsageLatencyBreakdown, 2)
+	factCh := make(chan ChannelPerformanceFact, 3)
 	hooks := &OpenAIWSIngressHooks{
 		AfterTurn: func(_ int, result *OpenAIForwardResult, turnErr error) {
 			if turnErr == nil && result != nil {
 				turnTerminalCh <- result.UpstreamTerminalEvent
+				turnLatencyCh <- result.LatencyBreakdown
 			}
 		},
 	}
@@ -112,7 +115,13 @@ func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_KeepLeaseAcrossT
 			return
 		}
 
-		serverErrCh <- svc.ProxyResponsesWebSocketFromClient(r.Context(), ginCtx, conn, account, "sk-test", firstMessage, hooks)
+		at := time.Now().Add(-time.Second)
+		performance := NewWebSocketPerformanceSession(7, 8, firstMessage, at, func(f ChannelPerformanceFact) { factCh <- f })
+		defer performance.Close(nil)
+		hooks.RequestReceived = performance.Next
+		hooks.PerformanceResult = performance.ObserveResult
+		ctx := WithWebSocketPerformance(WithWebSocketFirstTurnReceived(r.Context(), at), performance)
+		serverErrCh <- svc.ProxyResponsesWebSocketFromClient(ctx, ginCtx, conn, account, "sk-test", firstMessage, hooks)
 	}))
 	defer wsServer.Close()
 
@@ -153,6 +162,25 @@ func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_KeepLeaseAcrossT
 	require.Equal(t, "resp_ingress_turn_2", gjson.GetBytes(secondTurnEvent, "response.id").String())
 	require.Equal(t, "response.completed", <-turnTerminalCh, "首轮 turn 应保留成功终态")
 	require.Equal(t, "response.completed", <-turnTerminalCh, "第二轮 turn 应保留成功终态")
+
+	firstLatency, secondLatency := <-turnLatencyCh, <-turnLatencyCh
+	require.NotNil(t, firstLatency)
+	require.NotNil(t, secondLatency)
+	require.Equal(t, 2, firstLatency.Version)
+	require.Equal(t, 2, secondLatency.Version)
+	require.GreaterOrEqual(t, *firstLatency.FirstEventMs, 1000, "first turn includes scheduling wait")
+	require.Nil(t, firstLatency.FirstResponseMs, "WebSocket events are not HTTP headers")
+	require.Nil(t, secondLatency.FirstResponseMs, "reused connection cannot inherit handshake timing")
+	require.Equal(t, 1, secondLatency.AttemptCount)
+	require.NotSame(t, firstLatency, secondLatency)
+	require.Nil(t, firstLatency.FirstCharacterMs, "image-only output has no visible text milestone")
+	firstFact, secondFact := <-factCh, <-factCh
+	require.NotEqual(t, firstFact.RequestID, secondFact.RequestID)
+	require.Equal(t, "resp_ingress_turn_1", firstFact.UsageRequestID)
+	require.Equal(t, "resp_ingress_turn_2", secondFact.UsageRequestID)
+	require.Equal(t, PerformanceSuccess, firstFact.Outcome)
+	require.Equal(t, PerformanceSuccess, secondFact.Outcome)
+	require.Equal(t, 2, secondFact.Latency.Version)
 
 	_ = clientConn.Close(coderws.StatusNormalClosure, "done")
 
@@ -801,9 +829,12 @@ func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_PassthroughModeR
 
 	serverErrCh := make(chan error, 1)
 	resultCh := make(chan *OpenAIForwardResult, 1)
+	factCh := make(chan ChannelPerformanceFact, 2)
+	beforeDeliveryCh := make(chan bool, 1)
 	hooks := &OpenAIWSIngressHooks{
 		AfterTurn: func(_ int, result *OpenAIForwardResult, turnErr error) {
 			if turnErr == nil && result != nil {
+				beforeDeliveryCh <- len(factCh) == 0
 				resultCh <- result
 			}
 		},
@@ -840,7 +871,9 @@ func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_PassthroughModeR
 			return
 		}
 
-		serverErrCh <- svc.ProxyResponsesWebSocketFromClient(r.Context(), ginCtx, conn, account, "sk-test", firstMessage, hooks)
+		ctx, performance := attachWebSocketPerformanceTestHooks(r.Context(), firstMessage, hooks, factCh)
+		defer performance.Close(nil)
+		serverErrCh <- svc.ProxyResponsesWebSocketFromClient(ctx, ginCtx, conn, account, "sk-test", firstMessage, hooks)
 	}))
 	defer wsServer.Close()
 
@@ -893,6 +926,17 @@ func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_PassthroughModeR
 	}
 
 	require.Equal(t, 1, captureDialer.DialCount(), "passthrough 模式应直接建立上游 websocket")
+	require.True(t, <-beforeDeliveryCh, "the earlier billing callback must not commit delivery success")
+	select {
+	case fact := <-factCh:
+		require.Equal(t, PerformanceSuccess, fact.Outcome)
+		require.Equal(t, "resp_passthrough_turn_1", fact.UsageRequestID)
+		require.Equal(t, "priority", fact.ServiceTier)
+		require.Equal(t, "high", fact.ReasoningEffort)
+		require.Equal(t, 2, fact.Latency.Version)
+	case <-time.After(2 * time.Second):
+		t.Fatal("missing delivered WebSocket performance fact")
+	}
 	require.Len(t, upstreamConn.writes, 1, "passthrough 模式应透传首条 response.create")
 }
 
@@ -1084,6 +1128,7 @@ func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_HTTPBridgeModeRe
 
 	serverErrCh := make(chan error, 1)
 	resultCh := make(chan *OpenAIForwardResult, 1)
+	factCh := make(chan ChannelPerformanceFact, 2)
 	hooks := &OpenAIWSIngressHooks{
 		AfterTurn: func(_ int, result *OpenAIForwardResult, turnErr error) {
 			if turnErr == nil && result != nil {
@@ -1123,7 +1168,9 @@ func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_HTTPBridgeModeRe
 			return
 		}
 
-		serverErrCh <- svc.ProxyResponsesWebSocketFromClient(r.Context(), ginCtx, conn, account, "sk-test", firstMessage, hooks)
+		ctx, performance := attachWebSocketPerformanceTestHooks(r.Context(), firstMessage, hooks, factCh)
+		defer performance.Close(nil)
+		serverErrCh <- svc.ProxyResponsesWebSocketFromClient(ctx, ginCtx, conn, account, "sk-test", firstMessage, hooks)
 	}))
 	defer wsServer.Close()
 
@@ -1177,6 +1224,14 @@ func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_HTTPBridgeModeRe
 	}
 
 	require.NotNil(t, upstream.lastReq, "http_bridge 模式应调用 HTTP 上游")
+	select {
+	case fact := <-factCh:
+		require.Equal(t, PerformanceSuccess, fact.Outcome)
+		require.Equal(t, "resp_http_bridge_1", fact.UsageRequestID)
+		require.Equal(t, "gpt-5.1", fact.Model)
+	case <-time.After(2 * time.Second):
+		t.Fatal("missing HTTP bridge performance fact")
+	}
 }
 
 func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_ModeOffReturnsPolicyViolation(t *testing.T) {

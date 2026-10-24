@@ -201,3 +201,37 @@ func TestClassifyNoAccountError_FromGin_NilContextStillSafe(t *testing.T) {
 	require.Equal(t, http.StatusNotFound, cls.Status, "even with a nil gin context the classifier must still run and yield a coherent response")
 	require.True(t, cls.ModelNotFound)
 }
+
+func TestClassifySelectionFailureError_ModelNotFoundIsNotOverriddenByRateLimited(t *testing.T) {
+	fallback := noAccountErrorClassification{
+		Status:        http.StatusNotFound,
+		ErrType:       "model_not_found",
+		Message:       `Model "gpt-5.6-sol" is not supported by any configured account in this group`,
+		ModelNotFound: true,
+	}
+
+	got := classifySelectionFailureError(
+		fmt.Errorf("no available accounts supporting model: gpt-5.6-sol "+
+			"(pool=9, filtered: model_not_supported=8 model_rate_limited=1)"),
+		fallback,
+	)
+
+	require.Equal(t, fallback, got)
+}
+
+func TestClassifySelectionFailureError_UpgradesTemporaryModelRateLimit(t *testing.T) {
+	fallback := noAccountErrorClassification{
+		Status:  http.StatusServiceUnavailable,
+		ErrType: "api_error",
+		Message: "Service temporarily unavailable",
+	}
+
+	got := classifySelectionFailureError(
+		fmt.Errorf("no available accounts supporting model: gpt-5.6-sol "+
+			"(total=3 eligible=0 model_rate_limited=3)"),
+		fallback,
+	)
+
+	require.Equal(t, http.StatusTooManyRequests, got.Status)
+	require.Equal(t, "rate_limit_error", got.ErrType)
+}

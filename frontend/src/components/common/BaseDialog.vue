@@ -11,7 +11,7 @@
         @click.self="handleClose"
       >
         <!-- Modal panel -->
-        <div ref="dialogRef" :class="['modal-content', widthClasses]" @click.stop>
+        <div ref="dialogRef" :class="['modal-content', widthClasses]" @click.stop @keydown="handleTab">
           <!-- Header -->
           <div class="modal-header">
             <h3 :id="dialogId" class="modal-title">
@@ -112,6 +112,27 @@ const handleEscape = (event: KeyboardEvent) => {
   }
 }
 
+const restoreFocus = () => {
+  if (previousActiveElement?.isConnected) previousActiveElement.focus()
+  previousActiveElement = null
+}
+
+const handleTab = (event: KeyboardEvent) => {
+  if (event.key !== 'Tab' || !dialogRef.value) return
+  const elements = Array.from(dialogRef.value.querySelectorAll<HTMLElement>(
+    'button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])'
+  )).filter(element => element.tabIndex >= 0 && element.getClientRects().length > 0)
+  const first = elements[0]
+  const last = elements[elements.length - 1]
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault()
+    last?.focus()
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault()
+    first?.focus()
+  }
+}
+
 // Prevent body scroll when modal is open and manage focus
 watch(
   () => props.show,
@@ -136,10 +157,7 @@ watch(
     } else {
       document.body.classList.remove('modal-open')
       // 恢复之前的焦点
-      if (previousActiveElement && typeof previousActiveElement.focus === 'function') {
-        previousActiveElement.focus()
-      }
-      previousActiveElement = null
+      restoreFocus()
     }
   },
   { immediate: true }
@@ -151,6 +169,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   document.removeEventListener('keydown', handleEscape)
+  restoreFocus()
   // 确保组件卸载时移除滚动锁定
   document.body.classList.remove('modal-open')
 })

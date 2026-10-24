@@ -4,7 +4,7 @@ vi.mock('@/api/admin/accounts', () => ({
   getAntigravityDefaultModelMapping: vi.fn()
 }))
 
-import { buildModelMappingObject, getModelsByPlatform, splitModelMappingObject } from '../useModelWhitelist'
+import { buildModelMappingObject, getModelsByPlatform, getPresetMappingsByPlatform, splitModelMappingObject } from '../useModelWhitelist'
 
 describe('useModelWhitelist', () => {
   it('openai 模型列表包含 GPT-5.4 官方快照', () => {
@@ -15,6 +15,9 @@ describe('useModelWhitelist', () => {
     expect(models).toContain('gpt-5.4-2026-03-05')
     expect(models).toContain('codex-auto-review')
     expect(models).toContain('gpt-5.6')
+    expect(models).toContain('gpt-6-astra')
+    expect(models).toContain('gpt-6-sol')
+    expect(models).toContain('gpt-6-luna')
   })
 
   it('openai 模型列表不再暴露已下线的 ChatGPT 登录 Codex 模型', () => {
@@ -56,6 +59,9 @@ describe('useModelWhitelist', () => {
 
   it('国产模型列表包含当前 DeepSeek、Kimi 和 GLM 型号', () => {
     expect(getModelsByPlatform('deepseek')).toContain('deepseek-v4-pro')
+    expect(getModelsByPlatform('deepseek')).toContain('deepseek-v4.1-flash')
+    expect(getModelsByPlatform('deepseek')).toContain('deepseek-flash')
+    expect(getModelsByPlatform('deepseek')).toContain('deepseek-v4-flash-vision-exp')
     expect(getModelsByPlatform('moonshot')).toContain('kimi-k3')
     expect(getModelsByPlatform('moonshot')).toContain('k3-256k')
     expect(getModelsByPlatform('zhipu')).toContain('glm-5.3')
@@ -92,6 +98,7 @@ describe('useModelWhitelist', () => {
   it('gemini 模型列表包含原生生图模型', () => {
     const models = getModelsByPlatform('gemini')
 
+    expect(models).toContain('gemini-3.8-flash')
     expect(models).toContain('gemini-2.5-flash-image')
     expect(models).toContain('gemini-3.1-flash-image')
     expect(models.indexOf('gemini-3.1-flash-image')).toBeLessThan(models.indexOf('gemini-2.0-flash'))
@@ -109,6 +116,37 @@ describe('useModelWhitelist', () => {
     const models = getModelsByPlatform('antigravity')
 
     expect(models).toContain('gemini-3.1-pro')
+  })
+
+  it('gemini 模型列表包含 Gemini 4 Argon 基础别名', () => {
+    const models = getModelsByPlatform('gemini')
+
+    expect(models).toContain('gemini-4-argon')
+    expect(models).not.toContain('gemini-4-argon-low')
+  })
+
+  it('antigravity 模型列表包含 Gemini 4 Argon 三档思考等级', () => {
+    const models = getModelsByPlatform('antigravity')
+
+    expect(models).toContain('gemini-4-argon-low')
+    expect(models).toContain('gemini-4-argon-medium')
+    expect(models).toContain('gemini-4-argon-high')
+    expect(models).not.toContain('gemini-4-argon')
+  })
+
+  it('gemini 与 antigravity 预设映射都把 Gemini 4 Argon 指向 high', () => {
+    for (const platform of ['gemini', 'antigravity']) {
+      const mappings = getPresetMappingsByPlatform(platform)
+
+      expect(mappings).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ from: 'gemini-4-argon', to: 'gemini-4-argon-high' }),
+          expect.objectContaining({ from: 'gemini-4-argon-low', to: 'gemini-4-argon-low' }),
+          expect.objectContaining({ from: 'gemini-4-argon-medium', to: 'gemini-4-argon-medium' }),
+          expect.objectContaining({ from: 'gemini-4-argon-high', to: 'gemini-4-argon-high' })
+        ])
+      )
+    }
   })
 
   it('whitelist 模式会忽略通配符条目', () => {
@@ -162,5 +200,10 @@ describe('useModelWhitelist', () => {
       allowedModels: ['gpt-5.4'],
       modelMappings: [{ from: 'gpt-latest', to: 'gpt-5.4' }]
     })
+  })
+
+  it('qwen 模型列表包含 3.8 Flash', () => {
+    expect(getModelsByPlatform('qwen')).toContain('qwen3.8-flash')
+    expect(getModelsByPlatform('qwen')).toContain('qwen3.8-max')
   })
 })

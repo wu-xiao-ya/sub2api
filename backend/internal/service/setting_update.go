@@ -52,6 +52,9 @@ func (s *SettingService) UpdateSettingsWithAuthSourceDefaults(ctx context.Contex
 }
 
 func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, settings *SystemSettings) (map[string]string, error) {
+	if err := s.validateTrafficRelay(ctx, settings); err != nil {
+		return nil, err
+	}
 	// Native default-subscription settings are read-only during the rollback
 	// window. They remain parseable for old clients but are never persisted or
 	// applied by the purchase-only runtime.
@@ -131,6 +134,9 @@ func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, setting
 	updates[SettingKeyStepUpEnabled] = strconv.FormatBool(settings.StepUpEnabled)
 	updates[SettingKeyAuditLogRetentionDays] = strconv.Itoa(settings.AuditLogRetentionDays)
 	updates[SettingKeyMainlandAccessRestrictionEnabled] = strconv.FormatBool(settings.MainlandAccessRestrictionEnabled)
+	updates[SettingKeyTrafficRelayEnabled] = strconv.FormatBool(settings.TrafficRelayEnabled)
+	updates[SettingKeyTrafficRelayProxyID] = strconv.FormatInt(settings.TrafficRelayProxyID, 10)
+	updates[SettingKeyTrafficRelayUnavailableTTLSeconds] = strconv.Itoa(settings.TrafficRelayUnavailableTTLSeconds)
 	settings.LoginAgreementMode = normalizeLoginAgreementMode(settings.LoginAgreementMode)
 	settings.LoginAgreementUpdatedAt = strings.TrimSpace(settings.LoginAgreementUpdatedAt)
 	if settings.LoginAgreementUpdatedAt == "" {

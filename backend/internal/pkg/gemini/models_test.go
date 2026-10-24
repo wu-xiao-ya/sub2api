@@ -13,8 +13,10 @@ func TestDefaultModels_ContainsFallbackCatalogModels(t *testing.T) {
 
 	required := []string{
 		"models/gemini-2.5-flash-image",
+		"models/gemini-3.8-flash",
 		"models/gemini-3.1-pro-preview-customtools",
 		"models/gemini-3.1-flash-image",
+		"models/gemini-4-argon",
 	}
 
 	for _, name := range required {
@@ -39,5 +41,16 @@ func TestHasFallbackModel_RecognizesCustomtoolsModel(t *testing.T) {
 	}
 	if HasFallbackModel("gemini-unknown") {
 		t.Fatalf("did not expect unknown model to exist in fallback catalog")
+	}
+}
+
+func TestHasFallbackModel_RecognizesGemini4Argon(t *testing.T) {
+	t.Parallel()
+
+	if !HasFallbackModel("gemini-4-argon") {
+		t.Fatalf("expected gemini-4-argon to exist in fallback catalog")
+	}
+	if !HasFallbackModel("models/gemini-4-argon") {
+		t.Fatalf("expected prefixed gemini-4-argon to exist in fallback catalog")
 	}
 }

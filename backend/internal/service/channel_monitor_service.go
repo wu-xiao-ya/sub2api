@@ -127,8 +127,8 @@ func NewChannelMonitorService(repo ChannelMonitorRepository, encryptor SecretEnc
 	}
 }
 
-// SetRuntimeReader injects the settings view used by the optional passive V2
-// aggregation layer. It does not disable the existing active monitor.
+// SetRuntimeReader injects the settings view used by the monitor mode gate and
+// the passive V2 aggregation layer.
 func (s *ChannelMonitorService) SetRuntimeReader(r channelMonitorRuntimeReader) {
 	if s != nil {
 		s.settings = r
@@ -639,18 +639,28 @@ func (s *ChannelMonitorService) ListHistory(ctx context.Context, id int64, model
 
 // ---------- 业务 ----------
 
-// RunCheck 同步触发对一个监控的检测：并发跑 primary + extra 模型，
-// 写历史记录并更新 last_checked_at。返回每个模型的检测结果。
+// RunCheck synchronously runs the legacy active probe for one monitor.
+// Active probes are available only in V1; V2 is passive-only.
 func (s *ChannelMonitorService) RunCheck(ctx context.Context, id int64) ([]*CheckResult, error) {
+	rt := s.probeRuntime(ctx)
+	if !rt.Enabled {
+		return nil, ErrChannelMonitorDisabled
+	}
+	if !rt.ActiveProbesAllowed() {
+		return nil, ErrChannelMonitorActiveProbesRetired
+	}
 	return s.RunCheckWithOptions(ctx, id, false)
 }
 
-// RunScheduledCheck is reserved for the background scheduler. Manual checks
-// still run a live active probe so administrators can diagnose an upstream
-// immediately instead of seeing an older end-user request observation.
+// RunScheduledCheck is reserved for the background scheduler. V2 never calls
+// this path because it is passive-only.
 func (s *ChannelMonitorService) RunScheduledCheck(ctx context.Context, id int64) ([]*CheckResult, error) {
-	if !s.probeRuntime(ctx).ActiveProbesAllowed() {
+	rt := s.probeRuntime(ctx)
+	if !rt.Enabled {
 		return nil, ErrChannelMonitorDisabled
+	}
+	if !rt.ActiveProbesAllowed() {
+		return nil, ErrChannelMonitorActiveProbesRetired
 	}
 	m, err := s.Get(ctx, id)
 	if err != nil {
@@ -750,6 +760,13 @@ func (s *ChannelMonitorService) runCheckForMonitor(
 // The scheduler uses this path; the admin "run now" action intentionally stays
 // a one-line diagnostic so an operator can inspect a specific account.
 func (s *ChannelMonitorService) RunGroupCheck(ctx context.Context, ids []int64) (*MonitorGroupCheckSummary, error) {
+	rt := s.probeRuntime(ctx)
+	if !rt.Enabled {
+		return nil, ErrChannelMonitorDisabled
+	}
+	if !rt.ActiveProbesAllowed() {
+		return nil, ErrChannelMonitorActiveProbesRetired
+	}
 	monitors := s.loadGroupProbeMonitors(ctx, ids)
 	if len(monitors) == 0 {
 		return nil, ErrChannelMonitorNotFound
@@ -793,6 +810,13 @@ func (s *ChannelMonitorService) RunScheduledGroupCheck(
 	ctx context.Context,
 	ids []int64,
 ) (*MonitorGroupCheckSummary, error) {
+	rt := s.probeRuntime(ctx)
+	if !rt.Enabled {
+		return nil, ErrChannelMonitorDisabled
+	}
+	if !rt.ActiveProbesAllowed() {
+		return nil, ErrChannelMonitorActiveProbesRetired
+	}
 	monitors := s.loadGroupProbeMonitors(ctx, ids)
 	if len(monitors) == 0 {
 		return nil, ErrChannelMonitorNotFound

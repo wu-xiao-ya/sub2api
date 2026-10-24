@@ -49,6 +49,12 @@ func (r *usageBatchLogRepoStub) GetAccountWindowStats(context.Context, int64, ti
 func (r *usageBatchLogRepoStub) GetAccountTodayStats(context.Context, int64) (*usagestats.AccountStats, error) {
 	return &usagestats.AccountStats{}, nil
 }
+func (r *usageBatchLogRepoStub) ListImageGenerationModels(context.Context) ([]string, error) {
+	return nil, nil
+}
+func (r *usageBatchLogRepoStub) ListImageGenerationAccounts(context.Context) ([]ImageUpstreamCostAccountCandidate, error) {
+	return nil, nil
+}
 func (r *usageBatchLogRepoStub) GetDashboardStats(context.Context) (*usagestats.DashboardStats, error) {
 	return nil, nil
 }

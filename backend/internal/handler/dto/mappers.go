@@ -86,6 +86,7 @@ func APIKeyFromService(k *service.APIKey) *APIKey {
 		Name:               k.Name,
 		GroupID:            k.GroupID,
 		Status:             k.Status,
+		KeyKind:            service.NormalizeAPIKeyKind(k.KeyKind),
 		IPWhitelist:        k.IPWhitelist,
 		IPBlacklist:        k.IPBlacklist,
 		LastUsedAt:         k.LastUsedAt,
@@ -107,6 +108,21 @@ func APIKeyFromService(k *service.APIKey) *APIKey {
 		Window7dStart:      k.Window7dStart,
 		User:               UserFromServiceShallow(k.User),
 		Group:              GroupFromServiceShallow(k.Group),
+	}
+	if len(k.Members) > 0 {
+		out.Members = make([]APIKeyMember, 0, len(k.Members))
+		for _, member := range k.Members {
+			if member == nil {
+				continue
+			}
+			out.Members = append(out.Members, APIKeyMember{
+				ID:      member.ID,
+				Name:    member.Name,
+				GroupID: member.GroupID,
+				Status:  member.Status,
+				Group:   GroupFromServiceShallow(member.Group),
+			})
+		}
 	}
 	if k.Window5hStart != nil && !service.IsWindowExpired(k.Window5hStart, service.RateLimitWindow5h) {
 		t := k.Window5hStart.Add(service.RateLimitWindow5h)
@@ -226,6 +242,8 @@ func groupFromServiceBase(g *service.Group) Group {
 		FallbackGroupID:                 g.FallbackGroupID,
 		FallbackGroupIDOnInvalidRequest: g.FallbackGroupIDOnInvalidRequest,
 		AllowMessagesDispatch:           g.AllowMessagesDispatch,
+		ForceOpenAIFast:                 g.ForceOpenAIFast,
+		FreeOpenAIFast:                  g.FreeOpenAIFast,
 		RequireOAuthOnly:                g.RequireOAuthOnly,
 		RequirePrivacySet:               g.RequirePrivacySet,
 		RPMLimit:                        g.RPMLimit,
@@ -261,6 +279,7 @@ func AccountFromServiceShallow(a *service.Account) *Account {
 		LastUsedAt:              a.LastUsedAt,
 		ExpiresAt:               timeToUnixSeconds(a.ExpiresAt),
 		AutoPauseOnExpired:      a.AutoPauseOnExpired,
+		UseRelayRoute:           a.UseRelayRoute,
 		CreatedAt:               a.CreatedAt,
 		UpdatedAt:               a.UpdatedAt,
 		OwnerUserID:             a.OwnerUserID,
@@ -664,6 +683,7 @@ func usageLogFromServiceUser(l *service.UsageLog) UsageLog {
 		OpenAIWSMode:              openAIWSMode,
 		DurationMs:                l.DurationMs,
 		FirstTokenMs:              l.FirstTokenMs,
+		LatencyBreakdown:          l.LatencyBreakdown.Map(),
 		ImageCount:                l.ImageCount,
 		ImageSize:                 l.ImageSize,
 		ImageInputSize:            l.ImageInputSize,

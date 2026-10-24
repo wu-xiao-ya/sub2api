@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -907,5 +908,161 @@ func TestApiKeyAuthWithSubscriptionGoogle_SubscriptionLimitExceededReturns429(t 
 	require.Equal(t, http.StatusTooManyRequests, resp.Error.Code)
 	require.Equal(t, "RESOURCE_EXHAUSTED", resp.Error.Status)
 	require.Contains(t, resp.Error.Message, "All active subscription quotas")
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestApiKeyAuthWithSubscriptionGoogle_StandardGroupUsesPurchase(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	group := &service.Group{
+		ID:               88,
+		Name:             "gemini-standard",
+		Status:           service.StatusActive,
+		Platform:         service.PlatformGemini,
+		Hydrated:         true,
+		SubscriptionType: service.SubscriptionTypeStandard,
+	}
+	user := &service.User{
+		ID:          1001,
+		Role:        service.RoleUser,
+		Status:      service.StatusActive,
+		Balance:     0,
+		Concurrency: 3,
+	}
+	apiKey := &service.APIKey{
+		ID:     701,
+		UserID: user.ID,
+		Key:    "google-standard-sub",
+		Status: service.StatusActive,
+		User:   user,
+		Group:  group,
+	}
+	apiKey.GroupID = &group.ID
+	apiKeyService := newTestAPIKeyService(fakeAPIKeyRepo{
+		getByKey: func(ctx context.Context, key string) (*service.APIKey, error) {
+			if key != apiKey.Key {
+				return nil, service.ErrAPIKeyNotFound
+			}
+			clone := *apiKey
+			return &clone, nil
+		},
+	})
+
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	startsAt := time.Now().Add(-time.Hour)
+	expiresAt := time.Now().Add(24 * time.Hour)
+	mock.ExpectExec(`UPDATE subscription_purchases`).
+		WithArgs(int64(user.ID), sqlmock.AnyArg()).
+		WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectQuery(`(?s)`+regexp.QuoteMeta("SELECT p.id, p.user_id, p.name, p.tier_code")+
+		`.*WHERE p\.user_id = \$1 AND g\.group_id = \$2.*ORDER BY p\.expires_at ASC`).
+		WithArgs(int64(user.ID), int64(group.ID)).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"id", "user_id", "name", "tier_code", "starts_at", "expires_at", "status",
+			"concurrency_entitlement", "lifetime_quota_usd", "daily_quota_usd",
+			"weekly_quota_usd", "monthly_quota_usd", "lifetime_usage_usd",
+			"daily_usage_usd", "weekly_usage_usd", "monthly_usage_usd",
+			"balance_topup_enabled", "billing_priority",
+		}).AddRow(
+			int64(801), int64(user.ID), "Gemini mix", "standard", startsAt, expiresAt, "active",
+			5, 100.0, 10.0, 40.0, 80.0, 1.0, 1.0, 1.0, 1.0, false, "subscription",
+		))
+	mock.ExpectQuery(`SELECT balance_topup_enabled\s+FROM user_subscription_preferences`).
+		WithArgs(int64(user.ID)).
+		WillReturnError(sql.ErrNoRows)
+	subscriptionService := service.NewSubscriptionService(nil, nil, nil, nil, &config.Config{RunMode: config.RunModeStandard}, db)
+	t.Cleanup(subscriptionService.Stop)
+
+	r := gin.New()
+	r.Use(APIKeyAuthWithSubscriptionGoogle(apiKeyService, subscriptionService, &config.Config{RunMode: config.RunModeStandard}))
+	r.GET("/v1beta/test", func(c *gin.Context) {
+		raw, ok := c.Get(string(ContextKeySharedSubscription))
+		if !ok || raw == nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"ok": false})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"ok": true})
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/v1beta/test", nil)
+	req.Header.Set("x-goog-api-key", apiKey.Key)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestApiKeyAuthWithSubscriptionGoogle_StandardGroupWithoutPurchaseUsesBalance(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	group := &service.Group{
+		ID:               89,
+		Name:             "gemini-balance",
+		Status:           service.StatusActive,
+		Platform:         service.PlatformGemini,
+		Hydrated:         true,
+		SubscriptionType: service.SubscriptionTypeStandard,
+	}
+	user := &service.User{
+		ID:          1002,
+		Role:        service.RoleUser,
+		Status:      service.StatusActive,
+		Balance:     12,
+		Concurrency: 3,
+	}
+	apiKey := &service.APIKey{
+		ID:     702,
+		UserID: user.ID,
+		Key:    "google-standard-balance",
+		Status: service.StatusActive,
+		User:   user,
+		Group:  group,
+	}
+	apiKey.GroupID = &group.ID
+	apiKeyService := newTestAPIKeyService(fakeAPIKeyRepo{
+		getByKey: func(ctx context.Context, key string) (*service.APIKey, error) {
+			if key != apiKey.Key {
+				return nil, service.ErrAPIKeyNotFound
+			}
+			clone := *apiKey
+			return &clone, nil
+		},
+	})
+
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	mock.ExpectExec(`UPDATE subscription_purchases`).
+		WithArgs(int64(user.ID), sqlmock.AnyArg()).
+		WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectQuery(`(?s)`+regexp.QuoteMeta("SELECT p.id, p.user_id, p.name, p.tier_code")+
+		`.*WHERE p\.user_id = \$1 AND g\.group_id = \$2.*ORDER BY p\.expires_at ASC`).
+		WithArgs(int64(user.ID), int64(group.ID)).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"id", "user_id", "name", "tier_code", "starts_at", "expires_at", "status",
+			"concurrency_entitlement", "lifetime_quota_usd", "daily_quota_usd",
+			"weekly_quota_usd", "monthly_quota_usd", "lifetime_usage_usd",
+			"daily_usage_usd", "weekly_usage_usd", "monthly_usage_usd",
+			"balance_topup_enabled", "billing_priority",
+		}))
+	mock.ExpectQuery(`SELECT balance_topup_enabled\s+FROM user_subscription_preferences`).
+		WithArgs(int64(user.ID)).
+		WillReturnError(sql.ErrNoRows)
+	subscriptionService := service.NewSubscriptionService(nil, nil, nil, nil, &config.Config{RunMode: config.RunModeStandard}, db)
+	t.Cleanup(subscriptionService.Stop)
+
+	r := gin.New()
+	r.Use(APIKeyAuthWithSubscriptionGoogle(apiKeyService, subscriptionService, &config.Config{RunMode: config.RunModeStandard}))
+	r.GET("/v1beta/test", func(c *gin.Context) { c.JSON(200, gin.H{"ok": true}) })
+
+	req := httptest.NewRequest(http.MethodGet, "/v1beta/test", nil)
+	req.Header.Set("x-goog-api-key", apiKey.Key)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
