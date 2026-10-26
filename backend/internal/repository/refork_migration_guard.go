@@ -30,7 +30,7 @@ func validateReforkArchive(ctx context.Context, db *sql.Conn) error {
 		SELECT 1 FROM refork_audit.checkpoint
 		WHERE baseline = 'ac1b8f1271be0d674fa6f074403c1410f30a3a81'
 		  AND archive_sha256 ~ '^[0-9a-f]{64}$'
-		  AND (phase IN ('converted', 'audited')
+		  AND (phase = 'audited'
 		       OR (phase IN ('archived','migrating','migrated') AND archive_sha256 = $1))
 	)`, os.Getenv("REFORK_ARCHIVE_SHA256")).Scan(&valid); err != nil {
 		return err

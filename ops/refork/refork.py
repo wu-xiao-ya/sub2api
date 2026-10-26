@@ -3,7 +3,7 @@
 
 import argparse
 import hashlib
-import json
+import simplejson as json
 import os
 from pathlib import Path
 import re
@@ -86,8 +86,53 @@ def exact_models(config):
     return {"enabled": True, "models": result}
 
 
+def convert_channel_mapping(mapping):
+    if mapping is None:
+        return None
+    if not isinstance(mapping, dict) or any(not isinstance(v, dict) for v in mapping.values()):
+        raise Blocked("channel model_mapping has an unsupported shape")
+    result = {}
+    sources = {}
+    for platform, models in mapping.items():
+        target = PLATFORMS.get(platform, platform)
+        sources.setdefault(target, []).append(platform)
+        merged = result.setdefault(target, {})
+        for name, upstream in models.items():
+            if not isinstance(name, str) or not isinstance(upstream, str):
+                raise Blocked("channel mappings must map model strings to strings")
+            for existing, previous in merged.items():
+                if name.lower() == existing.lower() and upstream != previous:
+                    raise Blocked("channel model mapping collision after platform conversion")
+            merged[name] = upstream
+    for platform, origins in sources.items():
+        if len(origins) > 1 and any("*" in key for key in result[platform]):
+            raise Blocked("merged channel wildcard precedence requires explicit review")
+    return result
+
+
+def validate_pricing_platforms(rows, owner):
+    seen = {}
+    platforms = {}
+    wildcard = set()
+    for row in rows:
+        old = row["platform"]
+        target = PLATFORMS.get(old, old)
+        bucket = (row[owner], target)
+        platforms.setdefault(bucket, set()).add(old)
+        for model in row["models"] or []:
+            key = (bucket, model.strip().lower())
+            previous = seen.get(key)
+            if previous is not None and previous != old:
+                raise Blocked("channel pricing model collision after platform conversion")
+            seen[key] = old
+            if "*" in model:
+                wildcard.add(bucket)
+    if any(len(platforms[bucket]) > 1 for bucket in wildcard):
+        raise Blocked("merged wildcard channel pricing requires explicit review")
+
+
 def safe_json(value):
-    return json.dumps(value, default=str, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+    return json.dumps(value, default=str, use_decimal=True, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
 
 
 def archive_digest(archive):
@@ -104,7 +149,7 @@ def write_private(path, data):
     # Exclusive create prevents overwriting the evidence used to approve a run.
     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as stream:
-        stream.write(json.dumps(data, default=str, indent=2, sort_keys=True) + "\n")
+        stream.write(json.dumps(data, default=str, use_decimal=True, indent=2, sort_keys=True) + "\n")
 
 
 def table_exists(conn, name):
@@ -126,13 +171,13 @@ def snapshot(conn, usage_columns=None):
     for name in tables:
         if table_exists(conn, name):
             # Some join tables have composite primary keys and no id.
-            data = [json.loads(safe_json(row[0])) for row in conn.execute(f"SELECT to_jsonb(t) FROM public.{name} t")]
+            data = [json.loads(safe_json(row[0]), use_decimal=True) for row in conn.execute(f"SELECT to_jsonb(t) FROM public.{name} t")]
             evidence[name] = sorted(data, key=safe_json)
     evidence["schema_migrations"] = [dict(zip(("filename", "checksum"), row)) for row in conn.execute(
         "SELECT filename, checksum FROM schema_migrations ORDER BY filename")]
     # Settings can contain provider credentials. They stay inside the private archive.
     if table_exists(conn, "settings"):
-        evidence["settings"] = [json.loads(safe_json(row[0])) for row in conn.execute(
+        evidence["settings"] = [json.loads(safe_json(row[0]), use_decimal=True) for row in conn.execute(
             "SELECT to_jsonb(t) FROM settings t ORDER BY key")]
     evidence["usage_logs"] = usage_fingerprint(conn, usage_columns)
     return evidence
@@ -203,36 +248,32 @@ def checks(conn):
         if count:
             problems.append("limited legacy platform quota conversion requires explicit reconciliation")
     pending = {r["filename"] for r in comparison if r["status"] == "pending"}
-    if "224_user_platform_quotas_add_cn_providers.sql" in pending and table_exists(conn, "user_platform_quotas"):
-        count = conn.execute("""
-            SELECT count(*) FROM user_platform_quotas
-            WHERE platform NOT IN ('anthropic','openai','gemini','antigravity','grok','kimi','zhipu','deepseek')
-        """).fetchone()[0]
-        if count:
-            problems.append("official migration 224 would reject legacy quota platforms before cleanup 238; sequencing review required")
-    for table, column in (("composite_model_routes", "target_platform"),
-                          ("channel_model_pricing", "platform"),
-                          ("channel_account_stats_model_pricing", "platform")):
+    for table, column in (("composite_model_routes", "target_platform"),):
         if table_exists(conn, table):
             count = conn.execute(f"SELECT count(*) FROM {table} WHERE {column}=ANY(%s)",
                                  (list(PLATFORMS),)).fetchone()[0]
             if count:
-                problems.append(f"legacy platform references in {table} require reviewed routing/pricing conversion")
+                problems.append(f"legacy platform references in {table} require reviewed routing conversion")
+    for table, owner in (("channel_model_pricing", "channel_id"),
+                         ("channel_account_stats_model_pricing", "rule_id")):
+        if table_exists(conn, table):
+            rows = [row[0] for row in conn.execute(f"SELECT to_jsonb(t) FROM {table} t")]
+            try:
+                validate_pricing_platforms(rows, owner)
+            except Blocked as exc:
+                problems.append(f"{table}: {exc}")
+    if table_exists(conn, "channels"):
+        for channel_id, mapping in conn.execute("SELECT id, model_mapping FROM channels"):
+            try:
+                convert_channel_mapping(mapping)
+            except Blocked as exc:
+                problems.append(f"channel {channel_id}: {exc}")
     cleanup = []
     for name in sorted(pending):
         text = (MIGRATIONS / name).read_text(encoding="utf-8")
         # This is a review inventory, not an SQL parser or automatic approval.
         if re.search(r"\b(DELETE\s+FROM|DROP|TRUNCATE|UPDATE)\b", text, re.I):
             cleanup.append({"filename": name, "checksum": checksum(text)})
-    if "220_clear_non_grok_video_generation_config.sql" in pending and table_exists(conn, "groups"):
-        count = conn.execute("""
-            SELECT count(*) FROM groups WHERE platform IS DISTINCT FROM 'grok'
-              AND platform IS DISTINCT FROM 'composite'
-              AND (video_price_480p IS NOT NULL OR video_price_720p IS NOT NULL
-                   OR video_price_1080p IS NOT NULL OR video_model_prices IS NOT NULL)
-        """).fetchone()[0]
-        if count:
-            problems.append("migration 220 would clear existing video prices")
     return {"baseline": BASELINE, "applied_count": len(ledger(conn)),
             "ledger": comparison, "cleanup_review": cleanup, "blockers": problems}
 
@@ -266,7 +307,7 @@ def candidate_guard(conn, expected):
 
 
 def load_archive(path):
-    archive = json.loads(Path(path).read_text(encoding="utf-8"))
+    archive = json.loads(Path(path).read_text(encoding="utf-8"), use_decimal=True)
     if archive.get("baseline") != BASELINE:
         raise Blocked("archive baseline mismatch")
     expected = archive_digest(archive)
@@ -357,7 +398,11 @@ def do_archive(args):
         conn.execute("LOCK TABLE groups, accounts, user_subscriptions IN SHARE ROW EXCLUSIVE MODE")
         report = checks(conn)
         ensure_no_blockers(report)
-        plan = json.loads(Path(args.plan).read_text(encoding="utf-8"))
+        plan = json.loads(Path(args.plan).read_text(encoding="utf-8"), use_decimal=True)
+        if plan.get("archive_unlimited_quotas_before_224") is not True:
+            raise Blocked("explicit archive-first quota preparation approval is required")
+        if plan.get("restore_video_prices_after_220") is not True:
+            raise Blocked("explicit video price preservation approval is required")
         validate_plan(conn, plan)
         approved = plan.get("reviewed_cleanup", {})
         for item in report["cleanup_review"]:
@@ -379,8 +424,12 @@ def do_archive(args):
         conn.execute("""
             INSERT INTO refork_audit.checkpoint (baseline,archive_sha256,phase)
             VALUES (%s,%s,'archived') ON CONFLICT (baseline)
-            DO UPDATE SET archive_sha256=EXCLUDED.archive_sha256, phase='archived', created_at=now()
+            DO NOTHING
         """, (BASELINE, archive["sha256"]))
+        existing = conn.execute("SELECT archive_sha256 FROM refork_audit.checkpoint WHERE baseline=%s",
+                                (BASELINE,)).fetchone()[0]
+        if existing != archive["sha256"]:
+            raise Blocked("candidate already has another archive; retain the original checkpoint")
     print("archive complete; private evidence must be retained outside GitHub")
 
 
@@ -395,6 +444,27 @@ def do_migrate(args):
             usage_columns = (archive["data"].get("usage_logs") or {}).get("columns")
             if snapshot(conn, usage_columns) != archive["data"]:
                 raise Blocked("candidate data drift since archive; re-archive before migrations")
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS refork_audit.quota_archive (
+                  baseline text NOT NULL, archive_sha256 text NOT NULL,
+                  row_id bigint NOT NULL, original_row jsonb NOT NULL,
+                  PRIMARY KEY (baseline, row_id)
+                )
+            """)
+            if table_exists(conn, "user_platform_quotas"):
+                conn.execute("""
+                    INSERT INTO refork_audit.quota_archive (baseline,archive_sha256,row_id,original_row)
+                    SELECT %s,%s,id,to_jsonb(q) FROM user_platform_quotas q
+                    WHERE daily_limit_usd IS NULL AND weekly_limit_usd IS NULL AND monthly_limit_usd IS NULL
+                    ON CONFLICT DO NOTHING
+                """, (BASELINE, archive["sha256"]))
+                # Migration 224 adds its CHECK before 238 deletes these rows.
+                # Every removed counter is now archived both privately and in DB.
+                conn.execute("""
+                    DELETE FROM user_platform_quotas
+                    WHERE platform=ANY(%s)
+                      AND daily_limit_usd IS NULL AND weekly_limit_usd IS NULL AND monthly_limit_usd IS NULL
+                """, (list(PLATFORMS),))
         conn.execute("UPDATE refork_audit.checkpoint SET phase='migrating' WHERE baseline=%s", (BASELINE,))
     # The executable uses the official runner, checksum rules and non-tx handling.
     # Its own preflight guard checks the ledger again. No fabricated migration rows.
@@ -451,6 +521,34 @@ def do_convert(args):
             conn.execute("UPDATE accounts SET platform=%s WHERE id=%s", (PLATFORMS[old], account_id))
             after = conn.execute("SELECT to_jsonb(a) FROM accounts a WHERE id=%s", (account_id,)).fetchone()[0]
             record_conversion(conn, archive, "accounts", account_id, before, after)
+        for table in ("channel_model_pricing", "channel_account_stats_model_pricing"):
+            if not table_exists(conn, table):
+                continue
+            for entity_id, old in conn.execute(
+                    f"SELECT id,platform FROM {table} WHERE platform=ANY(%s) ORDER BY id FOR UPDATE",
+                    (list(PLATFORMS),)).fetchall():
+                before = conn.execute(f"SELECT to_jsonb(t) FROM {table} t WHERE id=%s", (entity_id,)).fetchone()[0]
+                conn.execute(f"UPDATE {table} SET platform=%s WHERE id=%s", (PLATFORMS[old], entity_id))
+                after = conn.execute(f"SELECT to_jsonb(t) FROM {table} t WHERE id=%s", (entity_id,)).fetchone()[0]
+                record_conversion(conn, archive, table, entity_id, before, after)
+        if table_exists(conn, "channels"):
+            for entity_id, mapping in conn.execute("SELECT id,model_mapping FROM channels ORDER BY id FOR UPDATE").fetchall():
+                converted = convert_channel_mapping(mapping)
+                if mapping == converted:
+                    continue
+                before = conn.execute("SELECT to_jsonb(t) FROM channels t WHERE id=%s", (entity_id,)).fetchone()[0]
+                conn.execute("UPDATE channels SET model_mapping=%s::jsonb WHERE id=%s", (safe_json(converted), entity_id))
+                after = conn.execute("SELECT to_jsonb(t) FROM channels t WHERE id=%s", (entity_id,)).fetchone()[0]
+                record_conversion(conn, archive, "channels", entity_id, before, after)
+        for original in archive["data"].get("groups", []):
+            # Restore exactly the original values, including explicit free prices.
+            fields = ("video_price_480p", "video_price_720p", "video_price_1080p", "video_model_prices")
+            if all(key in original for key in fields):
+                conn.execute("""
+                    UPDATE groups SET video_price_480p=%s,video_price_720p=%s,
+                        video_price_1080p=%s,video_model_prices=%s::jsonb WHERE id=%s
+                """, (original[fields[0]], original[fields[1]], original[fields[2]],
+                      None if original[fields[3]] is None else safe_json(original[fields[3]]), original["id"]))
         # Forward-only unfreeze; leave both legacy history and its migration intact.
         conn.execute("DROP TRIGGER IF EXISTS trg_user_subscriptions_read_only ON user_subscriptions")
         conn.execute("UPDATE refork_audit.checkpoint SET phase='converted' WHERE baseline=%s AND archive_sha256=%s",
@@ -470,11 +568,16 @@ def record_conversion(conn, archive, entity, entity_id, before, after):
 
 def do_audit(args):
     archive = load_archive(args.archive)
-    with connect(read_only=True) as conn:
+    with connect() as conn:
+        conn.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ")
+        candidate_guard(conn, args.candidate_database)
+        checkpoint(conn, archive, args.candidate_database, ("converted", "audited"))
+        original_ledger_intact(conn, archive)
         current = snapshot(conn, (archive["data"].get("usage_logs") or {}).get("columns"))
         problems = []
         for table, before in archive["data"].items():
-            if table in ("schema_migrations", "groups", "accounts", "user_platform_quotas"):
+            if table in ("schema_migrations", "groups", "accounts", "user_platform_quotas",
+                         "channels", "channel_model_pricing", "channel_account_stats_model_pricing"):
                 continue
             after = current.get(table)
             equal = projected_rows_match(before, after or []) if isinstance(before, list) else after == before
@@ -502,6 +605,13 @@ def do_audit(args):
         expected_quotas = [row for row in archive["data"].get("user_platform_quotas", []) if not unlimited(row)]
         if not projected_rows_match(expected_quotas, current.get("user_platform_quotas", [])):
             problems.append("unexpected quota reconciliation difference")
+        archived_quotas = [row[0] for row in conn.execute("""
+            SELECT original_row FROM refork_audit.quota_archive
+            WHERE baseline=%s AND archive_sha256=%s ORDER BY row_id
+        """, (BASELINE, archive["sha256"]))]
+        expected_archive = [row for row in archive["data"].get("user_platform_quotas", []) if unlimited(row)]
+        if sorted(expected_archive, key=safe_json) != sorted(archived_quotas, key=safe_json):
+            problems.append("unlimited quota archive missing or changed")
         comparison = compare_ledgers(ledger(conn))
         old_ledger = {r["filename"]: r["checksum"] for r in archive["data"]["schema_migrations"]}
         new_ledger = ledger(conn)
@@ -515,9 +625,23 @@ def do_audit(args):
         """).fetchone()[0]
         if frozen:
             problems.append("native subscriptions remain frozen")
-    write_private(args.output, {"baseline": BASELINE, "archive_sha256": archive["sha256"],
-                                "blockers": problems, "data_audit_passed": not problems,
-                                "candidate_accepted": False})
+        for table in ("channels", "channel_model_pricing", "channel_account_stats_model_pricing"):
+            before = archive["data"].get(table, [])
+            expected = []
+            for row in before:
+                changed = dict(row)
+                if table == "channels":
+                    changed["model_mapping"] = convert_channel_mapping(row.get("model_mapping"))
+                else:
+                    changed["platform"] = PLATFORMS.get(row["platform"], row["platform"])
+                expected.append(changed)
+            if not projected_rows_match(expected, current.get(table, [])):
+                problems.append(f"routing or price difference: {table}")
+        write_private(args.output, {"baseline": BASELINE, "archive_sha256": archive["sha256"],
+                                    "blockers": problems, "data_audit_passed": not problems,
+                                    "candidate_accepted": False})
+        if not problems:
+            conn.execute("UPDATE refork_audit.checkpoint SET phase='audited' WHERE baseline=%s", (BASELINE,))
     if problems:
         raise Blocked("; ".join(problems))
     print("data audit passed; this is not full candidate acceptance or production authorization")
@@ -533,8 +657,7 @@ def main():
     pre.add_argument("--output", required=True)
     for name in ("archive", "migrate", "convert", "audit"):
         p = sub.add_parser(name)
-        if name != "audit":
-            p.add_argument("--candidate-database", required=True)
+        p.add_argument("--candidate-database", required=True)
         if name == "archive":
             p.add_argument("--plan", required=True)
             p.add_argument("--output", required=True)

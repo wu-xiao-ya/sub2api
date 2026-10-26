@@ -95,6 +95,33 @@ class LedgerTests(unittest.TestCase):
     def test_numeric_evidence_does_not_round_via_binary_float(self):
         value = refork.json.loads('{"amount":123456789.123456789}', parse_float=refork.Decimal)
         self.assertIn("123456789.123456789", refork.safe_json(value))
+        self.assertNotIn('"123456789.123456789"', refork.safe_json(value))
+
+    def test_mapping_platform_conversion_preserves_model_names_and_targets(self):
+        original = {"glm": {"GLM-5": "upstream-glm"}, "qwen": {"Qwen-3": "qwen3"},
+                    "openai": {"gpt-example": "original"}}
+        result = refork.convert_channel_mapping(original)
+        self.assertEqual(result, {"zhipu": {"GLM-5": "upstream-glm"},
+                                  "openai": {"Qwen-3": "qwen3", "gpt-example": "original"}})
+        self.assertIn("qwen", original)
+        for bad in (
+            {"qwen": {"same": "a"}, "mimo": {"SAME": "b"}},
+            {"qwen": {"qw*": "a"}, "openai": {"gpt": "b"}},
+        ):
+            with self.assertRaises(refork.Blocked):
+                refork.convert_channel_mapping(bad)
+
+    def test_pricing_conversion_refuses_cross_platform_collisions(self):
+        refork.validate_pricing_platforms([
+            {"channel_id": 1, "platform": "qwen", "models": ["qwen-3"]},
+            {"channel_id": 1, "platform": "mimo", "models": ["mimo-2"]},
+        ], "channel_id")
+        for model in ("QWEN-3", "*"):
+            with self.assertRaises(refork.Blocked):
+                refork.validate_pricing_platforms([
+                    {"channel_id": 1, "platform": "qwen", "models": ["qwen-3"]},
+                    {"channel_id": 1, "platform": "mimo", "models": [model]},
+                ], "channel_id")
 
     def test_private_evidence_cannot_be_written_to_tracked_source_paths(self):
         with self.assertRaises(refork.Blocked):

@@ -4,8 +4,6 @@ on:
   workflow_dispatch:
   push:
     branches: [codex/refork-v0.2.18-20261026]
-  pull_request:
-    branches: [main]
 
 permissions:
   contents: read
@@ -46,6 +44,18 @@ jobs:
   validate:
     needs: baseline
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18.1
+        env:
+          POSTGRES_USER: refork_fixture
+          POSTGRES_PASSWORD: synthetic-ci-only
+          POSTGRES_DB: refork_test_candidate
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U refork_fixture -d refork_test_candidate"
+          --health-interval 5s --health-timeout 5s --health-retries 12
     steps:
       - uses: actions/checkout@v6
         with:
@@ -65,7 +75,9 @@ jobs:
         with:
           node-version: '20'
       - name: Migration coordinator unit tests
-        run: python3 -m unittest discover -s ops/refork -p 'test_*.py' -v
+        run: |
+          python3 -m pip install -r ops/refork/requirements.txt
+          python3 -m unittest discover -s ops/refork -p 'test_*.py' -v
       - name: Backend generated code, unit and database integration tests
         working-directory: backend
         run: |
@@ -75,6 +87,11 @@ jobs:
           make test-unit
           make test-integration
           CGO_ENABLED=0 go build -o /tmp/refork-migrate ./cmd/refork-migrate
+      - name: Empty-init and synthetic legacy-copy migration rehearsal
+        env:
+          REFORK_TEST_DATABASE_URL: postgresql://refork_fixture:synthetic-ci-only@localhost:5432/refork_test_candidate?sslmode=disable
+          REFORK_TEST_RUNNER: /tmp/refork-migrate
+        run: python3 -m unittest discover -s ops/refork -p 'test_refork_integration.py' -v
       - name: Frontend full verification
         working-directory: frontend
         run: |

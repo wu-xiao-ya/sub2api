@@ -1,1 +1,2 @@
 psycopg[binary]==3.2.13
+simplejson==3.20.2
