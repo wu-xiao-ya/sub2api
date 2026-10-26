@@ -35,7 +35,6 @@ jobs:
         run: |
           pnpm --dir frontend install --frozen-lockfile
           pnpm --dir frontend build
-          cp -a frontend/dist/. backend/internal/web/dist/
           cd backend
           CGO_ENABLED=0 go build -tags embed -o /tmp/sub2api-official ./cmd/server
       - uses: actions/upload-artifact@v6

@@ -10,12 +10,11 @@ This is a **draft implementation, not an accepted candidate**.
 - A normal independent checkout and a draft PR exist; fork main is unchanged.
 - Candidate CI builds the unmodified pinned baseline before testing modifications.
   It has no deployment steps and never writes production image tags.
-- GitHub reports Actions permission enabled, but actual dispatch returns HTTP 422:
-  `Actions has been disabled for this repository`. Permission/workflow re-enable
-  calls did not resolve this. The authenticated browser confirms the fork-wide
-  disabled-workflows warning with an explicit re-enable button. User confirmation
-  has been requested before that UI action. No successful baseline build has
-  been obtained.
+- Actions resumed after the fork-wide disabled warning was observed. The first
+  baseline run built the unmodified official frontend successfully, then failed
+  on an unnecessary copy command in the candidate workflow (official Vite already
+  writes directly into the backend embed directory). That command was removed.
+  The full baseline build remains unproven until the corrected run completes.
 - Migration runner unit tests (including the existing official checksum/non-tx
   suites) pass in a focused file-list invocation with Go 1.27.3.
 - Nine Python unit tests pass. Database-copy integration tests have NOT run.
