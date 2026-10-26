@@ -67,6 +67,7 @@ class LedgerTests(unittest.TestCase):
         self.assertFalse(refork.projected_rows_match(before, [{"id": 1, "amount": "0.11", "bonus": 0}]))
         self.assertFalse(refork.projected_rows_match(before, []))
         self.assertFalse(refork.projected_rows_match([], [{"id": 2}]))
+        self.assertFalse(refork.projected_rows_match([{"id": 1, "price": None}], [{"id": 1}]))
 
     def test_cache_invalidation_can_only_append_known_keys_and_preserve_old_rows(self):
         known = refork.hashlib.sha256(b"synthetic-key").hexdigest()

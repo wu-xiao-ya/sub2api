@@ -234,6 +234,8 @@ def projected_rows_match(before, after):
     columns = set(before[0])
     if any(set(row) != columns for row in before):
         raise Blocked("inconsistent archived row columns")
+    if any(not columns.issubset(row) for row in after):
+        return False
     projected = [{key: row.get(key) for key in columns} for row in after]
     return sorted(before, key=safe_json) == sorted(projected, key=safe_json)
 
@@ -515,7 +517,7 @@ def do_migrate(args):
         if phase == "archived":
             usage_columns = (archive["data"].get("usage_logs") or {}).get("columns")
             if snapshot(conn, usage_columns, archive["data"].get("other_tables")) != archive["data"]:
-                raise Blocked("candidate data drift since archive; re-archive before migrations")
+                raise Blocked("candidate data drift since archive; restore a new candidate, do not replace its checkpoint")
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS refork_audit.quota_archive (
                   baseline text NOT NULL, archive_sha256 text NOT NULL,
@@ -654,7 +656,8 @@ def do_audit(args):
         original_ledger_intact(conn, archive)
         current = snapshot(conn, (archive["data"].get("usage_logs") or {}).get("columns"),
                            archive["data"].get("other_tables"))
-        problems = []
+        problems = [f"historical table disappeared: {name}"
+                    for name in archive["data"] if name not in current]
         for table, before in archive["data"].items():
             if table in ("schema_migrations", "groups", "accounts", "user_platform_quotas",
                          "channels", "channel_model_pricing", "channel_account_stats_model_pricing"):
@@ -687,7 +690,7 @@ def do_audit(args):
                         expected["extra"] = expected_account_extra(row)
                 # New official columns may appear, but old prices/credentials must match.
                 for key, value in expected.items():
-                    if actual.get(key) != value:
+                    if key not in actual or actual[key] != value:
                         problems.append(f"unexpected change: {table} id={entity_id} column={key}")
         unlimited = lambda row: all(row.get(k) is None for k in
                                    ("daily_limit_usd", "weekly_limit_usd", "monthly_limit_usd"))
