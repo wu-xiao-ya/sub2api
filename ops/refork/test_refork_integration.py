@@ -9,12 +9,14 @@ import unittest
 from unittest.mock import patch
 
 import refork
+import backup
 
 
 @unittest.skipUnless(os.environ.get("REFORK_TEST_DATABASE_URL"), "dedicated PostgreSQL fixture not configured")
 class MigrationRehearsal(unittest.TestCase):
     def test_empty_init_upgrade_resume_conversion_and_fail_closed_audit(self):
         import psycopg
+        from psycopg.conninfo import conninfo_to_dict, make_conninfo
 
         dsn = os.environ["REFORK_TEST_DATABASE_URL"]
         runner = str(Path(os.environ["REFORK_TEST_RUNNER"]).resolve())
@@ -87,6 +89,18 @@ class MigrationRehearsal(unittest.TestCase):
             }
             args.plan = str(Path(folder) / "plan.json")
             refork.write_private(args.plan, plan)
+            args.dump = str(Path(folder) / "full.dump")
+            args.manifest = str(Path(folder) / "backup.json")
+            backup.do_create(args)
+            restore_name = "refork_restore_candidate"
+            with psycopg.connect(dsn, autocommit=True) as conn:
+                conn.execute("CREATE DATABASE refork_restore_candidate")
+            restore_dsn = make_conninfo(**dict(conninfo_to_dict(dsn), dbname=restore_name))
+            args.proof = args.backup_proof = str(Path(folder) / "restore-proof.json")
+            with patch.dict(os.environ, DATABASE_URL=restore_dsn):
+                args.candidate_database = restore_name
+                backup.do_verify(args)
+            args.candidate_database = name
             args.output = args.archive = str(Path(folder) / "archive.json")
             refork.do_archive(args)
             archive = refork.load_archive(args.archive)

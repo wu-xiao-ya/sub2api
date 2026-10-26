@@ -28,6 +28,7 @@ func TestFinanceLedgerPaymentRedemptionRefundAndExactExclusion(t *testing.T) {
 		SetUserID(user.ID).SetUserEmail(user.Email).SetUserName("Finance").
 		SetAmount(100).SetPayAmount(700).SetRechargeCode(code).
 		SetOutTradeNo(code).SetPaymentType("alipay").SetPaymentTradeNo("provider").
+		SetClientIP("127.0.0.1").SetSrcHost("fixture.invalid").
 		SetOrderType("balance").SetStatus("PARTIALLY_REFUNDED").
 		SetExpiresAt(now.Add(time.Hour)).SetCompletedAt(now).Save(ctx)
 	require.NoError(t, err)

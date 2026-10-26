@@ -44,18 +44,6 @@ jobs:
   validate:
     needs: baseline
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:18.1
-        env:
-          POSTGRES_USER: refork_fixture
-          POSTGRES_PASSWORD: synthetic-ci-only
-          POSTGRES_DB: refork_test_candidate
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U refork_fixture -d refork_test_candidate"
-          --health-interval 5s --health-timeout 5s --health-retries 12
     steps:
       - uses: actions/checkout@v6
         with:
@@ -87,11 +75,6 @@ jobs:
           make test-unit
           make test-integration
           CGO_ENABLED=0 go build -o /tmp/refork-migrate ./cmd/refork-migrate
-      - name: Empty-init and synthetic legacy-copy migration rehearsal
-        env:
-          REFORK_TEST_DATABASE_URL: postgresql://refork_fixture:synthetic-ci-only@localhost:5432/refork_test_candidate?sslmode=disable
-          REFORK_TEST_RUNNER: /tmp/refork-migrate
-        run: python3 -m unittest discover -s ops/refork -p 'test_refork_integration.py' -v
       - name: Frontend full verification
         working-directory: frontend
         run: |
@@ -106,8 +89,41 @@ jobs:
           path: /tmp/refork-migrate
           retention-days: 14
 
+  migration-rehearsal:
+    needs: baseline
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18.1
+        env:
+          POSTGRES_USER: refork_fixture
+          POSTGRES_PASSWORD: synthetic-ci-only
+          POSTGRES_DB: refork_test_candidate
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U refork_fixture -d refork_test_candidate"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+      - name: Build official-runner adapter
+        working-directory: backend
+        run: CGO_ENABLED=0 go build -o /tmp/refork-migrate ./cmd/refork-migrate
+      - name: Empty-init, full restore and synthetic legacy-copy upgrade
+        env:
+          REFORK_TEST_DATABASE_URL: postgresql://refork_fixture:synthetic-ci-only@localhost:5432/refork_test_candidate?sslmode=disable
+          REFORK_TEST_RUNNER: /tmp/refork-migrate
+          REFORK_PG_CONTAINER: ${{ job.services.postgres.id }}
+        run: |
+          python3 -m pip install -r ops/refork/requirements.txt
+          python3 -m unittest discover -s ops/refork -p 'test_*.py' -v
+
   image:
-    needs: validate
+    needs: [validate, migration-rehearsal]
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     permissions:

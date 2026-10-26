@@ -156,7 +156,41 @@ def table_exists(conn, name):
     return conn.execute("SELECT to_regclass(%s) IS NOT NULL", (f"public.{name}",)).fetchone()[0]
 
 
-def snapshot(conn, usage_columns=None):
+def historical_table_fingerprints(conn, excluded, original=None):
+    from psycopg import sql
+
+    if original is None:
+        names = [row[0] for row in conn.execute(
+            "SELECT tablename FROM pg_tables WHERE schemaname='public' ORDER BY tablename")
+                 if row[0] not in excluded]
+        original = {}
+        for name in names:
+            columns = [row[0] for row in conn.execute("""
+                SELECT column_name FROM information_schema.columns
+                WHERE table_schema='public' AND table_name=%s ORDER BY ordinal_position
+            """, (name,))]
+            original[name] = {"columns": columns}
+    result = {}
+    for index, (name, evidence) in enumerate(sorted(original.items())):
+        if not table_exists(conn, name):
+            result[name] = None
+            continue
+        digest = hashlib.sha256()
+        count = 0
+        columns = evidence["columns"]
+        query = sql.SQL('SELECT to_jsonb(p)::text FROM (SELECT {} FROM public.{}) p '
+                        'ORDER BY to_jsonb(p)::text COLLATE "C"').format(
+            sql.SQL(",").join(map(sql.Identifier, columns)), sql.Identifier(name))
+        with conn.cursor(name=f"refork_history_{index}") as cursor:
+            cursor.execute(query)
+            for (row,) in cursor:
+                digest.update(row.encode("utf-8") + b"\n")
+                count += 1
+        result[name] = {"count": count, "sha256": digest.hexdigest(), "columns": columns}
+    return result
+
+
+def snapshot(conn, usage_columns=None, historical_tables=None):
     """Capture configuration/identity evidence locally; never upload this to CI."""
     tables = (
         "users", "api_keys", "accounts", "groups", "account_groups",
@@ -180,6 +214,8 @@ def snapshot(conn, usage_columns=None):
         evidence["settings"] = [json.loads(safe_json(row[0]), use_decimal=True) for row in conn.execute(
             "SELECT to_jsonb(t) FROM settings t ORDER BY key")]
     evidence["usage_logs"] = usage_fingerprint(conn, usage_columns)
+    evidence["other_tables"] = historical_table_fingerprints(
+        conn, set(tables) | {"settings", "usage_logs", "schema_migrations"}, historical_tables)
     return evidence
 
 
@@ -225,6 +261,10 @@ def checks(conn):
     comparison = compare_ledgers(ledger(conn))
     problems += [f"checksum mismatch: {r['filename']}" for r in comparison
                  if r["status"] == "blocked_checksum"]
+    if conn.execute("""SELECT EXISTS (SELECT 1 FROM information_schema.columns
+        WHERE table_schema='public' AND table_name='accounts' AND column_name='use_relay_route')""").fetchone()[0]:
+        if conn.execute("SELECT EXISTS (SELECT 1 FROM accounts WHERE use_relay_route)").fetchone()[0]:
+            problems.append("legacy relay opt-ins require a verified egress adapter before migration")
     if table_exists(conn, "subscription_purchases"):
         count = conn.execute("""
             SELECT count(*) FROM subscription_purchases
@@ -288,6 +328,7 @@ def connect(read_only=False):
     # PostgreSQL NUMERIC values must never be rounded through binary float.
     set_json_loads(partial(json.loads, parse_float=Decimal), conn)
     conn.execute("SET statement_timeout = '120s'")
+    conn.execute("SET TIME ZONE 'UTC'")
     if read_only:
         conn.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY")
     return conn
@@ -392,6 +433,8 @@ def do_preflight(args):
 
 
 def do_archive(args):
+    import backup
+
     with connect() as conn:
         conn.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ")
         candidate_guard(conn, args.candidate_database)
@@ -404,6 +447,7 @@ def do_archive(args):
         if plan.get("restore_video_prices_after_220") is not True:
             raise Blocked("explicit video price preservation approval is required")
         validate_plan(conn, plan)
+        backup_proof = backup.validate_proof(args.backup_proof, conn, args.candidate_database)
         approved = plan.get("reviewed_cleanup", {})
         for item in report["cleanup_review"]:
             if approved.get(item["filename"]) != item["checksum"]:
@@ -411,7 +455,7 @@ def do_archive(args):
         data = snapshot(conn)
         archive = {"baseline": BASELINE, "database": args.candidate_database,
                    "created_at": datetime.now(timezone.utc).isoformat(), "report": report,
-                   "plan": plan, "data": data}
+                   "plan": plan, "data": data, "backup_proof": backup_proof}
         archive["sha256"] = archive_digest(archive)
         write_private(args.output, archive)
         conn.execute("""
@@ -442,7 +486,7 @@ def do_migrate(args):
         original_ledger_intact(conn, archive)
         if phase == "archived":
             usage_columns = (archive["data"].get("usage_logs") or {}).get("columns")
-            if snapshot(conn, usage_columns) != archive["data"]:
+            if snapshot(conn, usage_columns, archive["data"].get("other_tables")) != archive["data"]:
                 raise Blocked("candidate data drift since archive; re-archive before migrations")
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS refork_audit.quota_archive (
@@ -544,6 +588,13 @@ def do_convert(args):
             # Restore exactly the original values, including explicit free prices.
             fields = ("video_price_480p", "video_price_720p", "video_price_1080p", "video_model_prices")
             if all(key in original for key in fields):
+                before = conn.execute("""SELECT jsonb_build_object(
+                    'video_price_480p',video_price_480p,'video_price_720p',video_price_720p,
+                    'video_price_1080p',video_price_1080p,'video_model_prices',video_model_prices)
+                    FROM groups WHERE id=%s""", (original["id"],)).fetchone()[0]
+                after = {field: original[field] for field in fields}
+                if before != after:
+                    record_conversion(conn, archive, "group_video_prices", original["id"], before, after)
                 conn.execute("""
                     UPDATE groups SET video_price_480p=%s,video_price_720p=%s,
                         video_price_1080p=%s,video_model_prices=%s::jsonb WHERE id=%s
@@ -573,7 +624,8 @@ def do_audit(args):
         candidate_guard(conn, args.candidate_database)
         checkpoint(conn, archive, args.candidate_database, ("converted", "audited"))
         original_ledger_intact(conn, archive)
-        current = snapshot(conn, (archive["data"].get("usage_logs") or {}).get("columns"))
+        current = snapshot(conn, (archive["data"].get("usage_logs") or {}).get("columns"),
+                           archive["data"].get("other_tables"))
         problems = []
         for table, before in archive["data"].items():
             if table in ("schema_migrations", "groups", "accounts", "user_platform_quotas",
@@ -660,6 +712,7 @@ def main():
         p.add_argument("--candidate-database", required=True)
         if name == "archive":
             p.add_argument("--plan", required=True)
+            p.add_argument("--backup-proof", required=True)
             p.add_argument("--output", required=True)
         else:
             p.add_argument("--archive", required=True)
