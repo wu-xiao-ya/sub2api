@@ -68,6 +68,25 @@ class LedgerTests(unittest.TestCase):
         self.assertFalse(refork.projected_rows_match(before, []))
         self.assertFalse(refork.projected_rows_match([], [{"id": 2}]))
 
+    def test_cache_invalidation_can_only_append_known_keys_and_preserve_old_rows(self):
+        known = refork.hashlib.sha256(b"synthetic-key").hexdigest()
+        before = [{"id": 1, "cache_key": known, "attempts": 2}]
+        appended = before + [{"id": 2, "cache_key": known, "attempts": 0}]
+        self.assertTrue(refork.invalidation_rows_match(before, appended, [{"key": "synthetic-key"}]))
+        self.assertFalse(refork.invalidation_rows_match(before, appended, []))
+        self.assertFalse(refork.invalidation_rows_match(before, [], [{"key": "synthetic-key"}]))
+        self.assertFalse(refork.invalidation_rows_match(before, [
+            {"id": 1, "cache_key": known, "attempts": 3}], [{"key": "synthetic-key"}]))
+
+    def test_openai_conversion_only_accepts_precise_trigger_default(self):
+        original = {"platform": "qwen", "extra": {"upstream_billing_manual_rate": 0}}
+        self.assertEqual(refork.expected_account_extra(original), {
+            "upstream_billing_manual_rate": 0, "openai_long_context_billing_enabled": False})
+        original["extra"]["openai_long_context_billing_enabled"] = True
+        self.assertTrue(refork.expected_account_extra(original)["openai_long_context_billing_enabled"])
+        self.assertNotIn("openai_long_context_billing_enabled",
+                         refork.expected_account_extra({"platform": "glm", "extra": {}}))
+
     def test_archive_integrity_and_exclusive_output(self):
         data = {"schema_migrations": []}
         archive = {"baseline": refork.BASELINE, "data": data, "plan": {"groups": {}}}

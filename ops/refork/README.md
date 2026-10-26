@@ -19,7 +19,11 @@ This is a **draft implementation, not an accepted candidate**.
   The official CI on commit 5cd65246e also passed all its jobs.
 - Migration runner unit tests (including the existing official checksum/non-tx
   suites) pass in a focused file-list invocation with Go 1.27.3.
-- Eleven Python unit tests pass. Database-copy integration tests have NOT run.
+- Nineteen Python tests pass with a real local PostgreSQL 18.6 database:
+  empty initialization, complete backup and independent restore, archive-before-
+  cleanup, interrupted runner recovery, idempotent reruns, zero video-price
+  preservation, platform/mapping/price conversion and fail-closed reconciliation.
+  These use synthetic fixtures, NOT a successful production-copy upgrade.
 - Finance ledger API/UI, image upstream cost settings/report adapters and manual
   upstream rate adapters are implemented but final integration validation is
   pending. Code generation exposed missing upstream tool dependencies; their
@@ -63,25 +67,30 @@ committed. Schema hashes are not a substitute for schema or monetary validation.
 
 The coordinator intentionally refuses writes while any of these remain:
 
-1. Official migration 224 constrains quota platforms before migration 238 purges
-   unlimited rows. Legacy platform rows can fail 224 first. A reviewed,
-   archive-first sequencing solution and production-copy test are still needed.
-   The tool does not silently delete rows, reorder migrations, or fake completion.
+1. Before official 224, unlimited quotas are completely archived privately and in
+   `refork_audit.quota_archive`. Only legacy-platform unlimited rows are removed
+   ahead of the constraint; official 238 purges the remainder. Audit checks every
+   archived counter. Limited legacy quota rows still block; they are not merged.
 2. Production has 11 legacy-platform channel-pricing rows (GLM 5, Qwen 2, MiMo 2,
    Hunyuan 2). Their platform keys and channel mapping JSON must be converted
    without changing model sets, prices or multipliers. Group/account conversion
-   alone is insufficient. The tool blocks these references pending that adapter.
+   alone is insufficient. The narrow adapter now converts these keys and blocks
+   merged wildcard precedence and cross-platform model collisions.
 3. Composite legacy target-platform references and limited legacy quota rows are
    blocked rather than naively merged. Historical monitoring/usage platforms must
    remain historical rather than being globally rewritten.
-4. Migration 220 must not clear configured non-Grok video prices. Existing values
-   block migration until an explicit preservation solution is accepted.
+4. Migration 220 is unchanged. Conversion restores exact pre-migration video
+   prices, including explicit zero, and records before/after restoration evidence.
+   No app can start between cleanup and successful audit.
 5. Migration 221 forces long-context pricing on; all data-changing pending SQL
    must be individually reviewed by exact filename and checksum. Any monetary
    differences block acceptance. Do not auto-approve the generated inventory.
 6. New or unexpired legacy entitlements stop migration. Neither old subscription
    history nor its freeze migration is removed. Unfreeze is a forward operation
    after official migrations; the historical tables remain present.
+7. The three production relay opt-ins still require a verified egress adapter.
+   Preflight now BLOCKS them explicitly. Mapping them to proxy ID 1 would lose
+   connect-failure fallback/cooldown semantics and is not an accepted substitute.
 
 ## Tool Operation
 
@@ -108,15 +117,36 @@ python ops/refork/refork.py preflight \
   --output ops/refork/private/preflight.json
 ```
 
-Before any write: take a complete custom-format `pg_dump`, verify its digest,
-restore it into independent candidate PostgreSQL, and prove no production
-connection remains. The JSON archive is additional reconciliation evidence,
-**not a complete database backup or a passed restore test**.
+Before migration: restore a complete production export into an independent
+candidate. With the app stopped, create a custom-format backup of that candidate,
+then restore it into a DIFFERENT empty independent candidate database using
+`backup.py`. The tool fingerprints every public table and sequence, verifies the
+dump digest, and issues a private proof. `archive` requires this proof and refuses
+any intervening data drift. JSON evidence alone is never sufficient.
+
+Both connections come from private `DATABASE_URL` environments. Database names
+must contain `candidate`. Do not put DSNs/passwords in command arguments:
+
+```sh
+# DATABASE_URL selects the offline source candidate.
+python ops/refork/backup.py create --candidate-database sub2api_refork_candidate \
+  --dump ops/refork/private/full.dump --manifest ops/refork/private/backup.json
+# DATABASE_URL now selects the DIFFERENT, empty restore candidate.
+python ops/refork/backup.py verify --candidate-database sub2api_restore_candidate \
+  --manifest ops/refork/private/backup.json --proof ops/refork/private/restore-proof.json
+# DATABASE_URL must now select the original offline source candidate again.
+```
+
+The PostgreSQL client tools must match the server major version. Evidence paths
+must stay accessible for verification. On Windows, restrict the private directory
+ACL; POSIX file creation mode alone does not establish Windows access control.
 
 The reviewed conversion plan has this shape (illustrative model IDs only):
 
 ```json
 {
+  "archive_unlimited_quotas_before_224": true,
+  "restore_video_prices_after_220": true,
   "groups": {
     "33": {
       "from": "glm",
@@ -141,19 +171,22 @@ database integration tests may an operator use the write commands:
 
 ```sh
 python ops/refork/refork.py archive --candidate-database sub2api_refork_candidate \
-  --plan ops/refork/private/plan.json --output ops/refork/private/archive.json
+  --plan ops/refork/private/plan.json --output ops/refork/private/archive.json \
+  --backup-proof ops/refork/private/restore-proof.json
 python ops/refork/refork.py migrate --candidate-database sub2api_refork_candidate \
   --archive ops/refork/private/archive.json --runner /private/bin/refork-migrate
 python ops/refork/refork.py convert --candidate-database sub2api_refork_candidate \
   --archive ops/refork/private/archive.json
-python ops/refork/refork.py audit --archive ops/refork/private/archive.json \
+python ops/refork/refork.py audit --candidate-database sub2api_refork_candidate \
+  --archive ops/refork/private/archive.json \
   --output ops/refork/private/audit.json
 ```
 
 The archive checkpoint gates automatic startup migrations on restored custom
-databases. While phase is archived, only the standalone runner with the matching
-archive digest can proceed. Normal application startup stays blocked until
-conversion. The runner uses the official advisory lock, transactions, checksum
+databases. While the official migration phase is incomplete, only the standalone
+runner with the matching archive digest can proceed. Normal application startup
+stays blocked until successful AUDIT, not merely conversion. The runner uses the
+official advisory lock, transactions, checksum
 checks and nontransactional index recovery. It does not execute SQL via a custom
 splitter. Fresh official databases keep the upstream initialization path.
 
@@ -163,7 +196,11 @@ application objects, set `REFORK_INIT_EMPTY=true`,
 The empty-init flag refuses any existing application table or view.
 
 `audit` verifies old migration entries, identity sets, bindings, historical
-usage digests, balances/orders/settings and archived quota removal. It is
+usage digests, balances/orders/settings, every other historical public table and
+archived quota removal. The only accepted account-extra addition is the official
+175 trigger's exact long-context boolean default on conversion to OpenAI; existing
+extra keys stay unchanged. Official cache-invalidation events may append only
+known API-key hashes; existing outbox rows cannot change or disappear. It is
 fail-closed and may flag legitimate official column/default changes that need
 explicit review. A passed data audit is never marked candidate acceptance.
 
@@ -178,6 +215,8 @@ explicit review. A passed data audit is never marked candidate acceptance.
 - Exact model admission/listing/account isolation after platform conversion.
 - Fixed old/new billing samples: cache, long context, image costs, manual rate,
   currencies/rounding; no unexplained differences.
+- Image cost configuration changes must also invalidate/rebuild old dashboard
+  account-cost aggregates; a raw/aggregated consistency regression is still open.
 - Native subscription purchase/deduction and payment idempotence with mocks;
   multi-protocol SSE success/failure and Gemini cache ownership.
 - Same-session Pro Max cache replay using genuine parsed usage, no fixed

@@ -56,12 +56,6 @@ jobs:
         with:
           go-version-file: backend/go.mod
           cache-dependency-path: backend/go.sum
-      - uses: pnpm/action-setup@v6
-        with:
-          version: 9
-      - uses: actions/setup-node@v6
-        with:
-          node-version: '20'
       - name: Migration coordinator unit tests
         run: |
           python3 -m pip install -r ops/refork/requirements.txt
@@ -75,6 +69,23 @@ jobs:
           make test-unit
           make test-integration
           CGO_ENABLED=0 go build -o /tmp/refork-migrate ./cmd/refork-migrate
+      - uses: actions/upload-artifact@v6
+        with:
+          name: refork-migration-runner-${{ github.sha }}
+          path: /tmp/refork-migrate
+          retention-days: 14
+
+  frontend:
+    needs: baseline
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 9
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '20'
       - name: Frontend full verification
         working-directory: frontend
         run: |
@@ -83,11 +94,6 @@ jobs:
           pnpm lint:check
           pnpm test:run
           pnpm build
-      - uses: actions/upload-artifact@v6
-        with:
-          name: refork-migration-runner-${{ github.sha }}
-          path: /tmp/refork-migrate
-          retention-days: 14
 
   migration-rehearsal:
     needs: baseline
@@ -123,7 +129,7 @@ jobs:
           python3 -m unittest discover -s ops/refork -p 'test_*.py' -v
 
   image:
-    needs: [validate, migration-rehearsal]
+    needs: [validate, migration-rehearsal, frontend]
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     permissions:

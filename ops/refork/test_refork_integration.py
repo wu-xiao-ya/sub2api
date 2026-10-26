@@ -35,7 +35,7 @@ class MigrationRehearsal(unittest.TestCase):
             conn.execute("""INSERT INTO schema_migrations (filename,checksum)
                 VALUES ('233_backfill_and_freeze_native_subscriptions.sql',%s)""",
                          (refork.checksum("synthetic legacy fixture"),))
-            conn.execute("ALTER TABLE user_platform_quotas DROP CONSTRAINT user_platform_quotas_platform_check")
+            conn.execute("ALTER TABLE user_platform_quotas DROP CONSTRAINT IF EXISTS user_platform_quotas_platform_check")
             user_id = conn.execute("""INSERT INTO users(email,password_hash,balance)
                 VALUES ('synthetic@example.invalid','not-a-secret',123.12345678) RETURNING id""").fetchone()[0]
             group_id = conn.execute("""INSERT INTO groups(name,platform,rate_multiplier,

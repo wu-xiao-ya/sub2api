@@ -200,6 +200,7 @@ def snapshot(conn, usage_columns=None, historical_tables=None):
         "account_contribution_logs", "payment_orders", "payment_audit_logs",
         "user_affiliate_ledger", "redeem_codes", "channels", "channel_groups",
         "channel_model_pricing", "channel_account_stats_model_pricing", "composite_model_routes",
+        "auth_cache_invalidation_outbox",
     )
     evidence = {}
     for name in tables:
@@ -228,6 +229,26 @@ def projected_rows_match(before, after):
         raise Blocked("inconsistent archived row columns")
     projected = [{key: row.get(key) for key in columns} for row in after]
     return sorted(before, key=safe_json) == sorted(projected, key=safe_json)
+
+
+def invalidation_rows_match(before, after, api_keys):
+    previous = {row["id"]: row for row in before}
+    old_rows = [row for row in after if row["id"] in previous]
+    if not projected_rows_match(before, old_rows):
+        return False
+    known_keys = {hashlib.sha256(row["key"].encode("utf-8")).hexdigest()
+                  for row in api_keys if row.get("key")}
+    return all(row.get("cache_key", "").strip() in known_keys
+               for row in after if row["id"] not in previous)
+
+
+def expected_account_extra(row):
+    extra = dict(row.get("extra") or {})
+    # The official 175 trigger adds false when a legacy provider becomes openai.
+    # Accept only that exact addition, never arbitrary credentials/rate changes.
+    if row["platform"] in ("qwen", "mimo", "hunyuan"):
+        extra.setdefault("openai_long_context_billing_enabled", False)
+    return extra
 
 
 def usage_fingerprint(conn, columns=None):
@@ -632,9 +653,16 @@ def do_audit(args):
                          "channels", "channel_model_pricing", "channel_account_stats_model_pricing"):
                 continue
             after = current.get(table)
-            equal = projected_rows_match(before, after or []) if isinstance(before, list) else after == before
+            if table == "auth_cache_invalidation_outbox":
+                equal = invalidation_rows_match(before, after or [], archive["data"].get("api_keys", []))
+            else:
+                equal = projected_rows_match(before, after or []) if isinstance(before, list) else after == before
             if not equal:
-                problems.append(f"unexpected change: {table}")
+                if table == "other_tables":
+                    problems += [f"unexpected historical table change: {name}"
+                                 for name in before if before[name] != (after or {}).get(name)]
+                else:
+                    problems.append(f"unexpected change: {table}")
         for table in ("groups", "accounts"):
             before = {row["id"]: row for row in archive["data"].get(table, [])}
             after = {row["id"]: row for row in current.get(table, [])}
@@ -648,6 +676,8 @@ def do_audit(args):
                     if table == "groups":
                         item = archive["plan"]["groups"][str(entity_id)]
                         expected["model_allowlist"] = exact_models(item["model_allowlist"])
+                    else:
+                        expected["extra"] = expected_account_extra(row)
                 # New official columns may appear, but old prices/credentials must match.
                 for key, value in expected.items():
                     if actual.get(key) != value:

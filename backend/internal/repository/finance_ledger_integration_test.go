@@ -24,19 +24,27 @@ func TestFinanceLedgerPaymentRedemptionRefundAndExactExclusion(t *testing.T) {
 	})
 	now := time.Now().UTC().Truncate(time.Second)
 	code := fmt.Sprintf("FIN-%d", time.Now().UnixNano())
-	order, err := client.PaymentOrder.Create().
-		SetUserID(user.ID).SetUserEmail(user.Email).SetUserName("Finance").
-		SetAmount(100).SetPayAmount(700).SetRechargeCode(code).
-		SetOutTradeNo(code).SetPaymentType("alipay").SetPaymentTradeNo("provider").
-		SetClientIP("127.0.0.1").SetSrcHost("fixture.invalid").
-		SetOrderType("balance").SetStatus("PARTIALLY_REFUNDED").
-		SetExpiresAt(now.Add(time.Hour)).SetCompletedAt(now).Save(ctx)
-	require.NoError(t, err)
-	_, err = client.RedeemCode.Create().SetCode(code).SetType("balance").
+	createOrder := func(reference string, completed time.Time) int64 {
+		order, err := client.PaymentOrder.Create().
+			SetUserID(user.ID).SetUserEmail(user.Email).SetUserName("Finance").
+			SetAmount(100).SetPayAmount(700).SetRechargeCode(reference).
+			SetOutTradeNo(reference).SetPaymentType("alipay").SetPaymentTradeNo("provider").
+			SetClientIP("127.0.0.1").SetSrcHost("fixture.invalid").
+			SetOrderType("balance").SetStatus("PARTIALLY_REFUNDED").
+			SetExpiresAt(completed.Add(time.Hour)).SetCompletedAt(completed).Save(ctx)
+		require.NoError(t, err)
+		return order.ID
+	}
+	orderID := createOrder(code, now)
+	_, err := client.RedeemCode.Create().SetCode(code).SetType("balance").
 		SetValue(100).SetStatus("used").SetUsedBy(user.ID).SetUsedAt(now).Save(ctx)
 	require.NoError(t, err)
-	for _, detail := range []string{`{"balanceDeducted":25}`, `{"balanceDeducted":1e-8}`, `invalid audit detail`} {
-		_, err := client.PaymentAuditLog.Create().SetOrderID(strconv.FormatInt(order.ID, 10)).
+	for index, detail := range []string{`{"balanceDeducted":25}`, `{"balanceDeducted":1e-8}`, `invalid audit detail`} {
+		refundOrderID := orderID
+		if index > 0 {
+			refundOrderID = createOrder(fmt.Sprintf("%s-refund-%d", code, index), now.Add(-48*time.Hour))
+		}
+		_, err := client.PaymentAuditLog.Create().SetOrderID(strconv.FormatInt(refundOrderID, 10)).
 			SetAction("REFUND_SUCCESS").SetDetail(detail).SetCreatedAt(now).Save(ctx)
 		require.NoError(t, err)
 	}
