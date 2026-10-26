@@ -2761,6 +2761,9 @@ func (r *accountRepository) UpdateExtra(ctx context.Context, id int64, updates m
 		}
 	}
 	extraExpression := "COALESCE(extra, '{}'::jsonb) || $1::jsonb"
+	if value, exists := updates[service.UpstreamBillingManualRateExtraKey]; exists && value == nil {
+		extraExpression = "(" + extraExpression + ") - 'upstream_billing_manual_rate'"
+	}
 	if clearProbeSnapshot {
 		extraExpression = "(" + extraExpression + ") - 'upstream_billing_probe'"
 	}
@@ -3139,6 +3142,9 @@ func (r *accountRepository) BulkUpdate(ctx context.Context, ids []int64, updates
 			extraExpression += " || $" + itoa(idx) + "::jsonb"
 			args = append(args, payload)
 			idx++
+			if value, exists := updates.Extra[service.UpstreamBillingManualRateExtraKey]; exists && value == nil {
+				extraExpression = "(" + extraExpression + ") - 'upstream_billing_manual_rate'"
+			}
 			if upstreamBillingProbeExplicitlyDisabled(updates.Extra) || upstreamBillingProbeSnapshotClearRequested(updates.Extra) {
 				extraExpression = "(" + extraExpression + ") - 'upstream_billing_probe'"
 			}
