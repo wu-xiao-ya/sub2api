@@ -388,6 +388,8 @@ func prepareMigrationsBootstrapExpectations(mock sqlmock.Sqlmock) {
 		WillReturnRows(sqlmock.NewRows([]string{"pg_try_advisory_lock"}).AddRow(true))
 	mock.ExpectExec("CREATE TABLE IF NOT EXISTS schema_migrations").
 		WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectQuery("SELECT EXISTS \\(.*schema_migrations").
+		WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(false))
 	mock.ExpectQuery("SELECT EXISTS \\(").
 		WithArgs("schema_migrations").
 		WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(true))

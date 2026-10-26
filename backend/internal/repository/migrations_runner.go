@@ -165,6 +165,9 @@ func applyMigrationsFS(ctx context.Context, db *sql.DB, fsys fs.FS) error {
 	if _, err := lockConn.ExecContext(ctx, schemaMigrationsTableDDL); err != nil {
 		return fmt.Errorf("create schema_migrations: %w", err)
 	}
+	if err := validateReforkArchive(ctx, lockConn); err != nil {
+		return err
+	}
 
 	// 自动对齐 Atlas 基线（如果检测到 legacy schema_migrations 且缺失 atlas_schema_revisions）。
 	if err := ensureAtlasBaselineAligned(ctx, lockConn, fsys); err != nil {
@@ -484,6 +487,9 @@ func newMigrationChecksumCompatibilityRule(fileChecksum string, acceptedDBChecks
 }
 
 func isMigrationChecksumCompatible(name, dbChecksum, fileChecksum string) bool {
+	if isReforkMigrationChecksumCompatible(name, dbChecksum, fileChecksum) {
+		return true
+	}
 	rule, ok := migrationChecksumCompatibilityRules[name]
 	if !ok {
 		return false
