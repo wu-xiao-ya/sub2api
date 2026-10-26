@@ -14,6 +14,10 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from functools import partial
 
+if __name__ == "__main__":
+    # backup.py also imports these shared guard helpers when this is a CLI entry.
+    sys.modules["refork"] = sys.modules[__name__]
+
 BASELINE = "ac1b8f1271be0d674fa6f074403c1410f30a3a81"
 ROOT = Path(__file__).resolve().parents[2]
 MIGRATIONS = ROOT / "backend" / "migrations"
@@ -158,6 +162,7 @@ def table_exists(conn, name):
 
 def historical_table_fingerprints(conn, excluded, original=None):
     from psycopg import sql
+    from backup import primary_key_columns
 
     if original is None:
         names = [row[0] for row in conn.execute(
@@ -169,7 +174,7 @@ def historical_table_fingerprints(conn, excluded, original=None):
                 SELECT column_name FROM information_schema.columns
                 WHERE table_schema='public' AND table_name=%s ORDER BY ordinal_position
             """, (name,))]
-            original[name] = {"columns": columns}
+            original[name] = {"columns": columns, "order_by": primary_key_columns(conn, name)}
     result = {}
     for index, (name, evidence) in enumerate(sorted(original.items())):
         if not table_exists(conn, name):
@@ -178,15 +183,17 @@ def historical_table_fingerprints(conn, excluded, original=None):
         digest = hashlib.sha256()
         count = 0
         columns = evidence["columns"]
-        query = sql.SQL('SELECT to_jsonb(p)::text FROM (SELECT {} FROM public.{}) p '
-                        'ORDER BY to_jsonb(p)::text COLLATE "C"').format(
-            sql.SQL(",").join(map(sql.Identifier, columns)), sql.Identifier(name))
+        order = evidence["order_by"]
+        sort = (sql.SQL(",").join(map(sql.Identifier, order)) if order
+                else sql.SQL('to_jsonb(p)::text COLLATE "C"'))
+        query = sql.SQL('SELECT to_jsonb(p)::text FROM (SELECT {} FROM public.{}) p ORDER BY {}').format(
+            sql.SQL(",").join(map(sql.Identifier, columns)), sql.Identifier(name), sort)
         with conn.cursor(name=f"refork_history_{index}") as cursor:
             cursor.execute(query)
             for (row,) in cursor:
                 digest.update(row.encode("utf-8") + b"\n")
                 count += 1
-        result[name] = {"count": count, "sha256": digest.hexdigest(), "columns": columns}
+        result[name] = {"count": count, "sha256": digest.hexdigest(), "columns": columns, "order_by": order}
     return result
 
 

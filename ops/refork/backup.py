@@ -20,6 +20,18 @@ def file_digest(path):
     return digest.hexdigest()
 
 
+def primary_key_columns(conn, table):
+    from psycopg import sql
+
+    name = sql.Identifier("public", table).as_string(conn)
+    return [row[0] for row in conn.execute("""
+        SELECT a.attname FROM pg_index i
+        CROSS JOIN LATERAL unnest(i.indkey) WITH ORDINALITY k(attnum, position)
+        JOIN pg_attribute a ON a.attrelid=i.indrelid AND a.attnum=k.attnum
+        WHERE i.indrelid=%s::regclass AND i.indisprimary ORDER BY k.position
+    """, (name,))]
+
+
 def fingerprint(conn):
     from psycopg import sql
 
@@ -30,13 +42,16 @@ def fingerprint(conn):
     for index, table in enumerate(tables):
         digest = hashlib.sha256()
         count = 0
+        order = primary_key_columns(conn, table)
+        sort = (sql.SQL(",").join(map(sql.Identifier, order)) if order
+                else sql.SQL('to_jsonb(t)::text COLLATE "C"'))
         with conn.cursor(name=f"refork_backup_{index}") as cursor:
-            cursor.execute(sql.SQL('SELECT to_jsonb(t)::text FROM public.{} t '
-                                   'ORDER BY to_jsonb(t)::text COLLATE "C"').format(sql.Identifier(table)))
+            cursor.execute(sql.SQL('SELECT to_jsonb(t)::text FROM public.{} t ORDER BY {}').format(
+                sql.Identifier(table), sort))
             for (row,) in cursor:
                 digest.update(row.encode("utf-8") + b"\n")
                 count += 1
-        result["tables"][table] = {"count": count, "sha256": digest.hexdigest()}
+        result["tables"][table] = {"count": count, "sha256": digest.hexdigest(), "order_by": order}
     result["sequences"] = [list(row) for row in conn.execute("""
         SELECT sequencename, start_value, min_value, max_value, increment_by, cycle, last_value
         FROM pg_sequences WHERE schemaname='public' ORDER BY sequencename
