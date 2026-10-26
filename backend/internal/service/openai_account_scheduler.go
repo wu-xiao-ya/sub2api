@@ -2984,6 +2984,9 @@ func openAISchedulingRate(account *Account, now time.Time, oauthSchedulingRateMu
 	if account == nil || (!account.IsOpenAIApiKey() && !account.IsOpenAIOAuthLike()) {
 		return 0, false
 	}
+	if rate, ok := UpstreamBillingManualRate(account.Extra); ok {
+		return rate, true
+	}
 	if account.IsOpenAIOAuthLike() {
 		if rate := oauthSchedulingRateMultiplier; rate != nil && *rate >= 0 && !math.IsNaN(*rate) && !math.IsInf(*rate, 0) {
 			return *rate, true

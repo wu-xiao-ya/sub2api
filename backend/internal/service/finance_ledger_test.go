@@ -63,6 +63,11 @@ func TestFinanceLedgerRefundsOnlyUseRecordedBalanceDeduction(t *testing.T) {
 	require.NotContains(t, financeLedgerCTE, "-po.refund_amount::double precision AS amount")
 }
 
+func TestFinanceLedgerDoesNotDoubleCountPaymentRedemption(t *testing.T) {
+	require.Contains(t, financeLedgerCTE, "linked_payment.recharge_code = rc.code")
+	require.Contains(t, financeLedgerCTE, "linked_payment.completed_at IS NOT NULL")
+}
+
 func TestNormalizeFinanceLedgerQueryBoundsPagination(t *testing.T) {
 	got := normalizeFinanceLedgerQuery(FinanceLedgerQuery{
 		Page:         0,

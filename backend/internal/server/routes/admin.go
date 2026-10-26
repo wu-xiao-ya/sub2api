@@ -568,6 +568,9 @@ func registerPromoCodeRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 
 func registerSettingsRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 	adminSettings := admin.Group("/settings")
+	adminSettings.GET("/image-upstream-cost", h.Admin.Setting.GetImageUpstreamCost)
+	adminSettings.PUT("/image-upstream-cost", h.Admin.Setting.UpdateImageUpstreamCost)
+	adminSettings.GET("/image-upstream-cost/candidates", h.Admin.Setting.GetImageUpstreamCostCandidates)
 	{
 		adminSettings.GET("", h.Admin.Setting.GetSettings)
 		adminSettings.PUT("", h.Admin.Setting.UpdateSettings)

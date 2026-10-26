@@ -1815,6 +1815,15 @@
             data-testid="account-rate-multiplier"
             :disabled="upstreamBillingRateSyncEnabled"
           />
+          <div class="mt-3 flex flex-wrap items-center gap-2">
+            <label class="flex items-center gap-2 text-sm">
+              <input v-model="manualUpstreamRateEnabled" type="checkbox" />
+              {{ t('finance.manualUpstreamRate') }}
+            </label>
+            <input v-if="manualUpstreamRateEnabled" v-model.number="manualUpstreamRate"
+              type="number" min="0" step="0.001" class="input w-28"
+              :aria-label="t('finance.manualUpstreamRate')" />
+          </div>
           <p class="input-hint">
             {{
               t(
@@ -4197,6 +4206,8 @@ const form = reactive({
   group_ids: [] as number[],
   expires_at: null as number | null
 })
+const manualUpstreamRateEnabled = ref(false)
+const manualUpstreamRate = ref(0)
 
 const handleUpstreamBillingRateSyncChange = (enabled: boolean) => {
   upstreamBillingRateSyncEnabled.value = enabled
@@ -4301,6 +4312,9 @@ const syncFormFromAccount = (newAccount: Account | null) => {
   form.load_factor = newAccount.load_factor ?? null
   form.priority = newAccount.priority
   form.rate_multiplier = newAccount.rate_multiplier ?? 1
+  const manualRate = newAccount.extra?.upstream_billing_manual_rate
+  manualUpstreamRateEnabled.value = typeof manualRate === 'number' && Number.isFinite(manualRate) && manualRate >= 0
+  manualUpstreamRate.value = manualUpstreamRateEnabled.value ? manualRate as number : 0
   form.status = (newAccount.status === 'active' || newAccount.status === 'inactive' || newAccount.status === 'error')
     ? newAccount.status
     : 'active'
@@ -6090,6 +6104,18 @@ const handleSubmit = async () => {
       updatePayload.extra = newExtra
     }
 
+    if (manualUpstreamRateEnabled.value && (!Number.isFinite(manualUpstreamRate.value) || manualUpstreamRate.value < 0)) {
+      appStore.showError(t('finance.invalidManualRate'))
+      return
+    }
+    const originalManualRate = props.account.extra?.upstream_billing_manual_rate
+    const nextManualRate = manualUpstreamRateEnabled.value ? manualUpstreamRate.value : null
+    if ((originalManualRate ?? null) !== nextManualRate) {
+      updatePayload.extra = {
+        ...((updatePayload.extra as Record<string, unknown>) || props.account.extra || {}),
+        upstream_billing_manual_rate: nextManualRate,
+      }
+    }
     const canContinue = await ensureAntigravityMixedChannelConfirmed(async () => {
       await submitUpdateAccount(accountID, updatePayload)
     })

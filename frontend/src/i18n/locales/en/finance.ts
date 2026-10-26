@@ -1,5 +1,7 @@
 export default {
   title: 'Balance Ledger',
+  manualUpstreamRate: 'Manual upstream cost multiplier',
+  invalidManualRate: 'Upstream cost multiplier must be a finite non-negative number',
   income: 'Credits',
   deduction: 'Deductions',
   net: 'Net Change',

@@ -117,6 +117,7 @@ type WebSearchManagerBuilder func(cfg *WebSearchEmulationConfig, proxyURLs map[i
 
 // SettingService 系统设置服务
 type SettingService struct {
+	imageCostCandidates         imageCostCandidateReader
 	settingRepo                 SettingRepository
 	defaultSubGroupReader       DefaultSubscriptionGroupReader
 	proxyRepo                   ProxyRepository // for resolving websearch provider proxy URLs
@@ -305,6 +306,10 @@ func (s *SettingService) SetDefaultSubscriptionGroupReader(reader DefaultSubscri
 // SetProxyRepository injects a proxy repo for resolving websearch provider proxy URLs.
 func (s *SettingService) SetProxyRepository(repo ProxyRepository) {
 	s.proxyRepo = repo
+}
+
+func (s *SettingService) SetImageCostCandidates(repo UsageLogRepository) {
+	s.imageCostCandidates, _ = repo.(imageCostCandidateReader)
 }
 
 func (s *SettingService) LoadForwardedClientIPSettings(ctx context.Context) error {

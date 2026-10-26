@@ -1086,6 +1086,9 @@ func upstreamBillingRateSyncEnabled(account *Account) bool {
 	if account == nil || account.Extra == nil {
 		return false
 	}
+	if _, manual := UpstreamBillingManualRate(account.Extra); manual {
+		return false
+	}
 	enabled, ok := account.Extra[UpstreamBillingRateSyncEnabledExtraKey].(bool)
 	return ok && enabled && upstreamBillingProbeEnabled(account)
 }

@@ -94,12 +94,13 @@ WITH ledger AS (
     FROM payment_audit_logs pal
     JOIN payment_orders po ON po.id::text = pal.order_id
     CROSS JOIN LATERAL (
-        SELECT (
-            regexp_match(
-                pal.detail,
-                '"balanceDeducted"[[:space:]]*:[[:space:]]*(-?[0-9]+(\.[0-9]+)?)'
-            )
-        )[1]::double precision AS balance_deducted
+        SELECT CASE WHEN pg_input_is_valid(pal.detail, 'jsonb')
+            THEN pal.detail::jsonb ELSE '{}'::jsonb END AS detail
+    ) AS parsed
+    CROSS JOIN LATERAL (
+        SELECT CASE WHEN jsonb_typeof(parsed.detail -> 'balanceDeducted') = 'number'
+            THEN (parsed.detail ->> 'balanceDeducted')::double precision
+            ELSE 0 END AS balance_deducted
     ) AS refund
     WHERE pal.action = 'REFUND_SUCCESS'
       AND po.order_type = 'balance'
@@ -126,6 +127,13 @@ WITH ledger AS (
       AND rc.used_at IS NOT NULL
       AND rc.type IN ('balance', 'admin_balance')
       AND rc.value <> 0
+      AND NOT EXISTS (
+          SELECT 1 FROM payment_orders linked_payment
+          WHERE linked_payment.recharge_code = rc.code
+            AND linked_payment.order_type = 'balance'
+            AND linked_payment.completed_at IS NOT NULL
+            AND linked_payment.status IN ('COMPLETED', 'PARTIALLY_REFUNDED', 'REFUNDED')
+      )
 
     UNION ALL
 
@@ -182,6 +190,9 @@ FROM ledger` + where
 	}
 	if err := summaryRows.Err(); err != nil {
 		return nil, fmt.Errorf("iterate finance ledger summary: %w", err)
+	}
+	if err := summaryRows.Close(); err != nil {
+		return nil, fmt.Errorf("close finance ledger summary: %w", err)
 	}
 
 	listArgs := append(append([]any{}, args...), query.PageSize, (query.Page-1)*query.PageSize)

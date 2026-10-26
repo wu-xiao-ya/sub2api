@@ -2903,6 +2903,7 @@ func (r *accountRepository) updateUpstreamBillingProbeSnapshotInTx(
 				WHEN $10::numeric IS NOT NULL
 					AND extra @> '{"upstream_billing_probe_enabled": true}'::jsonb
 					AND extra @> '{"upstream_billing_rate_sync_enabled": true}'::jsonb
+					AND NOT (COALESCE(extra, '{}'::jsonb) ? 'upstream_billing_manual_rate')
 				THEN $10::numeric
 				ELSE rate_multiplier
 			END,

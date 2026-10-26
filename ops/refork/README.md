@@ -14,13 +14,19 @@ This is a **draft implementation, not an accepted candidate**.
   baseline run built the unmodified official frontend successfully, then failed
   on an unnecessary copy command in the candidate workflow (official Vite already
   writes directly into the backend embed directory). That command was removed.
-  The full baseline build remains unproven until the corrected run completes.
+  The corrected pinned official baseline build passed in run 40330396250 and
+  uploaded artifact `official-v0.2.18-baseline` (artifact ID 12654457609).
+  The official CI on commit 5cd65246e also passed all its jobs.
 - Migration runner unit tests (including the existing official checksum/non-tx
   suites) pass in a focused file-list invocation with Go 1.27.3.
 - Eleven Python unit tests pass. Database-copy integration tests have NOT run.
-- Finance, image cost, manual rates, egress adapters, frontend verification,
-  candidate deployment, billing regression, restore rehearsal and image digest
-  are NOT delivered. Business integration waits for baseline verification.
+- Finance ledger API/UI, image upstream cost settings/report adapters and manual
+  upstream rate adapters are implemented but final integration validation is
+  pending. Code generation exposed missing upstream tool dependencies; their
+  exact checksums were added without changing application dependency versions.
+- Egress adapters, restored-copy migration, full frontend verification, candidate
+  deployment, complete billing regression, restore rehearsal and image digest
+  are NOT delivered.
 - Requested gpt-6-luna agents received unreadable encrypted payloads. They were
   stopped; no delegated output was accepted and no model was substituted.
 

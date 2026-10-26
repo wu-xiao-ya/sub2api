@@ -1,5 +1,7 @@
 export default {
   title: '资金流水',
+  manualUpstreamRate: '手动上游成本倍率',
+  invalidManualRate: '上游成本倍率必须为非负有限数值',
   income: '入账',
   deduction: '扣减',
   net: '净变动',
