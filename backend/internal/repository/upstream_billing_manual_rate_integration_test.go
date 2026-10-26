@@ -27,6 +27,7 @@ func TestManualUpstreamRateClearRemovesOnlyExplicitKey(t *testing.T) {
 			"unrelated_nullable_field":                     nil,
 		},
 	})
+	require.NoError(t, tx.Client().Account.UpdateOneID(account.ID).SetRateMultiplier(fallback).Exec(ctx))
 	loaded, err := repo.GetByID(ctx, account.ID)
 	require.NoError(t, err)
 	automatic := 0.4
