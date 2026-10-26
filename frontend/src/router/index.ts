@@ -679,6 +679,17 @@ const routes: RouteRecordRaw[] = [
 
   // ==================== Payment Admin Routes ====================
   {
+    path: '/admin/finance/ledger',
+    name: 'AdminFinanceLedger',
+    component: () => import('@/views/admin/finance/AdminFinanceLedgerView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'Balance Ledger',
+      titleKey: 'finance.title',
+    }
+  },
+  {
     path: '/admin/orders/dashboard',
     name: 'AdminPaymentDashboard',
     component: () => import('@/views/admin/orders/AdminPaymentDashboardView.vue'),

@@ -11,6 +11,8 @@ import subprocess
 import sys
 from collections import Counter
 from datetime import datetime, timezone
+from decimal import Decimal
+from functools import partial
 
 BASELINE = "ac1b8f1271be0d674fa6f074403c1410f30a3a81"
 ROOT = Path(__file__).resolve().parents[2]
@@ -88,6 +90,11 @@ def safe_json(value):
     return json.dumps(value, default=str, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
 
 
+def archive_digest(archive):
+    payload = {key: value for key, value in archive.items() if key != "sha256"}
+    return hashlib.sha256(safe_json(payload).encode("utf-8")).hexdigest()
+
+
 def write_private(path, data):
     path = Path(path).resolve()
     private = (Path(__file__).parent / "private").resolve()
@@ -119,13 +126,13 @@ def snapshot(conn, usage_columns=None):
     for name in tables:
         if table_exists(conn, name):
             # Some join tables have composite primary keys and no id.
-            data = [row[0] for row in conn.execute(f"SELECT to_jsonb(t) FROM public.{name} t")]
+            data = [json.loads(safe_json(row[0])) for row in conn.execute(f"SELECT to_jsonb(t) FROM public.{name} t")]
             evidence[name] = sorted(data, key=safe_json)
     evidence["schema_migrations"] = [dict(zip(("filename", "checksum"), row)) for row in conn.execute(
         "SELECT filename, checksum FROM schema_migrations ORDER BY filename")]
     # Settings can contain provider credentials. They stay inside the private archive.
     if table_exists(conn, "settings"):
-        evidence["settings"] = [row[0] for row in conn.execute(
+        evidence["settings"] = [json.loads(safe_json(row[0])) for row in conn.execute(
             "SELECT to_jsonb(t) FROM settings t ORDER BY key")]
     evidence["usage_logs"] = usage_fingerprint(conn, usage_columns)
     return evidence
@@ -232,10 +239,13 @@ def checks(conn):
 
 def connect(read_only=False):
     import psycopg
+    from psycopg.types.json import set_json_loads
     dsn = os.environ.get("DATABASE_URL")
     if not dsn:
         raise Blocked("DATABASE_URL is required")
     conn = psycopg.connect(dsn)
+    # PostgreSQL NUMERIC values must never be rounded through binary float.
+    set_json_loads(partial(json.loads, parse_float=Decimal), conn)
     conn.execute("SET statement_timeout = '120s'")
     if read_only:
         conn.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY")
@@ -259,10 +269,32 @@ def load_archive(path):
     archive = json.loads(Path(path).read_text(encoding="utf-8"))
     if archive.get("baseline") != BASELINE:
         raise Blocked("archive baseline mismatch")
-    expected = hashlib.sha256(safe_json(archive["data"]).encode("utf-8")).hexdigest()
+    expected = archive_digest(archive)
     if archive.get("sha256") != expected:
         raise Blocked("archive digest mismatch")
     return archive
+
+
+def checkpoint(conn, archive, expected_database, phases):
+    if archive.get("database") != expected_database:
+        raise Blocked("archive database mismatch")
+    result = conn.execute("""
+        SELECT archive_sha256, phase FROM refork_audit.checkpoint WHERE baseline=%s FOR UPDATE
+    """, (BASELINE,)).fetchone()
+    if not result or result[0] != archive["sha256"] or result[1] not in phases:
+        raise Blocked("archive checkpoint mismatch or invalid operation phase")
+    return result[1]
+
+
+def original_ledger_intact(conn, archive):
+    current = ledger(conn)
+    original = {row["filename"]: row["checksum"] for row in archive["data"]["schema_migrations"]}
+    if any(current.get(name) != value for name, value in original.items()):
+        raise Blocked("original applied migration records changed")
+    known = official_ledger()
+    if any(name not in original and (name not in known or known[name] != value)
+           for name, value in current.items()):
+        raise Blocked("unexpected migration records appeared after archive")
 
 
 def validate_plan(conn, plan):
@@ -334,8 +366,8 @@ def do_archive(args):
         data = snapshot(conn)
         archive = {"baseline": BASELINE, "database": args.candidate_database,
                    "created_at": datetime.now(timezone.utc).isoformat(), "report": report,
-                   "plan": plan, "data": data,
-                   "sha256": hashlib.sha256(safe_json(data).encode("utf-8")).hexdigest()}
+                   "plan": plan, "data": data}
+        archive["sha256"] = archive_digest(archive)
         write_private(args.output, archive)
         conn.execute("""
             CREATE SCHEMA IF NOT EXISTS refork_audit;
@@ -356,16 +388,27 @@ def do_migrate(args):
     archive = load_archive(args.archive)
     with connect() as conn:
         candidate_guard(conn, args.candidate_database)
+        phase = checkpoint(conn, archive, args.candidate_database, ("archived", "migrating", "migrated"))
         ensure_no_blockers(checks(conn))
-        usage_columns = (archive["data"].get("usage_logs") or {}).get("columns")
-        if archive["database"] != args.candidate_database or snapshot(conn, usage_columns) != archive["data"]:
-            raise Blocked("candidate data drift since archive; re-archive before migrations")
+        original_ledger_intact(conn, archive)
+        if phase == "archived":
+            usage_columns = (archive["data"].get("usage_logs") or {}).get("columns")
+            if snapshot(conn, usage_columns) != archive["data"]:
+                raise Blocked("candidate data drift since archive; re-archive before migrations")
+        conn.execute("UPDATE refork_audit.checkpoint SET phase='migrating' WHERE baseline=%s", (BASELINE,))
     # The executable uses the official runner, checksum rules and non-tx handling.
     # Its own preflight guard checks the ledger again. No fabricated migration rows.
     env = dict(os.environ)
     env["REFORK_ARCHIVE_SHA256"] = archive["sha256"]
     env["REFORK_CANDIDATE_DATABASE"] = args.candidate_database
     subprocess.run([str(Path(args.runner).resolve())], env=env, check=True)
+    with connect() as conn:
+        candidate_guard(conn, args.candidate_database)
+        checkpoint(conn, archive, args.candidate_database, ("migrating",))
+        original_ledger_intact(conn, archive)
+        if any(row["status"] in ("pending", "blocked_checksum") for row in compare_ledgers(ledger(conn))):
+            raise Blocked("runner exited without completing official migrations")
+        conn.execute("UPDATE refork_audit.checkpoint SET phase='migrated' WHERE baseline=%s", (BASELINE,))
     print("official migrations complete; conversion and audit are still required")
 
 
@@ -373,11 +416,18 @@ def do_convert(args):
     archive = load_archive(args.archive)
     with connect() as conn:
         candidate_guard(conn, args.candidate_database)
-        if archive["database"] != args.candidate_database:
-            raise Blocked("archive database mismatch")
+        phase = checkpoint(conn, archive, args.candidate_database, ("migrated", "converted"))
         ensure_no_blockers(checks(conn))
+        original_ledger_intact(conn, archive)
         if any(row["status"] == "pending" for row in compare_ledgers(ledger(conn))):
             raise Blocked("official migrations must complete before conversion")
+        if phase == "converted":
+            if conn.execute("SELECT count(*) FROM groups WHERE platform=ANY(%s)", (list(PLATFORMS),)).fetchone()[0]:
+                raise Blocked("converted checkpoint has legacy group drift")
+            if conn.execute("SELECT count(*) FROM accounts WHERE platform=ANY(%s)", (list(PLATFORMS),)).fetchone()[0]:
+                raise Blocked("converted checkpoint has legacy account drift")
+            print("conversion already committed; run audit")
+            return
         conn.execute("""
             CREATE SCHEMA IF NOT EXISTS refork_audit;
             CREATE TABLE IF NOT EXISTS refork_audit.conversions (

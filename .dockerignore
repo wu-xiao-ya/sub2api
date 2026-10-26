@@ -53,6 +53,8 @@ coverage/
 /plugins/
 
 # Local config
+ops/refork/private/
+ops/refork/__pycache__/
 config.yaml
 config.local.yaml
 

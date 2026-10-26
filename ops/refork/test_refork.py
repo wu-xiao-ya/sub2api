@@ -70,8 +70,8 @@ class LedgerTests(unittest.TestCase):
 
     def test_archive_integrity_and_exclusive_output(self):
         data = {"schema_migrations": []}
-        archive = {"baseline": refork.BASELINE, "data": data,
-                   "sha256": refork.hashlib.sha256(refork.safe_json(data).encode()).hexdigest()}
+        archive = {"baseline": refork.BASELINE, "data": data, "plan": {"groups": {}}}
+        archive["sha256"] = refork.archive_digest(archive)
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / "archive.json"
             refork.write_private(path, archive)
@@ -83,6 +83,18 @@ class LedgerTests(unittest.TestCase):
             refork.write_private(tampered, archive)
             with self.assertRaises(refork.Blocked):
                 refork.load_archive(tampered)
+
+    def test_archive_plan_and_database_identity_are_covered_by_digest(self):
+        original = {"baseline": refork.BASELINE, "database": "candidate", "plan": {"groups": {}}, "data": {}}
+        digest = refork.archive_digest(original)
+        for key in ("database", "plan", "baseline"):
+            changed = dict(original)
+            changed[key] = "tampered"
+            self.assertNotEqual(refork.archive_digest(changed), digest)
+
+    def test_numeric_evidence_does_not_round_via_binary_float(self):
+        value = refork.json.loads('{"amount":123456789.123456789}', parse_float=refork.Decimal)
+        self.assertIn("123456789.123456789", refork.safe_json(value))
 
     def test_private_evidence_cannot_be_written_to_tracked_source_paths(self):
         with self.assertRaises(refork.Blocked):

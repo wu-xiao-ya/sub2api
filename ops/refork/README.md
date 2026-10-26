@@ -17,7 +17,7 @@ This is a **draft implementation, not an accepted candidate**.
   The full baseline build remains unproven until the corrected run completes.
 - Migration runner unit tests (including the existing official checksum/non-tx
   suites) pass in a focused file-list invocation with Go 1.27.3.
-- Nine Python unit tests pass. Database-copy integration tests have NOT run.
+- Eleven Python unit tests pass. Database-copy integration tests have NOT run.
 - Finance, image cost, manual rates, egress adapters, frontend verification,
   candidate deployment, billing regression, restore rehearsal and image digest
   are NOT delivered. Business integration waits for baseline verification.

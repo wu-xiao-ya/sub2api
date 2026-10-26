@@ -36,6 +36,8 @@ func RegisterAdminRoutes(
 
 		// 仪表盘
 		registerDashboardRoutes(admin, h)
+		admin.GET("/finance/ledger", h.Admin.Payment.ListFinanceLedger)
+		admin.GET("/finance/ledger/export", h.Admin.Payment.ExportFinanceLedger)
 
 		// 用户管理
 		registerUserManagementRoutes(admin, h)
