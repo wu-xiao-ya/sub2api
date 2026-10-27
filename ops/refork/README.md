@@ -204,19 +204,42 @@ known API-key hashes; existing outbox rows cannot change or disappear. It is
 fail-closed and may flag legitimate official column/default changes that need
 explicit review. A passed data audit is never marked candidate acceptance.
 
+## Isolated Linux Smoke Candidate
+
+`candidate-compose.yaml` runs the digest-pinned application with its own
+PostgreSQL, Redis and persistent volumes. The Docker network is internal-only;
+the app uses `172.31.240.2:8080`, publishes no host port, and the host firewall
+denies new connections from the candidate subnet to host services. Keep its
+generated `.env` root-readable only and out of Git.
+
+For browser access, create an SSH tunnel to the candidate host:
+
+```sh
+ssh -N -L 19098:172.31.240.2:8080 <candidate-host>
+```
+
+Then open `http://127.0.0.1:19098`. This environment currently proves clean
+database initialization and basic HTTP/UI health only. It contains no restored
+production data or provider credentials and has no outbound route, so it does
+not prove migrated behavior or live inference. Do not treat it as an accepted
+candidate or production authorization.
+
 ## Acceptance Still Required
 
 - Pure official baseline build, then final code generation, backend unit and DB
   integration tests; frontend typecheck, nonmutating lint, full Vitest and build.
-- Dedicated PG/Redis/volumes/private ingress; no real payment/email/probes or
-  other external side effects. Verify egress isolation, not just port binding.
+- Production-copy upgrade and restore rehearsal in a Linux environment using
+  the production collation. The smoke candidate above contains an empty DB.
+- Verify side-effect workers remain disabled before enabling any candidate
+  egress. Prove the one currently available user-facing relay path; alternate
+  relay failover is not required while no alternate route exists.
 - Full empty-init and restored-copy upgrade, rerun/idempotence and interrupted
   migration recovery. Prove an unarchived custom DB cannot start.
 - Exact model admission/listing/account isolation after platform conversion.
-- Fixed old/new billing samples: cache, long context, image costs, manual rate,
-  currencies/rounding; no unexplained differences.
-- Image cost configuration changes must also invalidate/rebuild old dashboard
-  account-cost aggregates; a raw/aggregated consistency regression is still open.
+- Fixed old/new user-billing samples: cache, long context, manual rate and
+  currency rounding; no unexplained differences.
+- Image upstream-cost/profit reporting consistency is deferred because it does
+  not affect user-facing inference or charges.
 - Native subscription purchase/deduction and payment idempotence with mocks;
   multi-protocol SSE success/failure and Gemini cache ownership.
 - Same-session Pro Max cache replay using genuine parsed usage, no fixed

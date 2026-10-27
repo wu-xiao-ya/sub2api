@@ -1,0 +1,146 @@
+name: sub2api-refork-candidate
+
+services:
+  app:
+    image: ghcr.io/wu-xiao-ya/sub2api@sha256:698e9594c95a4a8fe0452ce69c43498cb06d0f65cd4f7633d3df54662e2e880e
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 30s
+    security_opt:
+      - no-new-privileges:true
+    cpus: 1.5
+    mem_limit: 2g
+    volumes:
+      - app_data:/app/data
+    environment:
+      AUTO_SETUP: "true"
+      SERVER_HOST: 0.0.0.0
+      SERVER_PORT: "8080"
+      SERVER_MODE: release
+      RUN_MODE: standard
+      TZ: Asia/Shanghai
+      LOG_ENV: candidate
+      UPDATE_GITHUB_TOKEN: ""
+      DATABASE_HOST: postgres
+      DATABASE_PORT: "5432"
+      DATABASE_USER: ${CANDIDATE_POSTGRES_USER:?set CANDIDATE_POSTGRES_USER}
+      DATABASE_PASSWORD: ${CANDIDATE_POSTGRES_PASSWORD:?set CANDIDATE_POSTGRES_PASSWORD}
+      DATABASE_DBNAME: ${CANDIDATE_POSTGRES_DB:?set CANDIDATE_POSTGRES_DB}
+      DATABASE_SSLMODE: disable
+      DATABASE_MAX_OPEN_CONNS: "10"
+      DATABASE_MAX_IDLE_CONNS: "2"
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_USERNAME: ""
+      REDIS_PASSWORD: ${CANDIDATE_REDIS_PASSWORD:?set CANDIDATE_REDIS_PASSWORD}
+      REDIS_DB: "0"
+      REDIS_POOL_SIZE: "16"
+      REDIS_MIN_IDLE_CONNS: "1"
+      ADMIN_EMAIL: ${CANDIDATE_ADMIN_EMAIL:?set CANDIDATE_ADMIN_EMAIL}
+      ADMIN_PASSWORD: ${CANDIDATE_ADMIN_PASSWORD:?set CANDIDATE_ADMIN_PASSWORD}
+      JWT_SECRET: ${CANDIDATE_JWT_SECRET:?set CANDIDATE_JWT_SECRET}
+      JWT_EXPIRE_HOUR: "1"
+      TOTP_ENCRYPTION_KEY: ${CANDIDATE_TOTP_ENCRYPTION_KEY:?set CANDIDATE_TOTP_ENCRYPTION_KEY}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      isolated:
+        ipv4_address: 172.31.240.2
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-T", "5", "-O", "/dev/null", "http://localhost:8080/health"]
+      interval: 15s
+      timeout: 6s
+      retries: 8
+      start_period: 120s
+    logging:
+      driver: json-file
+      options:
+        max-size: 20m
+        max-file: "3"
+
+  postgres:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    cpus: 1
+    mem_limit: 1g
+    environment:
+      POSTGRES_USER: ${CANDIDATE_POSTGRES_USER:?set CANDIDATE_POSTGRES_USER}
+      POSTGRES_PASSWORD: ${CANDIDATE_POSTGRES_PASSWORD:?set CANDIDATE_POSTGRES_PASSWORD}
+      POSTGRES_DB: ${CANDIDATE_POSTGRES_DB:?set CANDIDATE_POSTGRES_DB}
+      PGDATA: /var/lib/postgresql/data
+      TZ: Asia/Shanghai
+    command:
+      - postgres
+      - -c
+      - max_connections=40
+      - -c
+      - shared_buffers=256MB
+      - -c
+      - effective_cache_size=1GB
+      - -c
+      - maintenance_work_mem=128MB
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      isolated:
+        ipv4_address: 172.31.240.3
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: 20m
+        max-file: "3"
+
+  redis:
+    image: redis:8-alpine
+    restart: unless-stopped
+    cpus: 0.25
+    mem_limit: 256m
+    environment:
+      REDISCLI_AUTH: ${CANDIDATE_REDIS_PASSWORD:?set CANDIDATE_REDIS_PASSWORD}
+      TZ: Asia/Shanghai
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --appendfsync
+      - everysec
+      - --requirepass
+      - ${CANDIDATE_REDIS_PASSWORD:?set CANDIDATE_REDIS_PASSWORD}
+    volumes:
+      - redis_data:/data
+    networks:
+      isolated:
+        ipv4_address: 172.31.240.4
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    logging:
+      driver: json-file
+      options:
+        max-size: 20m
+        max-file: "3"
+
+networks:
+  isolated:
+    driver: bridge
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.31.240.0/29
+
+volumes:
+  app_data:
+  postgres_data:
+  redis_data:
