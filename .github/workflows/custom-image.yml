@@ -1,0 +1,166 @@
+name: Refork Candidate
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [codex/refork-v0.2.18-20261026]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: refork-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  baseline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ac1b8f1271be0d674fa6f074403c1410f30a3a81
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 9
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+      - name: Build unmodified official baseline
+        run: |
+          pnpm --dir frontend install --frozen-lockfile
+          pnpm --dir frontend build
+          cd backend
+          CGO_ENABLED=0 go build -tags embed -o /tmp/sub2api-official ./cmd/server
+      - uses: actions/upload-artifact@v6
+        with:
+          name: official-v0.2.18-baseline
+          path: /tmp/sub2api-official
+          retention-days: 14
+
+  validate:
+    needs: baseline
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Verify official ancestry and immutable migration files
+        run: |
+          git merge-base --is-ancestor ac1b8f1271be0d674fa6f074403c1410f30a3a81 HEAD
+          test -z "$(git diff --name-only ac1b8f1271be0d674fa6f074403c1410f30a3a81 -- backend/migrations)"
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+      - name: Migration coordinator unit tests
+        run: |
+          python3 -m pip install -r ops/refork/requirements.txt
+          python3 -m unittest discover -s ops/refork -p 'test_*.py' -v
+      - name: Backend generated code, unit and database integration tests
+        working-directory: backend
+        run: |
+          go generate ./ent
+          go generate ./cmd/server
+          git diff --exit-code
+          make test-unit
+          make test-integration
+          CGO_ENABLED=0 go build -o /tmp/refork-migrate ./cmd/refork-migrate
+      - uses: actions/upload-artifact@v6
+        with:
+          name: refork-migration-runner-${{ github.sha }}
+          path: /tmp/refork-migrate
+          retention-days: 14
+
+  frontend:
+    needs: baseline
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 9
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+      - name: Frontend full verification
+        working-directory: frontend
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm typecheck
+          pnpm lint:check
+          pnpm test:run
+          pnpm build
+
+  migration-rehearsal:
+    needs: baseline
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18.1
+        env:
+          POSTGRES_USER: refork_fixture
+          POSTGRES_PASSWORD: synthetic-ci-only
+          POSTGRES_DB: refork_test_candidate
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U refork_fixture -d refork_test_candidate"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+      - name: Build official-runner adapter
+        working-directory: backend
+        run: CGO_ENABLED=0 go build -o /tmp/refork-migrate ./cmd/refork-migrate
+      - name: Empty-init, full restore and synthetic legacy-copy upgrade
+        env:
+          REFORK_TEST_DATABASE_URL: postgresql://refork_fixture:synthetic-ci-only@localhost:5432/refork_test_candidate?sslmode=disable
+          REFORK_TEST_RUNNER: /tmp/refork-migrate
+          REFORK_PG_CONTAINER: ${{ job.services.postgres.id }}
+        run: |
+          python3 -m pip install -r ops/refork/requirements.txt
+          python3 -m unittest discover -s ops/refork -p 'test_*.py' -v
+
+  image:
+    needs: [validate, migration-rehearsal, frontend]
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v6
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build isolated candidate image only
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ghcr.io/wu-xiao-ya/sub2api:refork-candidate-${{ github.sha }}
+          build-args: |
+            VERSION=0.2.18-refork-candidate
+            COMMIT=${{ github.sha }}
+      - name: Record immutable image identity
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          printf 'ghcr.io/wu-xiao-ya/sub2api@%s\n' "$DIGEST" > candidate-image.txt
+          cat candidate-image.txt >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v6
+        with:
+          name: refork-image-${{ github.sha }}
+          path: candidate-image.txt
+          retention-days: 30
