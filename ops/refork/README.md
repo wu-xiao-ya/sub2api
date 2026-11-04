@@ -100,14 +100,29 @@ visibility setting may change from a documented false value to `true`, with its
 update timestamp. Currency, prices and all unrelated settings remain subject to
 exact comparison; this is not a general exception for settings changes.
 
+Monitor configurations and request templates are archived as full structured
+rows. Before official provider constraints run, legacy providers are translated
+using the same reviewed platform mapping. The targeted CHECK replacement and
+row updates occur in one transaction, validated against the exact final official
+238 provider whitelist. IDs, template links, encrypted credentials and history
+rows remain intact; template-name collisions block preflight. This avoids
+deleting monitors, which would cascade-delete their history. Older archives
+without these structured rows cannot authorize that preparation: restore the
+verified pre-upgrade backup and make a new archive, preserving the old archive.
+The database rehearsal covers a GLM monitor/template/history and a MiniMax
+unlimited quota, interrupted runner recovery and archive-tamper rejection.
+
 ## Blocking Data Compatibility Work
 
 The coordinator intentionally refuses writes while any of these remain:
 
 1. Before official 224, unlimited quotas are completely archived privately and in
-   `refork_audit.quota_archive`. Only legacy-platform unlimited rows are removed
-   ahead of the constraint; official 238 purges the remainder. Audit checks every
-   archived counter. Limited legacy quota rows still block; they are not merged.
+   `refork_audit.quota_archive`. All verified unlimited rows are removed before
+   the constraint, matching official 238 semantics early. This includes MiniMax,
+   which official 224 rejects before a later migration adds support. Every retry
+   verifies the complete quota archive and remaining original rows before any
+   removal; tampering, new rows or changed limits block recovery. Audit checks
+   every archived counter. Incompatible limited rows still block, never merge.
 2. Production has 11 legacy-platform channel-pricing rows (GLM 5, Qwen 2, MiMo 2,
    Hunyuan 2). Their platform keys and channel mapping JSON must be converted
    without changing model sets, prices or multipliers. Group/account conversion

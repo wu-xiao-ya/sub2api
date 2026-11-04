@@ -23,6 +23,9 @@ ROOT = Path(__file__).resolve().parents[2]
 MIGRATIONS = ROOT / "backend" / "migrations"
 LOCK_ID = 694208311321144027
 PLATFORMS = {"glm": "zhipu", "qwen": "openai", "mimo": "openai", "hunyuan": "openai"}
+MONITOR_TABLES = ("channel_monitors", "channel_monitor_request_templates")
+MONITOR_PROVIDERS = ("openai", "anthropic", "gemini", "grok", "antigravity",
+                     "kimi", "zhipu", "deepseek", "minimax", "opencode_go")
 # Go strings.TrimSpace uses Unicode White_Space, not Python's extra C0 separators.
 GO_SPACE = " \t\n\v\f\r\u0085\u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000"
 
@@ -208,6 +211,7 @@ def snapshot(conn, usage_columns=None, historical_tables=None):
         "user_affiliate_ledger", "redeem_codes", "channels", "channel_groups",
         "channel_model_pricing", "channel_account_stats_model_pricing", "composite_model_routes",
         "auth_cache_invalidation_outbox",
+        "channel_monitors", "channel_monitor_request_templates",
     )
     evidence = {}
     for name in tables:
@@ -397,7 +401,28 @@ def checks(conn):
         """).fetchone()[0]
         if count:
             problems.append("limited legacy platform quota conversion requires explicit reconciliation")
+        if any(r["filename"] == "224_user_platform_quotas_add_cn_providers.sql" and r["status"] == "pending"
+               for r in comparison):
+            count = conn.execute("""SELECT count(*) FROM user_platform_quotas
+                WHERE platform<>ALL(%s) AND (daily_limit_usd IS NOT NULL
+                    OR weekly_limit_usd IS NOT NULL OR monthly_limit_usd IS NOT NULL)""",
+                (["anthropic", "openai", "gemini", "antigravity", "grok", "kimi", "zhipu", "deepseek"],)).fetchone()[0]
+            if count:
+                problems.append("limited platform quotas conflict with pending migration 224")
     pending = {r["filename"] for r in comparison if r["status"] == "pending"}
+    for table in MONITOR_TABLES:
+        if table_exists(conn, table):
+            providers = [row[0] for row in conn.execute(f"SELECT DISTINCT provider FROM {table}")]
+            if any(PLATFORMS.get(value, value) not in MONITOR_PROVIDERS for value in providers):
+                problems.append(f"unsupported monitor provider in {table}")
+    if table_exists(conn, "channel_monitor_request_templates"):
+        seen = set()
+        for provider, name in conn.execute("SELECT provider,name FROM channel_monitor_request_templates"):
+            target = (PLATFORMS.get(provider, provider), name)
+            if target in seen:
+                problems.append("monitor template provider conversion has a name collision")
+                break
+            seen.add(target)
     for table, column in (("composite_model_routes", "target_platform"),):
         if table_exists(conn, table):
             count = conn.execute(f"SELECT count(*) FROM {table} WHERE {column}=ANY(%s)",
@@ -613,13 +638,11 @@ def do_migrate(args):
                     WHERE daily_limit_usd IS NULL AND weekly_limit_usd IS NULL AND monthly_limit_usd IS NULL
                     ON CONFLICT DO NOTHING
                 """, (BASELINE, archive["sha256"]))
-                # Migration 224 adds its CHECK before 238 deletes these rows.
-                # Every removed counter is now archived both privately and in DB.
-                conn.execute("""
-                    DELETE FROM user_platform_quotas
-                    WHERE platform=ANY(%s)
-                      AND daily_limit_usd IS NULL AND weekly_limit_usd IS NULL AND monthly_limit_usd IS NULL
-                """, (list(PLATFORMS),))
+        # Also run on interrupted migrations: 224 rejects e.g. minimax before
+        # the later official expansion. Remove only verified archived unlimited
+        # rows, using the final official unlimited-quota semantics early.
+        prepare_unlimited_quotas(conn, archive)
+        prepare_monitor_providers(conn, archive)
         conn.execute("UPDATE refork_audit.checkpoint SET phase='migrating' WHERE baseline=%s", (BASELINE,))
     # The executable uses the official runner, checksum rules and non-tx handling.
     # Its own preflight guard checks the ledger again. No fabricated migration rows.
@@ -635,6 +658,85 @@ def do_migrate(args):
             raise Blocked("runner exited without completing official migrations")
         conn.execute("UPDATE refork_audit.checkpoint SET phase='migrated' WHERE baseline=%s", (BASELINE,))
     print("official migrations complete; conversion and audit are still required")
+
+
+def prepare_unlimited_quotas(conn, archive):
+    if not table_exists(conn, "user_platform_quotas"):
+        return
+    unlimited = lambda row: all(row.get(key) is None for key in
+                               ("daily_limit_usd", "weekly_limit_usd", "monthly_limit_usd"))
+    original = archive["data"].get("user_platform_quotas", [])
+    expected = [row for row in original if unlimited(row)]
+    archived = [row[0] for row in conn.execute("""SELECT original_row FROM refork_audit.quota_archive
+        WHERE baseline=%s AND archive_sha256=%s ORDER BY row_id""", (BASELINE, archive["sha256"]))]
+    if sorted(expected, key=safe_json) != sorted(archived, key=safe_json):
+        raise Blocked("quota archive must match before any unlimited quota removal")
+    known = {row["id"]: row for row in original}
+    current = [row[0] for row in conn.execute("SELECT to_jsonb(q) FROM user_platform_quotas q ORDER BY id FOR UPDATE")]
+    for row in current:
+        if row["id"] not in known or not projected_rows_match([known[row["id"]]], [row]):
+            raise Blocked("quota data drift before unlimited quota preparation")
+    # Limited rows must neither disappear nor change across recovery attempts.
+    ids = {row["id"] for row in current}
+    if any(row["id"] not in ids for row in original if not unlimited(row)):
+        raise Blocked("limited quota row disappeared before migration")
+    remove = [row["id"] for row in current if unlimited(row)]
+    if remove:
+        conn.execute("""DELETE FROM user_platform_quotas WHERE id=ANY(%s)
+            AND daily_limit_usd IS NULL AND weekly_limit_usd IS NULL AND monthly_limit_usd IS NULL""", (remove,))
+
+
+def prepare_monitor_providers(conn, archive):
+    from psycopg import sql
+
+    for table in MONITOR_TABLES:
+        if not table_exists(conn, table):
+            continue
+        current = [r[0] for r in conn.execute(f"SELECT to_jsonb(t) FROM {table} t ORDER BY id FOR UPDATE")]
+        original = archive["data"].get(table)
+        if original is None:
+            if any(row["provider"] in PLATFORMS for row in current):
+                raise Blocked("legacy monitor providers require a fresh structured archive from the verified backup")
+            continue
+        if not any(row["provider"] in PLATFORMS for row in original):
+            continue
+        before = {row["id"]: row for row in original}
+        if set(before) != {row["id"] for row in current}:
+            raise Blocked("monitor identities changed before provider preparation")
+        for row in current:
+            expected = dict(before[row["id"]])
+            if row["provider"] == PLATFORMS.get(expected["provider"], expected["provider"]):
+                expected["provider"] = row["provider"]
+            if not projected_rows_match([expected], [row]):
+                raise Blocked("monitor data drift before provider preparation")
+        # One transaction: preserve every row/ID/FK, translate the provider and
+        # validate the exact final official 238 whitelist. No check stays off.
+        constraint = table + "_provider_check"
+        conn.execute(sql.SQL("ALTER TABLE {} DROP CONSTRAINT IF EXISTS {}").format(
+            sql.Identifier(table), sql.Identifier(constraint)))
+        conn.execute("""CREATE TABLE IF NOT EXISTS refork_audit.preparations (
+            baseline text NOT NULL,archive_sha256 text NOT NULL,entity text NOT NULL,
+            entity_id bigint NOT NULL,before_row jsonb NOT NULL,after_row jsonb NOT NULL,
+            PRIMARY KEY (baseline,entity,entity_id))""")
+        for row in original:
+            target = PLATFORMS.get(row["provider"], row["provider"])
+            if target == row["provider"]:
+                continue
+            after = dict(row, provider=target)
+            conn.execute("""INSERT INTO refork_audit.preparations
+                (baseline,archive_sha256,entity,entity_id,before_row,after_row)
+                VALUES (%s,%s,%s,%s,%s::jsonb,%s::jsonb) ON CONFLICT DO NOTHING""",
+                (BASELINE, archive["sha256"], table, row["id"], safe_json(row), safe_json(after)))
+            saved = conn.execute("""SELECT before_row,after_row FROM refork_audit.preparations
+                WHERE baseline=%s AND archive_sha256=%s AND entity=%s AND entity_id=%s""",
+                (BASELINE, archive["sha256"], table, row["id"])).fetchone()
+            if saved is None or saved != (row, after):
+                raise Blocked("monitor provider preparation trace mismatch")
+            conn.execute(sql.SQL("UPDATE {} SET provider=%s WHERE id=%s").format(sql.Identifier(table)),
+                         (target, row["id"]))
+        conn.execute(sql.SQL("ALTER TABLE {} ADD CONSTRAINT {} CHECK(provider IN ({}))").format(
+            sql.Identifier(table), sql.Identifier(constraint),
+            sql.SQL(",").join(map(sql.Literal, MONITOR_PROVIDERS))))
 
 
 def do_convert(args):
@@ -751,7 +853,8 @@ def do_audit(args):
                     for name in archive["data"] if name not in current]
         for table, before in archive["data"].items():
             if table in ("schema_migrations", "groups", "accounts", "user_platform_quotas",
-                         "channels", "channel_model_pricing", "channel_account_stats_model_pricing"):
+                         "channels", "channel_model_pricing", "channel_account_stats_model_pricing",
+                         "channel_monitors", "channel_monitor_request_templates"):
                 continue
             after = current.get(table)
             if table == "auth_cache_invalidation_outbox":
@@ -822,6 +925,11 @@ def do_audit(args):
                 expected.append(changed)
             if not projected_rows_match(expected, current.get(table, [])):
                 problems.append(f"routing or price difference: {table}")
+        for table in MONITOR_TABLES:
+            expected = [dict(row, provider=PLATFORMS.get(row["provider"], row["provider"]))
+                        for row in archive["data"].get(table, [])]
+            if not projected_rows_match(expected, current.get(table, [])):
+                problems.append(f"monitor provider, identity or configuration difference: {table}")
         write_private(args.output, {"baseline": BASELINE, "archive_sha256": archive["sha256"],
                                     "blockers": problems, "data_audit_passed": not problems,
                                     "candidate_accepted": False})

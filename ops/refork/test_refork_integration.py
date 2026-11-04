@@ -16,6 +16,7 @@ import backup
 class MigrationRehearsal(unittest.TestCase):
     def test_empty_init_upgrade_resume_conversion_and_fail_closed_audit(self):
         import psycopg
+        from psycopg import sql
         from psycopg.conninfo import conninfo_to_dict, make_conninfo
 
         dsn = os.environ["REFORK_TEST_DATABASE_URL"]
@@ -30,7 +31,7 @@ class MigrationRehearsal(unittest.TestCase):
             # Construct a pre-upgrade fixture in this disposable CI database.
             # These are NOT migration actions or instructions for a real copy.
             pending = [filename for filename in refork.official_ledger()
-                       if filename.startswith(("206_", "220_", "224_", "235_", "236_", "238_purge", "246_"))]
+                       if filename.startswith(("206_", "220_", "224_", "235_", "236_", "238_", "246_"))]
             conn.execute("DELETE FROM schema_migrations WHERE filename=ANY(%s)", (pending,))
             conn.execute("ALTER TABLE groups RENAME COLUMN model_allowlist TO models_list_config")
             conn.execute("""INSERT INTO schema_migrations (filename,checksum)
@@ -39,6 +40,21 @@ class MigrationRehearsal(unittest.TestCase):
             conn.execute("ALTER TABLE user_platform_quotas DROP CONSTRAINT IF EXISTS user_platform_quotas_platform_check")
             user_id = conn.execute("""INSERT INTO users(email,password_hash,balance)
                 VALUES ('synthetic@example.invalid','not-a-secret',123.12345678) RETURNING id""").fetchone()[0]
+            legacy_providers = tuple(p for p in refork.MONITOR_PROVIDERS if p != 'opencode_go') + tuple(refork.PLATFORMS)
+            for table in refork.MONITOR_TABLES:
+                conn.execute(sql.SQL('ALTER TABLE {} DROP CONSTRAINT {}').format(
+                    sql.Identifier(table), sql.Identifier(table + '_provider_check')))
+                conn.execute(sql.SQL('ALTER TABLE {} ADD CONSTRAINT {} CHECK(provider IN ({}))').format(
+                    sql.Identifier(table), sql.Identifier(table + '_provider_check'),
+                    sql.SQL(',').join(map(sql.Literal, legacy_providers))))
+            template_id = conn.execute("""INSERT INTO channel_monitor_request_templates(name,provider)
+                VALUES ('synthetic-glm-template','glm') RETURNING id""").fetchone()[0]
+            monitor_id = conn.execute("""INSERT INTO channel_monitors
+                (name,provider,endpoint,api_key_encrypted,primary_model,enabled,interval_seconds,created_by,template_id)
+                VALUES ('synthetic-glm-monitor','glm','https://example.invalid','synthetic-only','glm-test',false,60,%s,%s)
+                RETURNING id""", (user_id, template_id)).fetchone()[0]
+            conn.execute("""INSERT INTO channel_monitor_histories(monitor_id,model,status)
+                VALUES (%s,'glm-test','operational')""", (monitor_id,))
             group_id = conn.execute("""INSERT INTO groups(name,platform,rate_multiplier,
                 video_price_480p,video_price_720p,video_model_prices)
                 VALUES ('synthetic-qwen','qwen',0.18,0,0.12345678,'{"sample":0}')
@@ -64,7 +80,7 @@ class MigrationRehearsal(unittest.TestCase):
                 VALUES (%s,'synthetic-only-key','fixture',%s) RETURNING id""", (user_id, group_id)).fetchone()[0]
             conn.execute("""INSERT INTO usage_logs(user_id,api_key_id,account_id,model,total_cost,actual_cost)
                 VALUES (%s,%s,%s,'qwen-test',0.1234567890,0.0222222220)""", (user_id, key_id, account_id))
-            for platform in ("qwen", "openai"):
+            for platform in ("qwen", "openai", "minimax"):
                 conn.execute("""INSERT INTO user_platform_quotas(user_id,platform,daily_usage_usd)
                     VALUES (%s,%s,1.1234567890)""", (user_id, platform))
             channel_id = conn.execute("""INSERT INTO channels(name,model_mapping)
@@ -132,7 +148,15 @@ class MigrationRehearsal(unittest.TestCase):
                     refork.do_migrate(args)
             with refork.connect(read_only=True) as conn:
                 self.assertEqual(conn.execute("SELECT phase FROM refork_audit.checkpoint").fetchone()[0], "migrating")
-                self.assertEqual(conn.execute("SELECT count(*) FROM refork_audit.quota_archive").fetchone()[0], 2)
+                self.assertEqual(conn.execute("SELECT count(*) FROM refork_audit.quota_archive").fetchone()[0], 3)
+            with refork.connect() as conn:
+                conn.execute("UPDATE refork_audit.quota_archive SET original_row=jsonb_set(original_row,'{daily_usage_usd}','999')")
+            with self.assertRaises(refork.Blocked):
+                refork.do_migrate(args)
+            with refork.connect() as conn:
+                for row in archive["data"]["user_platform_quotas"]:
+                    conn.execute("UPDATE refork_audit.quota_archive SET original_row=%s::jsonb WHERE row_id=%s",
+                                 (refork.safe_json(row), row["id"]))
             refork.do_migrate(args)
             refork.do_migrate(args)
             with refork.connect(read_only=True) as conn:
@@ -160,6 +184,9 @@ class MigrationRehearsal(unittest.TestCase):
                 self.assertFalse(conn.execute("SELECT allow_image_generation FROM groups WHERE id=%s",
                                               (gemini_group_id,)).fetchone()[0])
                 self.assertEqual(conn.execute("SELECT value FROM settings WHERE key='channel_monitor_hide_throughput'").fetchone()[0], "true")
+                self.assertEqual(conn.execute("SELECT provider,template_id FROM channel_monitors WHERE id=%s", (monitor_id,)).fetchone(), ('zhipu', template_id))
+                self.assertEqual(conn.execute("SELECT provider FROM channel_monitor_request_templates WHERE id=%s", (template_id,)).fetchone()[0], 'zhipu')
+                self.assertEqual(conn.execute("SELECT count(*) FROM channel_monitor_histories WHERE monitor_id=%s", (monitor_id,)).fetchone()[0], 1)
                 for filename, digest in original_ledger.items():
                     self.assertEqual(refork.ledger(conn)[filename], digest)
             args.output = str(Path(folder) / "rerun-audit.json")
