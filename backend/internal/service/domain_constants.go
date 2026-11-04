@@ -292,9 +292,9 @@ const (
 	SettingKeyPanelRateLimitSettings = "panel_rate_limit_settings"
 
 	// 操作审计日志设置
-	SettingKeyAuditLogRetentionDays = "audit_log_retention_days" // 审计日志保留天数（<=0 永久保留），默认 180
-	SettingKeyTrafficRelayEnabled = "traffic_relay_enabled"
-	SettingKeyTrafficRelayProxyID = "traffic_relay_proxy_id"
+	SettingKeyAuditLogRetentionDays             = "audit_log_retention_days" // 审计日志保留天数（<=0 永久保留），默认 180
+	SettingKeyTrafficRelayEnabled               = "traffic_relay_enabled"
+	SettingKeyTrafficRelayProxyID               = "traffic_relay_proxy_id"
 	SettingKeyTrafficRelayUnavailableTTLSeconds = "traffic_relay_unavailable_ttl_seconds"
 
 	// LinuxDo Connect OAuth 登录设置

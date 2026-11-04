@@ -72,11 +72,11 @@ type UpdateSettingsRequest struct {
 	AliyunCaptchaRegion          string `json:"aliyun_captcha_region"`
 
 	// API Key IP 访问控制设置
-	APIKeyACLTrustForwardedIP *bool     `json:"api_key_acl_trust_forwarded_ip"`
-	ForwardedClientIPHeaders  *[]string `json:"forwarded_client_ip_headers"`
-	TrafficRelayEnabled               *bool  `json:"traffic_relay_enabled"`
-	TrafficRelayProxyID               *int64 `json:"traffic_relay_proxy_id"`
-	TrafficRelayUnavailableTTLSeconds *int   `json:"traffic_relay_unavailable_ttl_seconds"`
+	APIKeyACLTrustForwardedIP         *bool     `json:"api_key_acl_trust_forwarded_ip"`
+	ForwardedClientIPHeaders          *[]string `json:"forwarded_client_ip_headers"`
+	TrafficRelayEnabled               *bool     `json:"traffic_relay_enabled"`
+	TrafficRelayProxyID               *int64    `json:"traffic_relay_proxy_id"`
+	TrafficRelayUnavailableTTLSeconds *int      `json:"traffic_relay_unavailable_ttl_seconds"`
 
 	// LinuxDo Connect OAuth 登录
 	LinuxDoConnectEnabled      bool   `json:"linuxdo_connect_enabled"`
@@ -1560,32 +1560,32 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 			}
 			return previousSettings.TrafficRelayUnavailableTTLSeconds
 		}(),
-		LoginAgreementEnabled:               req.LoginAgreementEnabled,
-		LoginAgreementMode:                  loginAgreementMode,
-		LoginAgreementUpdatedAt:             loginAgreementUpdatedAt,
-		LoginAgreementDocuments:             loginAgreementDocuments,
-		SMTPHost:                            req.SMTPHost,
-		SMTPPort:                            req.SMTPPort,
-		SMTPUsername:                        req.SMTPUsername,
-		SMTPPassword:                        req.SMTPPassword,
-		SMTPFrom:                            req.SMTPFrom,
-		SMTPFromName:                        req.SMTPFromName,
-		SMTPUseTLS:                          req.SMTPUseTLS,
-		TurnstileEnabled:                    req.TurnstileEnabled,
-		TurnstileSiteKey:                    req.TurnstileSiteKey,
-		TurnstileSecretKey:                  req.TurnstileSecretKey,
-		TencentCaptchaEnabled:               req.TencentCaptchaEnabled,
-		TencentCaptchaAppID:                 req.TencentCaptchaAppID,
-		TencentCaptchaAppSecretKey:          req.TencentCaptchaAppSecretKey,
-		TencentCaptchaCloudSecretID:         req.TencentCaptchaCloudSecretID,
-		TencentCaptchaCloudSecretKey:        req.TencentCaptchaCloudSecretKey,
-		TencentCaptchaRegion:                req.TencentCaptchaRegion,
-		AliyunCaptchaEnabled:                req.AliyunCaptchaEnabled,
-		AliyunCaptchaAccessKeyID:            req.AliyunCaptchaAccessKeyID,
-		AliyunCaptchaAccessKeySecret:        req.AliyunCaptchaAccessKeySecret,
-		AliyunCaptchaSceneID:                req.AliyunCaptchaSceneID,
-		AliyunCaptchaPrefix:                 req.AliyunCaptchaPrefix,
-		AliyunCaptchaRegion:                 req.AliyunCaptchaRegion,
+		LoginAgreementEnabled:        req.LoginAgreementEnabled,
+		LoginAgreementMode:           loginAgreementMode,
+		LoginAgreementUpdatedAt:      loginAgreementUpdatedAt,
+		LoginAgreementDocuments:      loginAgreementDocuments,
+		SMTPHost:                     req.SMTPHost,
+		SMTPPort:                     req.SMTPPort,
+		SMTPUsername:                 req.SMTPUsername,
+		SMTPPassword:                 req.SMTPPassword,
+		SMTPFrom:                     req.SMTPFrom,
+		SMTPFromName:                 req.SMTPFromName,
+		SMTPUseTLS:                   req.SMTPUseTLS,
+		TurnstileEnabled:             req.TurnstileEnabled,
+		TurnstileSiteKey:             req.TurnstileSiteKey,
+		TurnstileSecretKey:           req.TurnstileSecretKey,
+		TencentCaptchaEnabled:        req.TencentCaptchaEnabled,
+		TencentCaptchaAppID:          req.TencentCaptchaAppID,
+		TencentCaptchaAppSecretKey:   req.TencentCaptchaAppSecretKey,
+		TencentCaptchaCloudSecretID:  req.TencentCaptchaCloudSecretID,
+		TencentCaptchaCloudSecretKey: req.TencentCaptchaCloudSecretKey,
+		TencentCaptchaRegion:         req.TencentCaptchaRegion,
+		AliyunCaptchaEnabled:         req.AliyunCaptchaEnabled,
+		AliyunCaptchaAccessKeyID:     req.AliyunCaptchaAccessKeyID,
+		AliyunCaptchaAccessKeySecret: req.AliyunCaptchaAccessKeySecret,
+		AliyunCaptchaSceneID:         req.AliyunCaptchaSceneID,
+		AliyunCaptchaPrefix:          req.AliyunCaptchaPrefix,
+		AliyunCaptchaRegion:          req.AliyunCaptchaRegion,
 		APIKeyACLTrustForwardedIP: func() bool {
 			if req.APIKeyACLTrustForwardedIP != nil {
 				return *req.APIKeyACLTrustForwardedIP
