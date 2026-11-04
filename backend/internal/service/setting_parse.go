@@ -67,6 +67,9 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 		SettingKeyAPIKeyACLTrustForwardedIP:                 "true",
 		SettingKeyForwardedClientIPHeaders:                  string(forwardedClientIPHeadersJSON),
 		settingKeyForwardedClientIPModeV2:                   "true",
+		SettingKeyTrafficRelayEnabled:                       "false",
+		SettingKeyTrafficRelayProxyID:                       "0",
+		SettingKeyTrafficRelayUnavailableTTLSeconds:         "45",
 		SettingKeySiteName:                                  "Sub2API",
 		SettingKeySiteLogo:                                  "",
 		SettingKeyPurchaseSubscriptionEnabled:               "false",
@@ -332,6 +335,9 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 		SessionBindingEnabled:                  settings[SettingKeySessionBindingEnabled] == "true", // 默认关闭
 		StepUpEnabled:                          settings[SettingKeyStepUpEnabled] == "true",         // 默认关闭
 		AuditLogRetentionDays:                  parseAuditLogRetentionDays(settings[SettingKeyAuditLogRetentionDays]),
+		TrafficRelayEnabled:                    settings[SettingKeyTrafficRelayEnabled] == "true",
+		TrafficRelayProxyID:                    parseTrafficRelayProxyID(settings[SettingKeyTrafficRelayProxyID]),
+		TrafficRelayUnavailableTTLSeconds:      parseTrafficRelayUnavailableTTLSeconds(settings[SettingKeyTrafficRelayUnavailableTTLSeconds]),
 		LoginAgreementEnabled:                  settings[SettingKeyLoginAgreementEnabled] == "true",
 		LoginAgreementMode:                     normalizeLoginAgreementMode(settings[SettingKeyLoginAgreementMode]),
 		LoginAgreementUpdatedAt:                loginAgreementUpdatedAt,

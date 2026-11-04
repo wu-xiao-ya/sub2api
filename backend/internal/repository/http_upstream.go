@@ -184,6 +184,13 @@ func NewHTTPUpstream(cfg *config.Config) service.HTTPUpstream {
 	}
 }
 
+// ProvideHTTPUpstream exposes the relay-aware interface to application
+// services while keeping NewHTTPUpstream's concrete return type available to
+// repository tests and lifecycle instrumentation.
+func ProvideHTTPUpstream(cfg *config.Config) service.HTTPUpstream {
+	return service.WrapRelayHTTPUpstream(NewHTTPUpstream(cfg))
+}
+
 // Do 执行 HTTP 请求
 // 根据隔离策略获取或创建客户端，并跟踪请求生命周期
 //
@@ -1406,6 +1413,7 @@ func buildUpstreamTransport(settings poolSettings, proxyURL *url.URL, protocolMo
 	if err := proxyutil.ConfigureTransportProxy(transport, proxyURL); err != nil {
 		return nil, err
 	}
+	proxyutil.ConfigureRelayConnectBudget(transport, proxyURL)
 	return transport, nil
 }
 

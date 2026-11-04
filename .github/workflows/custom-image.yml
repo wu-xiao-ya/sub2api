@@ -50,8 +50,13 @@ jobs:
           fetch-depth: 0
       - name: Verify official ancestry and immutable migration files
         run: |
-          git merge-base --is-ancestor ac1b8f1271be0d674fa6f074403c1410f30a3a81 HEAD
-          test -z "$(git diff --name-only ac1b8f1271be0d674fa6f074403c1410f30a3a81 -- backend/migrations)"
+          baseline=ac1b8f1271be0d674fa6f074403c1410f30a3a81
+          git merge-base --is-ancestor "$baseline" HEAD
+          git diff --name-status "$baseline" HEAD -- backend/migrations |
+            awk '$1 != "A" {
+              print "official migration must remain unchanged: " $0 > "/dev/stderr"
+              failed = 1
+            } END { exit failed }'
       - uses: actions/setup-go@v6
         with:
           go-version-file: backend/go.mod

@@ -286,7 +286,27 @@ const (
 	clientTimeout = 10 * time.Second
 )
 
-func NewClient(proxyURL string) (*Client, error) {
+type TransportWrapper func(http.RoundTripper) http.RoundTripper
+
+func NewClient(proxyURL string, wrappers ...TransportWrapper) (*Client, error) {
+	client, err := NewHTTPClient(proxyURL)
+	if err != nil {
+		return nil, err
+	}
+	for _, wrap := range wrappers {
+		if wrap == nil {
+			continue
+		}
+		base := client.Transport
+		if base == nil {
+			base = http.DefaultTransport
+		}
+		client.Transport = wrap(base)
+	}
+	return &Client{httpClient: client}, nil
+}
+
+func NewHTTPClient(proxyURL string) (*http.Client, error) {
 	client := &http.Client{
 		Timeout: clientTimeout,
 	}
@@ -305,11 +325,10 @@ func NewClient(proxyURL string) (*Client, error) {
 		if err := proxyutil.ConfigureTransportProxy(transport, parsed); err != nil {
 			return nil, fmt.Errorf("configure proxy: %w", err)
 		}
+		proxyutil.ConfigureRelayConnectBudget(transport, parsed)
 		client.Transport = transport
 	}
-	return &Client{
-		httpClient: client,
-	}, nil
+	return client, nil
 }
 
 // IsConnectionError 判断是否为连接错误（网络超时、DNS 失败、连接拒绝）

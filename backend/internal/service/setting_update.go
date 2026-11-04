@@ -99,6 +99,9 @@ func (s *SettingService) refreshCachedSettingsAfterWrite(ctx context.Context, se
 }
 
 func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, settings *SystemSettings) (map[string]string, error) {
+	if err := s.validateTrafficRelay(ctx, settings); err != nil {
+		return nil, err
+	}
 	if err := s.validateDefaultSubscriptionGroups(ctx, settings.DefaultSubscriptions); err != nil {
 		return nil, err
 	}
@@ -233,6 +236,9 @@ func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, setting
 	updates[SettingKeyAliyunCaptchaPrefix] = settings.AliyunCaptchaPrefix
 	updates[SettingKeyAliyunCaptchaRegion] = normalizeAliyunCaptchaRegion(settings.AliyunCaptchaRegion)
 	updates[SettingKeyAPIKeyACLTrustForwardedIP] = strconv.FormatBool(settings.APIKeyACLTrustForwardedIP)
+	updates[SettingKeyTrafficRelayEnabled] = strconv.FormatBool(settings.TrafficRelayEnabled)
+	updates[SettingKeyTrafficRelayProxyID] = strconv.FormatInt(settings.TrafficRelayProxyID, 10)
+	updates[SettingKeyTrafficRelayUnavailableTTLSeconds] = strconv.Itoa(settings.TrafficRelayUnavailableTTLSeconds)
 	forwardedClientIPHeadersJSON, err := json.Marshal(settings.ForwardedClientIPHeaders)
 	if err != nil {
 		return nil, fmt.Errorf("marshal forwarded client IP headers: %w", err)

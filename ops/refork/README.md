@@ -210,7 +210,9 @@ explicit review. A passed data audit is never marked candidate acceptance.
 PostgreSQL, Redis and persistent volumes. The Docker network is internal-only;
 the app uses `172.31.240.2:8080`, publishes no host port, and the host firewall
 denies new connections from the candidate subnet to host services. Keep its
-generated `.env` root-readable only and out of Git.
+generated `.env` root-readable only and out of Git. Set `CANDIDATE_IMAGE` to the
+exact `ghcr.io/wu-xiao-ya/sub2api@sha256:...` value from the matching candidate
+workflow artifact; do not pin a mutable tag or reuse a digest from an older run.
 
 For browser access, create an SSH tunnel to the candidate host:
 

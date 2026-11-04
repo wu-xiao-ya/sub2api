@@ -74,6 +74,9 @@ type UpdateSettingsRequest struct {
 	// API Key IP 访问控制设置
 	APIKeyACLTrustForwardedIP *bool     `json:"api_key_acl_trust_forwarded_ip"`
 	ForwardedClientIPHeaders  *[]string `json:"forwarded_client_ip_headers"`
+	TrafficRelayEnabled               *bool  `json:"traffic_relay_enabled"`
+	TrafficRelayProxyID               *int64 `json:"traffic_relay_proxy_id"`
+	TrafficRelayUnavailableTTLSeconds *int   `json:"traffic_relay_unavailable_ttl_seconds"`
 
 	// LinuxDo Connect OAuth 登录
 	LinuxDoConnectEnabled      bool   `json:"linuxdo_connect_enabled"`
@@ -1539,6 +1542,24 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		SessionBindingEnabled:               sessionBindingEnabled,
 		StepUpEnabled:                       stepUpEnabled,
 		AuditLogRetentionDays:               req.AuditLogRetentionDays,
+		TrafficRelayEnabled: func() bool {
+			if req.TrafficRelayEnabled != nil {
+				return *req.TrafficRelayEnabled
+			}
+			return previousSettings.TrafficRelayEnabled
+		}(),
+		TrafficRelayProxyID: func() int64 {
+			if req.TrafficRelayProxyID != nil && *req.TrafficRelayProxyID >= 0 {
+				return *req.TrafficRelayProxyID
+			}
+			return previousSettings.TrafficRelayProxyID
+		}(),
+		TrafficRelayUnavailableTTLSeconds: func() int {
+			if req.TrafficRelayUnavailableTTLSeconds != nil && *req.TrafficRelayUnavailableTTLSeconds > 0 {
+				return *req.TrafficRelayUnavailableTTLSeconds
+			}
+			return previousSettings.TrafficRelayUnavailableTTLSeconds
+		}(),
 		LoginAgreementEnabled:               req.LoginAgreementEnabled,
 		LoginAgreementMode:                  loginAgreementMode,
 		LoginAgreementUpdatedAt:             loginAgreementUpdatedAt,
@@ -2208,6 +2229,9 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		SessionBindingEnabled:                                  updatedSettings.SessionBindingEnabled,
 		StepUpEnabled:                                          updatedSettings.StepUpEnabled,
 		AuditLogRetentionDays:                                  updatedSettings.AuditLogRetentionDays,
+		TrafficRelayEnabled:                                    updatedSettings.TrafficRelayEnabled,
+		TrafficRelayProxyID:                                    updatedSettings.TrafficRelayProxyID,
+		TrafficRelayUnavailableTTLSeconds:                      updatedSettings.TrafficRelayUnavailableTTLSeconds,
 		LoginAgreementEnabled:                                  updatedSettings.LoginAgreementEnabled,
 		LoginAgreementMode:                                     updatedSettings.LoginAgreementMode,
 		LoginAgreementUpdatedAt:                                updatedSettings.LoginAgreementUpdatedAt,

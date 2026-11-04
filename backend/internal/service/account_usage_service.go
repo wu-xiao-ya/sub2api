@@ -886,6 +886,10 @@ func (s *AccountUsageService) probeOpenAICodexSnapshot(ctx context.Context, acco
 	if account.ProxyID != nil && account.Proxy != nil {
 		proxyURL = account.Proxy.URL()
 	}
+	req = WithAccountOutbound(req, account, proxyURL)
+	if route, ok := requestOutbound(req, account.ID); ok {
+		proxyURL = route.ProxyURL
+	}
 	client, err := httppool.GetClient(httppool.Options{
 		ProxyURL:              proxyURL,
 		Timeout:               15 * time.Second,
@@ -896,7 +900,25 @@ func (s *AccountUsageService) probeOpenAICodexSnapshot(ctx context.Context, acco
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("openai codex probe request failed: %w", err)
+		if resp == nil {
+			resp, err, _ = RetryRelayHTTP(req.Context(), account.ID, proxyURL, req, err, func(next *http.Request, fallbackProxy string) (*http.Response, error) {
+				fallbackClient, clientErr := httppool.GetClient(httppool.Options{
+					ProxyURL:              fallbackProxy,
+					Timeout:               15 * time.Second,
+					ResponseHeaderTimeout: 10 * time.Second,
+				})
+				if clientErr != nil {
+					return nil, clientErr
+				}
+				return fallbackClient.Do(next)
+			})
+		}
+		if err != nil {
+			if resp != nil && resp.Body != nil {
+				_ = resp.Body.Close()
+			}
+			return nil, fmt.Errorf("openai codex probe request failed: %w", err)
+		}
 	}
 	defer func() { _ = resp.Body.Close() }()
 
@@ -1586,7 +1608,13 @@ func (s *AccountUsageService) fetchOAuthUsageRaw(ctx context.Context, account *A
 		}
 	}
 
-	return s.usageFetcher.FetchUsageWithOptions(ctx, opts)
+	outboundCtx := withAccountOperationRoute(ctx, account, proxyURL)
+	response, _, err := accountOutboundOperation(outboundCtx, proxyURL, func(routeProxyURL string) (*ClaudeUsageResponse, error) {
+		attemptOpts := *opts
+		attemptOpts.ProxyURL = routeProxyURL
+		return s.usageFetcher.FetchUsageWithOptions(outboundCtx, &attemptOpts)
+	})
+	return response, err
 }
 
 // parseTime 尝试多种格式解析时间

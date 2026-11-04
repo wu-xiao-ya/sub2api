@@ -32,6 +32,15 @@ func (h *SettingHandler) auditSettingsUpdate(c *gin.Context, before *service.Sys
 
 func diffSettings(before *service.SystemSettings, after *service.SystemSettings, beforeAuthSourceDefaults *service.AuthSourceDefaultSettings, afterAuthSourceDefaults *service.AuthSourceDefaultSettings, req UpdateSettingsRequest) []string {
 	changed := make([]string, 0, 20)
+	if before.TrafficRelayEnabled != after.TrafficRelayEnabled {
+		changed = append(changed, "traffic_relay_enabled")
+	}
+	if before.TrafficRelayProxyID != after.TrafficRelayProxyID {
+		changed = append(changed, "traffic_relay_proxy_id")
+	}
+	if before.TrafficRelayUnavailableTTLSeconds != after.TrafficRelayUnavailableTTLSeconds {
+		changed = append(changed, "traffic_relay_unavailable_ttl_seconds")
+	}
 	if before.RegistrationEnabled != after.RegistrationEnabled {
 		changed = append(changed, "registration_enabled")
 	}

@@ -2,7 +2,7 @@ name: sub2api-refork-candidate
 
 services:
   app:
-    image: ghcr.io/wu-xiao-ya/sub2api@sha256:698e9594c95a4a8fe0452ce69c43498cb06d0f65cd4f7633d3df54662e2e880e
+    image: ${CANDIDATE_IMAGE:?set CANDIDATE_IMAGE to a digest-pinned candidate image}
     restart: unless-stopped
     init: true
     stop_grace_period: 30s

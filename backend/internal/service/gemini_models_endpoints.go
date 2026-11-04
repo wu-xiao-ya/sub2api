@@ -265,7 +265,7 @@ func (s *GeminiMessagesCompatService) doGeminiModelsGET(req *http.Request, accou
 		proxyURL = account.Proxy.URL()
 	}
 
-	resp, err := s.httpUpstream.Do(req, proxyURL, account.ID, account.Concurrency)
+	resp, err := s.httpUpstream.Do(WithAccountOutbound(req, account, proxyURL), proxyURL, account.ID, account.Concurrency)
 	if err != nil {
 		return nil, err
 	}
