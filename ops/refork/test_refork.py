@@ -55,7 +55,7 @@ class LedgerTests(unittest.TestCase):
     def test_custom_compatibility_is_directional_and_pinned(self):
         exact = refork.exact_compatibility_rules()
         files = refork.official_ledger()
-        self.assertEqual(len(exact), 5)
+        self.assertEqual(len(exact), 6)
         for name, (old, new) in exact.items():
             self.assertEqual(files[name], new)
             self.assertEqual(refork.compare_ledgers({name: old}, {name: new})[0]["status"], "compatible")

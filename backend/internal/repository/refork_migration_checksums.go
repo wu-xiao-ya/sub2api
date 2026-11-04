@@ -1,6 +1,6 @@
 package repository
 
-// Each rule is directional: pinned official file <- verified deployed custom SQL.
+// Each rule is directional: pinned candidate file <- verified deployed custom SQL.
 // No migration file or schema_migrations row is changed. Review: ops/refork/README.md.
 var reforkMigrationChecksumCompatibilityRules = map[string]migrationChecksumCompatibilityRule{
 	"195_channel_monitor_mode.sql": newReforkMigrationChecksumCompatibilityRule(
@@ -18,6 +18,10 @@ var reforkMigrationChecksumCompatibilityRules = map[string]migrationChecksumComp
 	"219_group_search_price_per_1k.sql": newReforkMigrationChecksumCompatibilityRule(
 		"430c2e3595342fe22c59e9676e9b18ea376f076324b77174a21e6f181f57f4b5",
 		"833578274d0eed24d39355298d5659b33e5484c869b331ffd815187c221552d2"),
+	// Identical ADD COLUMN statement; only the relay documentation differs.
+	"255_account_use_relay_route.sql": newReforkMigrationChecksumCompatibilityRule(
+		"865431f7b1cb5c4b6512205a04f5a44a9bc4fdb12edb0969d30a06fcf1de879f",
+		"85e996cc565e4af18075e4403448c163b8758f233762994b7b92dc8cc702dcb9"),
 }
 
 func newReforkMigrationChecksumCompatibilityRule(fileChecksum, dbChecksum string) migrationChecksumCompatibilityRule {

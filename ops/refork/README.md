@@ -60,6 +60,20 @@ No migration record is rewritten, inserted speculatively or globally exempted.
 | `218_group_audio_voice_pricing.sql` | Comment-only SQL difference | Columns already exist; runtime NULL pricing semantics still need billing tests |
 | `219_group_search_price_per_1k.sql` | Comment-only SQL difference | Column already exists; runtime NULL pricing semantics still need billing tests |
 
+The 2026-11-04 read-only ledger refresh still contains the same 299 records.
+Adding the candidate relay migration introduced one additional same-name
+conflict: `255_account_use_relay_route.sql`. Its deployed digest is
+`85e996cc565e4af18075e4403448c163b8758f233762994b7b92dc8cc702dcb9`;
+the candidate digest is
+`865431f7b1cb5c4b6512205a04f5a44a9bc4fdb12edb0969d30a06fcf1de879f`.
+The reviewed deployed snapshot and candidate contain the identical statement
+`ALTER TABLE accounts ADD COLUMN IF NOT EXISTS use_relay_route BOOLEAN NOT NULL DEFAULT FALSE;`.
+Only comments differ. The sixth exact directional compatibility rule skips
+re-execution and preserves the original ledger record. After these rules the
+current comparison is 238 exact, 6 compatible, 55 custom-only and 54 pending,
+with no unreviewed checksum conflicts. This does not replace schema validation
+on the restored production copy.
+
 The complete private report is generated with `compare-ledger`. It must NOT be
 committed. Schema hashes are not a substitute for schema or monetary validation.
 
