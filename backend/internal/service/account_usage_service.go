@@ -910,7 +910,7 @@ func (s *AccountUsageService) probeOpenAICodexSnapshot(ctx context.Context, acco
 				if clientErr != nil {
 					return nil, clientErr
 				}
-				return fallbackClient.Do(next)
+				return fallbackClient.Do(next) // #nosec G704 -- request URL is a fixed upstream endpoint; the account proxy is an operator-managed route.
 			})
 		}
 		if err != nil {

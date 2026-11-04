@@ -97,6 +97,41 @@ func ProvideOAuthRefreshAPI(accountRepo AccountRepository, tokenCache GeminiToke
 	return NewOAuthRefreshAPI(accountRepo, tokenCache)
 }
 
+type redisTrafficRelayOutageStore struct {
+	client *redis.Client
+}
+
+func ProvideTrafficRelayOutageStore(client *redis.Client) TrafficRelayOutageStore {
+	if client == nil {
+		return nil
+	}
+	return redisTrafficRelayOutageStore{client: client}
+}
+
+func (s redisTrafficRelayOutageStore) IsDown(ctx context.Context, key string) (bool, error) {
+	count, err := s.client.Exists(ctx, key).Result()
+	return count > 0, err
+}
+
+func (s redisTrafficRelayOutageStore) ExtendDown(ctx context.Context, key string, ttl time.Duration) error {
+	const extendOutage = `
+local current = redis.call('PTTL', KEYS[1])
+local requested = tonumber(ARGV[1])
+if current < requested then
+  redis.call('PSETEX', KEYS[1], requested, '1')
+end
+return 1`
+	return s.client.Eval(ctx, extendOutage, []string{key}, ttl.Milliseconds()).Err()
+}
+
+func ProvideAccountOutboundService(
+	settings *SettingService,
+	proxyRepo ProxyRepository,
+	outageStore TrafficRelayOutageStore,
+) *AccountOutboundService {
+	return NewAccountOutboundService(settings, proxyRepo, outageStore)
+}
+
 func ProvideBatchImageModelPricingResolver(resolver *ModelPricingResolver) *BatchImageModelPricingResolver {
 	return &BatchImageModelPricingResolver{Resolver: resolver}
 }
@@ -867,7 +902,8 @@ var ProviderSet = wire.NewSet(
 	NewGroupService,
 	NewCompositeRouteResolver,
 	NewAccountService,
-	NewAccountOutboundService,
+	ProvideTrafficRelayOutageStore,
+	ProvideAccountOutboundService,
 	NewProxyService,
 	NewRedeemService,
 	NewPromoService,

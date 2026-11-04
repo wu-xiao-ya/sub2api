@@ -28,7 +28,7 @@ jobs:
           version: 9
       - uses: actions/setup-node@v6
         with:
-          node-version: '20'
+          node-version: '22'
       - name: Build unmodified official baseline
         run: |
           pnpm --dir frontend install --frozen-lockfile
@@ -90,7 +90,7 @@ jobs:
           version: 9
       - uses: actions/setup-node@v6
         with:
-          node-version: '20'
+          node-version: '22'
       - name: Frontend full verification
         working-directory: frontend
         run: |

@@ -5,8 +5,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/Wei-Shaw/sub2api/internal/pkg/proxyutil"
 	"github.com/imroc/req/v3"
+
+	"github.com/Wei-Shaw/sub2api/internal/pkg/proxyutil"
 )
 
 type accountOperationRouteKey struct{}
@@ -65,15 +66,4 @@ func accountOutboundOperation[T any](ctx context.Context, fallback string, call 
 	}
 	value, err = call(route.FallbackProxyURL)
 	return value, route.FallbackProxyURL, err
-}
-
-func accountPrivacyOperation(ctx context.Context, factory PrivacyClientFactory, fallback string, call func(*req.Client) (*req.Response, error)) (*req.Response, error) {
-	response, _, err := accountOutboundOperation(ctx, fallback, func(proxy string) (*req.Response, error) {
-		client, err := factory(proxy)
-		if err != nil {
-			return nil, err
-		}
-		return call(client)
-	})
-	return response, err
 }

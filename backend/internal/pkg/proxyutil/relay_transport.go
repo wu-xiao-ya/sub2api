@@ -25,8 +25,7 @@ func ConfigureRelayConnectBudget(transport *http.Transport, proxyURL *url.URL) {
 		originalDial = (&net.Dialer{}).DialContext
 		// Adding a custom dial hook otherwise disables net/http's implicit H2.
 		// Preserve explicit H1/TLS configuration and the original default mode.
-		if transport.DialTLSContext == nil && transport.DialTLS == nil &&
-			transport.TLSClientConfig == nil && transport.TLSNextProto == nil {
+		if transport.DialTLSContext == nil && transport.TLSClientConfig == nil && transport.TLSNextProto == nil {
 			transport.ForceAttemptHTTP2 = true
 		}
 	}

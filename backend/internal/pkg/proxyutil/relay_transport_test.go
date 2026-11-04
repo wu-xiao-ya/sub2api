@@ -31,11 +31,16 @@ func TestRelayTransportPreservesProtocolSelection(t *testing.T) {
 func TestRelayTransportStalledCONNECTLeavesFallbackBudget(t *testing.T) {
 	closed := make(chan struct{})
 	proxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		conn, _, err := w.(http.Hijacker).Hijack()
+		hijacker, ok := w.(http.Hijacker)
+		if !ok {
+			t.Error("response writer does not support hijacking")
+			return
+		}
+		conn, _, err := hijacker.Hijack()
 		if err != nil {
 			return
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 		defer close(closed)
 		_, _ = io.Copy(io.Discard, conn)
 	}))
@@ -49,7 +54,7 @@ func TestRelayTransportStalledCONNECTLeavesFallbackBudget(t *testing.T) {
 	req, _ := http.NewRequestWithContext(WithRelayConnectHost(ctx, u.Host), http.MethodGet, "https://example.test", nil)
 	resp, err := (&http.Client{Transport: transport}).Do(req)
 	if resp != nil {
-		resp.Body.Close()
+		_ = resp.Body.Close()
 		t.Fatal("unexpected response")
 	}
 	var connectErr *ConnectError
@@ -75,7 +80,12 @@ func TestRelayTransportKeepsStreamingAndReusesTunnel(t *testing.T) {
 		if r.Header.Get("Proxy-Authorization") != "" {
 			t.Error("proxy credentials leaked to origin")
 		}
-		w.(http.Flusher).Flush()
+		flusher, ok := w.(http.Flusher)
+		if !ok {
+			t.Error("response writer does not support flushing")
+			return
+		}
+		flusher.Flush()
 		time.Sleep(150 * time.Millisecond)
 		_, _ = w.Write([]byte("stream"))
 	}))
@@ -92,13 +102,18 @@ func TestRelayTransportKeepsStreamingAndReusesTunnel(t *testing.T) {
 			t.Error(err)
 			return
 		}
-		defer upstream.Close()
-		conn, rw, err := w.(http.Hijacker).Hijack()
+		defer func() { _ = upstream.Close() }()
+		hijacker, ok := w.(http.Hijacker)
+		if !ok {
+			t.Error("response writer does not support hijacking")
+			return
+		}
+		conn, rw, err := hijacker.Hijack()
 		if err != nil {
 			t.Error(err)
 			return
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 		tunnels.Add(1)
 		_, _ = rw.WriteString("HTTP/1.1 200 Connection Established\r\n\r\n")
 		_ = rw.Flush()
@@ -131,7 +146,7 @@ func TestRelayTransportKeepsStreamingAndReusesTunnel(t *testing.T) {
 			t.Fatal(err)
 		}
 		body, err := io.ReadAll(resp.Body)
-		resp.Body.Close()
+		_ = resp.Body.Close()
 		stop()
 		cancel()
 		if err != nil || string(body) != "stream" {
@@ -159,7 +174,7 @@ func TestRelayTransportUnmarkedPreservesProxy(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	body, _ := io.ReadAll(resp.Body)
 	if string(body) != "original proxy" {
 		t.Fatalf("default proxy changed: %s", body)

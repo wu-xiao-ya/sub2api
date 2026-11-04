@@ -13,7 +13,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
@@ -34,6 +33,11 @@ type AccountOutbound struct {
 	FallbackProxyURL string
 	RelayHost        string
 	unavailableTTL   time.Duration
+}
+
+type TrafficRelayOutageStore interface {
+	IsDown(ctx context.Context, key string) (bool, error)
+	ExtendDown(ctx context.Context, key string, ttl time.Duration) error
 }
 
 type relayRouteFailure struct{ err error }
@@ -70,9 +74,9 @@ type cachedRelaySnapshot struct {
 // AccountOutboundService owns relay configuration and shared outage state.
 // Individual request routes live exclusively in their request contexts.
 type AccountOutboundService struct {
-	settings  *SettingService
-	proxyRepo ProxyRepository
-	rdb       *redis.Client
+	settings    *SettingService
+	proxyRepo   ProxyRepository
+	outageStore TrafficRelayOutageStore
 
 	mu        sync.Mutex
 	downUntil map[string]time.Time
@@ -82,11 +86,11 @@ type AccountOutboundService struct {
 var processAccountOutbound atomic.Pointer[AccountOutboundService]
 
 // NewAccountOutboundService constructs the process-wide traffic relay resolver.
-func NewAccountOutboundService(settings *SettingService, proxyRepo ProxyRepository, rdb *redis.Client) *AccountOutboundService {
+func NewAccountOutboundService(settings *SettingService, proxyRepo ProxyRepository, outageStore TrafficRelayOutageStore) *AccountOutboundService {
 	svc := &AccountOutboundService{
-		settings:  settings,
-		proxyRepo: proxyRepo,
-		rdb:       rdb,
+		settings:    settings,
+		proxyRepo:   proxyRepo,
+		outageStore: outageStore,
 	}
 	SetProcessAccountOutbound(svc)
 	return svc
@@ -236,11 +240,11 @@ func (s *AccountOutboundService) isDown(ctx context.Context, proxyURL string) bo
 	if !until.IsZero() && time.Now().Before(until) {
 		return true
 	}
-	if s.rdb == nil {
+	if s.outageStore == nil {
 		return false
 	}
-	n, err := s.rdb.Exists(ctx, key).Result()
-	return err == nil && n > 0
+	down, err := s.outageStore.IsDown(ctx, key)
+	return err == nil && down
 }
 
 // MarkRelayDown remembers that the system relay is temporarily unavailable.
@@ -279,16 +283,8 @@ func (s *AccountOutboundService) MarkDown(ctx context.Context, route AccountOutb
 		s.downUntil[key] = until
 	}
 	s.mu.Unlock()
-	if s.rdb != nil {
-		// Delayed failures must not shorten a newer outage's remaining lifetime.
-		const extendOutage = `
-local current = redis.call('PTTL', KEYS[1])
-local requested = tonumber(ARGV[1])
-if current < requested then
-  redis.call('PSETEX', KEYS[1], requested, '1')
-end
-return 1`
-		if err := s.rdb.Eval(ctx, extendOutage, []string{key}, ttl.Milliseconds()).Err(); err != nil {
+	if s.outageStore != nil {
+		if err := s.outageStore.ExtendDown(ctx, key, ttl); err != nil {
 			logger.L().Warn("traffic_relay.mark_down_redis_failed", zap.Error(err))
 		}
 	}
