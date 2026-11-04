@@ -6,6 +6,36 @@ import refork
 
 
 class LedgerTests(unittest.TestCase):
+    def test_only_reviewed_official_privacy_default_can_change_settings(self):
+        name = "206_channel_monitor_v2_privacy_defaults.sql"
+        plan = {"reviewed_cleanup": {name: refork.checksum((refork.MIGRATIONS / name).read_bytes())}}
+        before = [{"key": "channel_monitor_hide_throughput", "value": "false", "updated_at": "old"},
+                  {"key": "currency", "value": "USD", "updated_at": "old"}]
+        after = [dict(before[0], value="true", updated_at="new"), before[1]]
+        self.assertTrue(refork.settings_rows_match(before, after, plan))
+        self.assertFalse(refork.settings_rows_match(before, after, {}))
+        self.assertFalse(refork.settings_rows_match(before, [after[0], dict(after[1], value="CNY")], plan))
+        self.assertFalse(refork.settings_rows_match(before, after[:1], plan))
+
+    def test_relay_evidence_is_bound_to_candidate_and_configuration(self):
+        flags = ("test_passed", "proxy_connect", "tls_verified", "origin_http_200",
+                 "direct_egress_blocked", "host_services_blocked",
+                 "temporary_policy_removed", "isolation_restored")
+        proof = {"baseline": refork.BASELINE, "database": "copy_candidate",
+                 "relay_state_sha256": "a" * 64, "adapter_tests_passed": True,
+                 "network_test": dict.fromkeys(flags, True)}
+        refork.validate_relay_evidence(proof, "copy_candidate", "a" * 64)
+        for database, digest in (("other_candidate", "a" * 64), ("production", "a" * 64),
+                                 ("copy_candidate", "b" * 64)):
+            with self.assertRaises(refork.Blocked):
+                refork.validate_relay_evidence(proof, database, digest)
+        for key in flags:
+            changed = dict(proof, network_test=dict(proof["network_test"], **{key: False}))
+            with self.assertRaises(refork.Blocked):
+                refork.validate_relay_evidence(changed, "copy_candidate", "a" * 64)
+        with self.assertRaises(refork.Blocked):
+            refork.validate_relay_evidence(dict(proof, adapter_tests_passed=False), "copy_candidate", "a" * 64)
+
     def test_trimspace_matches_go_not_python_c0(self):
         self.assertEqual(refork.checksum("\u2000SELECT 1;\r\n"), refork.checksum("SELECT 1;"))
         self.assertNotEqual(refork.checksum("\x1cSELECT 1;"), refork.checksum("SELECT 1;"))

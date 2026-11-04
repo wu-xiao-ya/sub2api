@@ -268,6 +268,27 @@ def expected_group_fields(row, actual):
     return expected
 
 
+def settings_rows_match(before, after, plan):
+    name = "206_channel_monitor_v2_privacy_defaults.sql"
+    reviewed = plan.get("reviewed_cleanup", {}).get(name) == checksum((MIGRATIONS / name).read_bytes())
+    actual = {row["key"]: row for row in after}
+    if len(actual) != len(after) or len(before) != len(after):
+        return False
+    for row in before:
+        current = actual.get(row["key"], {})
+        expected = dict(row)
+        # Exact reviewed official privacy correction; never a pricing exception.
+        if (reviewed and row["key"] == "channel_monitor_hide_throughput"
+                and str(row.get("value", "")).strip().lower() in ("false", "0", "off", "disabled")
+                and current.get("value") == "true"):
+            expected["value"] = "true"
+            if "updated_at" in expected and "updated_at" in current:
+                expected["updated_at"] = current["updated_at"]
+        if any(key not in current or current[key] != value for key, value in expected.items()):
+            return False
+    return True
+
+
 def usage_fingerprint(conn, columns=None):
     if not table_exists(conn, "usage_logs"):
         return None
@@ -294,15 +315,66 @@ def ledger(conn):
     return dict(conn.execute("SELECT filename, checksum FROM schema_migrations ORDER BY filename"))
 
 
+def relay_state_digest(conn):
+    accounts = list(conn.execute("SELECT id,use_relay_route,proxy_id FROM accounts WHERE use_relay_route ORDER BY id"))
+    settings = dict(conn.execute("SELECT key,value FROM settings WHERE key=ANY(%s) ORDER BY key",
+                                (["traffic_relay_enabled", "traffic_relay_proxy_id",
+                                  "traffic_relay_unavailable_ttl_seconds"],)))
+    try:
+        proxy_id = int(settings.get("traffic_relay_proxy_id", "0"))
+    except (ValueError, TypeError):
+        raise Blocked("relay proxy setting is invalid")
+    row = conn.execute("SELECT to_jsonb(p) FROM proxies p WHERE id=%s", (proxy_id,)).fetchone()
+    if settings.get("traffic_relay_enabled") != "true" or not row:
+        raise Blocked("relay opt-ins require an enabled proxy configuration")
+    proxy = row[0]
+    if proxy.get("protocol") != "http" or proxy.get("status") != "active":
+        raise Blocked("relay opt-ins require an active HTTP proxy")
+    return hashlib.sha256(safe_json({"accounts": accounts, "settings": settings,
+                                    "proxy": proxy}).encode("utf-8")).hexdigest()
+
+
+def validate_relay_evidence(proof, database, state_digest):
+    if "candidate" not in database.lower() or proof.get("database") != database:
+        raise Blocked("relay compatibility proof database mismatch")
+    if proof.get("baseline") != BASELINE or proof.get("relay_state_sha256") != state_digest:
+        raise Blocked("relay compatibility proof configuration mismatch")
+    if proof.get("adapter_tests_passed") is not True:
+        raise Blocked("relay adapter tests are not verified")
+    required = ("test_passed", "proxy_connect", "tls_verified", "origin_http_200",
+                "direct_egress_blocked", "host_services_blocked",
+                "temporary_policy_removed", "isolation_restored")
+    if any(proof.get("network_test", {}).get(key) is not True for key in required):
+        raise Blocked("controlled candidate relay network test is incomplete")
+
+
+def relay_compatibility(conn):
+    path = os.environ.get("REFORK_RELAY_PROOF")
+    if not path:
+        raise Blocked("legacy relay opt-ins require a verified egress adapter before migration")
+    try:
+        proof = load_archive(path)
+    except (OSError, ValueError):
+        raise Blocked("relay compatibility proof cannot be read")
+    database = conn.execute("SELECT current_database()").fetchone()[0]
+    digest = relay_state_digest(conn)
+    validate_relay_evidence(proof, database, digest)
+    return {"proof_sha256": proof["sha256"], "relay_state_sha256": digest}
+
+
 def checks(conn):
     problems = []
+    relay = None
     comparison = compare_ledgers(ledger(conn))
     problems += [f"checksum mismatch: {r['filename']}" for r in comparison
                  if r["status"] == "blocked_checksum"]
     if conn.execute("""SELECT EXISTS (SELECT 1 FROM information_schema.columns
         WHERE table_schema='public' AND table_name='accounts' AND column_name='use_relay_route')""").fetchone()[0]:
         if conn.execute("SELECT EXISTS (SELECT 1 FROM accounts WHERE use_relay_route)").fetchone()[0]:
-            problems.append("legacy relay opt-ins require a verified egress adapter before migration")
+            try:
+                relay = relay_compatibility(conn)
+            except Blocked as exc:
+                problems.append(str(exc))
     if table_exists(conn, "subscription_purchases"):
         count = conn.execute("""
             SELECT count(*) FROM subscription_purchases
@@ -353,7 +425,8 @@ def checks(conn):
         if re.search(r"\b(DELETE\s+FROM|DROP|TRUNCATE|UPDATE)\b", text, re.I):
             cleanup.append({"filename": name, "checksum": checksum(text)})
     return {"baseline": BASELINE, "applied_count": len(ledger(conn)),
-            "ledger": comparison, "cleanup_review": cleanup, "blockers": problems}
+            "ledger": comparison, "cleanup_review": cleanup, "blockers": problems,
+            "relay_compatibility": relay}
 
 
 def connect(read_only=False):
@@ -683,6 +756,8 @@ def do_audit(args):
             after = current.get(table)
             if table == "auth_cache_invalidation_outbox":
                 equal = invalidation_rows_match(before, after or [], archive["data"].get("api_keys", []))
+            elif table == "settings":
+                equal = settings_rows_match(before, after or [], archive["plan"])
             else:
                 equal = projected_rows_match(before, after or []) if isinstance(before, list) else after == before
             if not equal:

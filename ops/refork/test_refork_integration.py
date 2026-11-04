@@ -30,7 +30,7 @@ class MigrationRehearsal(unittest.TestCase):
             # Construct a pre-upgrade fixture in this disposable CI database.
             # These are NOT migration actions or instructions for a real copy.
             pending = [filename for filename in refork.official_ledger()
-                       if filename.startswith(("220_", "224_", "235_", "236_", "238_purge", "246_"))]
+                       if filename.startswith(("206_", "220_", "224_", "235_", "236_", "238_purge", "246_"))]
             conn.execute("DELETE FROM schema_migrations WHERE filename=ANY(%s)", (pending,))
             conn.execute("ALTER TABLE groups RENAME COLUMN model_allowlist TO models_list_config")
             conn.execute("""INSERT INTO schema_migrations (filename,checksum)
@@ -48,6 +48,15 @@ class MigrationRehearsal(unittest.TestCase):
                     '{"base_url":"https://example.invalid/v1","model_mapping":{"qwen-test":"upstream-test"}}',
                     '{"upstream_billing_manual_rate":0}')
                 RETURNING id""").fetchone()[0]
+            proxy_id = conn.execute("""INSERT INTO proxies(name,protocol,host,port,status)
+                VALUES ('synthetic-relay','http','127.0.0.1',38480,'active') RETURNING id""").fetchone()[0]
+            conn.execute("UPDATE accounts SET use_relay_route=true WHERE id=%s", (account_id,))
+            for key, value in (("traffic_relay_enabled", "true"),
+                               ("channel_monitor_hide_throughput", "false"),
+                               ("traffic_relay_proxy_id", str(proxy_id)),
+                               ("traffic_relay_unavailable_ttl_seconds", "45")):
+                conn.execute("""INSERT INTO settings(key,value) VALUES (%s,%s)
+                    ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value""", (key, value))
             gemini_group_id = conn.execute("""INSERT INTO groups(name,platform,allow_image_generation)
                 VALUES ('synthetic-gemini','gemini',false) RETURNING id""").fetchone()[0]
             conn.execute("INSERT INTO account_groups(account_id,group_id) VALUES (%s,%s)", (account_id, group_id))
@@ -71,7 +80,8 @@ class MigrationRehearsal(unittest.TestCase):
         env["REFORK_INIT_EMPTY"] = "false"
         env["REFORK_ARCHIVE_SHA256"] = "0" * 64
         self.assertNotEqual(subprocess.run([runner], env=env, capture_output=True).returncode, 0)
-        with tempfile.TemporaryDirectory() as folder, patch.dict(os.environ, DATABASE_URL=dsn):
+        with tempfile.TemporaryDirectory() as folder, patch.dict(os.environ, DATABASE_URL=dsn,
+                REFORK_RELAY_PROOF=str(Path(folder) / "relay-proof.json")):
             args = SimpleNamespace(candidate_database=name, runner=runner)
             with refork.connect() as conn:
                 conn.execute("INSERT INTO subscription_purchases(status,expires_at) VALUES ('active',now()+interval '1 day')")
@@ -79,6 +89,15 @@ class MigrationRehearsal(unittest.TestCase):
                 self.assertIn("active legacy subscription purchases exist", refork.checks(conn)["blockers"])
             with refork.connect() as conn:
                 conn.execute("DELETE FROM subscription_purchases")
+            with refork.connect(read_only=True) as conn:
+                self.assertIn("relay compatibility proof cannot be read", refork.checks(conn)["blockers"])
+                evidence = {"baseline": refork.BASELINE, "database": name,
+                    "relay_state_sha256": refork.relay_state_digest(conn), "adapter_tests_passed": True,
+                    "network_test": dict.fromkeys(("test_passed", "proxy_connect", "tls_verified",
+                        "origin_http_200", "direct_egress_blocked", "host_services_blocked",
+                        "temporary_policy_removed", "isolation_restored"), True)}
+                evidence["sha256"] = refork.archive_digest(evidence)
+                refork.write_private(os.environ["REFORK_RELAY_PROOF"], evidence)
             with refork.connect(read_only=True) as conn:
                 report = refork.checks(conn)
             self.assertEqual(report["blockers"], [])
@@ -140,6 +159,7 @@ class MigrationRehearsal(unittest.TestCase):
                 self.assertEqual(conn.execute("SELECT platform FROM accounts WHERE id=%s", (account_id,)).fetchone()[0], "openai")
                 self.assertFalse(conn.execute("SELECT allow_image_generation FROM groups WHERE id=%s",
                                               (gemini_group_id,)).fetchone()[0])
+                self.assertEqual(conn.execute("SELECT value FROM settings WHERE key='channel_monitor_hide_throughput'").fetchone()[0], "true")
                 for filename, digest in original_ledger.items():
                     self.assertEqual(refork.ledger(conn)[filename], digest)
             args.output = str(Path(folder) / "rerun-audit.json")

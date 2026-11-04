@@ -85,6 +85,21 @@ after official 246, so previously disabled Gemini/Antigravity groups remain
 disabled. The synthetic database rehearsal exercises both changes together
 with the full backup, migration, conversion and fail-closed audit sequence.
 
+Legacy relay opt-ins remain blocked unless `REFORK_RELAY_PROOF` references a
+private digest-protected proof for this exact candidate database and current
+account flags, proxy configuration and relay settings. Evidence must include
+adapter test success and a controlled candidate-network CONNECT/TLS test,
+blocked direct/host access, and successful restoration of network isolation.
+Changing that routing configuration invalidates the proof. This permits offline
+migration with preserved opt-ins; it does not accept the candidate application
+or replace end-to-end inference tests after application deployment.
+
+Audit permits the reviewed official 206 privacy correction only when its exact
+checksum is present in the archive's cleanup review: the existing throughput
+visibility setting may change from a documented false value to `true`, with its
+update timestamp. Currency, prices and all unrelated settings remain subject to
+exact comparison; this is not a general exception for settings changes.
+
 ## Blocking Data Compatibility Work
 
 The coordinator intentionally refuses writes while any of these remain:
