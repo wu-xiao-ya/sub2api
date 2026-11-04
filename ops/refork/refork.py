@@ -260,6 +260,14 @@ def expected_account_extra(row):
     return extra
 
 
+def expected_group_fields(row, actual):
+    expected = dict(row)
+    # Official 235/236 rename the legacy column; its value must still match.
+    if "models_list_config" in expected and "models_list_config" not in actual:
+        expected["model_allowlist"] = expected.pop("models_list_config")
+    return expected
+
+
 def usage_fingerprint(conn, columns=None):
     if not table_exists(conn, "usage_logs"):
         return None
@@ -615,6 +623,16 @@ def do_convert(args):
                 after = conn.execute("SELECT to_jsonb(t) FROM channels t WHERE id=%s", (entity_id,)).fetchone()[0]
                 record_conversion(conn, archive, "channels", entity_id, before, after)
         for original in archive["data"].get("groups", []):
+            # Official 246 enables images broadly. Preserve operator permissions.
+            if "allow_image_generation" in original:
+                before = conn.execute("SELECT allow_image_generation FROM groups WHERE id=%s FOR UPDATE",
+                                      (original["id"],)).fetchone()[0]
+                after = original["allow_image_generation"]
+                if before != after:
+                    record_conversion(conn, archive, "group_image_permission", original["id"],
+                                      {"allow_image_generation": before}, {"allow_image_generation": after})
+                    conn.execute("UPDATE groups SET allow_image_generation=%s WHERE id=%s",
+                                 (after, original["id"]))
             # Restore exactly the original values, including explicit free prices.
             fields = ("video_price_480p", "video_price_720p", "video_price_1080p", "video_model_prices")
             if all(key in original for key in fields):
@@ -680,7 +698,7 @@ def do_audit(args):
                 problems.append(f"identity set changed: {table}")
             for entity_id, row in before.items():
                 actual = after.get(entity_id, {})
-                expected = dict(row)
+                expected = expected_group_fields(row, actual) if table == "groups" else dict(row)
                 if row["platform"] in PLATFORMS:
                     expected["platform"] = PLATFORMS[row["platform"]]
                     if table == "groups":

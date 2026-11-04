@@ -77,6 +77,14 @@ on the restored production copy.
 The complete private report is generated with `compare-ledger`. It must NOT be
 committed. Schema hashes are not a substitute for schema or monetary validation.
 
+The production-copy review also covers official 235/236 renaming
+`groups.models_list_config` to `model_allowlist`: audit compares the preserved
+value under its new column name, while converted groups use their explicitly
+reviewed exact model scope. Conversion restores archived image permissions
+after official 246, so previously disabled Gemini/Antigravity groups remain
+disabled. The synthetic database rehearsal exercises both changes together
+with the full backup, migration, conversion and fail-closed audit sequence.
+
 ## Blocking Data Compatibility Work
 
 The coordinator intentionally refuses writes while any of these remain:

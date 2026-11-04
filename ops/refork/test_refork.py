@@ -69,6 +69,16 @@ class LedgerTests(unittest.TestCase):
         self.assertFalse(refork.projected_rows_match([], [{"id": 2}]))
         self.assertFalse(refork.projected_rows_match([{"id": 1, "price": None}], [{"id": 1}]))
 
+    def test_group_column_rename_preserves_config_and_detects_value_changes(self):
+        config = {"enabled": True, "models": ["explicit-model"]}
+        old = {"id": 1, "models_list_config": config}
+        actual = {"id": 1, "model_allowlist": config}
+        self.assertEqual(refork.expected_group_fields(old, actual), actual)
+        changed = {"id": 1, "model_allowlist": {}}
+        self.assertNotEqual(refork.expected_group_fields(old, changed), changed)
+        both = dict(actual, models_list_config=config)
+        self.assertEqual(refork.expected_group_fields(old, both), old)
+
     def test_cache_invalidation_can_only_append_known_keys_and_preserve_old_rows(self):
         known = refork.hashlib.sha256(b"synthetic-key").hexdigest()
         before = [{"id": 1, "cache_key": known, "attempts": 2}]

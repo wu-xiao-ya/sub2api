@@ -30,8 +30,9 @@ class MigrationRehearsal(unittest.TestCase):
             # Construct a pre-upgrade fixture in this disposable CI database.
             # These are NOT migration actions or instructions for a real copy.
             pending = [filename for filename in refork.official_ledger()
-                       if filename.startswith(("220_", "224_", "238_purge"))]
+                       if filename.startswith(("220_", "224_", "235_", "236_", "238_purge", "246_"))]
             conn.execute("DELETE FROM schema_migrations WHERE filename=ANY(%s)", (pending,))
+            conn.execute("ALTER TABLE groups RENAME COLUMN model_allowlist TO models_list_config")
             conn.execute("""INSERT INTO schema_migrations (filename,checksum)
                 VALUES ('233_backfill_and_freeze_native_subscriptions.sql',%s)""",
                          (refork.checksum("synthetic legacy fixture"),))
@@ -47,6 +48,8 @@ class MigrationRehearsal(unittest.TestCase):
                     '{"base_url":"https://example.invalid/v1","model_mapping":{"qwen-test":"upstream-test"}}',
                     '{"upstream_billing_manual_rate":0}')
                 RETURNING id""").fetchone()[0]
+            gemini_group_id = conn.execute("""INSERT INTO groups(name,platform,allow_image_generation)
+                VALUES ('synthetic-gemini','gemini',false) RETURNING id""").fetchone()[0]
             conn.execute("INSERT INTO account_groups(account_id,group_id) VALUES (%s,%s)", (account_id, group_id))
             key_id = conn.execute("""INSERT INTO api_keys(user_id,key,name,group_id)
                 VALUES (%s,'synthetic-only-key','fixture',%s) RETURNING id""", (user_id, group_id)).fetchone()[0]
@@ -135,6 +138,8 @@ class MigrationRehearsal(unittest.TestCase):
                 self.assertEqual(conn.execute("SELECT phase FROM refork_audit.checkpoint").fetchone()[0], "audited")
                 self.assertEqual(conn.execute("SELECT video_price_480p FROM groups WHERE id=%s", (group_id,)).fetchone()[0], 0)
                 self.assertEqual(conn.execute("SELECT platform FROM accounts WHERE id=%s", (account_id,)).fetchone()[0], "openai")
+                self.assertFalse(conn.execute("SELECT allow_image_generation FROM groups WHERE id=%s",
+                                              (gemini_group_id,)).fetchone()[0])
                 for filename, digest in original_ledger.items():
                     self.assertEqual(refork.ledger(conn)[filename], digest)
             args.output = str(Path(folder) / "rerun-audit.json")
