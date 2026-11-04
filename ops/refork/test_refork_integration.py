@@ -31,9 +31,17 @@ class MigrationRehearsal(unittest.TestCase):
             # Construct a pre-upgrade fixture in this disposable CI database.
             # These are NOT migration actions or instructions for a real copy.
             pending = [filename for filename in refork.official_ledger()
-                       if filename.startswith(("206_", "220_", "224_", "235_", "236_", "238_", "246_"))]
+                       if filename.startswith(("186_alipay_", "206_", "220_", "224_", "226_", "235_", "236_", "238_", "246_"))]
             conn.execute("DELETE FROM schema_migrations WHERE filename=ANY(%s)", (pending,))
             conn.execute("ALTER TABLE groups RENAME COLUMN model_allowlist TO models_list_config")
+            conn.execute("ALTER TABLE channel_monitors DROP CONSTRAINT channel_monitors_check_mode_check")
+            conn.execute("DELETE FROM settings WHERE key IN ('ALIPAY_MOBILE_PRECREATE_DEEP_LINK','channel_monitor_show_quota')")
+            # Reproduce a historic custom trigger, not the pinned official default.
+            conn.execute("""CREATE OR REPLACE FUNCTION public.enforce_openai_long_context_billing_extra()
+                RETURNS TRIGGER LANGUAGE plpgsql AS $$ BEGIN
+                IF NEW.platform='openai' AND NOT (COALESCE(NEW.extra,'{}'::jsonb) ? 'openai_long_context_billing_enabled') THEN
+                    NEW.extra=jsonb_set(COALESCE(NEW.extra,'{}'::jsonb),'{openai_long_context_billing_enabled}','true'::jsonb,true);
+                END IF; RETURN NEW; END $$""")
             conn.execute("""INSERT INTO schema_migrations (filename,checksum)
                 VALUES ('233_backfill_and_freeze_native_subscriptions.sql',%s)""",
                          (refork.checksum("synthetic legacy fixture"),))
@@ -162,6 +170,19 @@ class MigrationRehearsal(unittest.TestCase):
             with refork.connect(read_only=True) as conn:
                 self.assertEqual(conn.execute("SELECT count(*) FROM user_platform_quotas").fetchone()[0], 0)
                 self.assertIsNone(conn.execute("SELECT video_price_480p FROM groups WHERE id=%s", (group_id,)).fetchone()[0])
+            refork.do_convert(args)
+            with refork.connect(read_only=True) as conn:
+                self.assertIs(conn.execute("SELECT extra->'openai_long_context_billing_enabled' FROM accounts WHERE id=%s", (account_id,)).fetchone()[0], False)
+            # Synthetic previous-tool fixture: a recorded default, not operator drift.
+            with refork.connect() as conn:
+                conn.execute("UPDATE accounts SET extra=jsonb_set(extra,'{openai_long_context_billing_enabled}','true') WHERE id=%s", (account_id,))
+                conn.execute("""UPDATE refork_audit.conversions SET after_row=jsonb_set(after_row,
+                    '{extra,openai_long_context_billing_enabled}','true') WHERE entity='accounts' AND entity_id=%s""", (account_id,))
+                conn.execute("UPDATE accounts SET extra=jsonb_set(extra,'{unrelated_drift}','true') WHERE id=%s", (account_id,))
+            with self.assertRaises(refork.Blocked):
+                refork.do_convert(args)
+            with refork.connect() as conn:
+                conn.execute("UPDATE accounts SET extra=extra-'unrelated_drift' WHERE id=%s", (account_id,))
             refork.do_convert(args)
             refork.do_convert(args)
             with refork.connect() as conn:

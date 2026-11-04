@@ -6,6 +6,17 @@ import refork
 
 
 class LedgerTests(unittest.TestCase):
+    def test_new_official_settings_require_exact_pending_migration_and_default(self):
+        name = "226_channel_monitor_quota_mode.sql"
+        ledger = [{"filename": name, "status": "pending", "file_checksum": refork.checksum((refork.MIGRATIONS / name).read_bytes())}]
+        old = [{"key": "currency", "value": "USD"}]
+        new = old + [{"key": "channel_monitor_show_quota", "value": "false"}]
+        self.assertTrue(refork.settings_rows_match(old, new, {}, ledger))
+        self.assertFalse(refork.settings_rows_match(old, new, {}))
+        self.assertFalse(refork.settings_rows_match(old, old + [dict(new[1], value="true")], {}, ledger))
+        self.assertFalse(refork.settings_rows_match(old, old + [{"key": "unknown", "value": "false"}], {}, ledger))
+        self.assertFalse(refork.settings_rows_match(old, new, {}, [dict(ledger[0], status="match")]))
+
     def test_only_reviewed_official_privacy_default_can_change_settings(self):
         name = "206_channel_monitor_v2_privacy_defaults.sql"
         plan = {"reviewed_cleanup": {name: refork.checksum((refork.MIGRATIONS / name).read_bytes())}}

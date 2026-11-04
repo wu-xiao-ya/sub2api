@@ -257,8 +257,8 @@ def invalidation_rows_match(before, after, api_keys):
 
 def expected_account_extra(row):
     extra = dict(row.get("extra") or {})
-    # The official 175 trigger adds false when a legacy provider becomes openai.
-    # Accept only that exact addition, never arbitrary credentials/rate changes.
+    # A missing legacy flag must not acquire an OpenAI long-context surcharge.
+    # Historic custom triggers may default it to true; seed false explicitly.
     if row["platform"] in ("qwen", "mimo", "hunyuan"):
         extra.setdefault("openai_long_context_billing_enabled", False)
     return extra
@@ -272,12 +272,23 @@ def expected_group_fields(row, actual):
     return expected
 
 
-def settings_rows_match(before, after, plan):
+def settings_rows_match(before, after, plan, ledger=()):
     name = "206_channel_monitor_v2_privacy_defaults.sql"
     reviewed = plan.get("reviewed_cleanup", {}).get(name) == checksum((MIGRATIONS / name).read_bytes())
     actual = {row["key"]: row for row in after}
-    if len(actual) != len(after) or len(before) != len(after):
+    if len(actual) != len(after):
         return False
+    old_keys = {row["key"] for row in before}
+    additions = {
+        "ALIPAY_MOBILE_PRECREATE_DEEP_LINK": "186_alipay_mobile_precreate_deep_link.sql",
+        "channel_monitor_show_quota": "226_channel_monitor_quota_mode.sql",
+    }
+    pending = {row["filename"]: row.get("file_checksum") for row in ledger if row["status"] == "pending"}
+    for key in actual.keys() - old_keys:
+        migration = additions.get(key)
+        if (not migration or actual[key].get("value") != "false"
+                or pending.get(migration) != checksum((MIGRATIONS / migration).read_bytes())):
+            return False
     for row in before:
         current = actual.get(row["key"], {})
         expected = dict(row)
@@ -753,6 +764,7 @@ def do_convert(args):
                 raise Blocked("converted checkpoint has legacy group drift")
             if conn.execute("SELECT count(*) FROM accounts WHERE platform=ANY(%s)", (list(PLATFORMS),)).fetchone()[0]:
                 raise Blocked("converted checkpoint has legacy account drift")
+            repair_converted_long_context_defaults(conn, archive)
             print("conversion already committed; run audit")
             return
         conn.execute("""
@@ -775,7 +787,16 @@ def do_convert(args):
         for account_id, old in conn.execute("SELECT id, platform FROM accounts WHERE platform=ANY(%s) ORDER BY id FOR UPDATE",
                                            (list(PLATFORMS),)):
             before = conn.execute("SELECT to_jsonb(a) FROM accounts a WHERE id=%s", (account_id,)).fetchone()[0]
-            conn.execute("UPDATE accounts SET platform=%s WHERE id=%s", (PLATFORMS[old], account_id))
+            if old in ("qwen", "mimo", "hunyuan"):
+                original = next(row for row in archive["data"]["accounts"] if row["id"] == account_id)
+                flag = expected_account_extra(original)["openai_long_context_billing_enabled"]
+                if not isinstance(flag, bool):
+                    raise Blocked("legacy account has a non-boolean long-context billing flag")
+                conn.execute("""UPDATE accounts SET platform=%s,
+                    extra=jsonb_set(COALESCE(extra,'{}'::jsonb),'{openai_long_context_billing_enabled}',%s::jsonb,true)
+                    WHERE id=%s""", (PLATFORMS[old], safe_json(flag), account_id))
+            else:
+                conn.execute("UPDATE accounts SET platform=%s WHERE id=%s", (PLATFORMS[old], account_id))
             after = conn.execute("SELECT to_jsonb(a) FROM accounts a WHERE id=%s", (account_id,)).fetchone()[0]
             record_conversion(conn, archive, "accounts", account_id, before, after)
         for table in ("channel_model_pricing", "channel_account_stats_model_pricing"):
@@ -840,6 +861,33 @@ def record_conversion(conn, archive, entity, entity_id, before, after):
     """, (BASELINE, archive["sha256"], entity, entity_id, safe_json(before), safe_json(after)))
 
 
+def repair_converted_long_context_defaults(conn, archive):
+    key = "openai_long_context_billing_enabled"
+    for original in archive["data"].get("accounts", []):
+        if original["platform"] not in ("qwen", "mimo", "hunyuan") or key in (original.get("extra") or {}):
+            continue
+        row = conn.execute("SELECT to_jsonb(a) FROM accounts a WHERE id=%s FOR UPDATE", (original["id"],)).fetchone()
+        if row is None:
+            raise Blocked("converted account disappeared during billing-flag recovery")
+        actual = row[0]
+        if actual.get("extra", {}).get(key) is False:
+            continue
+        saved = conn.execute("""SELECT before_row,after_row FROM refork_audit.conversions
+            WHERE baseline=%s AND archive_sha256=%s AND entity='accounts' AND entity_id=%s""",
+            (BASELINE, archive["sha256"], original["id"])).fetchone()
+        if (actual.get("platform") != "openai" or actual.get("extra", {}).get(key) is not True
+                or saved is None or saved[1] != actual
+                or not projected_rows_match([original], [saved[0]])):
+            raise Blocked("converted account drift blocks billing-flag recovery")
+        conn.execute("""UPDATE accounts SET extra=jsonb_set(extra,
+            '{openai_long_context_billing_enabled}','false'::jsonb,true) WHERE id=%s""", (original["id"],))
+        flag = conn.execute("SELECT extra->'openai_long_context_billing_enabled' FROM accounts WHERE id=%s",
+                            (original["id"],)).fetchone()[0]
+        if flag is not False:
+            raise Blocked("account trigger prevents preserving legacy long-context billing")
+        record_conversion(conn, archive, "account_long_context_compat", original["id"], {key: True}, {key: False})
+
+
 def do_audit(args):
     archive = load_archive(args.archive)
     with connect() as conn:
@@ -860,7 +908,7 @@ def do_audit(args):
             if table == "auth_cache_invalidation_outbox":
                 equal = invalidation_rows_match(before, after or [], archive["data"].get("api_keys", []))
             elif table == "settings":
-                equal = settings_rows_match(before, after or [], archive["plan"])
+                equal = settings_rows_match(before, after or [], archive["plan"], archive["report"]["ledger"])
             else:
                 equal = projected_rows_match(before, after or []) if isinstance(before, list) else after == before
             if not equal:

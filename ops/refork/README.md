@@ -1,7 +1,7 @@
 # v0.2.18 Refork Candidate
 
 Pinned upstream: `ac1b8f1271be0d674fa6f074403c1410f30a3a81`.
-Branch: `codex/refork-v0.2.18-20261026`. Production cutover is not authorized.
+Branch: `codex/refork-v0.2.18-20261026`. Production traffic has not been switched.
 
 ## Current Status
 
@@ -10,27 +10,24 @@ This is a **draft implementation, not an accepted candidate**.
 - A normal independent checkout and a draft PR exist; fork main is unchanged.
 - Candidate CI builds the unmodified pinned baseline before testing modifications.
   It has no deployment steps and never writes production image tags.
-- Actions resumed after the fork-wide disabled warning was observed. The first
-  baseline run built the unmodified official frontend successfully, then failed
-  on an unnecessary copy command in the candidate workflow (official Vite already
-  writes directly into the backend embed directory). That command was removed.
-  The corrected pinned official baseline build passed in run 40330396250 and
-  uploaded artifact `official-v0.2.18-baseline` (artifact ID 12654457609).
-  The official CI on commit 5cd65246e also passed all its jobs.
-- Migration runner unit tests (including the existing official checksum/non-tx
-  suites) pass in a focused file-list invocation with Go 1.27.3.
-- Nineteen Python tests pass with a real local PostgreSQL 18.6 database:
+- Full candidate CI passed for `a56187fb` in run 41864794570: unmodified pinned
+  baseline, generated code consistency, backend unit/database integration,
+  frontend checks/tests/build, PostgreSQL rehearsal and isolated image build.
+  Later migration-tool refinements require their own CI result.
+- Twenty Python tests pass against Linux PostgreSQL, covering:
   empty initialization, complete backup and independent restore, archive-before-
   cleanup, interrupted runner recovery, idempotent reruns, zero video-price
-  preservation, platform/mapping/price conversion and fail-closed reconciliation.
-  These use synthetic fixtures, NOT a successful production-copy upgrade.
+  preservation, platform/mapping/price conversion, legacy provider constraints,
+  recorded billing-flag recovery and fail-closed reconciliation. These synthetic
+  tests do not substitute for the separate production-copy audit.
 - Finance ledger API/UI, image upstream cost settings/report adapters and manual
   upstream rate adapters are implemented but final integration validation is
-  pending. Code generation exposed missing upstream tool dependencies; their
-  exact checksums were added without changing application dependency versions.
-- Egress adapters, restored-copy migration, full frontend verification, candidate
-  deployment, complete billing regression, restore rehearsal and image digest
-  are NOT delivered.
+  pending. Image upstream-profit consistency and alternate relay paths are
+  deferred under the owner's user-availability priority.
+- Independent Linux backup/restore verification and controlled candidate-network
+  relay checks passed. Production-copy official upgrade and conversion have run;
+  full reconciliation is in progress. Upgraded application acceptance, protocol
+  and billing replay, payment/subscription checks and production cutover remain.
 - Requested gpt-6-luna agents received unreadable encrypted payloads. They were
   stopped; no delegated output was accepted and no model was substituted.
 
@@ -99,6 +96,17 @@ checksum is present in the archive's cleanup review: the existing throughput
 visibility setting may change from a documented false value to `true`, with its
 update timestamp. Currency, prices and all unrelated settings remain subject to
 exact comparison; this is not a general exception for settings changes.
+New settings rows are allowed only for the exact disabled defaults inserted by
+official 186 (Alipay mobile deep link) and 226 (monitor quota visibility), bound
+to the original archive's pending migration filename/checksum. Unknown additions,
+changed currency/prices or lost original settings still fail reconciliation.
+
+Converting Qwen/MiMo/Hunyuan accounts explicitly preserves any configured
+OpenAI long-context flag, or seeds `false` when the legacy provider had no flag.
+This prevents historic database triggers from introducing a new surcharge.
+Recovery of an earlier converted checkpoint only repairs an implicit `true`
+default when the entire current row matches its recorded conversion and the
+original archived row; it appends a repair record and rejects unrelated drift.
 
 Monitor configurations and request templates are archived as full structured
 rows. Before official provider constraints run, legacy providers are translated
