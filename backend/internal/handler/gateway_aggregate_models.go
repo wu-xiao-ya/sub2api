@@ -10,6 +10,9 @@ func (h *GatewayHandler) aggregateGroupModels(ctx context.Context, group *servic
 	if h == nil || h.gatewayService == nil || group == nil || !group.IsActive() {
 		return nil
 	}
+	if !h.gatewayService.AggregateGroupHasCapacity(ctx, group) {
+		return nil
+	}
 	var models []string
 	if group.Platform == service.PlatformComposite {
 		models = h.compositeAvailableModels(ctx, &group.ID, "", true)
