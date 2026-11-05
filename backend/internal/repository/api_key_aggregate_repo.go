@@ -26,7 +26,7 @@ func (r *apiKeyRepository) ListAggregateKeysByMemberID(ctx context.Context, memb
 		}
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var keys []string
 	for rows.Next() {
 		var key string
@@ -114,7 +114,7 @@ func (r *apiKeyRepository) loadKeyKinds(ctx context.Context, ids []int64) (map[i
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	out := make(map[int64]string, len(ids))
 	for rows.Next() {
 		var id int64
@@ -133,7 +133,7 @@ func (r *apiKeyRepository) loadAggregateMembers(ctx context.Context, aggregateID
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	type membership struct {
 		aggregateID int64
