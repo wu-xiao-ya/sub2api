@@ -66,6 +66,20 @@ export default {
 
   // API Keys
   keys: {
+    aggregate: {
+      create: "Create aggregate key",
+      label: "Aggregate",
+      memberCount: "{count} members",
+      members: "Member API keys",
+      hint: "Members are tried in order for the requested model. Use your own keys from different groups (up to 32). Member limits and group pricing still apply.",
+      selectMember: "Choose a member key",
+      add: "Add member",
+      moveUp: "Move up",
+      moveDown: "Move down",
+      remove: "Remove member",
+      loadFailed: "Unable to load member keys. Reopen this dialog to retry.",
+      invalidMembers: "Choose 1–32 keys from different groups.",
+    },
     title: 'API Keys',
     description: 'Manage your API keys and access tokens',
     searchPlaceholder: 'Search name or key...',

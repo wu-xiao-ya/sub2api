@@ -747,6 +747,11 @@ func (s *BillingCacheService) CheckBillingEligibility(ctx context.Context, user 
 	// API-key monetary windows from the database source of truth.
 	if s.cfg != nil && s.cfg.RunMode == config.RunModeSimple {
 		if s.cfg.SimpleModeKeyRateLimitEnabled {
+			if apiKey != nil && apiKey.RoutedMember != nil {
+				if err := s.checkSimpleModeAPIKeyRateLimits(ctx, apiKey.RoutedMember); err != nil {
+					return err
+				}
+			}
 			return s.checkSimpleModeAPIKeyRateLimits(ctx, apiKey)
 		}
 		return nil
@@ -775,6 +780,17 @@ func (s *BillingCacheService) CheckBillingEligibility(ctx context.Context, user 
 		}
 	}
 
+	if apiKey != nil && apiKey.RoutedMember != nil {
+		member := apiKey.RoutedMember
+		if !member.IsMemberUsable() {
+			return ErrAPIKeyQuotaExhausted
+		}
+		if member.HasRateLimits() {
+			if err := s.checkAPIKeyRateLimits(ctx, member); err != nil {
+				return err
+			}
+		}
+	}
 	// Check API Key rate limits (applies to both billing modes)
 	if apiKey != nil && apiKey.HasRateLimits() {
 		if err := s.checkAPIKeyRateLimits(ctx, apiKey); err != nil {
@@ -818,18 +834,27 @@ func (s *BillingCacheService) ReserveFixedCharge(ctx context.Context, user *User
 	if err != nil {
 		return nil, err
 	}
-	var subscriptionPending, apiKeyPending float64
+	var subscriptionPending, apiKeyPending, memberPending float64
 	if subscriptionBill && (group.HasDailyLimit() || group.HasWeeklyLimit() || group.HasMonthlyLimit()) {
 		res, subscriptionPending = s.reserveInflightScope(ctx, res, user.ID, inflightSubscriptionScope(subscription.ID), amount)
 	}
 	if apiKey != nil && (apiKey.Quota > 0 || apiKey.HasRateLimits()) {
 		res, apiKeyPending = s.reserveInflightScope(ctx, res, user.ID, inflightAPIKeyScope(apiKey.ID), amount)
 	}
+	if apiKey != nil && apiKey.RoutedMember != nil {
+		member := apiKey.RoutedMember
+		if member.Quota > 0 || member.HasRateLimits() {
+			res, memberPending = s.reserveInflightScope(ctx, res, user.ID, inflightAPIKeyScope(member.ID), amount)
+		}
+	}
 	if subscriptionBill {
 		err = s.checkFixedChargeSubscription(ctx, user.ID, group, amount+subscriptionPending)
 	}
 	if err == nil && apiKey != nil {
 		err = s.checkFixedChargeAPIKey(ctx, apiKey, amount+apiKeyPending)
+	}
+	if err == nil && apiKey != nil && apiKey.RoutedMember != nil {
+		err = s.checkFixedChargeAPIKey(ctx, apiKey.RoutedMember, amount+memberPending)
 	}
 	if err != nil {
 		res.Release()

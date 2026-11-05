@@ -14,7 +14,7 @@ import (
 	"github.com/dgraph-io/ristretto"
 )
 
-const apiKeyAuthSnapshotVersion = 24 // v24: group model_allowlist field (renamed from models_list_config, enforcing semantics)
+const apiKeyAuthSnapshotVersion = 25 // v25: key kind; aggregate members are refreshed outside the cache
 
 type apiKeyAuthCacheConfig struct {
 	l1Size        int
@@ -337,6 +337,7 @@ func (s *APIKeyService) snapshotFromAPIKey(ctx context.Context, apiKey *APIKey) 
 	}
 	snapshot := &APIKeyAuthSnapshot{
 		Version:     apiKeyAuthSnapshotVersion,
+		KeyKind:     apiKey.KeyKind,
 		APIKeyID:    apiKey.ID,
 		UserID:      apiKey.UserID,
 		GroupID:     apiKey.GroupID,
@@ -445,6 +446,7 @@ func (s *APIKeyService) snapshotToAPIKey(key string, snapshot *APIKeyAuthSnapsho
 		return nil
 	}
 	apiKey := &APIKey{
+		KeyKind:     snapshot.KeyKind,
 		ID:          snapshot.APIKeyID,
 		UserID:      snapshot.UserID,
 		GroupID:     snapshot.GroupID,

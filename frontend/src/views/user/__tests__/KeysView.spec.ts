@@ -297,6 +297,29 @@ describe('user KeysView column settings', () => {
     isCurrentStep.mockReturnValue(false)
   })
 
+  it('creates an ordered aggregate key without a group binding', async () => {
+    const a = { ...createApiKey(), id: 11, group_id: 1, name: 'member-a' }
+    const b = { ...createApiKey(), id: 12, group_id: 2, name: 'member-b' }
+    const root = { ...createApiKey(), id: 13, key_kind: 'aggregate' as const, members: [] }
+    listKeys.mockResolvedValue({ items: [a, b, root], total: 3, page: 1, page_size: 100, pages: 1 })
+    const wrapper = await mountView()
+    await wrapper.get('[data-testid="create-aggregate-key"]').trigger('click')
+    await flushPromises()
+    const picker = wrapper.get('[data-testid="aggregate-members"]').findComponent({ name: 'Select' })
+    expect(picker.props('options').map((option: { value: number }) => option.value)).toEqual([11, 12])
+    picker.vm.$emit('update:modelValue', 12)
+    await nextTick()
+    await getButtonByText(wrapper, 'keys.aggregate.add').trigger('click')
+    picker.vm.$emit('update:modelValue', 11)
+    await nextTick()
+    await getButtonByText(wrapper, 'keys.aggregate.add').trigger('click')
+    await wrapper.get('[data-tour="key-form-name"]').setValue('My aggregate')
+    await wrapper.get('#key-form').trigger('submit')
+    await flushPromises()
+    expect(keysAPI.create).toHaveBeenCalledWith('My aggregate', undefined, undefined, [], [], 0, undefined, expect.any(Object), { key_kind: 'aggregate', member_key_ids: [12, 11] })
+    wrapper.unmount()
+  })
+
   it.each([
     { initialStatus: 'quota_exhausted', status: 'active', formStatus: 'active' },
     { initialStatus: 'inactive', status: 'inactive', formStatus: 'inactive' },

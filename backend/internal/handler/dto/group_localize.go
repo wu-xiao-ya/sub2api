@@ -18,6 +18,9 @@ func (g *Group) Localized(acceptLanguage string) *Group {
 func (k *APIKey) Localized(acceptLanguage string) *APIKey {
 	if k != nil {
 		k.Group.Localized(acceptLanguage)
+		for i := range k.Members {
+			k.Members[i].Group.Localized(acceptLanguage)
+		}
 	}
 	return k
 }

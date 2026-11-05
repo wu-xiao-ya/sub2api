@@ -37,11 +37,14 @@ type UsageBillingCommand struct {
 	ImageCount          int
 	MediaType           string
 
-	BalanceCost         float64
-	SubscriptionCost    float64
-	APIKeyQuotaCost     float64
-	APIKeyRateLimitCost float64
-	AccountQuotaCost    float64
+	BalanceCost               float64
+	SubscriptionCost          float64
+	APIKeyQuotaCost           float64
+	APIKeyRateLimitCost       float64
+	RoutedMemberKeyID         int64
+	RoutedMemberQuotaCost     float64
+	RoutedMemberRateLimitCost float64
+	AccountQuotaCost          float64
 
 	// AccountQuotaHasDailyLimit / AccountQuotaHasWeeklyLimit 记录构造命令时账号是否设置了日/周上限，
 	// 只用于选择账号配额累加语句，不参与幂等指纹；实际累加哪些维度以数据库中的账号配置为准。
@@ -91,6 +94,8 @@ func (c *UsageBillingCommand) quantizeMonetaryFields() {
 	c.APIKeyQuotaCost = QuantizeUsageBillingAmount(c.APIKeyQuotaCost)
 	c.APIKeyRateLimitCost = QuantizeUsageBillingAmount(c.APIKeyRateLimitCost)
 	c.AccountQuotaCost = QuantizeUsageBillingAmount(c.AccountQuotaCost)
+	c.RoutedMemberQuotaCost = QuantizeUsageBillingAmount(c.RoutedMemberQuotaCost)
+	c.RoutedMemberRateLimitCost = QuantizeUsageBillingAmount(c.RoutedMemberRateLimitCost)
 }
 
 // QuantizeUsageBillingAmount 把金额舍入到 UsageBillingMonetaryScale 位小数，
@@ -134,6 +139,9 @@ func buildUsageBillingFingerprint(c *UsageBillingCommand) string {
 		c.APIKeyRateLimitCost,
 		c.AccountQuotaCost,
 	)
+	if c.RoutedMemberKeyID > 0 {
+		raw += fmt.Sprintf("|aggregate:%d|%0.10f|%0.10f", c.RoutedMemberKeyID, c.RoutedMemberQuotaCost, c.RoutedMemberRateLimitCost)
+	}
 	if payloadHash := strings.TrimSpace(c.RequestPayloadHash); payloadHash != "" {
 		raw += "|" + payloadHash
 	}
@@ -168,11 +176,12 @@ type AccountQuotaState struct {
 }
 
 type UsageBillingApplyResult struct {
-	Applied              bool
-	APIKeyQuotaExhausted bool
-	NewBalance           *float64           // post-deduction balance (nil = no balance deduction)
-	BalanceOverdrafted   bool               // true when the sufficient-balance guard missed and debt was still recorded
-	QuotaState           *AccountQuotaState // post-increment quota state (nil = no quota increment)
+	Applied                    bool
+	RoutedMemberQuotaExhausted bool
+	APIKeyQuotaExhausted       bool
+	NewBalance                 *float64           // post-deduction balance (nil = no balance deduction)
+	BalanceOverdrafted         bool               // true when the sufficient-balance guard missed and debt was still recorded
+	QuotaState                 *AccountQuotaState // post-increment quota state (nil = no quota increment)
 }
 
 // BatchImageBalanceHoldCommand describes an idempotent balance hold operation.

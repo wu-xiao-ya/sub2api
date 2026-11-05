@@ -1147,6 +1147,10 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 // Falls back to default models if no whitelist is configured
 func (h *GatewayHandler) Models(c *gin.Context) {
 	apiKey, _ := middleware2.GetAPIKeyFromContext(c)
+	if apiKey != nil && apiKey.IsAggregate() {
+		writeModelsList(c, service.PlatformOpenAI, h.aggregateModels(c.Request.Context(), apiKey))
+		return
+	}
 
 	var groupID *int64
 	var platform string
@@ -1223,6 +1227,16 @@ func (h *GatewayHandler) Models(c *gin.Context) {
 // OpenAIGatewayHandler.CodexModels so their live upstream metadata is preserved.
 func (h *GatewayHandler) CodexModels(c *gin.Context) {
 	apiKey, ok := middleware2.GetAPIKeyFromContext(c)
+	if ok && apiKey != nil && apiKey.IsAggregate() {
+		models := h.aggregateModels(c.Request.Context(), apiKey)
+		body, err := h.gatewayService.BuildCodexModelsManifestForGroup(c.Request.Context(), nil, "", models)
+		if err != nil {
+			h.errorResponse(c, http.StatusInternalServerError, "api_error", "Failed to build aggregate models manifest")
+			return
+		}
+		c.Data(http.StatusOK, "application/json", body)
+		return
+	}
 	if !ok || apiKey == nil || apiKey.Group == nil {
 		h.errorResponse(c, http.StatusUnauthorized, "invalid_request_error", "API key group is required")
 		return

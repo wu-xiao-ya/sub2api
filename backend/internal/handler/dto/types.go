@@ -53,22 +53,32 @@ type AdminUser struct {
 	RestrictPublicGroups bool `json:"restrict_public_groups"`
 }
 
+type APIKeyMember struct {
+	ID      int64  `json:"id"`
+	Name    string `json:"name"`
+	GroupID *int64 `json:"group_id"`
+	Status  string `json:"status"`
+	Group   *Group `json:"group,omitempty"`
+}
+
 type APIKey struct {
-	ID          int64      `json:"id"`
-	UserID      int64      `json:"user_id"`
-	Key         string     `json:"key"`
-	Name        string     `json:"name"`
-	GroupID     *int64     `json:"group_id"`
-	Status      string     `json:"status"`
-	IPWhitelist []string   `json:"ip_whitelist"`
-	IPBlacklist []string   `json:"ip_blacklist"`
-	LastUsedAt  *time.Time `json:"last_used_at"`
-	LastUsedIP  *string    `json:"last_used_ip"`
-	Quota       float64    `json:"quota"`      // Quota limit in USD (0 = unlimited)
-	QuotaUsed   float64    `json:"quota_used"` // Used quota amount in USD
-	ExpiresAt   *time.Time `json:"expires_at"` // Expiration time (nil = never expires)
-	CreatedAt   time.Time  `json:"created_at"`
-	UpdatedAt   time.Time  `json:"updated_at"`
+	KeyKind     string         `json:"key_kind"`
+	Members     []APIKeyMember `json:"members,omitempty"`
+	ID          int64          `json:"id"`
+	UserID      int64          `json:"user_id"`
+	Key         string         `json:"key"`
+	Name        string         `json:"name"`
+	GroupID     *int64         `json:"group_id"`
+	Status      string         `json:"status"`
+	IPWhitelist []string       `json:"ip_whitelist"`
+	IPBlacklist []string       `json:"ip_blacklist"`
+	LastUsedAt  *time.Time     `json:"last_used_at"`
+	LastUsedIP  *string        `json:"last_used_ip"`
+	Quota       float64        `json:"quota"`      // Quota limit in USD (0 = unlimited)
+	QuotaUsed   float64        `json:"quota_used"` // Used quota amount in USD
+	ExpiresAt   *time.Time     `json:"expires_at"` // Expiration time (nil = never expires)
+	CreatedAt   time.Time      `json:"created_at"`
+	UpdatedAt   time.Time      `json:"updated_at"`
 	// CurrentConcurrency is the real-time active request count for this API key.
 	CurrentConcurrency int `json:"current_concurrency"`
 

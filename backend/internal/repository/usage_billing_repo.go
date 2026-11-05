@@ -202,6 +202,22 @@ func (r *usageBillingRepository) applyUsageBillingEffects(ctx context.Context, t
 		}
 	}
 
+	// Member accounting belongs to this same deduplicated transaction. It
+	// increments key counters only; the user's wallet/subscription is charged once.
+	if cmd.RoutedMemberKeyID > 0 && cmd.RoutedMemberKeyID != cmd.APIKeyID {
+		if cmd.RoutedMemberQuotaCost > 0 {
+			exhausted, err := incrementUsageBillingAPIKeyQuota(ctx, tx, cmd.RoutedMemberKeyID, cmd.RoutedMemberQuotaCost)
+			if err != nil && !errors.Is(err, service.ErrAPIKeyNotFound) {
+				return err
+			}
+			result.RoutedMemberQuotaExhausted = exhausted
+		}
+		if cmd.RoutedMemberRateLimitCost > 0 {
+			if err := incrementUsageBillingAPIKeyRateLimit(ctx, tx, cmd.RoutedMemberKeyID, cmd.RoutedMemberRateLimitCost); err != nil && !errors.Is(err, service.ErrAPIKeyNotFound) {
+				return err
+			}
+		}
+	}
 	// 账号已不存在时跳过其配额计数，其余结算项不受影响。
 	if cmd.AccountQuotaCost > 0 && service.AccountTypeSupportsQuota(cmd.AccountType) {
 		quotaState, err := incrementUsageBillingAccountQuota(ctx, tx, cmd.AccountID, cmd.AccountQuotaCost, cmd.AccountQuotaHasDailyLimit, cmd.AccountQuotaHasWeeklyLimit)
