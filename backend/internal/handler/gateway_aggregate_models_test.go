@@ -18,7 +18,7 @@ func TestAggregateSkipsUnavailableGroupsInsteadOfAdvertisingDefaultModels(t *tes
 	ctx := context.Background()
 	emptyID, disabledID, limitedID, healthyID := int64(1), int64(2), int64(3), int64(4)
 	future := time.Now().Add(time.Hour)
-	account := service.Account{ID: 10, Platform: service.PlatformOpenAI, Type: service.AccountTypeAPIKey, Status: service.StatusActive, Schedulable: true, Credentials: map[string]any{"model_mapping": map[string]string{"gpt-6.1-sol": "gpt-6.1-sol"}}}
+	account := service.Account{ID: 10, Platform: service.PlatformOpenAI, Type: service.AccountTypeAPIKey, Status: service.StatusActive, Schedulable: true, Credentials: map[string]any{"model_mapping": map[string]any{"gpt-6.1-sol": "gpt-6.1-sol"}}}
 	disabled := account
 	disabled.Schedulable = false
 	limited := account
