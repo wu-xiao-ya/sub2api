@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 	"github.com/stretchr/testify/require"
 	"testing"
 	"time"
@@ -16,6 +17,7 @@ func TestAggregateBillingDeduplicatesBothKeysAndChargesWalletOnce(t *testing.T) 
 	ctx := context.Background()
 	client := testEntClient(t)
 	user := mustCreateUser(t, client, &service.User{Email: fmt.Sprintf("aggregate-%d@example.com", time.Now().UnixNano()), PasswordHash: "hash", Balance: 100})
+	t.Cleanup(func() { cleanupAggregateFixtures(t, []int64{user.ID}, nil) })
 	root := mustCreateApiKey(t, client, &service.APIKey{UserID: user.ID, Key: "sk-" + uuid.NewString(), Name: "aggregate", Quota: 10})
 	member := mustCreateApiKey(t, client, &service.APIKey{UserID: user.ID, Key: "sk-" + uuid.NewString(), Name: "member", Quota: 1})
 	repo := NewUsageBillingRepository(client, integrationDB)
@@ -67,8 +69,11 @@ func TestAggregateMembershipWritesPreserveOrderAndRejectForeignKeysAtomically(t 
 	client := testEntClient(t)
 	user := mustCreateUser(t, client, &service.User{Email: fmt.Sprintf("aggregate-meta-%d@example.com", time.Now().UnixNano()), PasswordHash: "hash"})
 	other := mustCreateUser(t, client, &service.User{Email: fmt.Sprintf("aggregate-other-%d@example.com", time.Now().UnixNano()), PasswordHash: "hash"})
+	var groupIDs []int64
+	t.Cleanup(func() { cleanupAggregateFixtures(t, []int64{user.ID, other.ID}, groupIDs) })
 	group := mustCreateGroup(t, client, &service.Group{Name: "aggregate-" + uuid.NewString(), Platform: service.PlatformOpenAI})
 	group2 := mustCreateGroup(t, client, &service.Group{Name: "aggregate-" + uuid.NewString(), Platform: service.PlatformAnthropic})
+	groupIDs = []int64{group.ID, group2.ID}
 	a := mustCreateApiKey(t, client, &service.APIKey{UserID: user.ID, GroupID: &group.ID, Key: "sk-" + uuid.NewString(), Name: "a"})
 	b := mustCreateApiKey(t, client, &service.APIKey{UserID: user.ID, GroupID: &group2.ID, Key: "sk-" + uuid.NewString(), Name: "b"})
 	foreign := mustCreateApiKey(t, client, &service.APIKey{UserID: other.ID, GroupID: &group.ID, Key: "sk-" + uuid.NewString(), Name: "foreign"})
@@ -91,4 +96,20 @@ func TestAggregateMembershipWritesPreserveOrderAndRejectForeignKeysAtomically(t 
 	got, err = repo.GetByID(ctx, root.ID)
 	require.NoError(t, err)
 	require.Equal(t, []int64{a.ID, b.ID}, got.MemberIDs())
+}
+
+// The integration harness is shared with suites that assert exact platform
+// catalogs, so these fixtures must not survive into another repository test.
+func cleanupAggregateFixtures(t *testing.T, userIDs, groupIDs []int64) {
+	t.Helper()
+	_, err := integrationDB.Exec("DELETE FROM usage_billing_dedup WHERE api_key_id IN (SELECT id FROM api_keys WHERE user_id = ANY($1))", pq.Array(userIDs))
+	require.NoError(t, err)
+	_, err = integrationDB.Exec("DELETE FROM api_keys WHERE user_id = ANY($1)", pq.Array(userIDs))
+	require.NoError(t, err)
+	if len(groupIDs) > 0 {
+		_, err = integrationDB.Exec("DELETE FROM groups WHERE id = ANY($1)", pq.Array(groupIDs))
+		require.NoError(t, err)
+	}
+	_, err = integrationDB.Exec("DELETE FROM users WHERE id = ANY($1)", pq.Array(userIDs))
+	require.NoError(t, err)
 }
