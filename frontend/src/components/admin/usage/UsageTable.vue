@@ -157,6 +157,7 @@
           <!-- Token 请求 -->
           <div v-else class="flex items-center gap-1.5">
             <div class="space-y-1 text-sm">
+              <CacheRateLabel :numerator="row.cache_read_tokens || 0" :denominator="(row.input_tokens || 0) + (row.cache_read_tokens || 0) + (row.cache_creation_tokens || 0)" />
               <div class="flex items-center gap-2">
                 <div class="inline-flex items-center gap-1">
                   <Icon name="arrowDown" size="sm" class="h-3.5 w-3.5 text-emerald-500" />
@@ -586,6 +587,7 @@ import DataTable from '@/components/common/DataTable.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import IpGeoCell from '@/components/common/IpGeoCell.vue'
 import Icon from '@/components/icons/Icon.vue'
+import CacheRateLabel from '@/components/common/CacheRateLabel.vue'
 import { fetchBatch, getEntry } from '@/utils/ipGeoLookup'
 import type { AdminUsageLog } from '@/types'
 import type { Column } from '@/components/common/types'

@@ -56,6 +56,7 @@
             </span>
           </span>
         </p>
+        <CacheRateLabel :numerator="stats?.total_cache_read_tokens || 0" :denominator="(stats?.total_input_tokens || 0) + (stats?.total_cache_read_tokens || 0) + (stats?.total_cache_creation_tokens || 0)" />
       </div>
     </div>
     <div class="card p-4 flex items-center gap-3">
@@ -94,6 +95,7 @@ import { useI18n } from 'vue-i18n'
 import type { AdminUsageStatsResponse } from '@/api/admin/usage'
 import type { UsageStatsResponse } from '@/types'
 import Icon from '@/components/icons/Icon.vue'
+import CacheRateLabel from '@/components/common/CacheRateLabel.vue'
 
 const props = withDefaults(defineProps<{
   stats: (AdminUsageStatsResponse | UsageStatsResponse) | null
