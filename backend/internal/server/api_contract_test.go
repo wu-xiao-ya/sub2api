@@ -353,6 +353,7 @@ func TestAPIContracts(t *testing.T) {
 					{
 						"id": 10,
 						"name": "Group One",
+						"upstream_provider": "",
 						"description": "desc",
 						"platform": "anthropic",
 						"rate_multiplier": 1.5,

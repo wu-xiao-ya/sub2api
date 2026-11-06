@@ -50,7 +50,7 @@
                 <GroupBadge
                   v-if="k.group"
                   :name="k.group.name"
-                  :platform="k.group.platform"
+                  :platform="k.group.platform" :upstream-provider="k.group.upstream_provider"
                   :subscription-type="k.group.subscription_type"
                   :rate-multiplier="k.group.rate_multiplier"
                   :user-rate-multiplier="userGroupRates[k.group.id]"

@@ -1,5 +1,8 @@
 export default {
   common: {
+    upstreamProvider: '上游供应商品牌',
+    upstreamProviderHint: '仅用于品牌展示和国模分类；转发协议、地址和计费配置保持独立。',
+    upstreamProviderDefault: '默认 / OpenAI',
     loading: '加载中...',
     submitting: '提交中...',
     justNow: '刚刚',

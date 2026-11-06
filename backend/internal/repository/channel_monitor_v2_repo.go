@@ -132,11 +132,11 @@ func (r *channelMonitorV2Repository) GetDimensions(ctx context.Context, filter s
 	// group allow-list, display-model collapse) still applies.
 	catalogFilter := channelMonitorV2CatalogFilter(channelMonitorV2CommonCoverageFilter(filter, *coverage))
 	where, args, _ := channelMonitorV2WhereWithRollup(catalogFilter, cfg, "m")
-	query := `SELECT m.platform, COALESCE(g.name, ''), lower(COALESCE(NULLIF(TRIM(g.platform), ''), 'unknown')), m.group_id, m.model,
+	query := `SELECT m.platform, COALESCE(g.name, ''), lower(COALESCE(NULLIF(TRIM(g.platform), ''), 'unknown')), COALESCE(g.upstream_provider,''), m.group_id, m.model,
 	                 SUM(m.success_requests + m.error_requests)
 	          FROM ` + channelMonitorV2MetricsTable(catalogFilter) + ` m
 	          LEFT JOIN groups g ON g.id = NULLIF(m.group_id, 0) ` + where + `
-	          GROUP BY m.platform, g.name, g.platform, m.group_id, m.model`
+	          GROUP BY m.platform, g.name, g.platform, g.upstream_provider, m.group_id, m.model`
 	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
@@ -151,6 +151,7 @@ func (r *channelMonitorV2Repository) GetDimensions(ctx context.Context, filter s
 	// different upstream models and must not share counts.
 	modelCounts := map[string]modelValue{}
 	type groupValue struct {
+		provider string
 		name     string
 		platform string
 		count    int64
@@ -172,12 +173,12 @@ func (r *channelMonitorV2Repository) GetDimensions(ctx context.Context, filter s
 		return nil, err
 	}
 	for groupID, info := range groupInfo {
-		groupCounts[groupID] = groupValue{name: info.name, platform: info.platform, count: 0}
+		groupCounts[groupID] = groupValue{name: info.name, platform: info.platform, provider: info.provider, count: 0}
 	}
 	for rows.Next() {
-		var platform, groupName, groupPlatform, model string
+		var platform, groupName, groupPlatform, provider, model string
 		var groupID, count int64
-		if err := rows.Scan(&platform, &groupName, &groupPlatform, &groupID, &model, &count); err != nil {
+		if err := rows.Scan(&platform, &groupName, &groupPlatform, &provider, &groupID, &model, &count); err != nil {
 			return nil, err
 		}
 		platformCounts[platform] += count
@@ -193,6 +194,7 @@ func (r *channelMonitorV2Repository) GetDimensions(ctx context.Context, filter s
 			current := groupCounts[groupID]
 			current.name = groupName
 			current.platform = groupPlatform
+			current.provider = provider
 			current.count += count
 			groupCounts[groupID] = current
 		}
@@ -209,7 +211,7 @@ func (r *channelMonitorV2Repository) GetDimensions(ctx context.Context, filter s
 		result.Models = append(result.Models, service.ChannelMonitorV2Dimension{Value: value, Label: channelMonitorV2ModelLabel(value), Platform: meta.platform, RequestCount: meta.count})
 	}
 	for id, value := range groupCounts {
-		result.Groups = append(result.Groups, service.ChannelMonitorV2GroupDimension{ID: id, Name: value.name, Platform: value.platform, RequestCount: value.count})
+		result.Groups = append(result.Groups, service.ChannelMonitorV2GroupDimension{ID: id, Name: value.name, Platform: value.platform, UpstreamProvider: value.provider, RequestCount: value.count})
 	}
 	sort.Slice(result.Platforms, func(i, j int) bool { return result.Platforms[i].RequestCount > result.Platforms[j].RequestCount })
 	sort.Slice(result.Models, func(i, j int) bool { return result.Models[i].RequestCount > result.Models[j].RequestCount })
@@ -638,6 +640,7 @@ func channelMonitorV2RestrictedGroupScopeEmpty(filter service.ChannelMonitorV2Fi
 }
 
 type channelMonitorV2GroupInfo struct {
+	provider string
 	name     string
 	platform string
 }
@@ -664,18 +667,18 @@ func (r *channelMonitorV2Repository) loadChannelMonitorV2GroupInfo(ctx context.C
 	if len(groupIDs) == 0 {
 		return out, nil
 	}
-	rows, err := r.db.QueryContext(ctx, `SELECT id, COALESCE(name, ''), lower(COALESCE(NULLIF(TRIM(platform), ''), 'unknown')) FROM groups WHERE id = ANY($1) AND deleted_at IS NULL AND status = 'active'`, pq.Array(groupIDs))
+	rows, err := r.db.QueryContext(ctx, `SELECT id, COALESCE(name, ''), lower(COALESCE(NULLIF(TRIM(platform), ''), 'unknown')), upstream_provider FROM groups WHERE id = ANY($1) AND deleted_at IS NULL AND status = 'active'`, pq.Array(groupIDs))
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = rows.Close() }()
 	for rows.Next() {
 		var id int64
-		var name, platform string
-		if err := rows.Scan(&id, &name, &platform); err != nil {
+		var name, platform, provider string
+		if err := rows.Scan(&id, &name, &platform, &provider); err != nil {
 			return nil, err
 		}
-		out[id] = channelMonitorV2GroupInfo{name: name, platform: platform}
+		out[id] = channelMonitorV2GroupInfo{name: name, platform: platform, provider: provider}
 	}
 	return out, rows.Err()
 }

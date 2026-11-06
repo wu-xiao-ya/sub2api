@@ -176,7 +176,7 @@ export interface MonitorMatrixResponse {
 
 export interface MonitorDimensions {
   platforms: Array<{ value: string; label: string; request_count: number }>
-  groups: Array<{ id: number; name: string; platform?: string; request_count: number }>
+  groups: Array<{ id: number; name: string; platform?: string; upstream_provider?: string; request_count: number }>
   models: Array<{ value: string; label: string; platform?: string; request_count: number }>
 }
 

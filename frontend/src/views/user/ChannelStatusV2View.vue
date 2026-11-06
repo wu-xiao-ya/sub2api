@@ -459,6 +459,7 @@
 </template>
 
 <script setup lang="ts">
+import { groupBrandLabel } from '@/utils/groupBrand'
 import { useI18n } from 'vue-i18n'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -592,7 +593,7 @@ const groupOptions = computed(() =>
     )
     .map((item) => ({
       value: String(item.id),
-      label: item.platform ? `${item.platform} / ${item.name || `#${item.id}`}` : item.name || `#${item.id}`,
+      label: item.platform ? `${groupBrandLabel(item)} / ${item.name || `#${item.id}`}` : item.name || `#${item.id}`,
     }))
 )
 const modelOptions = computed(() =>
@@ -654,7 +655,10 @@ const bootstrapPercent = computed(() => {
   return Math.min(100, Math.max(0, Math.round(raw)))
 })
 const matrixRows = computed(() => {
-  const items = matrix.value?.items || []
+  const items = (matrix.value?.items || []).map(row => {
+    const group = dimensions.value.groups.find(group => group.id === row.group_id)
+    return group?.upstream_provider ? { ...row, group_name: `${groupBrandLabel(group)} / ${row.group_name || group.name}` } : row
+  })
   // platform_group views should only show real groups, never bare platform placeholders.
   if (matrixGroupBy.value === 'platform_group' || matrixGroupBy.value === 'platform_group_model') {
     return items.filter((row) => row.group_id != null && Number(row.group_id) > 0)

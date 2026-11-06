@@ -210,6 +210,20 @@ func (_c *GroupCreate) SetNillableDuplicateOperationID(v *string) *GroupCreate {
 	return _c
 }
 
+// SetUpstreamProvider sets the "upstream_provider" field.
+func (_c *GroupCreate) SetUpstreamProvider(v string) *GroupCreate {
+	_c.mutation.SetUpstreamProvider(v)
+	return _c
+}
+
+// SetNillableUpstreamProvider sets the "upstream_provider" field if the given value is not nil.
+func (_c *GroupCreate) SetNillableUpstreamProvider(v *string) *GroupCreate {
+	if v != nil {
+		_c.SetUpstreamProvider(*v)
+	}
+	return _c
+}
+
 // SetPlatform sets the "platform" field.
 func (_c *GroupCreate) SetPlatform(v string) *GroupCreate {
 	_c.mutation.SetPlatform(v)
@@ -1085,6 +1099,10 @@ func (_c *GroupCreate) defaults() error {
 		v := group.DefaultStatus
 		_c.mutation.SetStatus(v)
 	}
+	if _, ok := _c.mutation.UpstreamProvider(); !ok {
+		v := group.DefaultUpstreamProvider
+		_c.mutation.SetUpstreamProvider(v)
+	}
 	if _, ok := _c.mutation.Platform(); !ok {
 		v := group.DefaultPlatform
 		_c.mutation.SetPlatform(v)
@@ -1282,6 +1300,14 @@ func (_c *GroupCreate) check() error {
 	if v, ok := _c.mutation.DuplicateOperationID(); ok {
 		if err := group.DuplicateOperationIDValidator(v); err != nil {
 			return &ValidationError{Name: "duplicate_operation_id", err: fmt.Errorf(`ent: validator failed for field "Group.duplicate_operation_id": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.UpstreamProvider(); !ok {
+		return &ValidationError{Name: "upstream_provider", err: errors.New(`ent: missing required field "Group.upstream_provider"`)}
+	}
+	if v, ok := _c.mutation.UpstreamProvider(); ok {
+		if err := group.UpstreamProviderValidator(v); err != nil {
+			return &ValidationError{Name: "upstream_provider", err: fmt.Errorf(`ent: validator failed for field "Group.upstream_provider": %w`, err)}
 		}
 	}
 	if _, ok := _c.mutation.Platform(); !ok {
@@ -1513,6 +1539,10 @@ func (_c *GroupCreate) createSpec() (*Group, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.DuplicateOperationID(); ok {
 		_spec.SetField(group.FieldDuplicateOperationID, field.TypeString, value)
 		_node.DuplicateOperationID = &value
+	}
+	if value, ok := _c.mutation.UpstreamProvider(); ok {
+		_spec.SetField(group.FieldUpstreamProvider, field.TypeString, value)
+		_node.UpstreamProvider = value
 	}
 	if value, ok := _c.mutation.Platform(); ok {
 		_spec.SetField(group.FieldPlatform, field.TypeString, value)
@@ -2047,6 +2077,18 @@ func (u *GroupUpsert) SetStatus(v string) *GroupUpsert {
 // UpdateStatus sets the "status" field to the value that was provided on create.
 func (u *GroupUpsert) UpdateStatus() *GroupUpsert {
 	u.SetExcluded(group.FieldStatus)
+	return u
+}
+
+// SetUpstreamProvider sets the "upstream_provider" field.
+func (u *GroupUpsert) SetUpstreamProvider(v string) *GroupUpsert {
+	u.Set(group.FieldUpstreamProvider, v)
+	return u
+}
+
+// UpdateUpstreamProvider sets the "upstream_provider" field to the value that was provided on create.
+func (u *GroupUpsert) UpdateUpstreamProvider() *GroupUpsert {
+	u.SetExcluded(group.FieldUpstreamProvider)
 	return u
 }
 
@@ -3191,6 +3233,20 @@ func (u *GroupUpsertOne) SetStatus(v string) *GroupUpsertOne {
 func (u *GroupUpsertOne) UpdateStatus() *GroupUpsertOne {
 	return u.Update(func(s *GroupUpsert) {
 		s.UpdateStatus()
+	})
+}
+
+// SetUpstreamProvider sets the "upstream_provider" field.
+func (u *GroupUpsertOne) SetUpstreamProvider(v string) *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetUpstreamProvider(v)
+	})
+}
+
+// UpdateUpstreamProvider sets the "upstream_provider" field to the value that was provided on create.
+func (u *GroupUpsertOne) UpdateUpstreamProvider() *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateUpstreamProvider()
 	})
 }
 
@@ -4651,6 +4707,20 @@ func (u *GroupUpsertBulk) SetStatus(v string) *GroupUpsertBulk {
 func (u *GroupUpsertBulk) UpdateStatus() *GroupUpsertBulk {
 	return u.Update(func(s *GroupUpsert) {
 		s.UpdateStatus()
+	})
+}
+
+// SetUpstreamProvider sets the "upstream_provider" field.
+func (u *GroupUpsertBulk) SetUpstreamProvider(v string) *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetUpstreamProvider(v)
+	})
+}
+
+// UpdateUpstreamProvider sets the "upstream_provider" field to the value that was provided on create.
+func (u *GroupUpsertBulk) UpdateUpstreamProvider() *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateUpstreamProvider()
 	})
 }
 

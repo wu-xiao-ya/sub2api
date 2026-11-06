@@ -22151,6 +22151,7 @@ type GroupMutation struct {
 	is_exclusive                            *bool
 	status                                  *string
 	duplicate_operation_id                  *string
+	upstream_provider                       *string
 	platform                                *string
 	subscription_type                       *string
 	daily_limit_usd                         *float64
@@ -22935,6 +22936,42 @@ func (m *GroupMutation) DuplicateOperationIDCleared() bool {
 func (m *GroupMutation) ResetDuplicateOperationID() {
 	m.duplicate_operation_id = nil
 	delete(m.clearedFields, group.FieldDuplicateOperationID)
+}
+
+// SetUpstreamProvider sets the "upstream_provider" field.
+func (m *GroupMutation) SetUpstreamProvider(s string) {
+	m.upstream_provider = &s
+}
+
+// UpstreamProvider returns the value of the "upstream_provider" field in the mutation.
+func (m *GroupMutation) UpstreamProvider() (r string, exists bool) {
+	v := m.upstream_provider
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpstreamProvider returns the old "upstream_provider" field's value of the Group entity.
+// If the Group object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GroupMutation) OldUpstreamProvider(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpstreamProvider is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpstreamProvider requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpstreamProvider: %w", err)
+	}
+	return oldValue.UpstreamProvider, nil
+}
+
+// ResetUpstreamProvider resets all changes to the "upstream_provider" field.
+func (m *GroupMutation) ResetUpstreamProvider() {
+	m.upstream_provider = nil
 }
 
 // SetPlatform sets the "platform" field.
@@ -26012,7 +26049,7 @@ func (m *GroupMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *GroupMutation) Fields() []string {
-	fields := make([]string, 0, 67)
+	fields := make([]string, 0, 68)
 	if m.created_at != nil {
 		fields = append(fields, group.FieldCreatedAt)
 	}
@@ -26054,6 +26091,9 @@ func (m *GroupMutation) Fields() []string {
 	}
 	if m.duplicate_operation_id != nil {
 		fields = append(fields, group.FieldDuplicateOperationID)
+	}
+	if m.upstream_provider != nil {
+		fields = append(fields, group.FieldUpstreamProvider)
 	}
 	if m.platform != nil {
 		fields = append(fields, group.FieldPlatform)
@@ -26250,6 +26290,8 @@ func (m *GroupMutation) Field(name string) (ent.Value, bool) {
 		return m.Status()
 	case group.FieldDuplicateOperationID:
 		return m.DuplicateOperationID()
+	case group.FieldUpstreamProvider:
+		return m.UpstreamProvider()
 	case group.FieldPlatform:
 		return m.Platform()
 	case group.FieldSubscriptionType:
@@ -26393,6 +26435,8 @@ func (m *GroupMutation) OldField(ctx context.Context, name string) (ent.Value, e
 		return m.OldStatus(ctx)
 	case group.FieldDuplicateOperationID:
 		return m.OldDuplicateOperationID(ctx)
+	case group.FieldUpstreamProvider:
+		return m.OldUpstreamProvider(ctx)
 	case group.FieldPlatform:
 		return m.OldPlatform(ctx)
 	case group.FieldSubscriptionType:
@@ -26605,6 +26649,13 @@ func (m *GroupMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetDuplicateOperationID(v)
+		return nil
+	case group.FieldUpstreamProvider:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpstreamProvider(v)
 		return nil
 	case group.FieldPlatform:
 		v, ok := value.(string)
@@ -27529,6 +27580,9 @@ func (m *GroupMutation) ResetField(name string) error {
 		return nil
 	case group.FieldDuplicateOperationID:
 		m.ResetDuplicateOperationID()
+		return nil
+	case group.FieldUpstreamProvider:
+		m.ResetUpstreamProvider()
 		return nil
 	case group.FieldPlatform:
 		m.ResetPlatform()

@@ -412,6 +412,10 @@ func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupIn
 	if normalizeCodexModelsManifestConfig(platform, input.CodexModelsManifestConfig).Enabled {
 		return nil, infraerrors.New(http.StatusBadRequest, "INVALID_CODEX_MODELS_MANIFEST_CONFIG", "codex models manifest config cannot be enabled at group creation; configure it after creation in the group editor")
 	}
+	upstreamProvider, err := NormalizeGroupUpstreamProvider(platform, input.UpstreamProvider)
+	if err != nil {
+		return nil, err
+	}
 	modelPricing, err := normalizeGroupModelPricing(platform, input.ModelPricing)
 	if err != nil {
 		return nil, err
@@ -576,6 +580,7 @@ func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupIn
 	group := &Group{
 		Name:                            input.Name,
 		Description:                     input.Description,
+		UpstreamProvider:                upstreamProvider,
 		I18n:                            i18n,
 		Platform:                        platform,
 		RateMultiplier:                  input.RateMultiplier,
@@ -781,6 +786,22 @@ func (s *adminServiceImpl) UpdateGroup(ctx context.Context, id int64, input *Upd
 
 	// 渠道缓存里存了 groupID → platform 的映射，改了平台要让它失效（见函数末尾）
 	previousPlatform := group.Platform
+	previousProvider := group.UpstreamProvider
+	provider := group.UpstreamProvider
+	targetPlatform := group.Platform
+	if input.Platform != "" {
+		targetPlatform = input.Platform
+	}
+	if input.UpstreamProvider != nil {
+		provider = *input.UpstreamProvider
+	} else if targetPlatform != PlatformOpenAI {
+		provider = ""
+	}
+	provider, err = NormalizeGroupUpstreamProvider(targetPlatform, provider)
+	if err != nil {
+		return nil, err
+	}
+	group.UpstreamProvider = provider
 
 	if input.Name != "" {
 		group.Name = input.Name
@@ -1086,7 +1107,7 @@ func (s *adminServiceImpl) UpdateGroup(ctx context.Context, id int64, input *Upd
 	// 平台变了就失效渠道缓存：该缓存持有 groupID → platform，而渠道定价 / 模型映射 /
 	// 模型白名单都按平台严格隔离。不失效的话，缓存最长 10 分钟仍按旧平台匹配，
 	// 期间定价查不到会静默回落到 LiteLLM 价格表、映射与白名单也不生效。
-	if group.Platform != previousPlatform && s.channelCacheInvalidator != nil {
+	if (group.Platform != previousPlatform || group.UpstreamProvider != previousProvider) && s.channelCacheInvalidator != nil {
 		s.channelCacheInvalidator.InvalidateCache()
 	}
 

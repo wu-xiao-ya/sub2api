@@ -6,7 +6,8 @@
     ]"
   >
     <!-- Platform logo -->
-    <PlatformIcon v-if="platform" :platform="platform" size="sm" />
+    <PlatformIcon v-if="platform" :platform="platform" :upstream-provider="upstreamProvider" size="sm" />
+    <span v-if="platform === 'openai' && upstreamProvider" class="opacity-80">{{ UPSTREAM_LABELS[upstreamProvider] }}</span>
     <!-- Group name -->
     <span :class="truncate ? 'truncate' : 'min-w-0 whitespace-normal [overflow-wrap:anywhere]'">{{ name }}</span>
     <!-- Right side label -->
@@ -29,13 +30,15 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { SubscriptionType, GroupPlatform } from '@/types'
+import type { SubscriptionType, GroupPlatform, UpstreamProvider } from '@/types'
 import { useAppStore } from '@/stores/app'
 import { formatPeakRateWindow, serverTimezoneLabel } from '@/utils/peak-rate'
 import PlatformIcon from './PlatformIcon.vue'
+import { UPSTREAM_LABELS } from '@/utils/groupBrand'
 
 interface Props {
   name: string
+  upstreamProvider?: UpstreamProvider
   platform?: GroupPlatform
   subscriptionType?: SubscriptionType
   rateMultiplier?: number

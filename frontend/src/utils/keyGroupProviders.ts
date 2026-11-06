@@ -1,3 +1,4 @@
+import { DOMESTIC_UPSTREAMS } from './groupBrand'
 import type { GroupPlatform } from '@/types'
 
 export type KeyGroupProvider = 'anthropic' | 'openai' | 'domestic' | 'other'
@@ -22,7 +23,8 @@ const PROVIDER_BY_PLATFORM: Record<GroupPlatform, KeyGroupProvider> = {
   cline: 'other'
 }
 
-export function getKeyGroupProvider(platform: GroupPlatform): KeyGroupProvider {
+export function getKeyGroupProvider(platform: GroupPlatform, upstreamProvider?: string): KeyGroupProvider {
+  if (platform === 'openai' && DOMESTIC_UPSTREAMS.includes(upstreamProvider as typeof DOMESTIC_UPSTREAMS[number])) return 'domestic'
   return PROVIDER_BY_PLATFORM[platform] ?? 'other'
 }
 

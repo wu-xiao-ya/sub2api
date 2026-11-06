@@ -574,7 +574,10 @@ export interface GroupLocaleText {
 export type GroupI18n = Record<string, GroupLocaleText>
 
 // 用户侧接口返回的 name / description 已由后端按请求语言（Accept-Language）选好
+export type UpstreamProvider = '' | 'qwen' | 'hunyuan' | 'mimo'
+
 export interface Group {
+  upstream_provider?: UpstreamProvider
   id: number
   name: string
   description: string | null
@@ -816,6 +819,7 @@ export interface UpdateApiKeyRequest {
 }
 
 export interface CreateGroupRequest {
+  upstream_provider?: UpstreamProvider
   name: string
   description?: string | null
   i18n?: GroupI18n
@@ -882,6 +886,7 @@ export interface CreateGroupRequest {
 }
 
 export interface UpdateGroupRequest {
+  upstream_provider?: UpstreamProvider
   name?: string
   description?: string | null
   i18n?: GroupI18n

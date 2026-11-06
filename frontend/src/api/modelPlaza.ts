@@ -56,6 +56,7 @@ export interface PlazaModel {
 }
 
 export interface ModelPlazaGroup {
+  upstream_provider?: import('@/types').UpstreamProvider
   id: number
   name: string
   description: string
