@@ -606,6 +606,18 @@ describe('user KeysView column settings', () => {
       getAvailableGroups.mockResolvedValue(availableGroups)
     })
 
+    it('puts explicitly branded OpenAI groups into domestic without changing generic OpenAI', async () => {
+      getAvailableGroups.mockResolvedValue([
+        ...availableGroups,
+        ...['qwen', 'hunyuan', 'mimo'].map((brand, i) => ({ id: 201 + i, name: 'Shared group', platform: 'openai', upstream_provider: brand, rate_multiplier: 1, subscription_type: 'standard' }))
+      ])
+      const wrapper = await openCreate()
+      await chooseProvider(wrapper, 'domestic')
+      expect(optionIds(wrapper)).toEqual([3, 4, 5, 6, 201, 202, 203])
+      await chooseProvider(wrapper, 'openai')
+      expect(optionIds(wrapper)).toEqual([2])
+    })
+
     it('classifies all configured platforms and retains the complete table filter', async () => {
       const wrapper = await openCreate()
       expect(wrapper.findAll('input[name="key-provider"]')).toHaveLength(4)
