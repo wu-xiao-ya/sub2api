@@ -30,6 +30,7 @@ func RegisterGatewayRoutes(
 	compositeResolver *service.CompositeRouteResolver,
 	cfg *config.Config,
 ) {
+	apiKeyAuth = middleware.APIKeyAuthMiddleware(middleware.WithAggregateRouting(gin.HandlerFunc(apiKeyAuth), h.Gateway.AggregateGroupSupportsModel))
 	bodyLimit := middleware.RequestBodyLimit(cfg.Gateway.MaxBodySize)
 	textBodyLimit := middleware.RequestBodyLimit(cfg.Gateway.TextMaxBodySize)
 	clientRequestID := middleware.ClientRequestID()

@@ -3,6 +3,7 @@ package middleware
 import (
 	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
@@ -72,6 +73,11 @@ func APIKeyAuthWithSubscriptionGoogle(apiKeyService *service.APIKeyService, subs
 				return
 			}
 			abortWithGoogleError(c, 500, "Failed to validate API key")
+			return
+		}
+
+		if apiKey.IsAggregate() {
+			AbortWithError(c, http.StatusBadRequest, "AGGREGATE_UNSUPPORTED_ENDPOINT", "Use a member key for the native Gemini API")
 			return
 		}
 

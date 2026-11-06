@@ -1,5 +1,8 @@
 export default {
   common: {
+    upstreamProvider: 'Upstream brand',
+    upstreamProviderHint: 'Display and domestic-model classification only; protocol, endpoint and billing remain independent.',
+    upstreamProviderDefault: 'Default / OpenAI',
     loading: 'Loading...',
     submitting: 'Submitting...',
     justNow: 'just now',

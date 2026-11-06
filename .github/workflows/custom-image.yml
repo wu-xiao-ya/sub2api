@@ -3,7 +3,7 @@ name: Refork Candidate
 on:
   workflow_dispatch:
   push:
-    branches: [codex/refork-v0.2.18-20261026]
+    branches: [codex/refork-v0.2.18-20261026, codex/restore-aggregate-keys-20261105]
 
 permissions:
   contents: read

@@ -89,7 +89,8 @@
               </button>
             </div>
           </div>
-          <button @click="showCreateModal = true" class="btn btn-primary" data-tour="keys-create-btn">
+          <button @click="openCreateKey('aggregate')" class="btn btn-secondary" data-testid="create-aggregate-key">{{ t('keys.aggregate.create') }}</button>
+          <button @click="openCreateKey('group')" class="btn btn-primary" data-tour="keys-create-btn">
             <Icon name="plus" size="md" class="mr-2" />
             {{ t('keys.createKey') }}
           </button>
@@ -144,6 +145,7 @@
           <template #cell-name="{ value, row }">
             <div class="flex items-center gap-1.5">
               <span class="font-medium text-gray-900 dark:text-white">{{ value }}</span>
+              <span v-if="row.key_kind === 'aggregate'" class="badge badge-primary">{{ t('keys.aggregate.label') }}</span>
               <Icon
                 v-if="row.ip_whitelist?.length > 0 || row.ip_blacklist?.length > 0"
                 name="shield"
@@ -158,14 +160,15 @@
             <div class="group/dropdown relative">
               <button
                 :ref="(el) => setGroupButtonRef(row.id, el)"
-                @click="openGroupSelector(row)"
+                @click="row.key_kind === 'aggregate' ? editKey(row) : openGroupSelector(row)"
                 class="-mx-2 -my-1 flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1 transition-all duration-200 hover:bg-gray-100 dark:hover:bg-dark-700"
                 :title="t('keys.clickToChangeGroup')"
               >
+                <span v-if="row.key_kind === 'aggregate'" class="text-sm">{{ t('keys.aggregate.memberCount', { count: row.members?.length || 0 }) }}</span>
                 <GroupBadge
-                  v-if="row.group"
+                  v-else-if="row.group"
                   :name="row.group.name"
-                  :platform="row.group.platform"
+                  :platform="row.group.platform" :upstream-provider="row.group.upstream_provider"
                   :subscription-type="row.group.subscription_type"
                   :rate-multiplier="row.group.rate_multiplier"
                   :user-rate-multiplier="userGroupRates[row.group.id]"
@@ -447,7 +450,7 @@
               :title="t('keys.noKeysYet')"
               :description="t('keys.createFirstKey')"
               :action-text="t('keys.createKey')"
-              @action="showCreateModal = true"
+              @action="openCreateKey('group')"
             />
           </template>
         </DataTable>
@@ -485,7 +488,7 @@
           />
         </div>
 
-        <fieldset v-if="!showEditModal" data-tour="key-form-provider">
+        <fieldset v-if="!showEditModal && formKind === 'group'" data-tour="key-form-provider">
           <legend class="input-label">{{ t('keys.providerLabel') }}</legend>
           <div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
             <label
@@ -533,7 +536,7 @@
           </p>
         </fieldset>
 
-        <div>
+        <div v-if="formKind === 'group'">
           <label class="input-label" for="key-form-group">{{ t('keys.groupLabel') }}</label>
           <Select
             :key="showEditModal ? 'edit' : createProvider"
@@ -551,7 +554,7 @@
               <GroupBadge
                 v-if="option"
                 :name="(option as unknown as GroupOption).label"
-                :platform="(option as unknown as GroupOption).platform"
+                :platform="(option as unknown as GroupOption).platform" :upstream-provider="(option as unknown as GroupOption).upstream_provider"
                 :subscription-type="(option as unknown as GroupOption).subscriptionType"
                 :rate-multiplier="(option as unknown as GroupOption).rate"
                 :user-rate-multiplier="(option as unknown as GroupOption).userRate"
@@ -565,7 +568,7 @@
             <template #option="{ option, selected }">
               <GroupOptionItem
                 :name="(option as unknown as GroupOption).label"
-                :platform="(option as unknown as GroupOption).platform"
+                :platform="(option as unknown as GroupOption).platform" :upstream-provider="(option as unknown as GroupOption).upstream_provider"
                 :subscription-type="(option as unknown as GroupOption).subscriptionType"
                 :rate-multiplier="(option as unknown as GroupOption).rate"
                 :user-rate-multiplier="(option as unknown as GroupOption).userRate"
@@ -579,6 +582,27 @@
             </template>
           </Select>
         </div>
+
+        <fieldset v-if="formKind === 'aggregate'" class="space-y-3" data-testid="aggregate-members">
+          <legend class="input-label">{{ t('keys.aggregate.members') }}</legend>
+          <p class="text-sm text-gray-500">{{ t('keys.aggregate.hint') }}</p>
+          <p v-if="memberOptionsLoading" role="status">{{ t('common.loading') }}</p>
+          <p v-else-if="memberOptionsError" role="alert" class="text-red-500">{{ memberOptionsError }}</p>
+          <template v-else>
+            <Select v-model="memberToAdd" :options="aggregateMemberOptions" :placeholder="t('keys.aggregate.selectMember')" :searchable="true" />
+            <button type="button" class="btn btn-secondary" :disabled="!memberToAdd || memberKeyIDs.length >= 32" @click="addAggregateMember">{{ t('keys.aggregate.add') }}</button>
+            <ol class="space-y-2">
+              <li v-for="(id, index) in memberKeyIDs" :key="id" class="flex items-center justify-between gap-2 rounded-lg border p-2">
+                <span>{{ index + 1 }}. {{ aggregateMemberLabel(id) }}</span>
+                <span class="flex gap-2">
+                  <button type="button" :disabled="index === 0" :aria-label="t('keys.aggregate.moveUp')" @click="moveAggregateMember(index, -1)">↑</button>
+                  <button type="button" :disabled="index === memberKeyIDs.length - 1" :aria-label="t('keys.aggregate.moveDown')" @click="moveAggregateMember(index, 1)">↓</button>
+                  <button type="button" :aria-label="t('keys.aggregate.remove')" @click="memberKeyIDs.splice(index, 1)">×</button>
+                </span>
+              </li>
+            </ol>
+          </template>
+        </fieldset>
 
         <!-- Custom Key Section (only for create) -->
         <div v-if="!showEditModal" class="space-y-3">
@@ -1074,7 +1098,7 @@
       :show="showUseKeyModal"
       :api-key="selectedKey?.key || ''"
       :base-url="publicSettings?.api_base_url || ''"
-      :platform="selectedKey?.group?.platform || null"
+      :platform="selectedKey?.key_kind === 'aggregate' ? 'composite' : selectedKey?.group?.platform || null"
       :claude-code-only="selectedKey?.group?.claude_code_only || false"
       :allow-messages-dispatch="selectedKey?.group?.allow_messages_dispatch || false"
       @close="closeUseKeyModal"
@@ -1173,7 +1197,7 @@
           >
             <GroupOptionItem
               :name="option.label"
-              :platform="option.platform"
+              :platform="option.platform" :upstream-provider="option.upstream_provider"
               :subscription-type="option.subscriptionType"
               :rate-multiplier="option.rate"
               :user-rate-multiplier="option.userRate"
@@ -1229,6 +1253,7 @@ import type { BatchApiKeyUsageStats } from '@/api/usage'
 import { formatDateTime } from '@/utils/format'
 import { maskApiKey } from '@/utils/maskApiKey'
 import PlatformIcon from '@/components/common/PlatformIcon.vue'
+import { groupBrandLabel } from '@/utils/groupBrand'
 import { platformBadgeLightClass } from '@/utils/platformColors'
 import { KEY_GROUP_PROVIDERS, KEY_GROUP_PROVIDER_ICONS, getKeyGroupProvider, type KeyGroupProvider } from '@/utils/keyGroupProviders'
 import {
@@ -1245,6 +1270,7 @@ const formatDateTimeLocal = (isoDate: string): string => {
 }
 
 interface GroupOption {
+  upstream_provider?: import('@/types').UpstreamProvider
   value: number
   label: string
   description: string | null
@@ -1396,6 +1422,54 @@ const filterSearch = ref('')
 const filterStatus = ref('')
 const filterGroupId = ref<string | number>('')
 
+const formKind = ref<'group' | 'aggregate'>('group')
+const memberKeyIDs = ref<number[]>([])
+const memberToAdd = ref<number | null>(null)
+const memberOptions = ref<ApiKey[]>([])
+const memberOptionsLoading = ref(false)
+const memberOptionsError = ref('')
+const aggregateMemberOptions = computed(() => memberOptions.value
+  .filter(key => key.key_kind !== 'aggregate' && key.group_id && !memberKeyIDs.value.includes(key.id))
+  .map(key => ({ value: key.id, label: `${key.name} · ${key.group ? groupBrandLabel(key.group) + ' / ' + key.group.name : key.group_id} · ${key.status}` })))
+const aggregateMemberLabel = (id: number) => {
+  const key = memberOptions.value.find(key => key.id === id)
+  const existing = selectedKey.value?.members?.find(key => key.id === id)
+  return key ? `${key.name} · ${key.group ? groupBrandLabel(key.group) + ' / ' + key.group.name : key.group_id}` : existing ? `${existing.name} · ${existing.group ? groupBrandLabel(existing.group) + ' / ' + existing.group.name : existing.group_id}` : `#${id}`
+}
+const loadMemberOptions = async () => {
+  memberOptionsLoading.value = true
+  memberOptionsError.value = ''
+  try {
+    const items: ApiKey[] = []
+    let page = 1
+    while (true) {
+      const result = await keysAPI.list(page, 100)
+      items.push(...result.items)
+      if (page >= result.pages || result.items.length === 0) break
+      page++
+    }
+    memberOptions.value = items
+  } catch { memberOptionsError.value = t('keys.aggregate.loadFailed') }
+  finally { memberOptionsLoading.value = false }
+}
+const openCreateKey = (kind: 'group' | 'aggregate') => {
+  formKind.value = kind
+  memberKeyIDs.value = []
+  memberToAdd.value = null
+  showCreateModal.value = true
+  if (kind === 'aggregate') void loadMemberOptions()
+}
+const addAggregateMember = () => {
+  if (memberToAdd.value && !memberKeyIDs.value.includes(memberToAdd.value)) memberKeyIDs.value.push(memberToAdd.value)
+  memberToAdd.value = null
+}
+const moveAggregateMember = (index: number, direction: number) => {
+  const target = index + direction
+  if (target < 0 || target >= memberKeyIDs.value.length) return
+  const ids = [...memberKeyIDs.value]
+  ;[ids[index], ids[target]] = [ids[target], ids[index]]
+  memberKeyIDs.value = ids
+}
 const showCreateModal = ref(false)
 const showEditModal = ref(false)
 const showDeleteDialog = ref(false)
@@ -1523,6 +1597,7 @@ const groupOptions = computed(() =>
     peakEnd: group.peak_end,
     peakRateMultiplier: group.peak_rate_multiplier,
     subscriptionType: group.subscription_type,
+    upstream_provider: group.upstream_provider,
     platform: group.platform
   }))
 )
@@ -1531,12 +1606,12 @@ const createProvider = ref<KeyGroupProvider>('anthropic')
 const createProviderOptions = computed(() => KEY_GROUP_PROVIDERS.map((value) => ({
   value,
   label: t(`keys.providers.${value}`),
-  count: groups.value.filter((group) => getKeyGroupProvider(group.platform) === value).length
+  count: groups.value.filter((group) => getKeyGroupProvider(group.platform, group.upstream_provider) === value).length
 })))
 
 const formGroupOptions = computed(() => showEditModal.value
   ? groupOptions.value
-  : groupOptions.value.filter((group) => getKeyGroupProvider(group.platform) === createProvider.value)
+  : groupOptions.value.filter((group) => getKeyGroupProvider(group.platform, group.upstream_provider) === createProvider.value)
 )
 
 const selectCreateProvider = (provider: KeyGroupProvider) => {
@@ -1694,6 +1769,10 @@ const handleSort = (key: string, order: 'asc' | 'desc') => {
 }
 
 const editKey = (key: ApiKey) => {
+  formKind.value = key.key_kind === 'aggregate' ? 'aggregate' : 'group'
+  memberKeyIDs.value = (key.members || []).map(member => member.id)
+  memberToAdd.value = null
+  if (formKind.value === 'aggregate') void loadMemberOptions()
   selectedKey.value = key
   const hasIPRestriction = (key.ip_whitelist?.length > 0) || (key.ip_blacklist?.length > 0)
   const hasExpiration = !!key.expires_at
@@ -1798,8 +1877,15 @@ const confirmDelete = (key: ApiKey) => {
 }
 
 const handleSubmit = async () => {
+  if (formKind.value === 'aggregate') {
+    if (memberOptionsLoading.value || memberOptionsError.value) { appStore.showError(t('keys.aggregate.loadFailed')); return }
+    const groups = memberKeyIDs.value.map(id => memberOptions.value.find(key => key.id === id)?.group_id)
+    if (groups.length === 0 || groups.length > 32 || groups.some(id => !id) || new Set(groups).size !== groups.length) {
+      appStore.showError(t('keys.aggregate.invalidMembers')); return
+    }
+  }
   // Validate group_id is required
-  if (formData.value.group_id === null) {
+  if (formKind.value === 'group' && formData.value.group_id === null) {
     appStore.showError(t('keys.groupRequired'))
     return
   }
@@ -1856,7 +1942,7 @@ const handleSubmit = async () => {
     if (showEditModal.value && selectedKey.value) {
       const updates: UpdateApiKeyRequest = {
         name: formData.value.name,
-        group_id: formData.value.group_id,
+        ...(formKind.value === 'aggregate' ? { member_key_ids: [...memberKeyIDs.value] } : { group_id: formData.value.group_id }),
         ip_whitelist: ipWhitelist,
         ip_blacklist: ipBlacklist,
         quota: quota,
@@ -1874,13 +1960,14 @@ const handleSubmit = async () => {
       const customKey = formData.value.use_custom_key ? formData.value.custom_key : undefined
       await keysAPI.create(
         formData.value.name,
-        formData.value.group_id,
+        formKind.value === 'aggregate' ? undefined : formData.value.group_id,
         customKey,
         ipWhitelist,
         ipBlacklist,
         quota,
         expiresInDays,
-        rateLimitData
+        rateLimitData,
+        formKind.value === 'aggregate' ? { key_kind: 'aggregate', member_key_ids: [...memberKeyIDs.value] } : undefined
       )
       appStore.showSuccess(t('keys.keyCreatedSuccess'))
       // Only advance tour if active, on submit step, and creation succeeded
@@ -1923,6 +2010,8 @@ const closeModals = () => {
   showCreateModal.value = false
   showEditModal.value = false
   selectedKey.value = null
+  formKind.value = 'group'
+  memberKeyIDs.value = []
   formData.value = {
     name: '',
     group_id: null,

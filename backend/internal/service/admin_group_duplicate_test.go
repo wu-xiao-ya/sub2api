@@ -125,6 +125,7 @@ func TestDuplicateGroupCopiesConfigurationDeeplyAndResetsRuntimeState(t *testing
 		Name:                         "高级订阅",
 		Description:                  "configuration",
 		Platform:                     PlatformOpenAI,
+		UpstreamProvider:             "qwen",
 		RateMultiplier:               1.75,
 		PeakRateEnabled:              true,
 		PeakStart:                    "09:00",
@@ -206,6 +207,7 @@ func TestDuplicateGroupCopiesConfigurationDeeplyAndResetsRuntimeState(t *testing
 	require.True(t, duplicate.Hydrated, "the duplicate response is reloaded with derived counts")
 	require.Equal(t, source.Description, duplicate.Description)
 	require.Equal(t, source.Platform, duplicate.Platform)
+	require.Equal(t, source.UpstreamProvider, duplicate.UpstreamProvider)
 	require.Equal(t, source.RateMultiplier, duplicate.RateMultiplier)
 	require.Equal(t, source.PeakRateMultiplier, duplicate.PeakRateMultiplier)
 	require.Equal(t, source.DefaultValidityDays, duplicate.DefaultValidityDays)

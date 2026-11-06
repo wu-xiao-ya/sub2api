@@ -120,6 +120,11 @@ func DuplicateOperationID(v string) predicate.Group {
 	return predicate.Group(sql.FieldEQ(FieldDuplicateOperationID, v))
 }
 
+// UpstreamProvider applies equality check predicate on the "upstream_provider" field. It's identical to UpstreamProviderEQ.
+func UpstreamProvider(v string) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldUpstreamProvider, v))
+}
+
 // Platform applies equality check predicate on the "platform" field. It's identical to PlatformEQ.
 func Platform(v string) predicate.Group {
 	return predicate.Group(sql.FieldEQ(FieldPlatform, v))
@@ -983,6 +988,71 @@ func DuplicateOperationIDEqualFold(v string) predicate.Group {
 // DuplicateOperationIDContainsFold applies the ContainsFold predicate on the "duplicate_operation_id" field.
 func DuplicateOperationIDContainsFold(v string) predicate.Group {
 	return predicate.Group(sql.FieldContainsFold(FieldDuplicateOperationID, v))
+}
+
+// UpstreamProviderEQ applies the EQ predicate on the "upstream_provider" field.
+func UpstreamProviderEQ(v string) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldUpstreamProvider, v))
+}
+
+// UpstreamProviderNEQ applies the NEQ predicate on the "upstream_provider" field.
+func UpstreamProviderNEQ(v string) predicate.Group {
+	return predicate.Group(sql.FieldNEQ(FieldUpstreamProvider, v))
+}
+
+// UpstreamProviderIn applies the In predicate on the "upstream_provider" field.
+func UpstreamProviderIn(vs ...string) predicate.Group {
+	return predicate.Group(sql.FieldIn(FieldUpstreamProvider, vs...))
+}
+
+// UpstreamProviderNotIn applies the NotIn predicate on the "upstream_provider" field.
+func UpstreamProviderNotIn(vs ...string) predicate.Group {
+	return predicate.Group(sql.FieldNotIn(FieldUpstreamProvider, vs...))
+}
+
+// UpstreamProviderGT applies the GT predicate on the "upstream_provider" field.
+func UpstreamProviderGT(v string) predicate.Group {
+	return predicate.Group(sql.FieldGT(FieldUpstreamProvider, v))
+}
+
+// UpstreamProviderGTE applies the GTE predicate on the "upstream_provider" field.
+func UpstreamProviderGTE(v string) predicate.Group {
+	return predicate.Group(sql.FieldGTE(FieldUpstreamProvider, v))
+}
+
+// UpstreamProviderLT applies the LT predicate on the "upstream_provider" field.
+func UpstreamProviderLT(v string) predicate.Group {
+	return predicate.Group(sql.FieldLT(FieldUpstreamProvider, v))
+}
+
+// UpstreamProviderLTE applies the LTE predicate on the "upstream_provider" field.
+func UpstreamProviderLTE(v string) predicate.Group {
+	return predicate.Group(sql.FieldLTE(FieldUpstreamProvider, v))
+}
+
+// UpstreamProviderContains applies the Contains predicate on the "upstream_provider" field.
+func UpstreamProviderContains(v string) predicate.Group {
+	return predicate.Group(sql.FieldContains(FieldUpstreamProvider, v))
+}
+
+// UpstreamProviderHasPrefix applies the HasPrefix predicate on the "upstream_provider" field.
+func UpstreamProviderHasPrefix(v string) predicate.Group {
+	return predicate.Group(sql.FieldHasPrefix(FieldUpstreamProvider, v))
+}
+
+// UpstreamProviderHasSuffix applies the HasSuffix predicate on the "upstream_provider" field.
+func UpstreamProviderHasSuffix(v string) predicate.Group {
+	return predicate.Group(sql.FieldHasSuffix(FieldUpstreamProvider, v))
+}
+
+// UpstreamProviderEqualFold applies the EqualFold predicate on the "upstream_provider" field.
+func UpstreamProviderEqualFold(v string) predicate.Group {
+	return predicate.Group(sql.FieldEqualFold(FieldUpstreamProvider, v))
+}
+
+// UpstreamProviderContainsFold applies the ContainsFold predicate on the "upstream_provider" field.
+func UpstreamProviderContainsFold(v string) predicate.Group {
+	return predicate.Group(sql.FieldContainsFold(FieldUpstreamProvider, v))
 }
 
 // PlatformEQ applies the EQ predicate on the "platform" field.

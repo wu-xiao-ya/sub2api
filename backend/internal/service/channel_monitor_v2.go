@@ -224,10 +224,11 @@ type ChannelMonitorV2Dimension struct {
 }
 
 type ChannelMonitorV2GroupDimension struct {
-	ID           int64  `json:"id"`
-	Name         string `json:"name"`
-	Platform     string `json:"platform,omitempty"`
-	RequestCount int64  `json:"request_count"`
+	UpstreamProvider string `json:"upstream_provider,omitempty"`
+	ID               int64  `json:"id"`
+	Name             string `json:"name"`
+	Platform         string `json:"platform,omitempty"`
+	RequestCount     int64  `json:"request_count"`
 }
 
 type ChannelMonitorV2Dimensions struct {

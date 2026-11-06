@@ -92,7 +92,7 @@ type postUsageBillingParams struct {
 var ErrSimpleModeKeyRateLimitBillingUnavailable = errors.New("simple mode api key rate-limit billing unavailable")
 
 func simpleModeKeyRateLimitBillingEnabled(cfg *config.Config, apiKey *APIKey) bool {
-	return cfg != nil && cfg.RunMode == config.RunModeSimple && cfg.SimpleModeKeyRateLimitEnabled && apiKey != nil && apiKey.HasRateLimits()
+	return cfg != nil && cfg.RunMode == config.RunModeSimple && cfg.SimpleModeKeyRateLimitEnabled && apiKey != nil && (apiKey.HasRateLimits() || (apiKey.RoutedMember != nil && apiKey.RoutedMember.HasRateLimits()))
 }
 
 // PlatformFromAPIKey 从 APIKey 关联的 Group 推导 platform 名称。
@@ -318,6 +318,15 @@ func buildUsageBillingCommand(requestID string, usageLog *UsageLog, p *postUsage
 		}
 	}
 
+	if member := routedBillingMember(p.APIKey); member != nil && p.APIKey.RoutedMemberKeyID == member.ID && p.Cost.ActualCost > 0 {
+		cmd.RoutedMemberKeyID = member.ID
+		if !p.SimpleModeKeyRateLimitOnly && member.Quota > 0 {
+			cmd.RoutedMemberQuotaCost = p.Cost.ActualCost
+		}
+		if member.HasRateLimits() {
+			cmd.RoutedMemberRateLimitCost = p.Cost.ActualCost
+		}
+	}
 	if p.SimpleModeKeyRateLimitOnly {
 		if p.Cost.ActualCost > 0 && p.APIKey.HasRateLimits() {
 			cmd.APIKeyRateLimitCost = p.Cost.ActualCost
@@ -365,6 +374,9 @@ func applyUsageBilling(ctx context.Context, requestID string, usageLog *UsageLog
 		}
 		// The legacy path is only a fallback for standard billing. Simple mode
 		// must retain request-id deduplication and never bill other balances.
+		if p.APIKey != nil && p.APIKey.RoutedMemberKeyID > 0 {
+			return false, errors.New("aggregate keys require atomic usage billing")
+		}
 		postUsageBilling(ctx, p, deps)
 		return true, nil
 	}
@@ -382,6 +394,11 @@ func applyUsageBilling(ctx context.Context, requestID string, usageLog *UsageLog
 		return false, nil
 	}
 
+	if result.RoutedMemberQuotaExhausted {
+		if invalidator, ok := p.APIKeyService.(apiKeyAuthCacheInvalidator); ok && p.APIKey.RoutedMember != nil && p.APIKey.RoutedMember.Key != "" {
+			invalidator.InvalidateAuthCacheByKey(billingCtx, p.APIKey.RoutedMember.Key)
+		}
+	}
 	if result.APIKeyQuotaExhausted {
 		if invalidator, ok := p.APIKeyService.(apiKeyAuthCacheInvalidator); ok && p.APIKey != nil && p.APIKey.Key != "" {
 			invalidator.InvalidateAuthCacheByKey(billingCtx, p.APIKey.Key)
@@ -411,6 +428,9 @@ func finalizePostUsageBilling(ctx context.Context, p *postUsageBillingParams, de
 		return
 	}
 
+	if member := routedBillingMember(p.APIKey); member != nil && member.HasRateLimits() && p.Cost.ActualCost > 0 && deps.billingCacheService != nil {
+		deps.billingCacheService.QueueUpdateAPIKeyRateLimitUsage(member.ID, p.Cost.ActualCost)
+	}
 	if p.IsSubscriptionBill {
 		if p.Cost.ActualCost > 0 && p.User != nil && p.APIKey != nil && p.APIKey.GroupID != nil {
 			deps.billingCacheService.QueueUpdateSubscriptionUsage(p.User.ID, *p.APIKey.GroupID, p.Cost.ActualCost)
@@ -1371,4 +1391,11 @@ func optionalSubscriptionID(subscription *UserSubscription) *int64 {
 		return &subscription.ID
 	}
 	return nil
+}
+
+func routedBillingMember(key *APIKey) *APIKey {
+	if key == nil {
+		return nil
+	}
+	return key.RoutedMember
 }

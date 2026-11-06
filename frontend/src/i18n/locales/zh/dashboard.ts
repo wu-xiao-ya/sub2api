@@ -66,6 +66,20 @@ export default {
 
   // API Keys
   keys: {
+    aggregate: {
+      create: "创建聚合密钥",
+      label: "聚合",
+      memberCount: "{count} 个成员",
+      members: "成员 API Key",
+      hint: "按列表顺序匹配请求模型。可选择自己不同分组的普通密钥，最多 32 个；成员限额和分组价格仍然生效。",
+      selectMember: "选择成员密钥",
+      add: "添加成员",
+      moveUp: "上移",
+      moveDown: "下移",
+      remove: "移除成员",
+      loadFailed: "成员密钥加载失败，请重新打开弹窗重试。",
+      invalidMembers: "请选择 1–32 个不同分组的普通密钥。",
+    },
     title: 'API 密钥',
     description: '管理您的 API 密钥和访问令牌',
     searchPlaceholder: '搜索名称或Key...',
@@ -418,6 +432,7 @@ export default {
     cacheHit: '缓存命中',
     cacheCreate: '缓存创建',
     cacheHitRate: '缓存命中率',
+    cacheRateHint: '缓存读取 Token ÷（未缓存输入 + 缓存写入 + 缓存读取 Token）；无输入数据时显示 —。汇总按 Token 加权。',
     inputTokenPrice: '输入单价',
     outputTokenPrice: '输出单价',
     perMillionTokens: '/ 1M Token',

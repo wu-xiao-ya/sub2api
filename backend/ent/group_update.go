@@ -215,6 +215,20 @@ func (_u *GroupUpdate) SetNillableStatus(v *string) *GroupUpdate {
 	return _u
 }
 
+// SetUpstreamProvider sets the "upstream_provider" field.
+func (_u *GroupUpdate) SetUpstreamProvider(v string) *GroupUpdate {
+	_u.mutation.SetUpstreamProvider(v)
+	return _u
+}
+
+// SetNillableUpstreamProvider sets the "upstream_provider" field if the given value is not nil.
+func (_u *GroupUpdate) SetNillableUpstreamProvider(v *string) *GroupUpdate {
+	if v != nil {
+		_u.SetUpstreamProvider(*v)
+	}
+	return _u
+}
+
 // SetPlatform sets the "platform" field.
 func (_u *GroupUpdate) SetPlatform(v string) *GroupUpdate {
 	_u.mutation.SetPlatform(v)
@@ -1509,6 +1523,11 @@ func (_u *GroupUpdate) check() error {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "Group.status": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.UpstreamProvider(); ok {
+		if err := group.UpstreamProviderValidator(v); err != nil {
+			return &ValidationError{Name: "upstream_provider", err: fmt.Errorf(`ent: validator failed for field "Group.upstream_provider": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.Platform(); ok {
 		if err := group.PlatformValidator(v); err != nil {
 			return &ValidationError{Name: "platform", err: fmt.Errorf(`ent: validator failed for field "Group.platform": %w`, err)}
@@ -1619,6 +1638,9 @@ func (_u *GroupUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.DuplicateOperationIDCleared() {
 		_spec.ClearField(group.FieldDuplicateOperationID, field.TypeString)
+	}
+	if value, ok := _u.mutation.UpstreamProvider(); ok {
+		_spec.SetField(group.FieldUpstreamProvider, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.Platform(); ok {
 		_spec.SetField(group.FieldPlatform, field.TypeString, value)
@@ -2414,6 +2436,20 @@ func (_u *GroupUpdateOne) SetStatus(v string) *GroupUpdateOne {
 func (_u *GroupUpdateOne) SetNillableStatus(v *string) *GroupUpdateOne {
 	if v != nil {
 		_u.SetStatus(*v)
+	}
+	return _u
+}
+
+// SetUpstreamProvider sets the "upstream_provider" field.
+func (_u *GroupUpdateOne) SetUpstreamProvider(v string) *GroupUpdateOne {
+	_u.mutation.SetUpstreamProvider(v)
+	return _u
+}
+
+// SetNillableUpstreamProvider sets the "upstream_provider" field if the given value is not nil.
+func (_u *GroupUpdateOne) SetNillableUpstreamProvider(v *string) *GroupUpdateOne {
+	if v != nil {
+		_u.SetUpstreamProvider(*v)
 	}
 	return _u
 }
@@ -3725,6 +3761,11 @@ func (_u *GroupUpdateOne) check() error {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "Group.status": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.UpstreamProvider(); ok {
+		if err := group.UpstreamProviderValidator(v); err != nil {
+			return &ValidationError{Name: "upstream_provider", err: fmt.Errorf(`ent: validator failed for field "Group.upstream_provider": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.Platform(); ok {
 		if err := group.PlatformValidator(v); err != nil {
 			return &ValidationError{Name: "platform", err: fmt.Errorf(`ent: validator failed for field "Group.platform": %w`, err)}
@@ -3852,6 +3893,9 @@ func (_u *GroupUpdateOne) sqlSave(ctx context.Context) (_node *Group, err error)
 	}
 	if _u.mutation.DuplicateOperationIDCleared() {
 		_spec.ClearField(group.FieldDuplicateOperationID, field.TypeString)
+	}
+	if value, ok := _u.mutation.UpstreamProvider(); ok {
+		_spec.SetField(group.FieldUpstreamProvider, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.Platform(); ok {
 		_spec.SetField(group.FieldPlatform, field.TypeString, value)

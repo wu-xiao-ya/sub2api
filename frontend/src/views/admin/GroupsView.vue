@@ -136,7 +136,7 @@
             >
           </template>
 
-          <template #cell-platform="{ value }">
+          <template #cell-platform="{ value, row }">
             <span
               :class="[
                 'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium',
@@ -161,8 +161,8 @@
                                 : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
               ]"
             >
-              <PlatformIcon :platform="value" size="xs" />
-              {{ t("admin.groups.platforms." + value, platformLabel(value)) }}
+              <PlatformIcon :platform="value" :upstream-provider="row.upstream_provider" size="xs" />
+              {{ row.upstream_provider ? groupBrandLabel(row) : t("admin.groups.platforms." + value, platformLabel(value)) }}
             </span>
           </template>
 
@@ -520,6 +520,11 @@
             @change="createForm.copy_accounts_from_group_ids = []"
           />
           <p class="input-hint">{{ t("admin.groups.platformHint") }}</p>
+        </div>
+        <div v-if="!authStore.isSimpleMode && createForm.platform === 'openai'">
+          <label class="input-label">{{ t('common.upstreamProvider') }}</label>
+          <Select v-model="createForm.upstream_provider" :options="upstreamOptions(t('common.upstreamProviderDefault'))" data-testid="createForm-upstream-provider" />
+          <p class="input-hint">{{ t('common.upstreamProviderHint') }}</p>
         </div>
         <!-- 从分组复制账号 -->
         <div v-if="!authStore.isSimpleMode && copyAccountsGroupOptions.length > 0">
@@ -2157,6 +2162,11 @@
             data-tour="group-form-platform"
           />
           <p class="input-hint">{{ t("admin.groups.platformNotEditable") }}</p>
+        </div>
+        <div v-if="!authStore.isSimpleMode && editForm.platform === 'openai'">
+          <label class="input-label">{{ t('common.upstreamProvider') }}</label>
+          <Select v-model="editForm.upstream_provider" :options="upstreamOptions(t('common.upstreamProviderDefault'))" data-testid="editForm-upstream-provider" />
+          <p class="input-hint">{{ t('common.upstreamProviderHint') }}</p>
         </div>
         <template v-if="!authStore.isSimpleMode">
         <!-- 从分组复制账号（编辑时） -->
@@ -4265,6 +4275,8 @@
 </template>
 
 <script setup lang="ts">
+import type { UpstreamProvider } from '@/types';
+import { upstreamOptions, groupBrandLabel } from '@/utils/groupBrand';
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useAppStore } from "@/stores/app";
@@ -4945,6 +4957,7 @@ const createForm = reactive({
   name: "",
   description: "",
   i18n: {} as GroupI18n,
+  upstream_provider: "" as UpstreamProvider,
   platform: "anthropic" as GroupPlatform,
   rate_multiplier: 1.0,
   is_exclusive: false,
@@ -5310,6 +5323,7 @@ const editForm = reactive({
   name: "",
   description: "",
   i18n: {} as GroupI18n,
+  upstream_provider: "" as UpstreamProvider,
   platform: "anthropic" as GroupPlatform,
   rate_multiplier: 1.0,
   is_exclusive: false,
@@ -5774,6 +5788,7 @@ const closeCreateModal = () => {
   createForm.name = "";
   createForm.description = "";
   createForm.i18n = {};
+  createForm.upstream_provider = "";
   createForm.platform = "anthropic";
   createForm.rate_multiplier = 1.0;
   createForm.is_exclusive = false;
@@ -6062,6 +6077,7 @@ const handleEdit = async (group: AdminGroup) => {
       { ...text },
     ]),
   );
+  editForm.upstream_provider = group.upstream_provider || "";
   editForm.platform = group.platform;
   editForm.rate_multiplier = group.rate_multiplier;
   editForm.is_exclusive = group.is_exclusive;
@@ -6895,4 +6911,6 @@ onUnmounted(() => {
   accountSearchRunner.clearAll();
   clearAllAccountSearchState();
 });
+watch(() => createForm.platform, platform => { if (platform !== 'openai') createForm.upstream_provider = '' });
+watch(() => editForm.platform, platform => { if (platform !== 'openai') editForm.upstream_provider = '' });
 </script>

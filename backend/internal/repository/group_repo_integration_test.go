@@ -1305,3 +1305,22 @@ func (s *GroupRepoSuite) TestDelete_SoftDeletedGroup_lockForUpdate() {
 	s.Require().Error(err, "should fail to get soft-deleted group")
 	s.Require().ErrorIs(err, service.ErrGroupNotFound)
 }
+
+func (s *GroupRepoSuite) TestUpstreamProviderRoundTrip() {
+	g := &service.Group{Name: "brand-roundtrip", Platform: service.PlatformOpenAI, UpstreamProvider: "qwen", RateMultiplier: 1, Status: service.StatusActive, SubscriptionType: service.SubscriptionTypeStandard}
+	s.Require().NoError(s.repo.Create(s.ctx, g))
+	got, err := s.repo.GetByID(s.ctx, g.ID)
+	s.Require().NoError(err)
+	s.Require().Equal("qwen", got.UpstreamProvider)
+	got.UpstreamProvider = "mimo"
+	s.Require().NoError(s.repo.Update(s.ctx, got))
+	got, err = s.repo.GetByID(s.ctx, g.ID)
+	s.Require().NoError(err)
+	s.Require().Equal("mimo", got.UpstreamProvider)
+	s.Require().Equal(service.PlatformOpenAI, got.Platform)
+	got.UpstreamProvider = ""
+	s.Require().NoError(s.repo.Update(s.ctx, got))
+	got, err = s.repo.GetByID(s.ctx, g.ID)
+	s.Require().NoError(err)
+	s.Require().Empty(got.UpstreamProvider)
+}
