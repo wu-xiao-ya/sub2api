@@ -212,6 +212,20 @@ class MigrationRehearsal(unittest.TestCase):
                     self.assertEqual(refork.ledger(conn)[filename], digest)
             args.output = str(Path(folder) / "rerun-audit.json")
             refork.do_audit(args)
+            # Brand backfill is independent from legacy billing conversion.
+            import group_brands
+            with psycopg.connect(dsn) as conn:
+                preview = group_brands.run(conn)
+                ready = {g['group_id']: g['proposed_provider'] for g in preview['groups'] if g['status']=='ready'}
+                self.assertEqual(ready[group_id], 'qwen')
+            with psycopg.connect(dsn) as conn:
+                group_brands.run(conn, apply=True)
+            with psycopg.connect(dsn) as conn:
+                repeated = group_brands.run(conn, apply=True)
+                self.assertEqual(next(g for g in repeated['groups'] if g['group_id']==group_id)['status'], 'already_applied')
+                self.assertEqual(conn.execute('SELECT platform,upstream_provider FROM groups WHERE id=%s',(group_id,)).fetchone(), ('openai','qwen'))
+                self.assertEqual(conn.execute('SELECT count(*) FROM refork_audit.group_brand_updates WHERE group_id=%s',(group_id,)).fetchone()[0],1)
+                self.assertEqual(conn.execute('SELECT balance FROM users WHERE id=%s',(user_id,)).fetchone()[0], __import__('decimal').Decimal('123.12345678'))
 
 
 if __name__ == "__main__":
