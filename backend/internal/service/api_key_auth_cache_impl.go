@@ -14,7 +14,7 @@ import (
 	"github.com/dgraph-io/ristretto"
 )
 
-const apiKeyAuthSnapshotVersion = 25 // v25: key kind; aggregate members are refreshed outside the cache
+const apiKeyAuthSnapshotVersion = 26 // v25: key kind; aggregate members are refreshed outside the cache
 
 type apiKeyAuthCacheConfig struct {
 	l1Size        int
@@ -383,6 +383,7 @@ func (s *APIKeyService) snapshotFromAPIKey(ctx context.Context, apiKey *APIKey) 
 			ID:                              apiKey.Group.ID,
 			Name:                            apiKey.Group.Name,
 			Platform:                        apiKey.Group.Platform,
+			UpstreamProvider:                apiKey.Group.UpstreamProvider,
 			IsExclusive:                     apiKey.Group.IsExclusive,
 			Status:                          apiKey.Group.Status,
 			SubscriptionType:                apiKey.Group.SubscriptionType,
@@ -485,6 +486,7 @@ func (s *APIKeyService) snapshotToAPIKey(key string, snapshot *APIKeyAuthSnapsho
 			ID:                              snapshot.Group.ID,
 			Name:                            snapshot.Group.Name,
 			Platform:                        snapshot.Group.Platform,
+			UpstreamProvider:                snapshot.Group.UpstreamProvider,
 			IsExclusive:                     snapshot.Group.IsExclusive,
 			Status:                          snapshot.Group.Status,
 			Hydrated:                        true,

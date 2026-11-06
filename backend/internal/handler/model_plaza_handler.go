@@ -76,6 +76,7 @@ type modelPlazaModel struct {
 
 // modelPlazaGroup 广场分组条目（白名单字段）。
 type modelPlazaGroup struct {
+	UpstreamProvider   string   `json:"upstream_provider"`
 	ID                 int64    `json:"id"`
 	Name               string   `json:"name"`
 	Description        string   `json:"description"`
@@ -215,6 +216,7 @@ func toModelPlazaGroupDTO(g *service.PlazaGroup, userRates map[int64]float64) mo
 		Name:                      g.Name,
 		Description:               g.Description,
 		Platform:                  g.Platform,
+		UpstreamProvider:          g.UpstreamProvider,
 		SubscriptionType:          g.SubscriptionType,
 		RateMultiplier:            g.RateMultiplier,
 		PeakRateEnabled:           g.PeakRateEnabled,

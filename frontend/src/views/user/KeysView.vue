@@ -168,7 +168,7 @@
                 <GroupBadge
                   v-else-if="row.group"
                   :name="row.group.name"
-                  :platform="row.group.platform"
+                  :platform="row.group.platform" :upstream-provider="row.group.upstream_provider"
                   :subscription-type="row.group.subscription_type"
                   :rate-multiplier="row.group.rate_multiplier"
                   :user-rate-multiplier="userGroupRates[row.group.id]"
@@ -554,7 +554,7 @@
               <GroupBadge
                 v-if="option"
                 :name="(option as unknown as GroupOption).label"
-                :platform="(option as unknown as GroupOption).platform"
+                :platform="(option as unknown as GroupOption).platform" :upstream-provider="(option as unknown as GroupOption).upstream_provider"
                 :subscription-type="(option as unknown as GroupOption).subscriptionType"
                 :rate-multiplier="(option as unknown as GroupOption).rate"
                 :user-rate-multiplier="(option as unknown as GroupOption).userRate"
@@ -568,7 +568,7 @@
             <template #option="{ option, selected }">
               <GroupOptionItem
                 :name="(option as unknown as GroupOption).label"
-                :platform="(option as unknown as GroupOption).platform"
+                :platform="(option as unknown as GroupOption).platform" :upstream-provider="(option as unknown as GroupOption).upstream_provider"
                 :subscription-type="(option as unknown as GroupOption).subscriptionType"
                 :rate-multiplier="(option as unknown as GroupOption).rate"
                 :user-rate-multiplier="(option as unknown as GroupOption).userRate"
@@ -1197,7 +1197,7 @@
           >
             <GroupOptionItem
               :name="option.label"
-              :platform="option.platform"
+              :platform="option.platform" :upstream-provider="option.upstream_provider"
               :subscription-type="option.subscriptionType"
               :rate-multiplier="option.rate"
               :user-rate-multiplier="option.userRate"
@@ -1253,6 +1253,7 @@ import type { BatchApiKeyUsageStats } from '@/api/usage'
 import { formatDateTime } from '@/utils/format'
 import { maskApiKey } from '@/utils/maskApiKey'
 import PlatformIcon from '@/components/common/PlatformIcon.vue'
+import { groupBrandLabel } from '@/utils/groupBrand'
 import { platformBadgeLightClass } from '@/utils/platformColors'
 import { KEY_GROUP_PROVIDERS, KEY_GROUP_PROVIDER_ICONS, getKeyGroupProvider, type KeyGroupProvider } from '@/utils/keyGroupProviders'
 import {
@@ -1269,6 +1270,7 @@ const formatDateTimeLocal = (isoDate: string): string => {
 }
 
 interface GroupOption {
+  upstream_provider?: import('@/types').UpstreamProvider
   value: number
   label: string
   description: string | null
@@ -1428,11 +1430,11 @@ const memberOptionsLoading = ref(false)
 const memberOptionsError = ref('')
 const aggregateMemberOptions = computed(() => memberOptions.value
   .filter(key => key.key_kind !== 'aggregate' && key.group_id && !memberKeyIDs.value.includes(key.id))
-  .map(key => ({ value: key.id, label: `${key.name} · ${key.group?.name || key.group_id} · ${key.status}` })))
+  .map(key => ({ value: key.id, label: `${key.name} · ${key.group ? groupBrandLabel(key.group) + ' / ' + key.group.name : key.group_id} · ${key.status}` })))
 const aggregateMemberLabel = (id: number) => {
   const key = memberOptions.value.find(key => key.id === id)
   const existing = selectedKey.value?.members?.find(key => key.id === id)
-  return key ? `${key.name} · ${key.group?.name || key.group_id}` : existing ? `${existing.name} · ${existing.group?.name || existing.group_id}` : `#${id}`
+  return key ? `${key.name} · ${key.group ? groupBrandLabel(key.group) + ' / ' + key.group.name : key.group_id}` : existing ? `${existing.name} · ${existing.group ? groupBrandLabel(existing.group) + ' / ' + existing.group.name : existing.group_id}` : `#${id}`
 }
 const loadMemberOptions = async () => {
   memberOptionsLoading.value = true
@@ -1595,6 +1597,7 @@ const groupOptions = computed(() =>
     peakEnd: group.peak_end,
     peakRateMultiplier: group.peak_rate_multiplier,
     subscriptionType: group.subscription_type,
+    upstream_provider: group.upstream_provider,
     platform: group.platform
   }))
 )
@@ -1603,12 +1606,12 @@ const createProvider = ref<KeyGroupProvider>('anthropic')
 const createProviderOptions = computed(() => KEY_GROUP_PROVIDERS.map((value) => ({
   value,
   label: t(`keys.providers.${value}`),
-  count: groups.value.filter((group) => getKeyGroupProvider(group.platform) === value).length
+  count: groups.value.filter((group) => getKeyGroupProvider(group.platform, group.upstream_provider) === value).length
 })))
 
 const formGroupOptions = computed(() => showEditModal.value
   ? groupOptions.value
-  : groupOptions.value.filter((group) => getKeyGroupProvider(group.platform) === createProvider.value)
+  : groupOptions.value.filter((group) => getKeyGroupProvider(group.platform, group.upstream_provider) === createProvider.value)
 )
 
 const selectCreateProvider = (provider: KeyGroupProvider) => {

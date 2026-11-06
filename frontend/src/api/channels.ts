@@ -7,6 +7,7 @@ import { apiClient } from './client'
 import type { BillingMode } from '@/constants/channel'
 
 export interface UserAvailableGroup {
+  upstream_provider?: import('@/types').UpstreamProvider
   id: number
   name: string
   platform: string

@@ -125,6 +125,7 @@ func TestDuplicateGroupCopiesConfigurationDeeplyAndResetsRuntimeState(t *testing
 		Name:                         "高级订阅",
 		Description:                  "configuration",
 		Platform:                     PlatformOpenAI,
+		UpstreamProvider:             "qwen",
 		RateMultiplier:               1.75,
 		PeakRateEnabled:              true,
 		PeakStart:                    "09:00",

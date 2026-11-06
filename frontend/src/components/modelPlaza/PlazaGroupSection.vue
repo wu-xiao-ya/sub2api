@@ -56,7 +56,7 @@
       <PlazaModelPricingTable
         v-if="group.models.length > 0"
         :models="group.models"
-        :platform="group.platform"
+        :platform="group.platform" :upstream-provider="group.upstream_provider"
         :rate-multiplier="group.rate_multiplier"
         :user-rate-multiplier="group.user_rate_multiplier ?? null"
         :image-rate-independent="group.image_rate_independent"
