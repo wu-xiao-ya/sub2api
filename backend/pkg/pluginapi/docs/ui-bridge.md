@@ -57,3 +57,11 @@ UI 到宿主：
 UI 接收消息时必须验证 `event.source === parent`、消息来源标识、Bridge Token 和等待中的 `request_id`。每个请求必须有超时和卸载清理。
 
 宿主不会向 iframe 提供管理员 Token。插件 UI 不得尝试访问管理 API、Cookie、父页面 DOM 或浏览器存储中的宿主数据。
+
+## 本 fork 的供应商扩展
+
+- `auth.action`：参数 `action`（begin/poll/cancel/unlink）、`identity_ref`、`session_id`，返回脱敏 `result`，所有动作要求二次验证。
+- `account.create`：参数 `account_name`、`identity_ref`；创建无分组、并发为 1 的 DeepSeek 插件账号并绑定，返回 `account_id`。创建后由管理员配置分组。
+- `account.bind`：参数 `account_id`、`identity_ref`；只能绑定空凭据的 DeepSeek 插件账号，不可静默替换已绑定身份。
+
+授权 URL 由宿主按签名清单 `authorization_hosts` 校验并展示，iframe 不自行打开外部页面。旧会话关闭或被替换后，迟到的授权响应不得在新会话显示。

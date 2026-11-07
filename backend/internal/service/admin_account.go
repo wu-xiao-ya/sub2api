@@ -411,6 +411,9 @@ func normalizeOpenAILongContextBillingUpdateExtra(account *Account, input *Updat
 // Grok media eligibility helpers live in account_grok_media_eligibility.go.
 
 func buildAccountForCreate(input *CreateAccountInput, accountExtra map[string]any) (*Account, error) {
+	if input.Type == AccountTypePlugin && (input.Platform != PlatformDeepseek || len(input.Credentials) != 0) {
+		return nil, errors.New("plugin accounts require deepseek platform and empty credentials")
+	}
 	if err := ValidateUpstreamBillingManualRateExtra(accountExtra); err != nil {
 		return nil, err
 	}
@@ -644,6 +647,11 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 
 	if input.Name != "" {
 		account.Name = input.Name
+	}
+	if input.Type == AccountTypePlugin || account.Type == AccountTypePlugin {
+		if (input.Type != "" && input.Type != account.Type) || (input.Credentials != nil && len(input.Credentials) != 0) {
+			return nil, errors.New("plugin account type is immutable and credentials must be empty")
+		}
 	}
 	if input.Type != "" {
 		account.Type = input.Type

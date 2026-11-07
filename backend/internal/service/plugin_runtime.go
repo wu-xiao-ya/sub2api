@@ -295,6 +295,7 @@ func (r *pluginRuntime) roundTrip(ctx context.Context, request *http.Request, pr
 		AccountType:        account.Type,
 		ContentLength:      request.ContentLength,
 		HasBody:            request.Body != nil && request.Body != http.NoBody,
+		IdentityRef:        providerIdentityFromContext(ctx),
 	}}}); err != nil {
 		cancel()
 		// gRPC Send 返回错误时无法证明服务端没有收到元数据，必须禁止自动重放。
@@ -358,6 +359,7 @@ type PluginTransportError struct {
 	Code        string
 	Message     string
 	RequestSent bool
+	NoReplay    bool // Policy decision independent of whether bytes reached upstream.
 }
 
 func (e *PluginTransportError) Error() string {

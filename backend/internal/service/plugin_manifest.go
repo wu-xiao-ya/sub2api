@@ -15,6 +15,7 @@ import (
 )
 
 const (
+	PluginCapabilityChatCompletions     = "upstream.chat_completions.v1"
 	PluginCapabilityOpenAIOAuthOutbound = "openai.oauth.outbound_transport.v1"
 	PluginStateDisabled                 = "disabled"
 	PluginStateStarting                 = "starting"
@@ -31,17 +32,18 @@ var ErrPluginStateChanged = errors.New("插件状态已在其他实例中变化�
 
 // PluginManifest 是 .s2plugin 包中可在执行二进制前检查的声明。
 type PluginManifest struct {
-	SchemaVersion int                      `json:"schema_version"`
-	ID            string                   `json:"id"`
-	Name          string                   `json:"name"`
-	Version       string                   `json:"version"`
-	Description   string                   `json:"description,omitempty"`
-	Author        string                   `json:"author,omitempty"`
-	Requires      PluginRequirements       `json:"requires"`
-	Capabilities  []PluginCapability       `json:"capabilities"`
-	Runtimes      map[string]PluginRuntime `json:"runtimes"`
-	UI            PluginUIManifest         `json:"ui"`
-	Files         map[string]string        `json:"files"`
+	SchemaVersion      int                      `json:"schema_version"`
+	ID                 string                   `json:"id"`
+	Name               string                   `json:"name"`
+	Version            string                   `json:"version"`
+	Description        string                   `json:"description,omitempty"`
+	Author             string                   `json:"author,omitempty"`
+	Requires           PluginRequirements       `json:"requires"`
+	Capabilities       []PluginCapability       `json:"capabilities"`
+	Runtimes           map[string]PluginRuntime `json:"runtimes"`
+	AuthorizationHosts []string                 `json:"authorization_hosts,omitempty"`
+	UI                 PluginUIManifest         `json:"ui"`
+	Files              map[string]string        `json:"files"`
 }
 
 type PluginRequirements struct {
@@ -168,9 +170,20 @@ func (m PluginManifest) Validate() error {
 	if len(m.Capabilities) == 0 {
 		return errors.New("插件必须声明至少一个能力")
 	}
+	if isProviderPlugin(m) && len(m.Capabilities) != 1 {
+		return errors.New("provider plugins must declare exactly one capability")
+	}
 	for _, capability := range m.Capabilities {
-		if capability.ID != PluginCapabilityOpenAIOAuthOutbound || capability.Platform != PlatformOpenAI || capability.AccountType != AccountTypeOAuth {
-			return fmt.Errorf("初期仅支持能力 %s", PluginCapabilityOpenAIOAuthOutbound)
+		if !validPluginCapability(capability) {
+			return errors.New("unsupported plugin capability or account scope")
+		}
+	}
+	if len(m.AuthorizationHosts) > 8 {
+		return errors.New("too many authorization hosts")
+	}
+	for _, host := range m.AuthorizationHosts {
+		if host != strings.ToLower(host) || !regexp.MustCompile(`^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?\.[a-z]{2,}$`).MatchString(host) {
+			return errors.New("invalid authorization host")
 		}
 	}
 	runtimeEntry, ok := m.Runtimes[m.RuntimeKey()]
