@@ -1,9 +1,8 @@
 <template>
   <!-- Claude/Anthropic logo -->
-  <svg v-if="platform === 'openai' && upstreamProvider" :class="sizeClass" viewBox="0 0 24 24" fill="currentColor" role="img" :aria-label="UPSTREAM_LABELS[upstreamProvider]">
-    <title>{{ UPSTREAM_LABELS[upstreamProvider] }}</title>
-    <rect x="1" y="1" width="22" height="22" rx="6" fill="none" stroke="currentColor" />
-    <text x="12" y="17" text-anchor="middle" font-size="14" font-weight="700">{{ upstreamProvider === 'qwen' ? 'Q' : upstreamProvider === 'hunyuan' ? 'H' : 'M' }}</text>
+  <svg v-if="brandVisual" :class="[sizeClass, brandVisual.iconClass]" viewBox="0 0 24 24" fill="currentColor" fill-rule="evenodd" role="img" :aria-label="UPSTREAM_LABELS[upstreamProvider!]">
+    <title>{{ UPSTREAM_LABELS[upstreamProvider!] }}</title>
+    <path v-for="(path, index) in brandVisual.paths" :key="index" :d="path" />
   </svg>
   <svg v-else-if="platform === 'anthropic'" :class="sizeClass" viewBox="0 0 16 16" fill="currentColor">
     <path
@@ -93,6 +92,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { domesticBrandVisual } from '@/utils/domesticBrandVisuals'
 import { UPSTREAM_LABELS } from '@/utils/groupBrand'
 import type { GroupPlatform, UpstreamProvider } from '@/types'
 
@@ -105,6 +105,8 @@ interface Props {
 const props = withDefaults(defineProps<Props>(), {
   size: 'sm'
 })
+
+const brandVisual = computed(() => domesticBrandVisual(props.platform, props.upstreamProvider))
 
 const sizeClass = computed(() => {
   const sizes = {

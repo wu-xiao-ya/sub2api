@@ -7,7 +7,7 @@
   >
     <!-- Platform logo -->
     <PlatformIcon v-if="platform" :platform="platform" :upstream-provider="upstreamProvider" size="sm" />
-    <span v-if="platform === 'openai' && upstreamProvider" class="opacity-80">{{ UPSTREAM_LABELS[upstreamProvider] }}</span>
+    <span v-if="showBrandName" class="text-[10px] opacity-75">{{ UPSTREAM_LABELS[upstreamProvider || ''] }}</span>
     <!-- Group name -->
     <span :class="truncate ? 'truncate' : 'min-w-0 whitespace-normal [overflow-wrap:anywhere]'">{{ name }}</span>
     <!-- Right side label -->
@@ -28,6 +28,7 @@
 </template>
 
 <script setup lang="ts">
+import { domesticBrandVisual } from '@/utils/domesticBrandVisuals'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { SubscriptionType, GroupPlatform, UpstreamProvider } from '@/types'
@@ -70,6 +71,12 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 const { t } = useI18n()
+
+const showBrandName = computed(() => {
+  if (!domesticBrandVisual(props.platform, props.upstreamProvider)) return false
+  const aliases: Record<string, string[]> = { qwen: ['qwen', '千问'], hunyuan: ['hunyuan', '混元'], mimo: ['mimo'] }
+  return !(aliases[props.upstreamProvider || ''] || []).some(alias => props.name.toLowerCase().includes(alias))
+})
 
 const isSubscription = computed(() => props.subscriptionType === 'subscription')
 
@@ -192,6 +199,8 @@ const peakRateClass = computed(() => {
 
 // Badge color based on platform and subscription type
 const badgeClass = computed(() => {
+  const brand = domesticBrandVisual(props.platform, props.upstreamProvider)
+  if (brand) return brand.badgeClass
   if (props.platform === 'anthropic') {
     // Claude: orange theme
     return isSubscription.value
