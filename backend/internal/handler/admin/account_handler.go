@@ -2804,6 +2804,16 @@ func (h *AccountHandler) GetAvailableModels(c *gin.Context) {
 		return
 	}
 
+	if account.Type == service.AccountTypePlugin {
+		models, err := h.accountTestService.FetchPluginAccountModels(c.Request.Context(), account)
+		if err != nil {
+			response.Error(c, http.StatusServiceUnavailable, err.Error())
+			return
+		}
+		response.Success(c, models)
+		return
+	}
+
 	// Handle OpenAI accounts
 	if account.IsOpenAI() {
 		// Prefer the shared, account-keyed upstream catalog. If discovery fails,

@@ -171,7 +171,7 @@ func (s *OpenAIGatewayService) openAIChatCompletionsTargetURL(account *Account) 
 // （回退路径仅面向 APIKey 账号，凭证恒为 openai api_key）。
 func (s *OpenAIGatewayService) resolveCCFallbackTarget(account *Account) (apiKey string, targetURL string, err error) {
 	if account.Type == AccountTypePlugin {
-		return "", "https://plugin.invalid/v1/chat/completions", nil
+		return "", buildOpenAIChatCompletionsURL(pluginProviderBaseURL), nil
 	}
 	apiKey = strings.TrimSpace(account.GetOpenAIProtocolAPIKey())
 	if apiKey == "" {

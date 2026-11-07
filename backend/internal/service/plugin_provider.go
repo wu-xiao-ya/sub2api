@@ -148,7 +148,9 @@ func providerUnavailable(message string) error {
 	return &PluginTransportError{Code: "provider_unavailable", Message: message, NoReplay: true}
 }
 
-func (m *PluginManager) RoundTripProvider(ctx context.Context, req *http.Request, proxy string, account *Account) (*http.Response, error) {
+const pluginProviderBaseURL = "https://plugin.invalid"
+
+func (m *PluginManager) providerAccountBinding(ctx context.Context, account *Account) (*PluginAccountBinding, error) {
 	if account == nil || account.Platform != PlatformDeepseek || account.Type != AccountTypePlugin {
 		return nil, providerUnavailable("invalid plugin account")
 	}
@@ -157,8 +159,24 @@ func (m *PluginManager) RoundTripProvider(ctx context.Context, req *http.Request
 		return nil, providerUnavailable("provider repository unavailable")
 	}
 	binding, err := repo.GetPluginAccountBinding(ctx, account.ID)
-	if err != nil {
+	if err != nil || binding == nil {
 		return nil, providerUnavailable("plugin account is not bound")
+	}
+	return binding, nil
+}
+
+func (m *PluginManager) ProviderAccountModels(ctx context.Context, account *Account) ([]string, error) {
+	binding, err := m.providerAccountBinding(ctx, account)
+	if err != nil {
+		return nil, err
+	}
+	return m.inspectProviderIdentity(ctx, binding.PluginID, binding.IdentityRef)
+}
+
+func (m *PluginManager) RoundTripProvider(ctx context.Context, req *http.Request, proxy string, account *Account) (*http.Response, error) {
+	binding, err := m.providerAccountBinding(ctx, account)
+	if err != nil {
+		return nil, err
 	}
 	// Refresh uses the same encrypted, transactionally locked config as admin auth.
 	if _, err = m.Authorize(ctx, binding.PluginID, "prepare", binding.IdentityRef, ""); err != nil {
@@ -278,22 +296,30 @@ func (m *PluginManager) BindProviderAccount(ctx context.Context, id, accountID i
 	if accountID < 1 || identity == "" || len(identity) > 160 {
 		return errors.New("invalid account binding")
 	}
-	result, err := m.Authorize(ctx, id, "inspect", identity, "")
-	if err != nil {
+	if _, err := m.inspectProviderIdentity(ctx, id, identity); err != nil {
 		return err
-	}
-	var status struct {
-		IdentityRef string `json:"identity_ref"`
-		Authorized  bool   `json:"authorized"`
-	}
-	if json.Unmarshal(result, &status) != nil || !status.Authorized || status.IdentityRef != identity {
-		return errors.New("identity is not authorized")
 	}
 	repo, ok := m.repo.(PluginProviderRepository)
 	if !ok {
 		return fmt.Errorf("provider repository unavailable")
 	}
 	return repo.BindPluginAccount(ctx, PluginAccountBinding{AccountID: accountID, PluginID: id, IdentityRef: identity})
+}
+
+func (m *PluginManager) inspectProviderIdentity(ctx context.Context, pluginID int64, identity string) ([]string, error) {
+	result, err := m.Authorize(ctx, pluginID, "inspect", identity, "")
+	if err != nil {
+		return nil, err
+	}
+	var status struct {
+		IdentityRef string   `json:"identity_ref"`
+		Authorized  bool     `json:"authorized"`
+		Models      []string `json:"models"`
+	}
+	if json.Unmarshal(result, &status) != nil || !status.Authorized || status.IdentityRef != identity {
+		return nil, errors.New("identity is not authorized")
+	}
+	return status.Models, nil
 }
 
 func (m *PluginManager) UnbindProviderAccount(ctx context.Context, id, accountID int64) error {
