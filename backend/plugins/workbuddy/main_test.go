@@ -92,8 +92,40 @@ func TestAuthorizationKeepsSecretsPrivateAndCatalogScoped(t *testing.T) {
 	require.NoError(t, e)
 	require.Len(t, c.Accounts, 1)
 	require.Empty(t, c.Sessions)
-	_, e = s.Authorize(context.Background(), &pluginv1.AuthorizeRequest{Action: "poll", SessionId: public.SessionID, ConfigJson: poll.ConfigJson})
-	require.Error(t, e)
+	expired, e := s.Authorize(context.Background(), &pluginv1.AuthorizeRequest{Action: "poll", SessionId: public.SessionID, ConfigJson: poll.ConfigJson})
+	require.NoError(t, e)
+	require.JSONEq(t, `{"done":true,"reason":"session_expired"}`, string(expired.PublicJson))
+}
+
+func TestAuthorizationPollDistinguishesPendingFromUpstreamFailure(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		status   int
+		body     string
+		expected string
+	}{
+		{"pending", 200, `{"code":11217,"msg":"login ing..."}`, `{"done":false,"reason":"upstream_pending"}`},
+		{"refused", 200, `{"code":12154,"msg":"private details"}`, `{"done":false,"reason":"upstream_refused","upstream_code":12154}`},
+		{"http error", 502, `private response`, `{"done":false,"reason":"upstream_unavailable"}`},
+		{"invalid metadata", 200, `private response`, `{"done":false,"reason":"upstream_unavailable"}`},
+		{"missing token", 200, `{"code":0,"data":{}}`, `{"done":false,"reason":"missing_token"}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(tc.status)
+				io.WriteString(w, tc.body)
+			}))
+			defer upstream.Close()
+			s := newServer()
+			s.billing = upstream.URL
+			c := fixture()
+			c.Sessions["session"] = loginSession{State: "private state", ExpiresAt: time.Now().Add(time.Minute).Unix()}
+			result, err := s.Authorize(context.Background(), &pluginv1.AuthorizeRequest{Action: "poll", SessionId: "session", ConfigJson: rawConfig(c)})
+			require.NoError(t, err)
+			require.False(t, result.ConfigChanged)
+			require.JSONEq(t, tc.expected, string(result.PublicJson))
+		})
+	}
 }
 func TestForwardPreservesToolReasoningAndUsageWithoutCredentialLeak(t *testing.T) {
 	for _, streaming := range []bool{false, true} {

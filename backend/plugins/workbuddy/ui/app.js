@@ -55,7 +55,26 @@ action('login', () => begin());
 action('reauthorize', () => begin(chosen()));
 action('poll', async () => {
   const result = await request('auth.action', { action: 'poll', session_id: session });
-  if (!result.done) { el('message').textContent = '等待授权，请完成登录后再次检查。'; return; }
+  switch (result.reason) {
+    case 'session_expired':
+      session = '';
+      el('pending').hidden = true;
+      el('message').textContent = '授权会话已过期，请重新添加账号并使用新链接。';
+      return;
+    case 'upstream_pending':
+      el('message').textContent = 'WorkBuddy 尚未确认本次授权（11217）。请确认当前登录页显示「登录成功」并提示返回 WorkBuddy，然后再次检查。';
+      return;
+    case 'upstream_refused':
+      el('message').textContent = `WorkBuddy 拒绝令牌查询（业务码 ${result.upstream_code}）。`;
+      return;
+    case 'upstream_unavailable':
+      el('message').textContent = 'WorkBuddy 令牌接口暂时不可用或返回异常，请稍后再次检查。';
+      return;
+    case 'missing_token':
+      el('message').textContent = 'WorkBuddy 返回成功，但未签发访问令牌。';
+      return;
+  }
+  if (!result.authorized) throw new Error('未收到有效的授权结果');
   session = ''; el('pending').hidden = true; await status(); el('identity').value = result.identity_ref; renderModels(); el('message').textContent = '授权成功，可以创建或绑定宿主账号。';
 });
 action('cancel', async () => { await request('auth.action', { action: 'cancel', session_id: session }); session = ''; el('pending').hidden = true; });

@@ -24,11 +24,24 @@ import (
 )
 
 const pluginID = "org.starlight.workbuddy"
-const pluginVersion = "0.1.0"
+const pluginVersion = "0.1.1"
 const capability = "upstream.chat_completions.v1"
 const billingBase = "https://www.codebuddy.cn"
 const chatBase = "https://copilot.tencent.com"
 const maxBody = 32 << 20
+const authorizationPendingCode = 11217
+
+type metadataBusinessError struct {
+	code float64
+}
+
+func (e *metadataBusinessError) Error() string {
+	return "upstream metadata not ready or refused"
+}
+
+func (e *metadataBusinessError) GRPCStatus() *status.Status {
+	return status.New(codes.FailedPrecondition, e.Error())
+}
 
 type credential struct {
 	AccessToken  string   `json:"access_token"`
@@ -198,16 +211,25 @@ func (s *server) Authorize(ctx context.Context, r *pluginv1.AuthorizeRequest) (*
 	case "poll":
 		session, ok := c.Sessions[r.SessionId]
 		if !ok {
-			return nil, status.Error(codes.NotFound, "authorization session expired; start again")
+			public = map[string]any{"done": true, "reason": "session_expired"}
+			break
 		}
 		data, e := s.document(ctx, http.MethodGet, s.billing+"/v2/plugin/auth/token?state="+url.QueryEscape(session.State), nil, nil)
 		if e != nil {
-			public = map[string]any{"done": false}
+			var refusal *metadataBusinessError
+			switch {
+			case errors.As(e, &refusal) && refusal.code == authorizationPendingCode:
+				public = map[string]any{"done": false, "reason": "upstream_pending"}
+			case refusal != nil:
+				public = map[string]any{"done": false, "reason": "upstream_refused", "upstream_code": refusal.code}
+			default:
+				public = map[string]any{"done": false, "reason": "upstream_unavailable"}
+			}
 			break
 		}
 		token := str(data, "accessToken", "access_token", "AccessToken")
 		if token == "" {
-			public = map[string]any{"done": false}
+			public = map[string]any{"done": false, "reason": "missing_token"}
 			break
 		}
 		a := credential{AccessToken: token, RefreshToken: str(data, "refreshToken", "refresh_token", "RefreshToken"), Domain: str(data, "domain", "Domain"), ExpiresAt: expiry(data, now)}
@@ -358,7 +380,7 @@ func readDocument(resp *http.Response) (map[string]any, error) {
 		return nil, status.Error(codes.Unavailable, "invalid upstream metadata")
 	}
 	if code, ok := envelope["code"].(float64); ok && code != 0 && code != 200 {
-		return nil, status.Error(codes.FailedPrecondition, "upstream metadata not ready or refused")
+		return nil, &metadataBusinessError{code: code}
 	}
 	data, ok := envelope["data"].(map[string]any)
 	if !ok {
