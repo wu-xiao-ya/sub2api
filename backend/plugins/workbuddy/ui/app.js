@@ -32,7 +32,13 @@ async function status() {
   if (accounts.some(a => a.identity_ref === selected)) el('identity').value = selected;
   renderModels();
 }
-function renderModels() { el('models').textContent = (accounts.find(a => a.identity_ref === el('identity').value)?.models ?? []).join('\n'); }
+function renderModels() {
+  const account = accounts.find(a => a.identity_ref === el('identity').value);
+  el('models').textContent = (account?.models ?? []).join('\n');
+  el('identity-status').textContent = !account ? '尚未保存授权' : account.expires_at > 0
+    ? `已保存授权；凭据到期时间 ${new Date(account.expires_at * 1000).toLocaleString()}。实际可用性以调用结果为准。`
+    : '已保存授权；上游未提供到期时间，下次请求将尝试刷新凭据。';
+}
 function action(id, fn) {
   el(id).addEventListener('click', async () => {
     const button = el(id); button.disabled = true; el('message').textContent = '';

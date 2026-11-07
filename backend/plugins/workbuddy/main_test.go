@@ -191,3 +191,59 @@ func TestRedirectCannotExfiltrateCredentials(t *testing.T) {
 	require.NoError(t, s.Forward(call))
 	require.EqualValues(t, 502, call.responses[0].GetStart().StatusCode)
 }
+
+func TestBusinessErrorsAreNeverSuccessfulUsage(t *testing.T) {
+	for _, streaming := range []bool{false, true} {
+		t.Run(map[bool]string{false: "json", true: "stream"}[streaming], func(t *testing.T) {
+			calls := 0
+			upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				calls++
+				if streaming {
+					w.Header().Set("Content-Type", "text/event-stream")
+					io.WriteString(w, "data: {\"code\":14018,\"message\":\"test-private-upstream-detail\"}\n\n")
+				} else {
+					w.Header().Set("Content-Type", "application/json")
+					io.WriteString(w, `{"code":14018,"message":"test-private-upstream-detail"}`)
+				}
+			}))
+			defer upstream.Close()
+			s := newServer()
+			s.chat = upstream.URL
+			s.config = fixture()
+			call := callStream(`{"model":"deepseek-v4-pro"}`, identityRef("test-user"))
+			require.NoError(t, s.Forward(call))
+			require.Equal(t, 1, calls)
+			raw, _ := json.Marshal(call.responses)
+			require.NotContains(t, string(raw), "test-private-upstream-detail")
+			if streaming {
+				last := call.responses[len(call.responses)-1].GetError()
+				require.NotNil(t, last)
+				require.Equal(t, "quota_exhausted", last.Code)
+				require.True(t, last.RequestSent)
+			} else {
+				require.EqualValues(t, 502, call.responses[0].GetStart().StatusCode)
+			}
+		})
+	}
+}
+
+func TestForwardUsesOnlyTheExplicitlyBoundIdentity(t *testing.T) {
+	calls := 0
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		require.Equal(t, "test-user-b", r.Header.Get("X-User-Id"))
+		require.Equal(t, "Bearer test-access-b", r.Header.Get("Authorization"))
+		require.Empty(t, r.Header.Get("X-Refresh-Token"))
+		w.Header().Set("Content-Type", "application/json")
+		io.WriteString(w, `{"choices":[{"message":{"content":"ok"}}],"usage":{"prompt_tokens":1,"completion_tokens":1}}`)
+	}))
+	defer upstream.Close()
+	s := newServer()
+	s.chat = upstream.URL
+	s.config = fixture()
+	s.config.Accounts[identityRef("test-user-b")] = credential{UID: "test-user-b", AccessToken: "test-access-b", RefreshToken: "test-refresh-b", Domain: "codebuddy.cn", Models: []string{"deepseek-v4-pro"}}
+	call := callStream(`{"model":"deepseek-v4-pro"}`, identityRef("test-user-b"))
+	require.NoError(t, s.Forward(call))
+	require.Equal(t, 1, calls)
+	require.EqualValues(t, 200, call.responses[0].GetStart().StatusCode)
+}

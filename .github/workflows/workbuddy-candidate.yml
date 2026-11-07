@@ -65,7 +65,7 @@ jobs:
       - uses: actions/upload-artifact@v6
         with:
           name: workbuddy-frontend-${{ github.sha }}
-          path: frontend/dist/
+          path: backend/internal/web/dist/
           retention-days: 14
 
   image:
@@ -89,7 +89,7 @@ jobs:
           push: true
           tags: ghcr.io/wu-xiao-ya/sub2api:workbuddy-candidate-${{ github.sha }}
           build-args: |
-            VERSION=0.2.18-workbuddy-candidate
+            VERSION=0.2.18+workbuddy.${{ github.sha }}
             COMMIT=${{ github.sha }}
             GOPROXY=https://proxy.golang.org,direct
             GOSUMDB=sum.golang.org
