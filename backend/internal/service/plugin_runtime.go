@@ -10,6 +10,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"os"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -40,10 +41,15 @@ func startPluginRuntime(ctx context.Context, installation *PluginInstallation, s
 		return nil, errors.New("插件安装记录为空")
 	}
 	checksum, err := hex.DecodeString(installation.BinarySHA256)
+	args := []string(nil)
+	if installation.Builtin {
+		args = []string{"--builtin-workbuddy"}
+		checksum, err = runningExecutableChecksum(installation.BinaryPath)
+	}
 	if err != nil || len(checksum) != sha256.Size {
 		return nil, errors.New("插件二进制哈希无效")
 	}
-	cmd := exec.CommandContext(context.WithoutCancel(ctx), installation.BinaryPath)
+	cmd := exec.CommandContext(context.WithoutCancel(ctx), installation.BinaryPath, args...)
 	client := hcplugin.NewClient(&hcplugin.ClientConfig{
 		HandshakeConfig:  pluginv1.HandshakeConfig,
 		Plugins:          pluginv1.ClientPluginMap(),
@@ -106,6 +112,19 @@ func startPluginRuntime(ctx context.Context, installation *PluginInstallation, s
 	// 老插件不实现 InitHostServices（返回 Unimplemented），此处静默跳过，绝不阻断启动。
 	offerPluginHostServices(ctx, installation, api, transportClient.Broker, hostServices, startTimeout)
 	return runtime, nil
+}
+
+func runningExecutableChecksum(path string) ([]byte, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	hash := sha256.New()
+	if _, err := io.Copy(hash, f); err != nil {
+		return nil, err
+	}
+	return hash.Sum(nil), nil
 }
 
 // offerPluginHostServices 在 go-plugin broker 上启动一个宿主服务实例，并通过

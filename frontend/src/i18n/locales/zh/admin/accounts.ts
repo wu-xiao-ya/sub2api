@@ -321,6 +321,7 @@ export default {
         typesafe: 'TypeSafe / Jev',
       },
       pluginCredits: {
+        builtin: '宿主内置',
         remaining: '剩余积分',
         reset: '重置时间 {time}',
         query: '查询积分',

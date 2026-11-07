@@ -114,6 +114,7 @@ type PluginInstallation struct {
 	Compatibility   PluginCompatibility `json:"compatibility"`
 	RuntimeHealthy  bool                `json:"runtime_healthy"`
 	RuntimeMessage  string              `json:"runtime_message"`
+	Builtin         bool                `json:"builtin,omitempty"`
 }
 
 type PluginBinding struct {

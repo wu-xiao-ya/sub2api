@@ -118,6 +118,7 @@ export default {
         typesafe: 'TypeSafe / Jev',
       },
       pluginCredits: {
+        builtin: 'Built in',
         remaining: 'Credits remaining',
         reset: 'Resets {time}',
         query: 'Check credits',

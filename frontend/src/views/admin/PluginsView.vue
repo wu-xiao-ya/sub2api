@@ -194,7 +194,7 @@
                   class="rounded bg-gray-100 px-2 py-0.5 text-gray-600 dark:bg-dark-700 dark:text-gray-300"
                 >
                   {{ t("admin.plugins.signature") }}:
-                  {{ t(`admin.plugins.${plugin.signature_status}`) }}
+                  {{ plugin.builtin ? t("admin.accounts.pluginCredits.builtin") : t(`admin.plugins.${plugin.signature_status}`) }}
                 </span>
               </div>
               <p
@@ -274,6 +274,7 @@
             <button
               type="button"
               class="btn btn-danger btn-sm"
+              v-if="!plugin.builtin"
               :disabled="busyID === plugin.id || hasEnabledBinding(plugin)"
               @click="uninstallPlugin(plugin)"
             >
@@ -362,6 +363,7 @@ interface PluginBridgeMessage {
   action?: string;
   identity_ref?: string;
   session_id?: string;
+  import_json?: string;
   account_id?: number;
   account_name?: string;
   height?: unknown;
@@ -542,7 +544,7 @@ async function openConfiguration(plugin: PluginInstallation): Promise<void> {
   try {
     const session = await adminAPI.plugins.createUISession(plugin.id);
     if (version !== uiSessionVersion) return;
-    uiSession.value = session;
+    uiSession.value = plugin.builtin ? { ...session, url: `${session.url}&builtin=1` } : session;
   } catch (error: unknown) {
     if (version !== uiSessionVersion) return;
     uiLoading.value = false;
@@ -574,10 +576,10 @@ function handlePluginFrameLoad(): void {
   uiLoading.value = false;
 }
 
-function registerBridgeRequest(requestID: string): void {
+function registerBridgeRequest(requestID: string, timeoutMS: number): void {
   const timeout = window.setTimeout(() => {
     pendingBridgeRequests.delete(requestID);
-  }, 30_000);
+  }, timeoutMS);
   pendingBridgeRequests.set(requestID, timeout);
 }
 
@@ -626,10 +628,10 @@ async function handleBridgeMessage(event: MessageEvent): Promise<void> {
     message.type === "config.load" ||
     message.type === "config.save" ||
     message.type === "config.test" ||
-    message.type === "plugin.status" || message.type === "auth.action" || message.type === "account.bind" || message.type === "account.create" || message.type === "account.unbind";
+    message.type === "plugin.status" || message.type === "auth.action" || message.type === "workbuddy.import" || message.type === "account.bind" || message.type === "account.create" || message.type === "account.unbind";
   if (expectsResponse) {
     if (!requestID || pendingBridgeRequests.has(requestID)) return;
-    registerBridgeRequest(requestID);
+    registerBridgeRequest(requestID, message.type === "workbuddy.import" ? 60000 : 30000);
   }
 
   const targetPlugin = configPlugin.value;
@@ -685,6 +687,14 @@ async function handleBridgeMessage(event: MessageEvent): Promise<void> {
           authorizationURL.value = url.href;
         } else if (result.done || message.action === "cancel") { authorizationURL.value = ""; }
         postBridgeResult(message, { ok: true, result });
+        break;
+      }
+      case "workbuddy.import": {
+        if (!targetPlugin.builtin || typeof message.import_json !== "string" || new TextEncoder().encode(message.import_json).length > 256 * 1024) {
+          throw new Error(t("admin.plugins.bridgeRejected"));
+        }
+        const result = await pluginStepUp.run(() => adminAPI.plugins.importWorkBuddy(targetPlugin.id, message.import_json!));
+        if (uiSession.value?.bridge_token === targetSession) postBridgeResult(message, { ok: true, result });
         break;
       }
       case "account.bind": {
@@ -770,9 +780,13 @@ function compatibilityClass(
   return "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300";
 }
 
-onMounted(() => {
+onMounted(async () => {
   window.addEventListener("message", handleBridgeMessage);
-  void loadPlugins();
+  await loadPlugins();
+  if (new URLSearchParams(window.location.search).get("workbuddy") === "1") {
+    const workbuddy = plugins.value.find(plugin => plugin.builtin && plugin.plugin_key === "org.starlight.workbuddy");
+    if (workbuddy) await openConfiguration(workbuddy);
+  }
 });
 
 onBeforeUnmount(() => {

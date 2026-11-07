@@ -1,5 +1,7 @@
 # WorkBuddy 国内版 DeepSeek 插件
 
+当前分支的宿主已内置 WorkBuddy。管理端从「账号管理 → WorkBuddy」进入，可官方登录或导入 DSH JSON。初次导入的授权需要创建并绑定宿主账号，重复导入同一身份会保留原有绑定。宿主升级保留已有 WorkBuddy 的加密配置、账号与分组关系。独立包构建说明适用于历史版本的回退场景。
+
 独立进程插件，能力 `upstream.chat_completions.v1`。需要本分支的宿主扩展，不能安装到仅支持 OpenAI OAuth 的旧宿主。
 
 ## 使用

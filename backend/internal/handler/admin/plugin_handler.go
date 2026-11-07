@@ -45,7 +45,7 @@ func (h *PluginHandler) Authorize(c *gin.Context) {
 		SessionID   string `json:"session_id"`
 	}
 	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 4096)
-	if c.ShouldBindJSON(&input) != nil || input.Action == "prepare" || input.Action == "inspect" || input.Action == "credits" {
+	if c.ShouldBindJSON(&input) != nil || input.Action == "prepare" || input.Action == "inspect" || input.Action == "credits" || input.Action == "import" {
 		response.BadRequest(c, "Invalid authorization action")
 		return
 	}
@@ -57,6 +57,25 @@ func (h *PluginHandler) Authorize(c *gin.Context) {
 	response.Success(c, result)
 }
 
+func (h *PluginHandler) ImportWorkBuddy(c *gin.Context) {
+	id, ok := pluginIDParam(c)
+	if !ok {
+		return
+	}
+	c.Header("Cache-Control", "no-store")
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, service.WorkBuddyImportMaxBytes)
+	raw, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		response.BadRequest(c, "WorkBuddy JSON is too large or unreadable")
+		return
+	}
+	result, err := h.manager.ImportWorkBuddyAccounts(c.Request.Context(), id, string(raw))
+	if err != nil {
+		response.BadRequest(c, "WorkBuddy import failed; check JSON format and upstream connectivity")
+		return
+	}
+	response.Success(c, result)
+}
 func (h *PluginHandler) AccountCredits(c *gin.Context) {
 	id, err := strconv.ParseInt(c.Param("account_id"), 10, 64)
 	if err != nil || id < 1 {

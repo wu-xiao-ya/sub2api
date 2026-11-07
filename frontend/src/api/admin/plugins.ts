@@ -63,6 +63,7 @@ export interface PluginBinding {
 }
 
 export interface PluginInstallation {
+  builtin?: boolean
   id: number
   plugin_key: string
   name: string
@@ -172,6 +173,14 @@ export async function authorize(id: number, input: { action: string; identity_re
   return data
 }
 
+export async function importWorkBuddy(id: number, raw: string): Promise<Record<string, unknown>> {
+  const { data } = await apiClient.post<Record<string, unknown>>(`/admin/plugins/${id}/workbuddy-import`, raw, {
+    headers: { 'Content-Type': 'application/json' },
+    timeout: 45000
+  })
+  return data
+}
+
 export async function bindAccount(id: number, account_id: number, identity_ref: string): Promise<Record<string, unknown>> {
   const { data } = await apiClient.post<Record<string, unknown>>(`/admin/plugins/${id}/accounts`, { account_id, identity_ref })
   return data
@@ -194,6 +203,7 @@ export default {
   status,
   createUISession,
   authorize,
+  importWorkBuddy,
   bindAccount,
   unbindAccount
 }

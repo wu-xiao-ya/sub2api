@@ -22,6 +22,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/setup"
 	"github.com/Wei-Shaw/sub2api/internal/web"
+	"github.com/Wei-Shaw/sub2api/internal/workbuddy"
 
 	"github.com/gin-gonic/gin"
 )
@@ -53,6 +54,10 @@ func init() {
 // initLogger configures the default slog handler based on gin.Mode().
 // In non-release mode, Debug level logs are enabled.
 func main() {
+	if len(os.Args) == 2 && os.Args[1] == "--builtin-workbuddy" {
+		workbuddy.Serve()
+		return
+	}
 	logger.InitBootstrap()
 	defer logger.Sync()
 

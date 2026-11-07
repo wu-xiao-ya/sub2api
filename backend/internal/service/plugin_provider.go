@@ -257,7 +257,7 @@ func (m *PluginManager) RoundTripProvider(ctx context.Context, req *http.Request
 // document supplied by trusted plugin code; private config never enters HTTP.
 func (m *PluginManager) Authorize(ctx context.Context, id int64, action, identity, session string) (json.RawMessage, error) {
 	switch action {
-	case "begin", "poll", "cancel", "unlink", "inspect", "prepare":
+	case "begin", "poll", "cancel", "unlink", "inspect", "prepare", "import":
 	default:
 		return nil, errors.New("unsupported authorization action")
 	}
@@ -266,6 +266,9 @@ func (m *PluginManager) Authorize(ctx context.Context, id int64, action, identit
 	p, err := m.repo.GetByID(ctx, id)
 	if err != nil {
 		return nil, err
+	}
+	if action == "import" && !isBuiltinWorkBuddy(p) {
+		return nil, errors.New("JSON import is only available for built-in WorkBuddy")
 	}
 	if !isProviderPlugin(p.Manifest) || p.State != PluginStateEnabled {
 		return nil, errors.New("enable the provider plugin before authorization")

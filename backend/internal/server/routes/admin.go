@@ -779,6 +779,7 @@ func registerPluginRoutes(admin *gin.RouterGroup, h *handler.Handlers, stepUpAut
 		plugins.PUT("/:id/config", gin.HandlerFunc(stepUpAuth), h.Admin.Plugin.SaveConfig)
 		plugins.POST("/:id/test", gin.HandlerFunc(stepUpAuth), h.Admin.Plugin.Test)
 		plugins.POST("/:id/authorize", gin.HandlerFunc(stepUpAuth), h.Admin.Plugin.Authorize)
+		plugins.POST("/:id/workbuddy-import", gin.HandlerFunc(stepUpAuth), h.Admin.Plugin.ImportWorkBuddy)
 		plugins.POST("/:id/accounts", gin.HandlerFunc(stepUpAuth), h.Admin.Plugin.BindAccount)
 		plugins.DELETE("/:id/accounts/:accountID", gin.HandlerFunc(stepUpAuth), h.Admin.Plugin.UnbindAccount)
 		plugins.POST("/:id/ui-session", h.Admin.Plugin.CreateUISession)

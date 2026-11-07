@@ -1,5 +1,6 @@
 'use strict';
-const token = new URLSearchParams(location.hash.slice(1)).get('bridge_token');
+const bridge = new URLSearchParams(location.hash.slice(1));
+const token = bridge.get('bridge_token');
 const pending = new Map();
 let session = '';
 let accounts = [];
@@ -7,7 +8,7 @@ const el = id => document.getElementById(id);
 function request(type, payload = {}) {
   return new Promise((resolve, reject) => {
     const id = crypto.randomUUID();
-    const timer = setTimeout(() => { pending.delete(id); reject(new Error('请求超时，请刷新状态后重试')); }, 45000);
+    const timer = setTimeout(() => { pending.delete(id); reject(new Error('请求超时，请刷新状态后重试')); }, type === 'workbuddy.import' ? 60000 : 45000);
     pending.set(id, { resolve, reject, timer });
     parent.postMessage({ source: 'sub2api-plugin-ui', bridge_token: token, request_id: id, type, ...payload }, '*');
   });
@@ -52,6 +53,33 @@ async function begin(identity_ref) {
   session = result.session_id; el('pending').hidden = false; el('message').textContent = '请在上方链接完成 WorkBuddy 官方授权。';
 }
 action('login', () => begin());
+el('json-import').hidden = bridge.get('builtin') !== '1';
+action('import', async () => {
+  const file = el('import-file').files[0];
+  if (file && file.size > 256 * 1024) throw new Error('JSON 文件超过 256 KB');
+  const raw = file ? await file.text() : el('import-json').value;
+  if (!raw.trim() || new TextEncoder().encode(raw).length > 256 * 1024) throw new Error('请选择或粘贴有效 JSON，最大 256 KB');
+  el('import-file').value = '';
+  el('import-json').value = '';
+  const result = await request('workbuddy.import', { import_json: raw });
+  await status();
+  const accepted = result.results.filter(row => row.identity_ref);
+  if (accepted.length) {
+    el('identity').value = accepted[0].identity_ref;
+    renderModels();
+  }
+  const reasons = {
+    invalid_credentials_or_region: '凭据或国内区校验失败',
+    expiry_or_refresh_required: '缺少有效期或刷新令牌',
+    refresh_failed: '刷新令牌失败',
+    profile_unavailable: '无法读取账号资料',
+    identity_unavailable: '无法确认账号身份',
+    deepseek_catalog_unavailable: '无法读取 DeepSeek 模型目录',
+  };
+  const errors = result.results.filter(row => !row.identity_ref)
+    .map(row => `第 ${row.index} 项：${reasons[row.reason] ?? '验证失败'}`);
+  el('message').textContent = [`已保存 ${accepted.length} 项授权。首次导入的账号可在下方「创建并绑定」。`, ...errors].join('\n');
+});
 action('reauthorize', () => begin(chosen()));
 action('poll', async () => {
   const result = await request('auth.action', { action: 'poll', session_id: session });

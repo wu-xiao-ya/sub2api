@@ -17,6 +17,9 @@
             @create="showCreate = true"
           >
             <template #after>
+              <RouterLink :to="{ path: '/admin/plugins', query: { workbuddy: '1' } }" class="btn btn-secondary">
+                WorkBuddy
+              </RouterLink>
               <!-- Auto Refresh Dropdown -->
               <div class="relative" ref="autoRefreshDropdownRef">
                 <button

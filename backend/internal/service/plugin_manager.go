@@ -155,6 +155,7 @@ func (m *PluginManager) List(ctx context.Context) ([]*PluginInstallation, error)
 	route := m.route.Load()
 	for _, installation := range plugins {
 		installation.Compatibility = EvaluatePluginCompatibility(installation.Manifest, m.hostInfo)
+		describeBuiltinWorkBuddy(installation)
 		if runtime := m.runtimeLocked(installation.ID); runtime != nil && !runtime.client.Exited() {
 			installation.RuntimeHealthy = true
 			installation.RuntimeMessage = "插件进程运行中"
@@ -174,6 +175,7 @@ func (m *PluginManager) Get(ctx context.Context, id int64) (*PluginInstallation,
 		return nil, err
 	}
 	installation.Compatibility = EvaluatePluginCompatibility(installation.Manifest, m.hostInfo)
+	describeBuiltinWorkBuddy(installation)
 	m.mu.Lock()
 	runtime := m.runtimeLocked(id)
 	m.mu.Unlock()
@@ -192,6 +194,9 @@ func (m *PluginManager) Install(ctx context.Context, reader io.Reader, installed
 	packageInfo, err := m.installer.Install(ctx, reader, installedBy)
 	if err != nil {
 		return nil, err
+	}
+	if packageInfo.PluginKey == workBuddyBuiltinID {
+		return nil, errors.Join(errors.New("WorkBuddy is updated with Sub2API"), m.cleanupInstallationFiles(packageInfo))
 	}
 	var previous *PluginInstallation
 	if existing, getErr := m.repo.GetByKey(ctx, packageInfo.PluginKey); getErr == nil {
@@ -443,6 +448,9 @@ func (m *PluginManager) ensureLocalInstallation(ctx context.Context, installatio
 	if installation == nil {
 		return nil, errors.New("插件安装记录为空")
 	}
+	if isBuiltinWorkBuddy(installation) {
+		return localBuiltinWorkBuddy(installation)
+	}
 	m.mu.Lock()
 	local := m.localInstallations[installation.ID]
 	m.mu.Unlock()
@@ -581,6 +589,7 @@ func (m *PluginManager) Enable(ctx context.Context, id int64, acceptUntested boo
 	}
 	if installation.State == PluginStateEnabled && (hasEnabledOpenAIBinding(installation.Bindings) || isProviderPlugin(installation.Manifest)) {
 		installation.Compatibility = EvaluatePluginCompatibility(installation.Manifest, m.hostInfo)
+		describeBuiltinWorkBuddy(installation)
 		m.mu.Lock()
 		runtime := m.runtimeLocked(id)
 		m.mu.Unlock()
@@ -589,7 +598,9 @@ func (m *PluginManager) Enable(ctx context.Context, id int64, acceptUntested boo
 			return installation, nil
 		}
 	}
-	compatibility := EvaluatePluginCompatibility(installation.Manifest, m.hostInfo)
+	installation.Compatibility = EvaluatePluginCompatibility(installation.Manifest, m.hostInfo)
+	describeBuiltinWorkBuddy(installation)
+	compatibility := installation.Compatibility
 	if !compatibility.Compatible {
 		stateErr := m.repo.UpdateState(ctx, id, PluginStateIncompatible, compatibility.Message, nil, installation.BinarySHA256, installation.State)
 		return nil, errors.Join(errors.New(compatibility.Message), stateErr)
@@ -638,6 +649,7 @@ func (m *PluginManager) Enable(ctx context.Context, id int64, acceptUntested boo
 		return nil, err
 	}
 	result.Compatibility = compatibility
+	describeBuiltinWorkBuddy(result)
 	result.RuntimeHealthy = true
 	result.RuntimeMessage = "插件进程运行中"
 	return result, nil
@@ -675,6 +687,10 @@ func (m *PluginManager) Delete(ctx context.Context, id int64) error {
 	if err != nil {
 		m.mu.Unlock()
 		return err
+	}
+	if isBuiltinWorkBuddy(installation) {
+		m.mu.Unlock()
+		return errors.New("WorkBuddy is built into Sub2API")
 	}
 	if installation.State == PluginStateEnabled || hasEnabledOpenAIBinding(installation.Bindings) {
 		m.mu.Unlock()
@@ -925,6 +941,9 @@ func (m *PluginManager) ReadUIAsset(ctx context.Context, id int64, relative stri
 	installation, err := m.repo.GetByID(ctx, id)
 	if err != nil {
 		return nil, "", err
+	}
+	if isBuiltinWorkBuddy(installation) {
+		return readBuiltinWorkBuddyUI(relative)
 	}
 	installation, err = m.ensureLocalInstallation(ctx, installation)
 	if err != nil {
