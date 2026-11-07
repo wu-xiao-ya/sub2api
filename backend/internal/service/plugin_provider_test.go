@@ -3,9 +3,11 @@ package service
 import (
 	"context"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	pluginv1 "github.com/Wei-Shaw/sub2api/pkg/pluginapi/v1"
+	"github.com/gin-gonic/gin"
 	hcplugin "github.com/hashicorp/go-plugin"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
@@ -84,6 +86,25 @@ func TestPluginProviderForcesChatConversionAcrossIngressProtocols(t *testing.T) 
 	require.NoError(t, e)
 	require.Empty(t, key)
 	require.Equal(t, "https://plugin.invalid/v1/chat/completions", target)
+}
+
+func TestPluginProviderChatCompletionsUsesPluginTransportWithoutAPIKey(t *testing.T) {
+	upstream := &pluginRoutingHTTPUpstream{}
+	gateway := &OpenAIGatewayService{httpUpstream: upstream}
+	account := &Account{ID: 284, Type: AccountTypePlugin, Platform: PlatformDeepseek}
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
+
+	target, err := gateway.rawChatCompletionsURL(account)
+	require.NoError(t, err)
+	require.Equal(t, "https://plugin.invalid/v1/chat/completions", target)
+	_, err = gateway.ForwardAsChatCompletions(c.Request.Context(), c, account,
+		[]byte(`{"model":"deepseek-v4-flash","messages":[{"role":"user","content":"hello"}]}`), "", "")
+	var transportErr *PluginTransportError
+	require.ErrorAs(t, err, &transportErr)
+	require.Equal(t, "plugin_unavailable", transportErr.Code)
+	require.True(t, transportErr.NoReplay)
+	require.Zero(t, upstream.doCalls)
 }
 
 func TestPluginProviderRejectsStatefulFeaturesBeforeConversion(t *testing.T) {
