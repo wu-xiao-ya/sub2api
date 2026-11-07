@@ -24,7 +24,7 @@ import (
 )
 
 const pluginID = "org.starlight.workbuddy"
-const pluginVersion = "0.1.1"
+const pluginVersion = "0.1.2"
 const capability = "upstream.chat_completions.v1"
 const billingBase = "https://www.codebuddy.cn"
 const chatBase = "https://copilot.tencent.com"
@@ -271,6 +271,16 @@ func (s *server) Authorize(ctx context.Context, r *pluginv1.AuthorizeRequest) (*
 		delete(c.Accounts, r.IdentityRef)
 		changed = true
 		public["unlinked"] = true
+	case "credits":
+		a, ok := c.Accounts[r.IdentityRef]
+		if !ok {
+			return nil, status.Error(codes.NotFound, "identity is not authorized")
+		}
+		credits, err := s.fetchCredits(ctx, a)
+		if err != nil {
+			return nil, err
+		}
+		public = credits
 	case "inspect", "prepare":
 		a, ok := c.Accounts[r.IdentityRef]
 		if !ok {
@@ -355,6 +365,9 @@ func (s *server) request(ctx context.Context, method, target string, a *credenti
 		}
 		if a.EnterpriseID != "" {
 			req.Header.Set("X-Enterprise-Id", a.EnterpriseID)
+			if req.URL.Path == "/billing/meter/get-enterprise-user-usage" {
+				req.Header.Set("X-Tenant-Id", a.EnterpriseID)
+			}
 		}
 	}
 	resp, e := s.client.Do(req)

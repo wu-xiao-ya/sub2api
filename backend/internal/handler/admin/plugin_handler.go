@@ -45,13 +45,28 @@ func (h *PluginHandler) Authorize(c *gin.Context) {
 		SessionID   string `json:"session_id"`
 	}
 	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 4096)
-	if c.ShouldBindJSON(&input) != nil || input.Action == "prepare" || input.Action == "inspect" {
+	if c.ShouldBindJSON(&input) != nil || input.Action == "prepare" || input.Action == "inspect" || input.Action == "credits" {
 		response.BadRequest(c, "Invalid authorization action")
 		return
 	}
 	result, err := h.manager.Authorize(c.Request.Context(), id, input.Action, input.IdentityRef, input.SessionID)
 	if err != nil {
 		response.BadRequest(c, err.Error())
+		return
+	}
+	response.Success(c, result)
+}
+
+func (h *PluginHandler) AccountCredits(c *gin.Context) {
+	id, err := strconv.ParseInt(c.Param("account_id"), 10, 64)
+	if err != nil || id < 1 {
+		response.BadRequest(c, "Invalid account ID")
+		return
+	}
+	c.Header("Cache-Control", "no-store")
+	result, err := h.manager.ProviderAccountCredits(c.Request.Context(), id)
+	if err != nil {
+		response.Error(c, http.StatusServiceUnavailable, "Plugin credits unavailable")
 		return
 	}
 	response.Success(c, result)

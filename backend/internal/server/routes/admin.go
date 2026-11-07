@@ -768,6 +768,7 @@ func registerPluginRoutes(admin *gin.RouterGroup, h *handler.Handlers, stepUpAut
 	plugins := admin.Group("/plugins")
 	{
 		plugins.GET("", h.Admin.Plugin.List)
+		plugins.GET("/accounts/:account_id/credits", h.Admin.Plugin.AccountCredits)
 		plugins.GET("/:id", h.Admin.Plugin.Get)
 		plugins.POST("/upload", gin.HandlerFunc(stepUpAuth), h.Admin.Plugin.Upload)
 		plugins.POST("/:id/enable", gin.HandlerFunc(stepUpAuth), h.Admin.Plugin.Enable)

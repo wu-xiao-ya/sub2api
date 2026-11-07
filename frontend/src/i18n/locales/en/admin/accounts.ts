@@ -117,6 +117,12 @@ export default {
         opencode_go: 'OpenCode',
         typesafe: 'TypeSafe / Jev',
       },
+      pluginCredits: {
+        remaining: 'Credits remaining',
+        reset: 'Resets {time}',
+        query: 'Check credits',
+        unavailable: 'Upstream credits are unavailable'
+      },
       cnProviders: {
         accountMode: {
           title: 'Account Type',

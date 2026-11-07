@@ -436,6 +436,8 @@
       </div>
     </template>
 
+    <PluginCreditsCell v-else-if="account.type === 'plugin' && account.platform === 'deepseek'" :key="account.id" :account-id="account.id" />
+
     <!-- Multi-protocol API-key providers (CN vendors, OpenCode, Command Code):
          coding-plan / subscription quota windows or balance -->
     <template v-else-if="isMultiProtocolApiKeyPlatform(account.platform)">
@@ -715,6 +717,7 @@ import OpenAIQuotaResetCell from './OpenAIQuotaResetCell.vue'
 import GrokQuotaProbeCell from './GrokQuotaProbeCell.vue'
 import CNProviderQuotaCell from './CNProviderQuotaCell.vue'
 import CNProviderBalanceCell from './CNProviderBalanceCell.vue'
+import PluginCreditsCell from './PluginCreditsCell.vue'
 import OllamaCloudUsageCell from './OllamaCloudUsageCell.vue'
 import {
   cnQuotaCellVisible as cnQuotaCellVisibleFn,

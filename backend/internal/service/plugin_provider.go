@@ -154,11 +154,15 @@ func (m *PluginManager) providerAccountBinding(ctx context.Context, account *Acc
 	if account == nil || account.Platform != PlatformDeepseek || account.Type != AccountTypePlugin {
 		return nil, providerUnavailable("invalid plugin account")
 	}
+	return m.providerAccountBindingByID(ctx, account.ID)
+}
+
+func (m *PluginManager) providerAccountBindingByID(ctx context.Context, accountID int64) (*PluginAccountBinding, error) {
 	repo, ok := m.repo.(PluginProviderRepository)
 	if !ok {
 		return nil, providerUnavailable("provider repository unavailable")
 	}
-	binding, err := repo.GetPluginAccountBinding(ctx, account.ID)
+	binding, err := repo.GetPluginAccountBinding(ctx, accountID)
 	if err != nil || binding == nil {
 		return nil, providerUnavailable("plugin account is not bound")
 	}
@@ -171,6 +175,46 @@ func (m *PluginManager) ProviderAccountModels(ctx context.Context, account *Acco
 		return nil, err
 	}
 	return m.inspectProviderIdentity(ctx, binding.PluginID, binding.IdentityRef)
+}
+
+type PluginAccountCredits struct {
+	Remaining      *float64 `json:"remaining"`
+	Limit          *float64 `json:"limit,omitempty"`
+	CycleResetTime string   `json:"cycle_reset_time,omitempty"`
+}
+
+func (m *PluginManager) ProviderAccountCredits(ctx context.Context, accountID int64) (PluginAccountCredits, error) {
+	var result PluginAccountCredits
+	binding, err := m.providerAccountBindingByID(ctx, accountID)
+	if err != nil {
+		return result, err
+	}
+	installation, err := m.repo.GetByID(ctx, binding.PluginID)
+	if err != nil || installation.State != PluginStateEnabled || !isProviderPlugin(installation.Manifest) {
+		return result, providerUnavailable("provider plugin disabled")
+	}
+	m.mu.Lock()
+	runtime := m.providerRuntimes[binding.PluginID]
+	m.mu.Unlock()
+	if runtime == nil || runtime.client.Exited() || runtime.installation.BinarySHA256 != installation.BinarySHA256 || !runtime.beginRequest() {
+		return result, providerUnavailable("provider plugin unavailable")
+	}
+	defer runtime.finishRequest()
+	raw, err := m.decryptConfig(installation)
+	if err != nil {
+		return result, err
+	}
+	queryCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	response, err := runtime.api.Authorize(queryCtx, &pluginv1.AuthorizeRequest{Action: "credits", IdentityRef: binding.IdentityRef, ConfigJson: raw})
+	if err != nil {
+		return result, err
+	}
+	if response.ConfigChanged || len(response.PublicJson) > 4096 || json.Unmarshal(response.PublicJson, &result) != nil ||
+		result.Remaining == nil || *result.Remaining < 0 {
+		return PluginAccountCredits{}, errors.New("invalid plugin credit response")
+	}
+	return result, nil
 }
 
 func (m *PluginManager) RoundTripProvider(ctx context.Context, req *http.Request, proxy string, account *Account) (*http.Response, error) {

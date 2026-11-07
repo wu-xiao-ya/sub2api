@@ -1,5 +1,16 @@
 import { apiClient } from '../client'
 
+export interface PluginAccountCredits {
+  remaining: number
+  limit?: number
+  cycle_reset_time?: string
+}
+
+export async function getAccountCredits(accountId: number): Promise<PluginAccountCredits> {
+  const { data } = await apiClient.get<PluginAccountCredits>(`/admin/plugins/accounts/${accountId}/credits`)
+  return data
+}
+
 export interface PluginCapability {
   id: string
   platform: string

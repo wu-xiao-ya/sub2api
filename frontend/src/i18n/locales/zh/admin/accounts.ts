@@ -320,6 +320,12 @@ export default {
         opencode_go: 'OpenCode',
         typesafe: 'TypeSafe / Jev',
       },
+      pluginCredits: {
+        remaining: '剩余积分',
+        reset: '重置时间 {time}',
+        query: '查询积分',
+        unavailable: '暂时无法读取上游积分'
+      },
       cnProviders: {
         accountMode: {
           title: '账号类型',
