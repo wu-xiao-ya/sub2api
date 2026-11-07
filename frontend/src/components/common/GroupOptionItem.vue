@@ -59,6 +59,7 @@
 </template>
 
 <script setup lang="ts">
+import { domesticBrandVisual } from '@/utils/domesticBrandVisuals'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import GroupBadge from './GroupBadge.vue'
@@ -126,6 +127,8 @@ const peakRateTitle = computed(() => {
 
 // Rate pill color matches platform badge color
 const ratePillClass = computed(() => {
+  const brand = domesticBrandVisual(props.platform, props.upstreamProvider)
+  if (brand) return brand.badgeClass
   switch (props.platform) {
     case 'anthropic':
       return 'bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400'
