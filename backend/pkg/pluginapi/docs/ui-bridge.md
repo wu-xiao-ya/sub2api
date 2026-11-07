@@ -65,3 +65,5 @@ UI 接收消息时必须验证 `event.source === parent`、消息来源标识、
 - `account.bind`：参数 `account_id`、`identity_ref`；只能绑定空凭据的 DeepSeek 插件账号，不可静默替换已绑定身份。
 
 授权 URL 由宿主按签名清单 `authorization_hosts` 校验并展示，iframe 不自行打开外部页面。旧会话关闭或被替换后，迟到的授权响应不得在新会话显示。
+
+- `account.unbind`：参数 `account_id`；要求先通过账号管理停用账号，解除当前绑定但保留账号与历史记录。

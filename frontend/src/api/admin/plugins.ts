@@ -166,6 +166,11 @@ export async function bindAccount(id: number, account_id: number, identity_ref: 
   return data
 }
 
+export async function unbindAccount(id: number, account_id: number): Promise<Record<string, unknown>> {
+  const { data } = await apiClient.delete<Record<string, unknown>>(`/admin/plugins/${id}/accounts/${account_id}`)
+  return data
+}
+
 export default {
   list,
   upload,
@@ -178,5 +183,6 @@ export default {
   status,
   createUISession,
   authorize,
-  bindAccount
+  bindAccount,
+  unbindAccount
 }

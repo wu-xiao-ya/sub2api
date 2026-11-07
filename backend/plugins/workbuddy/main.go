@@ -579,11 +579,21 @@ func classifyFailure(httpStatus int, raw []byte) (string, bool) {
 	return code, httpStatus < 200 || httpStatus >= 300
 }
 func writeFailure(stream pluginv1.TransportPlugin_ForwardServer, httpStatus int, code string) error {
+	switch code {
+	case "quota_exhausted":
+		httpStatus = 402
+	case "authorization_required":
+		httpStatus = 401
+	case "upstream_rejected":
+		httpStatus = 403
+	case "rate_limit_exceeded":
+		httpStatus = 429
+	}
 	// Redirects are terminal errors, never instructions for the caller to follow.
 	if httpStatus < 400 {
 		httpStatus = 502
 	}
-	raw, _ := json.Marshal(map[string]any{"error": map[string]string{"type": code, "message": "WorkBuddy upstream request refused"}})
+	raw, _ := json.Marshal(map[string]any{"error": map[string]string{"type": code, "message": "WorkBuddy upstream request refused [" + code + "]"}})
 	if e := sendStart(stream, int32(httpStatus), "application/json"); e != nil {
 		return e
 	}

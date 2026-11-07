@@ -12,6 +12,29 @@ func (r *pluginRepository) GetPluginAccountBinding(ctx context.Context, id int64
 	err := r.db.QueryRowContext(ctx, `SELECT account_id, plugin_id, identity_ref FROM sub2api_plugin_account_bindings WHERE account_id=$1`, id).Scan(&b.AccountID, &b.PluginID, &b.IdentityRef)
 	return b, err
 }
+
+// Disable through the normal account API first so scheduler caches are invalidated.
+// Only the live binding is removed; account IDs and historical usage remain intact.
+func (r *pluginRepository) UnbindPluginAccount(ctx context.Context, pluginID, accountID int64) error {
+	result, err := r.db.ExecContext(ctx, `DELETE FROM sub2api_plugin_account_bindings b USING accounts a
+ WHERE b.plugin_id=$1 AND b.account_id=$2 AND a.id=b.account_id
+ AND (NOT a.schedulable OR a.status<>'active' OR a.deleted_at IS NOT NULL)`, pluginID, accountID)
+	if err != nil {
+		return err
+	}
+	n, err := result.RowsAffected()
+	if err != nil || n > 0 {
+		return err
+	}
+	var exists bool
+	if err = r.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM sub2api_plugin_account_bindings WHERE plugin_id=$1 AND account_id=$2)`, pluginID, accountID).Scan(&exists); err != nil {
+		return err
+	}
+	if exists {
+		return errors.New("disable the host account in account management before unbinding")
+	}
+	return nil
+}
 func (r *pluginRepository) BindPluginAccount(ctx context.Context, b service.PluginAccountBinding) error {
 	// An account cannot be silently rebound to a different identity.
 	result, err := r.db.ExecContext(ctx, `INSERT INTO sub2api_plugin_account_bindings(account_id,plugin_id,identity_ref)

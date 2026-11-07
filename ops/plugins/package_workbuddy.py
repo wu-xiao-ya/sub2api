@@ -46,6 +46,7 @@ def main():
     for path in sorted((source / 'ui').iterdir()):
         if path.is_file():
             files['ui/' + path.name] = path.read_bytes()
+    files['LICENSE.sub2api'] = (root / 'LICENSE').read_bytes()
     files['LICENSE.reference'] = (source / 'LICENSE.reference').read_bytes()
     files['THIRD_PARTY_NOTICES.md'] = (source / 'THIRD_PARTY_NOTICES.md').read_bytes()
     manifest = {
@@ -64,10 +65,10 @@ def main():
                  'signature': base64.b64encode(key.sign(raw)).decode()}
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(args.output, 'w', zipfile.ZIP_DEFLATED) as archive:
-        archive.writestr('manifest.json', raw)
-        archive.writestr('signature.json', json.dumps(signature))
-        for path, data in files.items():
+        members = {'manifest.json': raw, 'signature.json': json.dumps(signature).encode(), **files}
+        for path, data in sorted(members.items()):
             info = zipfile.ZipInfo(path)
+            info.compress_type = zipfile.ZIP_DEFLATED
             info.external_attr = (0o100755 if path.startswith('runtimes/') else 0o100644) << 16
             archive.writestr(info, data)
     public = key.public_key().public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw)

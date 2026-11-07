@@ -626,7 +626,7 @@ async function handleBridgeMessage(event: MessageEvent): Promise<void> {
     message.type === "config.load" ||
     message.type === "config.save" ||
     message.type === "config.test" ||
-    message.type === "plugin.status" || message.type === "auth.action" || message.type === "account.bind" || message.type === "account.create";
+    message.type === "plugin.status" || message.type === "auth.action" || message.type === "account.bind" || message.type === "account.create" || message.type === "account.unbind";
   if (expectsResponse) {
     if (!requestID || pendingBridgeRequests.has(requestID)) return;
     registerBridgeRequest(requestID);
@@ -689,6 +689,11 @@ async function handleBridgeMessage(event: MessageEvent): Promise<void> {
       }
       case "account.bind": {
         const result = await pluginStepUp.run(() => adminAPI.plugins.bindAccount(targetPlugin.id, Number(message.account_id), message.identity_ref ?? ""));
+        postBridgeResult(message, { ok: true, result });
+        break;
+      }
+      case "account.unbind": {
+        const result = await pluginStepUp.run(() => adminAPI.plugins.unbindAccount(targetPlugin.id, Number(message.account_id)));
         postBridgeResult(message, { ok: true, result });
         break;
       }

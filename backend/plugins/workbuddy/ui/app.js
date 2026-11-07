@@ -64,6 +64,7 @@ action('refresh', status);
 action('test', async () => { const result = await request('config.test'); el('message').textContent = result.message; });
 action('create', async () => { const result = await request('account.create', { identity_ref: chosen(), account_name: el('name').value }); el('account').value = result.account_id; el('message').textContent = `已绑定宿主账号 ${result.account_id}。请到账号管理配置分组后再测试。`; });
 action('bind', async () => { const account_id = Number(el('account').value); if (!Number.isSafeInteger(account_id) || account_id < 1) throw new Error('请输入有效账号 ID'); await request('account.bind', { account_id, identity_ref: chosen() }); el('message').textContent = '绑定成功'; });
+action('unbind', async () => { const account_id = Number(el('account').value); if (!Number.isSafeInteger(account_id) || account_id < 1) throw new Error('请输入有效账号 ID'); await request('account.unbind', { account_id }); el('message').textContent = '已解除宿主绑定，历史记录保留。需要清除登录材料时，请再解除授权。'; });
 el('identity').addEventListener('change', renderModels);
 parent.postMessage({ source: 'sub2api-plugin-ui', bridge_token: token, type: 'sub2api.plugin.ready' }, '*');
 status().catch(error => { el('message').textContent = error.message; });

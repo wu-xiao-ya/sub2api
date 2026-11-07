@@ -36,7 +36,7 @@ func TestPluginProviderMigrationAndBindingsIntegration(t *testing.T) {
 	db, e := sql.Open("postgres", u.String())
 	require.NoError(t, e)
 	defer db.Close()
-	_, e = db.ExecContext(ctx, `CREATE TABLE users(id BIGINT PRIMARY KEY);CREATE TABLE accounts(id BIGINT PRIMARY KEY,platform TEXT,type TEXT,credentials JSONB NOT NULL DEFAULT '{}',deleted_at TIMESTAMPTZ);`)
+	_, e = db.ExecContext(ctx, `CREATE TABLE users(id BIGINT PRIMARY KEY);CREATE TABLE accounts(id BIGINT PRIMARY KEY,platform TEXT,type TEXT,credentials JSONB NOT NULL DEFAULT '{}',schedulable BOOLEAN NOT NULL DEFAULT TRUE,status TEXT NOT NULL DEFAULT 'active',deleted_at TIMESTAMPTZ);`)
 	require.NoError(t, e)
 	for _, name := range []string{"229_plugins.sql", "258_plugin_provider_accounts.sql"} {
 		raw, e := os.ReadFile("../../migrations/" + name)
@@ -60,5 +60,32 @@ func TestPluginProviderMigrationAndBindingsIntegration(t *testing.T) {
 	actual, e := repo.GetPluginAccountBinding(ctx, 1)
 	require.NoError(t, e)
 	require.Equal(t, "identity-a", actual.IdentityRef)
+	require.Error(t, repo.UnbindPluginAccount(ctx, 7, 1))
+	_, e = db.ExecContext(ctx, "UPDATE accounts SET schedulable=FALSE WHERE id=1")
+	require.NoError(t, e)
+	require.NoError(t, repo.UnbindPluginAccount(ctx, 7, 1))
+	require.NoError(t, repo.UnbindPluginAccount(ctx, 7, 1))
+	_, e = repo.GetPluginAccountBinding(ctx, 1)
+	require.ErrorIs(t, e, sql.ErrNoRows)
+	var count int
+	require.NoError(t, db.QueryRowContext(ctx, "SELECT COUNT(*) FROM accounts").Scan(&count))
+	require.Equal(t, 3, count)
 	require.NoError(t, repo.WithPluginConfig(ctx, 7, "binary", func(string) (string, error) { return "encrypted-fixture", nil }))
+	// A different session must not rotate the same token while its row is locked.
+	tx, e := db.BeginTx(ctx, nil)
+	require.NoError(t, e)
+	defer func() { _ = tx.Rollback() }()
+	var encrypted string
+	require.NoError(t, tx.QueryRowContext(ctx, "SELECT config_encrypted FROM sub2api_plugin_installations WHERE id=7 FOR UPDATE").Scan(&encrypted))
+	blocked, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
+	defer cancel()
+	called := false
+	e = repo.WithPluginConfig(blocked, 7, "binary", func(string) (string, error) { called = true; return "should-not-write", nil })
+	require.Error(t, e)
+	require.False(t, called)
+	require.NoError(t, tx.Rollback())
+	require.NoError(t, repo.WithPluginConfig(ctx, 7, "binary", func(current string) (string, error) {
+		require.Equal(t, "encrypted-fixture", current)
+		return current + "-next", nil
+	}))
 }

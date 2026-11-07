@@ -78,6 +78,23 @@ func (h *PluginHandler) BindAccount(c *gin.Context) {
 	response.Success(c, gin.H{"bound": true, "account_id": input.AccountID})
 }
 
+func (h *PluginHandler) UnbindAccount(c *gin.Context) {
+	id, ok := pluginIDParam(c)
+	if !ok {
+		return
+	}
+	accountID, err := strconv.ParseInt(c.Param("accountID"), 10, 64)
+	if err != nil || accountID < 1 {
+		response.BadRequest(c, "Invalid account ID")
+		return
+	}
+	if err = h.manager.UnbindProviderAccount(c.Request.Context(), id, accountID); err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+	response.Success(c, gin.H{"unbound": true})
+}
+
 func (h *PluginHandler) List(c *gin.Context) {
 	plugins, err := h.manager.List(c.Request.Context())
 	if err != nil {

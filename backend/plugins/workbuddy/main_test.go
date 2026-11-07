@@ -221,7 +221,7 @@ func TestBusinessErrorsAreNeverSuccessfulUsage(t *testing.T) {
 				require.Equal(t, "quota_exhausted", last.Code)
 				require.True(t, last.RequestSent)
 			} else {
-				require.EqualValues(t, 502, call.responses[0].GetStart().StatusCode)
+				require.EqualValues(t, 402, call.responses[0].GetStart().StatusCode)
 			}
 		})
 	}

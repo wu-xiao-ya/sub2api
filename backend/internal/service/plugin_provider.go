@@ -10,6 +10,7 @@ import (
 	"time"
 
 	pluginv1 "github.com/Wei-Shaw/sub2api/pkg/pluginapi/v1"
+	"github.com/tidwall/gjson"
 )
 
 // Provider plugins never receive the global account directory or other plugins'
@@ -23,6 +24,7 @@ type PluginAccountBinding struct {
 type PluginProviderRepository interface {
 	GetPluginAccountBinding(context.Context, int64) (*PluginAccountBinding, error)
 	BindPluginAccount(context.Context, PluginAccountBinding) error
+	UnbindPluginAccount(context.Context, int64, int64) error
 	// Serializes rotating credentials across replicas, not just this process.
 	WithPluginConfig(context.Context, int64, string, func(string) (string, error)) error
 }
@@ -73,8 +75,21 @@ func (m *PluginManager) reconcileProviders(ctx context.Context, installations []
 		m.mu.Lock()
 		current := m.providerRuntimes[p.ID]
 		m.mu.Unlock()
-		if current != nil && !current.client.Exited() && current.installation.BinarySHA256 == p.BinarySHA256 && current.installation.ConfigEncrypted == p.ConfigEncrypted {
-			continue
+		if current != nil && !current.client.Exited() && current.installation.BinarySHA256 == p.BinarySHA256 {
+			if current.installation.ConfigEncrypted == p.ConfigEncrypted {
+				continue
+			}
+			// A login or token rotation on another replica must not kill streams.
+			raw, err := m.decryptConfig(p)
+			if err == nil {
+				applyCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+				err = current.validateAndApplyConfig(applyCtx, raw)
+				cancel()
+			}
+			if err == nil {
+				current.installation.ConfigEncrypted = p.ConfigEncrypted
+				continue
+			}
 		}
 		if current != nil {
 			m.mu.Lock()
@@ -113,6 +128,17 @@ func (m *PluginManager) reconcileProviders(ctx context.Context, installations []
 	m.mu.Unlock()
 	for _, r := range stale {
 		r.drain(10 * time.Second)
+	}
+	return nil
+}
+
+// Reject stateful features before the compatibility converters can discard them.
+func validateProviderIngress(account *Account, body []byte) error {
+	if account == nil || account.Type != AccountTypePlugin {
+		return nil
+	}
+	if gjson.GetBytes(body, "background").Bool() || gjson.GetBytes(body, "store").Bool() || gjson.GetBytes(body, "previous_response_id").String() != "" {
+		return errors.New("provider plugin supports stateless chat only; background, store and previous_response_id are unavailable")
 	}
 	return nil
 }
@@ -268,4 +294,15 @@ func (m *PluginManager) BindProviderAccount(ctx context.Context, id, accountID i
 		return fmt.Errorf("provider repository unavailable")
 	}
 	return repo.BindPluginAccount(ctx, PluginAccountBinding{AccountID: accountID, PluginID: id, IdentityRef: identity})
+}
+
+func (m *PluginManager) UnbindProviderAccount(ctx context.Context, id, accountID int64) error {
+	if id < 1 || accountID < 1 {
+		return errors.New("invalid account binding")
+	}
+	repo, ok := m.repo.(PluginProviderRepository)
+	if !ok {
+		return errors.New("provider repository unavailable")
+	}
+	return repo.UnbindPluginAccount(ctx, id, accountID)
 }
