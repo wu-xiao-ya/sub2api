@@ -32,6 +32,69 @@ func NewPluginHandler(manager *service.PluginManager) *PluginHandler {
 	return &PluginHandler{manager: manager}
 }
 
+// All authorization operations (including polling, which exchanges credentials)
+// are POSTs behind the route's step-up authentication middleware.
+func (h *PluginHandler) Authorize(c *gin.Context) {
+	id, ok := pluginIDParam(c)
+	if !ok {
+		return
+	}
+	var input struct {
+		Action      string `json:"action"`
+		IdentityRef string `json:"identity_ref"`
+		SessionID   string `json:"session_id"`
+	}
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 4096)
+	if c.ShouldBindJSON(&input) != nil || input.Action == "prepare" || input.Action == "inspect" {
+		response.BadRequest(c, "Invalid authorization action")
+		return
+	}
+	result, err := h.manager.Authorize(c.Request.Context(), id, input.Action, input.IdentityRef, input.SessionID)
+	if err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+	response.Success(c, result)
+}
+
+func (h *PluginHandler) BindAccount(c *gin.Context) {
+	id, ok := pluginIDParam(c)
+	if !ok {
+		return
+	}
+	var input struct {
+		AccountID   int64  `json:"account_id"`
+		IdentityRef string `json:"identity_ref"`
+	}
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 4096)
+	if c.ShouldBindJSON(&input) != nil {
+		response.BadRequest(c, "Invalid account binding")
+		return
+	}
+	if err := h.manager.BindProviderAccount(c.Request.Context(), id, input.AccountID, input.IdentityRef); err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+	response.Success(c, gin.H{"bound": true, "account_id": input.AccountID})
+}
+
+func (h *PluginHandler) UnbindAccount(c *gin.Context) {
+	id, ok := pluginIDParam(c)
+	if !ok {
+		return
+	}
+	accountID, err := strconv.ParseInt(c.Param("accountID"), 10, 64)
+	if err != nil || accountID < 1 {
+		response.BadRequest(c, "Invalid account ID")
+		return
+	}
+	if err = h.manager.UnbindProviderAccount(c.Request.Context(), id, accountID); err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+	response.Success(c, gin.H{"unbound": true})
+}
+
 func (h *PluginHandler) List(c *gin.Context) {
 	plugins, err := h.manager.List(c.Request.Context())
 	if err != nil {

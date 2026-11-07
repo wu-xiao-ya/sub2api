@@ -292,6 +292,7 @@
         width="full"
         @close="closeConfiguration"
       >
+        <a v-if="authorizationURL" :href="authorizationURL" target="_blank" rel="noopener noreferrer" class="mb-3 block break-all text-primary-500 underline">{{ authorizationURL }}</a>
         <div
           class="relative min-h-[520px] overflow-hidden bg-gray-50 dark:bg-dark-900"
           :style="{ height: `${iframeHeight}px` }"
@@ -358,6 +359,11 @@ interface PluginBridgeMessage {
   type?: string;
   request_id?: string;
   config?: unknown;
+  action?: string;
+  identity_ref?: string;
+  session_id?: string;
+  account_id?: number;
+  account_name?: string;
   height?: unknown;
   level?: unknown;
   message?: unknown;
@@ -378,6 +384,7 @@ const pluginFrame = ref<HTMLIFrameElement | null>(null);
 const uiLoading = ref(false);
 const uiError = ref("");
 const iframeHeight = ref(640);
+const authorizationURL = ref("");
 const pluginFrameLoaded = ref(false);
 const pendingBridgeRequests = new Map<string, number>();
 let uiSessionVersion = 0;
@@ -548,6 +555,7 @@ function closeConfiguration(): void {
   clearPendingBridgeRequests();
   pluginFrameLoaded.value = false;
   configPlugin.value = null;
+  authorizationURL.value = "";
   uiSession.value = null;
   uiLoading.value = false;
   uiError.value = "";
@@ -618,12 +626,14 @@ async function handleBridgeMessage(event: MessageEvent): Promise<void> {
     message.type === "config.load" ||
     message.type === "config.save" ||
     message.type === "config.test" ||
-    message.type === "plugin.status";
+    message.type === "plugin.status" || message.type === "auth.action" || message.type === "account.bind" || message.type === "account.create" || message.type === "account.unbind";
   if (expectsResponse) {
     if (!requestID || pendingBridgeRequests.has(requestID)) return;
     registerBridgeRequest(requestID);
   }
 
+  const targetPlugin = configPlugin.value;
+  const targetSession = uiSession.value.bridge_token;
   try {
     switch (message.type) {
       case "sub2api.plugin.ready":
@@ -664,6 +674,44 @@ async function handleBridgeMessage(event: MessageEvent): Promise<void> {
         // explicit "test" action, and those must not spam a success toast.
         if (!result.success)
           appStore.showError(result.message || t("common.error"));
+        break;
+      }
+      case "auth.action": {
+        const result = await pluginStepUp.run(() => adminAPI.plugins.authorize(targetPlugin.id, { action: message.action ?? "", identity_ref: message.identity_ref, session_id: message.session_id }));
+        if (uiSession.value?.bridge_token !== targetSession || configPlugin.value?.id !== targetPlugin.id) return;
+        if (typeof result.verification_uri === "string") {
+          const url = new URL(result.verification_uri);
+          if (url.protocol !== "https:" || url.username || url.password || url.port || !targetPlugin.manifest.authorization_hosts?.includes(url.hostname)) throw new Error("Authorization URL is outside the signed manifest allowlist");
+          authorizationURL.value = url.href;
+        } else if (result.done || message.action === "cancel") { authorizationURL.value = ""; }
+        postBridgeResult(message, { ok: true, result });
+        break;
+      }
+      case "account.bind": {
+        const result = await pluginStepUp.run(() => adminAPI.plugins.bindAccount(targetPlugin.id, Number(message.account_id), message.identity_ref ?? ""));
+        postBridgeResult(message, { ok: true, result });
+        break;
+      }
+      case "account.unbind": {
+        const result = await pluginStepUp.run(() => adminAPI.plugins.unbindAccount(targetPlugin.id, Number(message.account_id)));
+        postBridgeResult(message, { ok: true, result });
+        break;
+      }
+      case "account.create": {
+        if (!targetPlugin.manifest.capabilities.some(c => c.id === "upstream.chat_completions.v1" && c.platform === "deepseek" && c.account_type === "plugin")) throw new Error("Provider capability required");
+        const name = String(message.account_name ?? "").trim();
+        if (!name || name.length > 100) throw new Error("Account name required");
+        const result = await pluginStepUp.run(async () => {
+          const account = await adminAPI.accounts.create({ name, platform: "deepseek", type: "plugin", credentials: {}, concurrency: 1, group_ids: [] });
+          try {
+            await adminAPI.plugins.bindAccount(targetPlugin.id, account.id, message.identity_ref ?? "");
+          } catch (error) {
+            await adminAPI.accounts.update(account.id, { schedulable: false });
+            throw new Error(`Account ${account.id} was created but could not be bound: ${error instanceof Error ? error.message : "authorization failed"}`);
+          }
+          return { account_id: account.id };
+        });
+        postBridgeResult(message, { ok: true, result });
         break;
       }
       case "plugin.status": {

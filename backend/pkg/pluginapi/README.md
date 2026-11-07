@@ -21,7 +21,7 @@
 
 ## 初期能力边界
 
-当前只接受 `openai.oauth.outbound_transport.v1`：
+内置 OpenAI 传输能力 `openai.oauth.outbound_transport.v1` 保持原契约：
 
 - 仅匹配 `platform=openai` 且 `account_type=oauth` 的上游 HTTP 请求。
 - API Key 账号、其他 provider、OAuth 登录与 Token 刷新流程不进入插件。
@@ -29,6 +29,16 @@
 - 命中插件的 OAuth WebSocket 账号会使用 Sub2API 现有 HTTP Bridge，不直接建立上游 WebSocket，避免绕过 v1 HTTP 插件协议。
 - Sub2API 继续负责响应状态处理、SSE 解析、错误映射、用量统计、计费和下游输出。
 - 灰度比例以账号 ID 稳定分桶，未命中的 OAuth 账号继续使用原有内置路径。
+
+## 供应商插件扩展
+
+新增 `upstream.chat_completions.v1`，首期限定 `platform=deepseek`、`account_type=plugin`。插件通过独立账号绑定接收标准 Chat Completions 请求，`ForwardRequestStart.identity_ref` 是不含令牌的身份引用；宿主继续处理外部协议转换、账号调度、SSE、用量与计费。供应商插件没有全局账号目录权限，与 OpenAI OAuth 插件并行运行。
+
+`TransportPlugin.Authorize` 是可选增量 RPC，旧插件可返回 Unimplemented。私有配置只在宿主和插件之间传递，浏览器只收到 `public_json`。凭据旋转由数据库行锁串行化；供应商配置禁止通过普通 config.load/config.save 读取或改写。每个身份只能绑定一个宿主账号。
+
+授权 UI 的外部 HTTPS 链接必须匹配签名清单中的 `authorization_hosts`；链接由宿主展示，插件 iframe 仍无外部网络和管理员令牌。浏览器授权、轮询、取消、解绑及账号绑定均要求管理员二次验证。
+
+参考实现与限制见 [WorkBuddy 插件](../../plugins/workbuddy/README.md)。该能力属于本 fork 的扩展，尚未被官方宿主支持；不能仅凭宿主版本号认定安装兼容。
 
 ## 宿主服务（HostService）
 

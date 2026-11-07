@@ -32,13 +32,18 @@
         "type": "object",
         "additionalProperties": false,
         "required": ["id", "platform", "account_type"],
+        "oneOf": [
+          { "properties": { "id": { "const": "openai.oauth.outbound_transport.v1" }, "platform": { "const": "openai" }, "account_type": { "const": "oauth" } } },
+          { "properties": { "id": { "const": "upstream.chat_completions.v1" }, "platform": { "const": "deepseek" }, "account_type": { "const": "plugin" } } }
+        ],
         "properties": {
-          "id": { "const": "openai.oauth.outbound_transport.v1" },
-          "platform": { "const": "openai" },
-          "account_type": { "const": "oauth" }
+          "id": { "enum": ["openai.oauth.outbound_transport.v1", "upstream.chat_completions.v1"] },
+          "platform": { "enum": ["openai", "deepseek"] },
+          "account_type": { "enum": ["oauth", "plugin"] }
         }
       }
     },
+    "authorization_hosts": { "type": "array", "maxItems": 8, "items": { "type": "string" } },
     "runtimes": {
       "type": "object",
       "minProperties": 1,

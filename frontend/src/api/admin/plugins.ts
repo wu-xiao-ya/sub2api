@@ -23,6 +23,7 @@ export interface PluginManifest {
   description?: string
   author?: string
   requires: PluginRequirements
+  authorization_hosts?: string[]
   capabilities: PluginCapability[]
   ui: { entrypoint: string }
 }
@@ -155,6 +156,21 @@ export async function createUISession(id: number): Promise<PluginUISession> {
   return data
 }
 
+export async function authorize(id: number, input: { action: string; identity_ref?: string; session_id?: string }): Promise<Record<string, unknown>> {
+  const { data } = await apiClient.post<Record<string, unknown>>(`/admin/plugins/${id}/authorize`, input)
+  return data
+}
+
+export async function bindAccount(id: number, account_id: number, identity_ref: string): Promise<Record<string, unknown>> {
+  const { data } = await apiClient.post<Record<string, unknown>>(`/admin/plugins/${id}/accounts`, { account_id, identity_ref })
+  return data
+}
+
+export async function unbindAccount(id: number, account_id: number): Promise<Record<string, unknown>> {
+  const { data } = await apiClient.delete<Record<string, unknown>>(`/admin/plugins/${id}/accounts/${account_id}`)
+  return data
+}
+
 export default {
   list,
   upload,
@@ -165,5 +181,8 @@ export default {
   saveConfig,
   test,
   status,
-  createUISession
+  createUISession,
+  authorize,
+  bindAccount,
+  unbindAccount
 }

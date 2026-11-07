@@ -16,6 +16,22 @@ service TransportPlugin {
   // lifecycle hook: plugins built against an older contract leave it
   // Unimplemented and the host simply runs without offering host services.
   rpc InitHostServices(InitHostServicesRequest) returns (InitHostServicesResponse);
+  // Optional authorization workflow. Secrets stay on the private RPC channel;
+  // only public_json may be returned to the administrator's browser.
+  rpc Authorize(AuthorizeRequest) returns (AuthorizeResponse);
+}
+
+message AuthorizeRequest {
+  string action = 1;
+  string identity_ref = 2;
+  string session_id = 3;
+  bytes config_json = 4;
+}
+
+message AuthorizeResponse {
+  bytes public_json = 1;
+  bytes config_json = 2;
+  bool config_changed = 3;
 }
 
 // HostService is implemented by the host and dialed by the plugin over the
@@ -110,6 +126,8 @@ message ForwardRequestStart {
   string account_type = 10;
   int64 content_length = 11;
   bool has_body = 12;
+  // Present only for an explicitly bound provider plugin account.
+  string identity_ref = 13;
 }
 
 message ForwardRequest {

@@ -13,6 +13,7 @@ const {
   enablePlugin,
   savePluginConfig,
   createUISession,
+  authorizePlugin,
   stepUpRun,
 } = vi.hoisted(() => ({
   listPlugins: vi.fn(),
@@ -20,6 +21,7 @@ const {
   enablePlugin: vi.fn(),
   savePluginConfig: vi.fn(),
   createUISession: vi.fn(),
+  authorizePlugin: vi.fn(),
   stepUpRun: vi.fn((action: () => Promise<unknown>) => action()),
 }))
 
@@ -34,6 +36,7 @@ vi.mock('@/api/admin', () => ({
       getConfig: vi.fn().mockResolvedValue({}),
       saveConfig: savePluginConfig,
       test: vi.fn().mockResolvedValue({ success: true, message: 'ok', latency_ms: 1 }),
+      authorize: authorizePlugin,
       createUISession,
     },
   },
@@ -207,6 +210,22 @@ describe('管理员插件页二次验证', () => {
     resolveSession({ url: '/closed-session', bridge_token: 'old', ui_bridge_version: 1, expires_at: '' })
     await flushPromises()
     expect(wrapper.find('iframe').exists()).toBe(false)
+  })
+
+  it.each([true, false])('only displays authorization URLs in the signed host allowlist (%s)', async allowed => {
+    listPlugins.mockResolvedValue([{ ...plugin, manifest: { ...plugin.manifest, authorization_hosts: ['www.codebuddy.cn'] } }])
+    const uri = allowed ? 'https://www.codebuddy.cn/login?state=test' : 'https://www.codebuddy.cn.evil.example/login'
+    authorizePlugin.mockResolvedValue({ verification_uri: uri, session_id: 'test-session' })
+    const wrapper = mountView()
+    await flushPromises()
+    await wrapper.findAll('button').find(item => item.text() === 'admin.plugins.configure')!.trigger('click')
+    await flushPromises()
+    const frame = wrapper.get('iframe').element as HTMLIFrameElement
+    window.dispatchEvent(new MessageEvent('message', { origin: 'null', source: frame.contentWindow!, data: { source: 'sub2api-plugin-ui', bridge_token: 'bridge', request_id: 'auth-test', type: 'auth.action', action: 'begin' } }))
+    await flushPromises()
+    expect(stepUpRun).toHaveBeenCalledTimes(1)
+    expect(authorizePlugin).toHaveBeenCalledWith(7, { action: 'begin', identity_ref: undefined, session_id: undefined })
+    expect(wrapper.find(`a[href="${uri}"]`).exists()).toBe(allowed)
   })
 
   it('上传插件通过 step-up 控制器执行', async () => {
