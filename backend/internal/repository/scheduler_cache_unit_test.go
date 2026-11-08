@@ -1128,6 +1128,36 @@ func schedulerCacheBenchmarkAccounts(size int) []service.Account {
 // 一旦投影把开关裁掉、却保留了白名单，透传账号在选号阶段就会退回白名单判定并被误判成
 // model_not_supported，而转发阶段（读完整账号）仍按透传工作 —— 表现为"单独测这个账号能通、
 // 走网关却报 no available accounts"。#4936 修的是判定逻辑，这里守的是喂给判定的输入。
+func TestBuildSchedulerMetadataAccount_KeepsWorkBuddyModelSelection(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		extra map[string]any
+	}{
+		{name: "selected", extra: map[string]any{service.WorkBuddyModelsExtraKey: []string{"deepseek-v4.1-flash", "deepseek-v4-pro"}}},
+		{name: "empty", extra: map[string]any{service.WorkBuddyModelsExtraKey: []string{}}},
+		{name: "legacy"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			account := service.Account{
+				ID:       284,
+				Platform: service.PlatformDeepseek,
+				Type:     service.AccountTypePlugin,
+				Extra:    tc.extra,
+			}
+			payload, err := json.Marshal(buildSchedulerMetadataAccount(account))
+			require.NoError(t, err)
+			var restored service.Account
+			require.NoError(t, json.Unmarshal(payload, &restored))
+			_, configured := account.WorkBuddyModelSelection()
+			_, restoredConfigured := restored.WorkBuddyModelSelection()
+			require.Equal(t, configured, restoredConfigured)
+			for _, model := range []string{"deepseek-v4.1-flash", "deepseek-v4-flash", "deepseek-v4-pro"} {
+				require.Equal(t, account.IsModelSupported(model), restored.IsModelSupported(model), model)
+			}
+		})
+	}
+}
+
 func TestBuildSchedulerMetadataAccount_KeepsOpenAIPassthroughForModelGate(t *testing.T) {
 	for _, key := range []string{"openai_passthrough", "openai_oauth_passthrough"} {
 		t.Run(key, func(t *testing.T) {

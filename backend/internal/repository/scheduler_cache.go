@@ -1292,6 +1292,8 @@ func filterSchedulerExtra(extra map[string]any) map[string]any {
 		"quota_weekly_reset_hour",
 		"quota_reset_timezone",
 		"mixed_scheduling",
+		// Model selection must survive the metadata projection used by candidate filtering.
+		service.WorkBuddyModelsExtraKey,
 		"window_cost_limit",
 		"window_cost_sticky_reserve",
 		// RPM 门与窗口费用门一样跑在本投影上：isAccountSchedulableForRPM 读 base_rpm，
