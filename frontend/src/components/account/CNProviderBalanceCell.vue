@@ -5,7 +5,7 @@
       <span
         data-test="cn-provider-balance-value"
         :class="['text-[10px] font-medium leading-4', platformTextClass(account.platform)]"
-        :title="t('admin.accounts.cnProviders.balanceProbeTooltip')"
+        :title="probeTitle"
       >
         {{ balanceLabel }}
       </span>
@@ -18,6 +18,9 @@
         {{ t('admin.accounts.cnProviders.balanceLow') }}
       </span>
     </div>
+    <div v-if="workBuddy && credits?.cycle_reset_time" class="text-[10px] text-gray-500 dark:text-gray-400">
+      {{ t('admin.accounts.pluginCredits.reset', { time: credits.cycle_reset_time }) }}
+    </div>
 
     <!-- Explicit refresh action (aligned with the OpenAI "Query" / Grok "Probe"
          buttons): the old chip doubled as the data display and a hidden click
@@ -29,7 +32,7 @@
         data-test="cn-provider-balance-probe"
         class="inline-flex items-center gap-0.5 whitespace-nowrap rounded px-1.5 py-0.5 text-[10px] font-medium leading-4 text-blue-600 transition-colors hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50 dark:text-blue-400 dark:hover:bg-blue-900/30"
         :disabled="loading"
-        :title="t('admin.accounts.cnProviders.balanceProbeTooltip')"
+        :title="probeTitle"
         @click="handleProbe"
       >
         <svg
@@ -46,7 +49,7 @@
             d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
           />
         </svg>
-        {{ t('admin.accounts.cnProviders.probe') }}
+        {{ t(workBuddy ? 'admin.accounts.pluginCredits.query' : 'admin.accounts.cnProviders.probe') }}
       </button>
     </div>
 
@@ -61,6 +64,7 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { adminAPI } from '@/api/admin'
 import type { CNProviderBalanceEntry, CNProviderBalanceResult } from '@/api/admin/cnProviders'
+import { getAccountCredits, type PluginAccountCredits } from '@/api/admin/plugins'
 import type { Account } from '@/types'
 import { platformTextClass } from '@/utils/platformColors'
 import { cnBalanceCellVisible } from './credentialsBuilder'
@@ -69,14 +73,18 @@ const props = defineProps<{
   account: Account
 }>()
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 
-// 仅 kimi / deepseek payg 账号有公开余额端点（智谱 payg 无）。
+const workBuddy = computed(() => props.account.type === 'plugin' && props.account.platform === 'deepseek')
 const visible = computed(() => cnBalanceCellVisible(props.account))
+const probeTitle = computed(() => t(workBuddy.value
+  ? 'admin.accounts.pluginCredits.query'
+  : 'admin.accounts.cnProviders.balanceProbeTooltip'))
 
 const loading = ref(false)
 const error = ref<string | null>(null)
 const data = ref<CNProviderBalanceResult | null>(null)
+const credits = ref<PluginAccountCredits | null>(null)
 
 const extraKey = (suffix: string) => `${props.account.platform}_${suffix}`
 
@@ -100,7 +108,7 @@ const snapshotBalances = computed<CNProviderBalanceEntry[]>(() => {
     return [{ currency, balance }]
   })
 })
-const balanceLow = computed(() => props.account.extra?.[extraKey('balance_low')] === true)
+const balanceLow = computed(() => !workBuddy.value && props.account.extra?.[extraKey('balance_low')] === true)
 
 // 优先用探测结果，其次落库快照。多币种返回全部明细，否则主币种单条。
 const currentEntries = computed<CNProviderBalanceEntry[]>(() => {
@@ -121,6 +129,13 @@ const formatEntry = (entry: CNProviderBalanceEntry): string => {
 }
 
 const balanceLabel = computed(() => {
+  if (workBuddy.value) {
+    const format = new Intl.NumberFormat(locale.value, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    const value = credits.value
+    const remaining = value ? format.format(value.remaining) : '—'
+    const limit = value?.limit == null ? '' : ` / ${format.format(value.limit)}`
+    return `${t('admin.accounts.pluginCredits.remaining')} ${remaining}${limit}`
+  }
   if (currentEntries.value.length === 0) {
     // 修复:此前误引 admin.accounts.grokBalance(实际嵌套在 usageWindow 下),
     // 未命中时渲染原始 key。CN 供应商使用自己的占位键。
@@ -151,10 +166,18 @@ const truncatedError = computed(() => {
 
 const handleProbe = async () => {
   if (loading.value) return
+  const id = props.account.id
+  const queryCredits = workBuddy.value
   loading.value = true
   error.value = null
   try {
-    const result = await adminAPI.cnProviders.queryBalance(props.account.id)
+    if (queryCredits) {
+      const result = await getAccountCredits(id)
+      if (props.account.id === id) credits.value = result
+      return
+    }
+    const result = await adminAPI.cnProviders.queryBalance(id)
+    if (props.account.id !== id) return
     // 失败时保留快照展示（仅显示错误行），成功才覆盖。
     if (result.success) {
       data.value = result
@@ -162,9 +185,12 @@ const handleProbe = async () => {
       error.value = result.error || t('common.error')
     }
   } catch (e) {
-    error.value = extractErrorMessage(e)
+    if (props.account.id === id) {
+      if (queryCredits) credits.value = null
+      error.value = queryCredits ? t('admin.accounts.pluginCredits.unavailable') : extractErrorMessage(e)
+    }
   } finally {
-    loading.value = false
+    if (props.account.id === id) loading.value = false
   }
 }
 
@@ -172,6 +198,7 @@ watch(
   () => props.account.id,
   () => {
     data.value = null
+    credits.value = null
     error.value = null
     loading.value = false
   }

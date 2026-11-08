@@ -599,7 +599,7 @@ export function cnQuotaCellVisible(account: CNUsageCellAccount): boolean {
 }
 
 export function cnBalanceCellVisible(account: CNUsageCellAccount): boolean {
-  if (account.type === 'plugin') return false
+  if (account.type === 'plugin') return account.platform === 'deepseek'
   const { platform } = account
   const mode = cnUsageCellAccountMode(account)
   if (OFFICIAL_ACCOUNT_API_PLATFORMS.includes(platform)) return officialAccountAPISupported(account, mode)

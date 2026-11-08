@@ -223,7 +223,7 @@ describe('credentialsBuilder built-in Command Code provider', () => {
     expect(cnQuotaCellVisible(adaptiveRelay)).toBe(false)
     expect(cnBalanceCellVisible(account({ account_mode: 'payg' }, 'oauth'))).toBe(false)
     expect(cnQuotaCellVisible({ platform: 'deepseek', type: 'apikey', credentials: { account_mode: 'payg' } })).toBe(false)
-    expect(cnBalanceCellVisible({ platform: 'deepseek', type: 'plugin', credentials: {} })).toBe(false)
+    expect(cnBalanceCellVisible({ platform: 'deepseek', type: 'plugin', credentials: {} })).toBe(true)
     expect(cnBalanceCellVisible({ platform: 'zhipu', type: 'apikey', credentials: { account_mode: 'payg' } })).toBe(false)
   })
 })

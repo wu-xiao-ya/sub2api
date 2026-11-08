@@ -10,12 +10,9 @@
       </button>
     </div>
     <template v-if="loaded">
-      <div class="max-h-48 space-y-1 overflow-y-auto">
-        <label v-for="model in models" :key="model" class="flex items-center gap-2 text-sm">
-          <input v-model="selection" type="checkbox" :value="model" :disabled="busy" />
-          <span class="break-all">{{ model }}</span>
-        </label>
-      </div>
+      <fieldset :disabled="busy">
+        <ModelWhitelistSelector v-model="selection" :catalog-models="models" />
+      </fieldset>
       <button type="button" class="btn btn-primary btn-sm" :disabled="busy" @click="save">
         {{ t('admin.accounts.pluginCredits.saveModels') }}
       </button>
@@ -30,6 +27,7 @@
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { apiClient } from '@/api/client'
+import ModelWhitelistSelector from './ModelWhitelistSelector.vue'
 
 const props = defineProps<{ accountId: number }>()
 const { t } = useI18n()
