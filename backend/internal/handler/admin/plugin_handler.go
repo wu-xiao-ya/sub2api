@@ -45,7 +45,7 @@ func (h *PluginHandler) Authorize(c *gin.Context) {
 		SessionID   string `json:"session_id"`
 	}
 	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 4096)
-	if c.ShouldBindJSON(&input) != nil || input.Action == "prepare" || input.Action == "inspect" || input.Action == "credits" || input.Action == "import" {
+	if c.ShouldBindJSON(&input) != nil || input.Action == "prepare" || input.Action == "inspect" || input.Action == "credits" || input.Action == "import" || input.Action == "catalog" {
 		response.BadRequest(c, "Invalid authorization action")
 		return
 	}

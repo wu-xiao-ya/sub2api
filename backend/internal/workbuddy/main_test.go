@@ -64,7 +64,7 @@ func TestAuthorizationKeepsSecretsPrivateAndCatalogScoped(t *testing.T) {
 			require.Equal(t, "Bearer test-access", r.Header.Get("Authorization"))
 			io.WriteString(w, `{"code":0,"data":{"uid":"test-user"}}`)
 		case "/v2/enterprises/personal/models":
-			io.WriteString(w, `{"code":0,"data":{"models":[{"id":"deepseek-v4-pro"},{"id":"gpt-other"}]}}`)
+			io.WriteString(w, `{"code":0,"data":{"models":[{"id":"deepseek-v4-pro"},{"id":"qwen3"},{"id":"disabled-model","disabled":true}]}}`)
 		default:
 			t.Errorf("unexpected path %s", r.URL.Path)
 			http.NotFound(w, r)
@@ -87,7 +87,8 @@ func TestAuthorizationKeepsSecretsPrivateAndCatalogScoped(t *testing.T) {
 	require.NotContains(t, string(poll.PublicJson), "test-access")
 	require.NotContains(t, string(poll.PublicJson), "test-refresh")
 	require.NotContains(t, string(poll.PublicJson), "test-user")
-	require.NotContains(t, string(poll.PublicJson), "gpt-other")
+	require.Contains(t, string(poll.PublicJson), "qwen3")
+	require.NotContains(t, string(poll.PublicJson), "disabled-model")
 	c, e := parseConfig(poll.ConfigJson)
 	require.NoError(t, e)
 	require.Len(t, c.Accounts, 1)

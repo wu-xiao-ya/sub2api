@@ -51,7 +51,7 @@ def main():
     files['THIRD_PARTY_NOTICES.md'] = (source / 'THIRD_PARTY_NOTICES.md').read_bytes()
     manifest = {
         'schema_version': 1, 'id': 'org.starlight.workbuddy', 'name': 'WorkBuddy 国内版 DeepSeek',
-        'version': '0.1.3', 'author': 'Starlight',
+        'version': '0.1.4', 'author': 'Starlight',
         'description': 'Browser authorization and independently scheduled DeepSeek accounts; live acceptance required.',
         'requires': {'sub2api': '>=0.2.18 <0.3.0', 'recommended_sub2api_version': '0.2.18',
                      'tested_sub2api_versions': args.tested_version, 'plugin_protocol': 1, 'transport_api': 1, 'ui_bridge': 1},

@@ -321,6 +321,11 @@ export default {
         typesafe: 'TypeSafe / Jev',
       },
       pluginCredits: {
+        modelSelection: 'WorkBuddy 模型选择',
+        modelSelectionHint: '仅转发已勾选的模型。全部取消并保存可停用此账号的所有模型。其他品牌模型需有可用的站内定价。',
+        refreshModels: '读取上游模型',
+        saveModels: '保存模型选择',
+        modelSelectionFailed: '无法读取或保存模型，请刷新上游目录后重试。',
         builtin: '宿主内置',
         remaining: '剩余积分',
         reset: '重置时间 {time}',

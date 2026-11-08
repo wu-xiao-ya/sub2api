@@ -29,7 +29,9 @@ func describeBuiltinWorkBuddy(p *PluginInstallation) {
 		return
 	}
 	p.Builtin = true
+	p.Name = "WorkBuddy 国内版"
 	p.Version = workbuddy.Version
+	p.Description = "国内版账号授权、积分查询与可选模型"
 	p.Compatibility.Compatible = true
 	p.Compatibility.Tested = true
 	p.Compatibility.Status = "compatible"

@@ -47,5 +47,5 @@ func TestImportVerifiesIdentityKeepsExistingReferenceAndRedactsTokens(t *testing
 	require.NoError(t, json.Unmarshal(result.ConfigJson, &saved))
 	require.Len(t, saved.Accounts, 1)
 	require.Equal(t, "imported-secret", saved.Accounts[ref].AccessToken)
-	require.Equal(t, []string{"deepseek-v4-flash"}, saved.Accounts[ref].Models)
+	require.Equal(t, []string{"deepseek-v4-flash", "other"}, saved.Accounts[ref].Models)
 }

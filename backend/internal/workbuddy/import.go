@@ -113,7 +113,7 @@ func (s *server) importAccount(ctx context.Context, c configuration, row importR
 	}
 	a.Models, err = s.models(ctx, a)
 	if err != nil || len(a.Models) == 0 {
-		return "", "deepseek_catalog_unavailable"
+		return "", "catalog_unavailable"
 	}
 	ref := identityRef(a.UID)
 	c.Accounts[ref] = a

@@ -16,6 +16,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/Wei-Shaw/sub2api/internal/util/responseheaders"
 	"github.com/gin-gonic/gin"
+	"github.com/tidwall/gjson"
 	"go.uber.org/zap"
 )
 
@@ -203,6 +204,28 @@ func (s *OpenAIGatewayService) sendCCUpstreamRequest(
 	userAgent string,
 	grokCacheIdentity string,
 ) (*http.Response, error) {
+	if account.Type == AccountTypePlugin {
+		model := gjson.GetBytes(body, "model").String()
+		if !account.allowsSelectedWorkBuddyModel(model) {
+			return nil, providerUnavailable("model is disabled for this WorkBuddy account")
+		}
+		if !strings.HasPrefix(strings.ToLower(model), "deepseek-") {
+			if _, configured := account.WorkBuddyModelSelection(); !configured {
+				return nil, providerUnavailable("select this model before serving it through WorkBuddy")
+			}
+			var key *APIKey
+			if c != nil {
+				value, _ := c.Get("api_key")
+				key, _ = value.(*APIKey)
+			}
+			if key == nil || s.billingService == nil {
+				return nil, providerUnavailable("WorkBuddy model pricing is unavailable")
+			}
+			if _, err := s.calculateOpenAIRecordUsageTokenCost(ctx, key, model, 1, time.Now(), UsageTokens{}, "", "", nil, false); err != nil {
+				return nil, providerUnavailable("configure pricing before serving this WorkBuddy model")
+			}
+		}
+	}
 	// DeepSeek thinking mode 要求历史 assistant 回传 reasoning_content。
 	// Responses→CC 回退在加密-only / 缺 reasoning item 且缓存未命中时会漏掉该
 	// 字段，上游 400 "The `reasoning_content` in the thinking mode must be

@@ -14,6 +14,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -25,7 +26,7 @@ import (
 
 const ID = "org.starlight.workbuddy"
 const pluginID = ID
-const Version = "0.1.3"
+const Version = "0.1.4"
 const pluginVersion = Version
 const capability = "upstream.chat_completions.v1"
 const billingBase = "https://www.codebuddy.cn"
@@ -96,8 +97,8 @@ func parseConfig(raw []byte) (configuration, error) {
 			return c, errors.New("invalid domestic identity")
 		}
 		for _, model := range a.Models {
-			if !isDeepSeek(model) {
-				return c, errors.New("only DeepSeek models are allowed")
+			if !validModelID(model) {
+				return c, errors.New("invalid WorkBuddy model identifier")
 			}
 		}
 	}
@@ -119,7 +120,9 @@ func identityRef(uid string) string {
 	h := sha256.Sum256([]byte(uid))
 	return "wb_" + hex.EncodeToString(h[:16])
 }
-func isDeepSeek(m string) bool { return strings.HasPrefix(strings.ToLower(m), "deepseek-") }
+func validModelID(id string) bool {
+	return id != "" && len(id) <= 200 && !strings.ContainsAny(id, "*\r\n\t ")
+}
 func (s *server) GetInfo(context.Context, *pluginv1.GetInfoRequest) (*pluginv1.GetInfoResponse, error) {
 	return &pluginv1.GetInfoResponse{PluginId: pluginID, PluginVersion: pluginVersion, ProtocolVersion: pluginv1.ProtocolVersion, TransportApiVersion: pluginv1.TransportAPIVersion, Capabilities: []string{capability}}, nil
 }
@@ -265,7 +268,7 @@ func (s *server) Authorize(ctx context.Context, r *pluginv1.AuthorizeRequest) (*
 			return nil, e
 		}
 		if len(a.Models) == 0 {
-			return nil, status.Error(codes.FailedPrecondition, "no DeepSeek models available")
+			return nil, status.Error(codes.FailedPrecondition, "no WorkBuddy models available")
 		}
 		c.Accounts[ref] = a
 		delete(c.Sessions, r.SessionId)
@@ -289,6 +292,23 @@ func (s *server) Authorize(ctx context.Context, r *pluginv1.AuthorizeRequest) (*
 			return nil, err
 		}
 		public = credits
+	case "catalog":
+		a, ok := c.Accounts[r.IdentityRef]
+		if !ok {
+			return nil, status.Error(codes.NotFound, "identity is not authorized")
+		}
+		catalogCtx, cancel := context.WithTimeout(ctx, 8*time.Second)
+		models, err := s.models(catalogCtx, a)
+		cancel()
+		if err != nil {
+			return nil, err
+		}
+		if !slices.Equal(a.Models, models) {
+			a.Models = models
+			c.Accounts[r.IdentityRef] = a
+			changed = true
+		}
+		public = map[string]any{"identity_ref": r.IdentityRef, "models": models}
 	case "inspect", "prepare":
 		a, ok := c.Accounts[r.IdentityRef]
 		if !ok {
@@ -440,7 +460,7 @@ func (s *server) models(ctx context.Context, a credential) ([]string, error) {
 		if m, ok := row.(map[string]any); ok {
 			id := str(m, "id")
 			disabled, _ := m["disabled"].(bool)
-			if !disabled && isDeepSeek(id) && !seen[id] {
+			if !disabled && validModelID(id) && !seen[id] {
 				models = append(models, id)
 				seen[id] = true
 			}
@@ -490,8 +510,8 @@ func (s *server) Forward(stream pluginv1.TransportPlugin_ForwardServer) error {
 			allowed = true
 		}
 	}
-	if !allowed || !isDeepSeek(model) {
-		return sendError(stream, "model_not_allowed", "model not in authorized DeepSeek catalog", false)
+	if !allowed {
+		return sendError(stream, "model_not_allowed", "model not in authorized WorkBuddy catalog", false)
 	}
 	for _, field := range []string{"previous_response_id", "store", "background", "web_search", "audio", "modalities"} {
 		if _, ok := request[field]; ok {

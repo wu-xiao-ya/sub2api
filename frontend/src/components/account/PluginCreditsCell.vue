@@ -33,7 +33,7 @@ const loading = ref(false)
 const failed = ref(false)
 
 function format(value: number): string {
-  return new Intl.NumberFormat(locale.value, { maximumFractionDigits: 8 }).format(value)
+  return new Intl.NumberFormat(locale.value, { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value)
 }
 
 async function query() {

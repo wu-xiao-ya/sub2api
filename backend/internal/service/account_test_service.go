@@ -189,6 +189,13 @@ func (s *AccountTestService) FetchPluginAccountModels(ctx context.Context, accou
 		Data []openai.Model `json:"data"`
 	}{Data: make([]openai.Model, 0, len(ids))}
 	for _, id := range ids {
+		if _, configured := account.WorkBuddyModelSelection(); configured {
+			if !account.allowsSelectedWorkBuddyModel(id) {
+				continue
+			}
+		} else if !strings.HasPrefix(strings.ToLower(id), "deepseek-") {
+			continue
+		}
 		catalog.Data = append(catalog.Data, openai.Model{ID: id, Object: "model", Type: "model", DisplayName: id})
 	}
 	body, err := json.Marshal(catalog)

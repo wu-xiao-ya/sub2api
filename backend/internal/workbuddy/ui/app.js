@@ -74,7 +74,7 @@ action('import', async () => {
     refresh_failed: '刷新令牌失败',
     profile_unavailable: '无法读取账号资料',
     identity_unavailable: '无法确认账号身份',
-    deepseek_catalog_unavailable: '无法读取 DeepSeek 模型目录',
+    catalog_unavailable: '无法读取 WorkBuddy 模型目录',
   };
   const errors = result.results.filter(row => !row.identity_ref)
     .map(row => `第 ${row.index} 项：${reasons[row.reason] ?? '验证失败'}`);
