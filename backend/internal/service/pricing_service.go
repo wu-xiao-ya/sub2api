@@ -1050,6 +1050,11 @@ func (s *PricingService) buildPricingData(body []byte) (map[string]*LiteLLMModel
 		return nil, "", err
 	}
 	data = s.mergeFallbackPricingData(data)
+	for name, pricing := range kimiK31Pricing() {
+		if _, exists := data[name]; !exists {
+			data[name] = pricing
+		}
+	}
 	data = s.mergeOverrideOnlyModels(data)
 	return data, fingerprint, nil
 }
