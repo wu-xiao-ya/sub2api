@@ -1132,6 +1132,10 @@ func (s *BillingService) getFallbackPricing(model string) *ModelPricing {
 	if strings.Contains(modelLower, "gemini-4-argon-cyber") {
 		return s.fallbackPrices["gemini-4-argon-cyber-permissive"]
 	}
+	// Carbon uses the Argon price card by operator policy.
+	if normalizeGeminiThinkingTierAlias(lastSegment(modelLower)) == "gemini-4-carbon" {
+		return s.fallbackPrices["gemini-4-argon"]
+	}
 	if strings.Contains(modelLower, "gemini-4-argon") {
 		return s.fallbackPrices["gemini-4-argon"]
 	}

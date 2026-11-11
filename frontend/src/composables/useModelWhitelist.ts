@@ -58,7 +58,8 @@ const geminiModels = [
   'gemini-3.5-flash',
   'gemini-3-flash-preview',
   'gemini-3-pro-preview',
-  'gemini-4-argon'
+  'gemini-4-argon',
+  'gemini-4-carbon'
 ]
 
 // Antigravity 官方支持的模型（精确匹配）

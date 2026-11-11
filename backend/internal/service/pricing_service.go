@@ -1370,7 +1370,12 @@ func normalizeModelNameForPricing(model string) string {
 		}
 		return canonical
 	}
-	return normalizeAntigravityClaudeTierAlias(normalizeGeminiThinkingTierAlias(model))
+	model = normalizeAntigravityClaudeTierAlias(normalizeGeminiThinkingTierAlias(model))
+	// Carbon follows the Argon price card by operator policy.
+	if model == "gemini-4-carbon" {
+		return "gemini-4-argon"
+	}
+	return model
 }
 
 // normalizeAntigravityClaudeTierAlias maps Antigravity's Claude 5.5 thinking-tier
@@ -1400,7 +1405,7 @@ func isAntigravityThinkingTierAlias(model string) bool {
 // the published token rate, so this keeps -high/-low/-medium and -tiered
 // requests on the corresponding base model's price card.
 func normalizeGeminiThinkingTierAlias(model string) string {
-	for _, baseModel := range []string{"gemini-3.6-flash", "gemini-3.7-flash", "gemini-3.8-flash", "gemini-4-argon"} {
+	for _, baseModel := range []string{"gemini-3.6-flash", "gemini-3.7-flash", "gemini-3.8-flash", "gemini-4-argon", "gemini-4-carbon"} {
 		for _, tier := range []string{"-high", "-low", "-medium", "-tiered"} {
 			if model == baseModel+tier {
 				return baseModel
