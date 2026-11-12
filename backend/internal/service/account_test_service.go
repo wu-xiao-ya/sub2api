@@ -150,13 +150,19 @@ type AccountTestService struct {
 	modelMetadataRegistryMu   sync.Mutex
 	modelMetadataRegistry     map[string]modelsDevProvider
 	modelMetadataRegistryAt   time.Time
-	pluginManager             *PluginManager
+	pluginManager             accountTestPluginProvider
 	openaiGatewayService      *OpenAIGatewayService
 	agentIdentityTaskMu       sync.Mutex
 	agentIdentityWS           agentIdentityWSConnectionInvalidator
 	// grokWSDialer is optional; realtime account tests use the default OpenAI-style
 	// WS dialer when nil (supports proxy + coder/websocket handshake).
 	grokWSDialer openAIWSClientDialer
+}
+
+type accountTestPluginProvider interface {
+	ProviderAccountModels(context.Context, *Account) ([]string, error)
+	RoundTripProvider(context.Context, *http.Request, string, *Account) (*http.Response, error)
+	RoundTripOpenAIOAuth(context.Context, *http.Request, string, *Account) (*http.Response, bool, error)
 }
 
 func (s *AccountTestService) SetSettingService(settingService *SettingService) {
@@ -166,9 +172,48 @@ func (s *AccountTestService) SetSettingService(settingService *SettingService) {
 }
 
 func (s *AccountTestService) SetPluginManager(pluginManager *PluginManager) {
-	if s != nil {
+	if s != nil && pluginManager != nil {
 		s.pluginManager = pluginManager
 	}
+}
+
+func (s *AccountTestService) FetchPluginAccountModels(ctx context.Context, account *Account) ([]openai.Model, error) {
+	if s == nil || s.pluginManager == nil {
+		return nil, errors.New("provider plugin is unavailable")
+	}
+	ids, err := s.pluginManager.ProviderAccountModels(ctx, account)
+	if err != nil {
+		return nil, err
+	}
+	catalog := struct {
+		Data []openai.Model `json:"data"`
+	}{Data: make([]openai.Model, 0, len(ids))}
+	for _, id := range ids {
+		if _, configured := account.WorkBuddyModelSelection(); configured {
+			if !account.allowsSelectedWorkBuddyModel(id) {
+				continue
+			}
+		} else if !strings.HasPrefix(strings.ToLower(id), "deepseek-") {
+			continue
+		}
+		catalog.Data = append(catalog.Data, openai.Model{ID: id, Object: "model", Type: "model", DisplayName: id})
+	}
+	body, err := json.Marshal(catalog)
+	if err != nil {
+		return nil, err
+	}
+	body, err = projectAccountModelAliases(body, account, nil, false)
+	if err != nil {
+		return nil, err
+	}
+	catalog.Data = nil
+	if err := json.Unmarshal(body, &catalog); err != nil {
+		return nil, err
+	}
+	for i := range catalog.Data {
+		catalog.Data[i].DisplayName = catalog.Data[i].ID
+	}
+	return catalog.Data, nil
 }
 
 func (s *AccountTestService) SetOpenAIGatewayService(gateway *OpenAIGatewayService) {
@@ -382,6 +427,26 @@ func (s *AccountTestService) TestAccountConnection(c *gin.Context, accountID int
 		s.sendEvent(c, TestEvent{Type: "content", Text: "Synthetic Anthropic OAuth account is healthy and interactive."})
 		s.sendEvent(c, TestEvent{Type: "test_complete", Success: true})
 		return nil
+	}
+
+	if account.Type == AccountTypePlugin {
+		models, err := s.FetchPluginAccountModels(ctx, account)
+		if err != nil {
+			return s.sendErrorAndEnd(c, fmt.Sprintf("Plugin model catalog unavailable: %s", err))
+		}
+		if len(models) == 0 {
+			return s.sendErrorAndEnd(c, "No models are available for this plugin account")
+		}
+		modelID = strings.TrimSpace(modelID)
+		if modelID == "" {
+			modelID = models[0].ID
+		}
+		for _, model := range models {
+			if model.ID == modelID {
+				return s.testOpenAIChatCompletionsConnection(c, account, account.GetMappedModel(modelID), prompt, pluginProviderBaseURL, "")
+			}
+		}
+		return s.sendErrorAndEnd(c, "The selected model is not available for this plugin account")
 	}
 
 	// Route to platform-specific test method
@@ -2145,6 +2210,21 @@ func (s *AccountTestService) testOpenAIChatCompletionsConnection(
 	req = req.WithContext(WithHTTPUpstreamProfile(req.Context(), HTTPUpstreamProfileOpenAI))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "text/event-stream")
+	proxyURL := ""
+	if account.ProxyID != nil && account.Proxy != nil {
+		proxyURL = account.Proxy.URL()
+	}
+	if account.Type == AccountTypePlugin {
+		resp, err := s.doOpenAIAccountTestUpstream(req, proxyURL, account, true)
+		if err != nil {
+			return s.sendErrorAndEnd(c, fmt.Sprintf("Plugin Chat Completions request failed: %s", err))
+		}
+		defer func() { _ = resp.Body.Close() }()
+		if resp.StatusCode != http.StatusOK {
+			return s.sendErrorAndEnd(c, fmt.Sprintf("Plugin Chat Completions returned HTTP %d", resp.StatusCode))
+		}
+		return s.processOpenAIChatCompletionsStream(c, resp.Body)
+	}
 	req.Header.Set("Authorization", "Bearer "+authToken)
 
 	// 官方 OpenCode / Command Code 上游收敛为规范客户端 UA，与真实转发路径一致。
@@ -2153,11 +2233,6 @@ func (s *AccountTestService) testOpenAIChatCompletionsConnection(
 	// 账号级请求头覆写：测试请求与真实转发保持一致的最终头
 	account.ApplyHeaderOverrides(req.Header)
 	applyOpenCodeSessionHeader(c, account, apiURL, req.Header, payloadBytes)
-
-	proxyURL := ""
-	if account.ProxyID != nil && account.Proxy != nil {
-		proxyURL = account.Proxy.URL()
-	}
 
 	resp, err := s.httpUpstream.DoWithTLS(WithAccountOutbound(req, account, proxyURL), proxyURL, account.ID, account.Concurrency, s.tlsFPProfileService.ResolveTLSProfile(account))
 	if err != nil {

@@ -117,6 +117,18 @@ export default {
         opencode_go: 'OpenCode',
         typesafe: 'TypeSafe / Jev',
       },
+      pluginCredits: {
+        modelSelection: 'WorkBuddy model selection',
+        modelSelectionHint: 'Only selected models are forwarded. Clear all selections to disable every model for this account. Other brands require gateway pricing.',
+        refreshModels: 'Load upstream models',
+        saveModels: 'Save model selection',
+        modelSelectionFailed: 'Could not load or save models. Refresh the upstream catalog and try again.',
+        builtin: 'Built in',
+        remaining: 'Credits remaining',
+        reset: 'Resets {time}',
+        query: 'Check credits',
+        unavailable: 'Upstream credits are unavailable'
+      },
       cnProviders: {
         accountMode: {
           title: 'Account Type',

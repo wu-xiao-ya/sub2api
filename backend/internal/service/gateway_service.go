@@ -1398,8 +1398,13 @@ func mixedListingModelAllowed(groupPlatform, model string) bool {
 
 func (s *GatewayService) GetAvailableModels(ctx context.Context, groupID *int64, platform string) []string {
 	cacheKey := modelsListCacheKey(groupID, platform)
-	if s.modelsListCache != nil {
-		if cached, found := s.modelsListCache.Get(cacheKey); found {
+	cache := s.modelsListCache
+	if platform == PlatformDeepseek {
+		// WorkBuddy selections are editable per account and must reflect removals immediately.
+		cache = nil
+	}
+	if cache != nil {
+		if cached, found := cache.Get(cacheKey); found {
 			if models, ok := cached.([]string); ok {
 				modelsListCacheHitTotal.Add(1)
 				return cloneStringSlice(models)
@@ -1437,8 +1442,12 @@ func (s *GatewayService) GetAvailableModels(ctx context.Context, groupID *int64,
 	// Collect unique models from all accounts
 	modelSet := make(map[string]struct{})
 	hasAnyMapping := false
+	hasWorkBuddySelection := false
 
 	for _, acc := range accounts {
+		if _, configured := acc.WorkBuddyModelSelection(); configured {
+			hasWorkBuddySelection = true
+		}
 		// Passthrough routing accepts models independently of model_mapping, so a
 		// stale mapping on a passthrough account must not narrow the public list.
 		// Treat it like an unmapped account: skip its mapping here and let
@@ -1460,6 +1469,16 @@ func (s *GatewayService) GetAvailableModels(ctx context.Context, groupID *int64,
 			hasAnyMapping = true
 		}
 	}
+	if hasWorkBuddySelection && platform == PlatformDeepseek {
+		for _, account := range accounts {
+			if _, configured := account.WorkBuddyModelSelection(); !configured && len(account.GetModelMapping()) == 0 {
+				for _, model := range deepseekServableModels {
+					modelSet[model] = struct{}{}
+				}
+			}
+		}
+		hasAnyMapping = true
+	}
 
 	// If no account has model_mapping, return nil (use default)
 	if !hasAnyMapping && platform == PlatformOpenAI {
@@ -1469,8 +1488,8 @@ func (s *GatewayService) GetAvailableModels(ctx context.Context, groupID *int64,
 		}
 	}
 	if !hasAnyMapping {
-		if s.modelsListCache != nil {
-			s.modelsListCache.Set(cacheKey, []string(nil), s.modelsListCacheTTL)
+		if cache != nil {
+			cache.Set(cacheKey, []string(nil), s.modelsListCacheTTL)
 			modelsListCacheStoreTotal.Add(1)
 		}
 		return nil
@@ -1493,11 +1512,11 @@ func (s *GatewayService) GetAvailableModels(ctx context.Context, groupID *int64,
 		}
 	}
 
-	if s.modelsListCache != nil {
-		s.modelsListCache.Set(cacheKey, cloneStringSlice(models), s.modelsListCacheTTL)
+	if cache != nil {
+		cache.Set(cacheKey, cloneStringSlice(models), s.modelsListCacheTTL)
 		modelsListCacheStoreTotal.Add(1)
 	}
-	return cloneStringSlice(models)
+	return models
 }
 
 func (s *GatewayService) resolveCompositeModelOwnership(ctx context.Context, groupID int64, model string) (CompositeModelOwnership, error) {

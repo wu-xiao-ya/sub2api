@@ -1195,7 +1195,7 @@ func (h *GatewayHandler) Models(c *gin.Context) {
 		return
 	}
 
-	if len(availableModels) > 0 || (platform == service.PlatformOpenAI && availableModels != nil) {
+	if len(availableModels) > 0 || ((platform == service.PlatformOpenAI || platform == service.PlatformDeepseek) && availableModels != nil) {
 		writeModelsList(c, platform, availableModels)
 		return
 	}
@@ -1469,7 +1469,7 @@ func writeOpenAIModelsList(c *gin.Context, modelIDs []string) {
 // 与平台默认列表（fallbackModels）。账号映射为空时回落默认列表；Anthropic
 // 平台两者取并集，其余平台以账号映射键为准。
 func modelListingSource(platform string, availableModels, fallbackModels []string) []string {
-	if platform == service.PlatformOpenAI && availableModels != nil {
+	if (platform == service.PlatformOpenAI || platform == service.PlatformDeepseek) && availableModels != nil {
 		return availableModels
 	}
 	if len(availableModels) == 0 {

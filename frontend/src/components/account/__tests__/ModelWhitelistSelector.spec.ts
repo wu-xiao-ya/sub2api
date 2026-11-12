@@ -100,6 +100,16 @@ describe('ModelWhitelistSelector', () => {
     resetPlatformCatalog()
   })
 
+  it('uses only the supplied upstream catalog and keeps its models individually selectable', async () => {
+    const wrapper = mountSelector({ accountId: 46, catalogModels: ['deepseek-v4-pro', 'workbuddy-brand-model'] })
+    await wrapper.get('.cursor-pointer').trigger('click')
+    expect(wrapper.findAll('[data-testid="model-option"]')).toHaveLength(2)
+    expect(wrapper.text()).not.toContain('admin.accounts.customModelName')
+    expect(wrapper.text()).not.toContain('admin.accounts.syncUpstreamModels')
+    await findModelRow(wrapper, 'workbuddy-brand-model').get('[data-testid="select-model"]').trigger('click')
+    expect(wrapper.emitted('update:modelValue')).toEqual([[['workbuddy-brand-model']]])
+  })
+
   it.each(['anthropic', 'openai', 'gemini', 'antigravity', 'grok', 'kimi', 'zhipu', 'deepseek', 'minimax', 'opencode_go', 'command_code', 'cline'])(
     'supports upstream sync for %s saved accounts and creation previews',
     (platform) => {

@@ -587,6 +587,12 @@ func (s *OpenAIGatewayService) handleErrorResponse(
 ) (*OpenAIForwardResult, error) {
 	body := s.readUpstreamErrorBody(resp)
 	body = s.redactAgentIdentitySensitiveBody(ctx, account, body)
+	if account != nil && account.Type == AccountTypePlugin {
+		setOpsUpstreamError(c, resp.StatusCode, "provider upstream error", "")
+		MarkResponseCommitted(c)
+		c.Data(resp.StatusCode, "application/json", body)
+		return nil, fmt.Errorf("provider upstream error: %d", resp.StatusCode)
+	}
 
 	// cyber_policy 硬阻断：透传上游原始错误体给客户端（不重包成通用 502），不冷却账号。
 	// 当前请求恒透传（需求1）；标记供 handler 事后写风控/邮件。400 cyber 不可 failover
@@ -838,6 +844,13 @@ func (s *OpenAIGatewayService) handleCompatErrorResponse(
 ) (*OpenAIForwardResult, error) {
 	body := s.readUpstreamErrorBody(resp)
 	body = s.redactAgentIdentitySensitiveBody(context.Background(), account, body)
+	if account != nil && account.Type == AccountTypePlugin {
+		message := extractUpstreamErrorMessage(body)
+		setOpsUpstreamError(c, resp.StatusCode, message, "")
+		MarkResponseCommitted(c)
+		writeError(c, resp.StatusCode, "upstream_error", message)
+		return nil, fmt.Errorf("provider upstream error: %d", resp.StatusCode)
+	}
 
 	// cyber_policy：兼容路径（Chat Completions / Anthropic）以各自格式回写错误，
 	// 不原样透传 responses 格式的 cyber body（否则对下游格式不合法）。cyber 是上游网络

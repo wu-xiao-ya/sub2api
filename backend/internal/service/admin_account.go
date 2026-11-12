@@ -411,6 +411,9 @@ func normalizeOpenAILongContextBillingUpdateExtra(account *Account, input *Updat
 // Grok media eligibility helpers live in account_grok_media_eligibility.go.
 
 func buildAccountForCreate(input *CreateAccountInput, accountExtra map[string]any) (*Account, error) {
+	if input.Type == AccountTypePlugin && (input.Platform != PlatformDeepseek || len(input.Credentials) != 0) {
+		return nil, errors.New("plugin accounts require deepseek platform and empty credentials")
+	}
 	if err := ValidateUpstreamBillingManualRateExtra(accountExtra); err != nil {
 		return nil, err
 	}
@@ -645,6 +648,11 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 	if input.Name != "" {
 		account.Name = input.Name
 	}
+	if input.Type == AccountTypePlugin || account.Type == AccountTypePlugin {
+		if (input.Type != "" && input.Type != account.Type) || (input.Credentials != nil && len(input.Credentials) != 0) {
+			return nil, errors.New("plugin account type is immutable and credentials must be empty")
+		}
+	}
 	if input.Type != "" {
 		account.Type = input.Type
 	}
@@ -691,6 +699,7 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 		delete(normalizedExtra, OllamaCloudUsageSnapshotExtraKey)
 		delete(normalizedExtra, OpenCodeGoUsageAutoRefreshExtraKey)
 		delete(normalizedExtra, OpenCodeGoUsageSnapshotExtraKey)
+		delete(normalizedExtra, WorkBuddyModelsExtraKey)
 		// 保留配额用量和专用服务受管字段，防止普通账号编辑意外覆盖。
 		for _, key := range []string{
 			"quota_used",
@@ -708,6 +717,7 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 			OpenAIAutoResetCreditStateExtraKey,
 			OpenCodeGoUsageAutoRefreshExtraKey,
 			OpenCodeGoUsageSnapshotExtraKey,
+			WorkBuddyModelsExtraKey,
 		} {
 			if v, ok := account.Extra[key]; ok {
 				normalizedExtra[key] = v
@@ -963,6 +973,7 @@ func (s *adminServiceImpl) UpdateAccountExtra(ctx context.Context, id int64, upd
 // BulkUpdateAccounts updates multiple accounts in one request.
 // It merges credentials/extra keys instead of overwriting the whole object.
 func (s *adminServiceImpl) BulkUpdateAccounts(ctx context.Context, input *BulkUpdateAccountsInput) (*BulkUpdateAccountsResult, error) {
+	delete(input.Extra, WorkBuddyModelsExtraKey)
 	if err := validateManualRateMerge(input.Extra); err != nil {
 		return nil, err
 	}

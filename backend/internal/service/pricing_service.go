@@ -1050,6 +1050,14 @@ func (s *PricingService) buildPricingData(body []byte) (map[string]*LiteLLMModel
 		return nil, "", err
 	}
 	data = s.mergeFallbackPricingData(data)
+	for name, pricing := range kimiK31Pricing() {
+		if _, exists := data[name]; !exists {
+			data[name] = pricing
+		}
+	}
+	if _, exists := data["claude-fable-5-2"]; !exists {
+		data["claude-fable-5-2"] = fable52Pricing()
+	}
 	data = s.mergeOverrideOnlyModels(data)
 	return data, fingerprint, nil
 }
@@ -1225,6 +1233,10 @@ func (s *PricingService) GetModelPricing(modelName string) *LiteLLMModelPricing 
 		return pricing
 	}
 
+	if isClaudeFable52Model(lookupCandidates[0]) {
+		return fable52Pricing()
+	}
+
 	// 4. 基于模型系列匹配（Claude）
 	if pricing := s.matchByModelFamily(lookupCandidates[0]); pricing != nil {
 		return pricing
@@ -1365,7 +1377,12 @@ func normalizeModelNameForPricing(model string) string {
 		}
 		return canonical
 	}
-	return normalizeAntigravityClaudeTierAlias(normalizeGeminiThinkingTierAlias(model))
+	model = normalizeAntigravityClaudeTierAlias(normalizeGeminiThinkingTierAlias(model))
+	// Carbon follows the Argon price card by operator policy.
+	if model == "gemini-4-carbon" {
+		return "gemini-4-argon"
+	}
+	return model
 }
 
 // normalizeAntigravityClaudeTierAlias maps Antigravity's Claude 5.5 thinking-tier
@@ -1395,7 +1412,7 @@ func isAntigravityThinkingTierAlias(model string) bool {
 // the published token rate, so this keeps -high/-low/-medium and -tiered
 // requests on the corresponding base model's price card.
 func normalizeGeminiThinkingTierAlias(model string) string {
-	for _, baseModel := range []string{"gemini-3.6-flash", "gemini-3.7-flash", "gemini-3.8-flash", "gemini-4-argon"} {
+	for _, baseModel := range []string{"gemini-3.6-flash", "gemini-3.7-flash", "gemini-3.8-flash", "gemini-4-argon", "gemini-4-carbon"} {
 		for _, tier := range []string{"-high", "-low", "-medium", "-tiered"} {
 			if model == baseModel+tier {
 				return baseModel

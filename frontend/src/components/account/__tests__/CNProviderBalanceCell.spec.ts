@@ -3,9 +3,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import CNProviderBalanceCell from '../CNProviderBalanceCell.vue'
 import type { Account } from '@/types'
 
-const { queryBalance } = vi.hoisted(() => ({
-  queryBalance: vi.fn()
+const { queryBalance, getAccountCredits } = vi.hoisted(() => ({
+  queryBalance: vi.fn(),
+  getAccountCredits: vi.fn()
 }))
+
+vi.mock('@/api/admin/plugins', () => ({ getAccountCredits }))
 
 vi.mock('@/api/admin', () => ({
   adminAPI: {
@@ -15,7 +18,8 @@ vi.mock('@/api/admin', () => ({
 
 vi.mock('vue-i18n', () => ({
   useI18n: () => ({
-    t: (key: string) => key
+    t: (key: string) => key,
+    locale: { value: 'en-US' }
   })
 }))
 
@@ -33,6 +37,21 @@ const account = {
 describe('CNProviderBalanceCell', () => {
   beforeEach(() => {
     queryBalance.mockReset()
+    getAccountCredits.mockReset()
+  })
+
+  it('reuses the query control for WorkBuddy and formats upstream credits to two decimals', async () => {
+    getAccountCredits.mockResolvedValue({ remaining: 2136.68000105, limit: 3000 })
+    const wrapper = mount(CNProviderBalanceCell, {
+      props: { account: { ...account, type: 'plugin', platform: 'deepseek' } }
+    })
+    const button = wrapper.get('[data-test="cn-provider-balance-probe"]')
+    expect(button.text()).toBe('admin.accounts.pluginCredits.query')
+    await button.trigger('click')
+    await flushPromises()
+    expect(getAccountCredits).toHaveBeenCalledWith(account.id)
+    expect(queryBalance).not.toHaveBeenCalled()
+    expect(wrapper.get('[data-test="cn-provider-balance-value"]').text()).toContain('2,136.68 / 3,000.00')
   })
 
   it('renders the persisted balance as static text with an explicit query action', async () => {

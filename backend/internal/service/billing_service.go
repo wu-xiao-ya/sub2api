@@ -469,6 +469,15 @@ func (s *BillingService) initFallbackPricing() {
 		CacheReadPricePerToken:     1e-6,
 		SupportsCacheBreakdown:     true,
 	}
+	s.fallbackPrices["claude-fable-5-2"] = &ModelPricing{
+		InputPricePerToken:         8e-6,
+		OutputPricePerToken:        40e-6,
+		CacheCreationPricePerToken: 10e-6,
+		CacheCreation5mPrice:       10e-6,
+		CacheCreation1hPrice:       16e-6,
+		CacheReadPricePerToken:     0.2e-6,
+		SupportsCacheBreakdown:     true,
+	}
 	s.fallbackPrices["claude-fable-5-1"] = &ModelPricing{
 		InputPricePerToken:         10e-6,
 		OutputPricePerToken:        50e-6,
@@ -849,6 +858,17 @@ func (s *BillingService) initFallbackPricing() {
 	// Kimi K3 国际站 USD 价目：https://platform.kimi.ai/docs/pricing/chat-k3.md
 	// Kimi Code bare aliases（k3 / k3-256k）官方无按 token 价目；复用 API Platform
 	// kimi-k3 档位作代理计费 fallback（同 kimi-for-coding 对 K2.6 的处理口径）。
+	for name, pricing := range kimiK31Pricing() {
+		s.fallbackPrices[name] = &ModelPricing{
+			InputPricePerToken:         pricing.InputCostPerToken,
+			OutputPricePerToken:        pricing.OutputCostPerToken,
+			CacheReadPricePerToken:     pricing.CacheReadInputTokenCost,
+			CacheCreationPricePerToken: pricing.CacheCreationInputTokenCost,
+			CacheCreation5mPrice:       pricing.CacheCreationInputTokenCost,
+			CacheCreation1hPrice:       pricing.CacheCreationInputTokenCostAbove1hr,
+			SupportsCacheBreakdown:     true,
+		}
+	}
 	s.fallbackPrices["kimi-k3"] = &ModelPricing{
 		InputPricePerToken:     3e-6,    // $3.00 per MTok (cache miss)
 		OutputPricePerToken:    15e-6,   // $15.00 per MTok
@@ -1055,6 +1075,9 @@ func (s *BillingService) getFallbackPricing(model string) *ModelPricing {
 	}
 
 	// 按模型系列匹配
+	if isClaudeFable52Model(modelLower) {
+		return s.fallbackPrices["claude-fable-5-2"]
+	}
 	if isClaudeFable51Model(modelLower) {
 		return s.fallbackPrices["claude-fable-5-1"]
 	}
@@ -1120,6 +1143,10 @@ func (s *BillingService) getFallbackPricing(model string) *ModelPricing {
 	// Cyber 变体不享受 Gemini 4 Argon 的优惠价，必须先于 "gemini-4-argon" 判。
 	if strings.Contains(modelLower, "gemini-4-argon-cyber") {
 		return s.fallbackPrices["gemini-4-argon-cyber-permissive"]
+	}
+	// Carbon uses the Argon price card by operator policy.
+	if normalizeGeminiThinkingTierAlias(lastSegment(modelLower)) == "gemini-4-carbon" {
+		return s.fallbackPrices["gemini-4-argon"]
 	}
 	if strings.Contains(modelLower, "gemini-4-argon") {
 		return s.fallbackPrices["gemini-4-argon"]
@@ -1207,6 +1234,11 @@ func (s *BillingService) getFallbackPricing(model string) *ModelPricing {
 	// 注意：kimi-k3[1m] 是 Claude Code 上下文选择语法，不是 Kimi API 模型 ID，不进入 fallback。
 	if strings.Contains(modelLower, "kimi-for-coding") {
 		return s.fallbackPrices["kimi-for-coding"]
+	}
+	for _, name := range []string{"kimi-k3.1-pro", "kimi-k3.1-pro-highspeed"} {
+		if modelLower == name || strings.HasSuffix(modelLower, "/"+name) {
+			return s.fallbackPrices[name]
+		}
 	}
 	if modelLower == "kimi-k3" || strings.HasSuffix(modelLower, "/kimi-k3") ||
 		modelLower == "k3" || modelLower == "k3-256k" ||

@@ -27,6 +27,11 @@
       </div>
 
       <!-- API Key fields (only for apikey type) -->
+      <WorkBuddyModelsEditor
+        v-if="account.type === 'plugin' && account.platform === 'deepseek'"
+        :key="account.id"
+        :account-id="account.id"
+      />
       <div v-if="account.type === 'apikey'" class="space-y-4">
         <div v-if="!isCNApiKeyAccount || editApiProtocol !== 'adaptive'">
           <label class="input-label">{{ t('admin.accounts.baseUrl') }}</label>
@@ -3236,6 +3241,7 @@
 </template>
 
 <script setup lang="ts">
+import WorkBuddyModelsEditor from './WorkBuddyModelsEditor.vue'
 import { ref, reactive, computed, watch, nextTick, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'

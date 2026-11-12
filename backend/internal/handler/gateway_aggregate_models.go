@@ -20,7 +20,7 @@ func (h *GatewayHandler) aggregateGroupModels(ctx context.Context, group *servic
 		models = h.gatewayService.GetAvailableModels(ctx, &group.ID, group.Platform)
 		if group.ModelAllowlistEnabled() {
 			models = modelListingSource(group.Platform, models, aggregateDefaultModels(group.Platform))
-		} else if len(models) == 0 && (group.Platform != service.PlatformOpenAI || models == nil) {
+		} else if len(models) == 0 && ((group.Platform != service.PlatformOpenAI && group.Platform != service.PlatformDeepseek) || models == nil) {
 			models = aggregateDefaultModels(group.Platform)
 		}
 	}

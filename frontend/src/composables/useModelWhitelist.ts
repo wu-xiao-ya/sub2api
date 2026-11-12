@@ -42,6 +42,7 @@ export const claudeModels = [
   'claude-haiku-5-5',
   'claude-sonnet-5',
   'claude-sonnet-4-6',
+  'claude-fable-5-2',
   'claude-fable-5-1',
   'claude-fable-5'
 ]
@@ -58,7 +59,8 @@ const geminiModels = [
   'gemini-3.5-flash',
   'gemini-3-flash-preview',
   'gemini-3-pro-preview',
-  'gemini-4-argon'
+  'gemini-4-argon',
+  'gemini-4-carbon'
 ]
 
 // Antigravity 官方支持的模型（精确匹配）
@@ -223,6 +225,7 @@ const yiModels = [
 
 // Moonshot/Kimi
 const moonshotModels = [
+  'kimi-k3.1-pro', 'kimi-k3.1-pro-highspeed',
   'moonshot-v1-8k', 'moonshot-v1-32k', 'moonshot-v1-128k',
   'kimi-latest',
   'kimi-for-coding',

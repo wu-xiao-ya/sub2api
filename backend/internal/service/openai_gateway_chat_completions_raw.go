@@ -138,12 +138,17 @@ func (s *OpenAIGatewayService) forwardAsRawChatCompletionsWithStartTime(
 
 	// Grok Composer does not accept image_url parts directly, but Grok Build
 	// can describe the images first. Bridge only this exact failure mode.
-	token, tokenKind, err := s.getRequestCredential(ctx, c, account)
-	if err != nil {
-		return nil, err
-	}
-	if strings.TrimSpace(token) == "" {
-		return nil, fmt.Errorf("account %d missing %s credential", account.ID, tokenKind)
+	var token string
+	var err error
+	if account.Type != AccountTypePlugin {
+		var tokenKind string
+		token, tokenKind, err = s.getRequestCredential(ctx, c, account)
+		if err != nil {
+			return nil, err
+		}
+		if strings.TrimSpace(token) == "" {
+			return nil, fmt.Errorf("account %d missing %s credential", account.ID, tokenKind)
+		}
 	}
 
 	var bridgeUsage OpenAIUsage

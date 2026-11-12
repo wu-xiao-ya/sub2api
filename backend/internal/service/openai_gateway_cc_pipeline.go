@@ -16,6 +16,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/Wei-Shaw/sub2api/internal/util/responseheaders"
 	"github.com/gin-gonic/gin"
+	"github.com/tidwall/gjson"
 	"go.uber.org/zap"
 )
 
@@ -101,6 +102,9 @@ func (s *OpenAIGatewayService) failoverOpenAIUpstreamHTTPError(
 	upstreamMsg string,
 	upstreamModel string,
 ) *UpstreamFailoverError {
+	if account != nil && account.Type == AccountTypePlugin {
+		return nil
+	}
 	shouldFailover := s.shouldFailoverOpenAIUpstreamResponse(account, resp.StatusCode, upstreamMsg, respBody)
 	tempUnscheduled := false
 	if c != nil && account != nil && account.Platform != PlatformGrok && !shouldFailover && !IsResponseCommitted(c) && s.rateLimitService != nil {
@@ -153,6 +157,9 @@ func (s *OpenAIGatewayService) failoverOpenAIUpstreamHTTPError(
 
 // openAIChatCompletionsTargetURL 解析账号的（非 Grok）Chat Completions 上游端点。
 func (s *OpenAIGatewayService) openAIChatCompletionsTargetURL(account *Account) (string, error) {
+	if account.Type == AccountTypePlugin {
+		return buildOpenAIChatCompletionsURL(pluginProviderBaseURL), nil
+	}
 	baseURL := account.GetOpenAIBaseURL()
 	if baseURL == "" {
 		baseURL = "https://api.openai.com"
@@ -167,9 +174,11 @@ func (s *OpenAIGatewayService) openAIChatCompletionsTargetURL(account *Account) 
 // resolveCCFallbackTarget 解析两条 CC 回退路径共用的账号凭证与上游端点
 // （回退路径仅面向 APIKey 账号，凭证恒为 openai api_key）。
 func (s *OpenAIGatewayService) resolveCCFallbackTarget(account *Account) (apiKey string, targetURL string, err error) {
-	apiKey = strings.TrimSpace(account.GetOpenAIProtocolAPIKey())
-	if apiKey == "" {
-		return "", "", fmt.Errorf("account %d missing api_key", account.ID)
+	if account.Type != AccountTypePlugin {
+		apiKey = strings.TrimSpace(account.GetOpenAIProtocolAPIKey())
+		if apiKey == "" {
+			return "", "", fmt.Errorf("account %d missing api_key", account.ID)
+		}
 	}
 	targetURL, err = s.openAIChatCompletionsTargetURL(account)
 	if err != nil {
@@ -195,6 +204,28 @@ func (s *OpenAIGatewayService) sendCCUpstreamRequest(
 	userAgent string,
 	grokCacheIdentity string,
 ) (*http.Response, error) {
+	if account.Type == AccountTypePlugin {
+		model := gjson.GetBytes(body, "model").String()
+		if !account.allowsSelectedWorkBuddyModel(model) {
+			return nil, providerUnavailable("model is disabled for this WorkBuddy account")
+		}
+		if !strings.HasPrefix(strings.ToLower(model), "deepseek-") {
+			if _, configured := account.WorkBuddyModelSelection(); !configured {
+				return nil, providerUnavailable("select this model before serving it through WorkBuddy")
+			}
+			var key *APIKey
+			if c != nil {
+				value, _ := c.Get("api_key")
+				key, _ = value.(*APIKey)
+			}
+			if key == nil || s.billingService == nil {
+				return nil, providerUnavailable("WorkBuddy model pricing is unavailable")
+			}
+			if _, err := s.calculateOpenAIRecordUsageTokenCost(ctx, key, model, 1, time.Now(), UsageTokens{}, "", "", nil, false); err != nil {
+				return nil, providerUnavailable("configure pricing before serving this WorkBuddy model")
+			}
+		}
+	}
 	// DeepSeek thinking mode 要求历史 assistant 回传 reasoning_content。
 	// Responses→CC 回退在加密-only / 缺 reasoning item 且缓存未命中时会漏掉该
 	// 字段，上游 400 "The `reasoning_content` in the thinking mode must be

@@ -412,6 +412,8 @@ func registerAccountRoutes(admin *gin.RouterGroup, h *handler.Handlers, stepUpAu
 		accounts.POST("/:id/schedulable", h.Admin.Account.SetSchedulable)
 		accounts.POST("/models/sync-upstream-preview", h.Admin.Account.SyncUpstreamModelsPreview)
 		accounts.GET("/:id/models", h.Admin.Account.GetAvailableModels)
+		accounts.POST("/:id/workbuddy-models", h.Admin.Account.WorkBuddyModels)
+		accounts.PUT("/:id/workbuddy-models", h.Admin.Account.WorkBuddyModels)
 		accounts.POST("/:id/models/sync-upstream", h.Admin.Account.SyncUpstreamModels)
 		accounts.POST("/batch", h.Admin.Account.BatchCreate)
 		// 账号导出泄露上游凭证原文——要求 step-up 2FA
@@ -768,6 +770,7 @@ func registerPluginRoutes(admin *gin.RouterGroup, h *handler.Handlers, stepUpAut
 	plugins := admin.Group("/plugins")
 	{
 		plugins.GET("", h.Admin.Plugin.List)
+		plugins.GET("/accounts/:account_id/credits", h.Admin.Plugin.AccountCredits)
 		plugins.GET("/:id", h.Admin.Plugin.Get)
 		plugins.POST("/upload", gin.HandlerFunc(stepUpAuth), h.Admin.Plugin.Upload)
 		plugins.POST("/:id/enable", gin.HandlerFunc(stepUpAuth), h.Admin.Plugin.Enable)
@@ -777,6 +780,10 @@ func registerPluginRoutes(admin *gin.RouterGroup, h *handler.Handlers, stepUpAut
 		plugins.GET("/:id/status", h.Admin.Plugin.Status)
 		plugins.PUT("/:id/config", gin.HandlerFunc(stepUpAuth), h.Admin.Plugin.SaveConfig)
 		plugins.POST("/:id/test", gin.HandlerFunc(stepUpAuth), h.Admin.Plugin.Test)
+		plugins.POST("/:id/authorize", gin.HandlerFunc(stepUpAuth), h.Admin.Plugin.Authorize)
+		plugins.POST("/:id/workbuddy-import", gin.HandlerFunc(stepUpAuth), h.Admin.Plugin.ImportWorkBuddy)
+		plugins.POST("/:id/accounts", gin.HandlerFunc(stepUpAuth), h.Admin.Plugin.BindAccount)
+		plugins.DELETE("/:id/accounts/:accountID", gin.HandlerFunc(stepUpAuth), h.Admin.Plugin.UnbindAccount)
 		plugins.POST("/:id/ui-session", h.Admin.Plugin.CreateUISession)
 	}
 }

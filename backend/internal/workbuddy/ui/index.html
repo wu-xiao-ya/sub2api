@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="style.css"><title>WorkBuddy 国内版</title></head>
+<body><main>
+<h1>WorkBuddy 国内版</h1>
+<p>国内版账号由 Sub2API 独立调度。授权材料加密保存在服务器，不返回此页面。</p>
+<section><button id="login">添加账号</button><button id="refresh">刷新状态</button><button id="test">测试模型目录</button></section>
+<section id="json-import" hidden>
+  <h2>导入 WorkBuddy 账号</h2>
+  <p>选择 DSH 导出的 JSON，或粘贴单个账号或账号数组。每次最多 16 个账号、256 KB。</p>
+  <label>JSON 文件 <input id="import-file" type="file" accept=".json,application/json"></label>
+  <label>账号 JSON <textarea id="import-json" rows="4" spellcheck="false" autocomplete="off"></textarea></label>
+  <button id="import">验证并导入</button>
+</section>
+<section id="pending" hidden><p>请点击上方宿主页面的授权链接，完成官方登录，再检查结果。授权有效期 10 分钟。</p><button id="poll">检查授权结果</button><button id="cancel">取消授权</button></section>
+<p id="message" role="status"></p>
+<section><label>已授权账号 <select id="identity"></select></label><p id="identity-status"></p><pre id="models"></pre>
+<button id="reauthorize">重新授权</button><button id="unlink">解除授权</button></section>
+<section><h2>绑定宿主账号</h2>
+<p>新账号默认不加入任何分组。创建后到「账号管理」配置分组、并发与倍率。</p>
+<label>账号名称 <input id="name" maxlength="100" value="WorkBuddy"></label><button id="create">创建并绑定</button>
+<label>或绑定已有插件账号 ID <input id="account" type="number" min="1"></label><button id="bind">绑定已有账号</button><button id="unbind">解除宿主绑定</button><p>解除绑定前，请先在账号管理停用该账号。历史用量和账单会保留。</p></section>
+<p>目录测试通过仅代表授权与模型目录可读；推理、工具调用及账单仍须实测。上游拒绝时需要重新授权或处理账号状态。</p>
+</main><script src="app.js"></script></body></html>
