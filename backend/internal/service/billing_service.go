@@ -469,6 +469,15 @@ func (s *BillingService) initFallbackPricing() {
 		CacheReadPricePerToken:     1e-6,
 		SupportsCacheBreakdown:     true,
 	}
+	s.fallbackPrices["claude-fable-5-2"] = &ModelPricing{
+		InputPricePerToken:         8e-6,
+		OutputPricePerToken:        40e-6,
+		CacheCreationPricePerToken: 10e-6,
+		CacheCreation5mPrice:       10e-6,
+		CacheCreation1hPrice:       16e-6,
+		CacheReadPricePerToken:     0.2e-6,
+		SupportsCacheBreakdown:     true,
+	}
 	s.fallbackPrices["claude-fable-5-1"] = &ModelPricing{
 		InputPricePerToken:         10e-6,
 		OutputPricePerToken:        50e-6,
@@ -1066,6 +1075,9 @@ func (s *BillingService) getFallbackPricing(model string) *ModelPricing {
 	}
 
 	// 按模型系列匹配
+	if isClaudeFable52Model(modelLower) {
+		return s.fallbackPrices["claude-fable-5-2"]
+	}
 	if isClaudeFable51Model(modelLower) {
 		return s.fallbackPrices["claude-fable-5-1"]
 	}

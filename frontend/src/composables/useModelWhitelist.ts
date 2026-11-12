@@ -42,6 +42,7 @@ export const claudeModels = [
   'claude-haiku-5-5',
   'claude-sonnet-5',
   'claude-sonnet-4-6',
+  'claude-fable-5-2',
   'claude-fable-5-1',
   'claude-fable-5'
 ]

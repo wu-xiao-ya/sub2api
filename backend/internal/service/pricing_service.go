@@ -1055,6 +1055,9 @@ func (s *PricingService) buildPricingData(body []byte) (map[string]*LiteLLMModel
 			data[name] = pricing
 		}
 	}
+	if _, exists := data["claude-fable-5-2"]; !exists {
+		data["claude-fable-5-2"] = fable52Pricing()
+	}
 	data = s.mergeOverrideOnlyModels(data)
 	return data, fingerprint, nil
 }
@@ -1228,6 +1231,10 @@ func (s *PricingService) GetModelPricing(modelName string) *LiteLLMModelPricing 
 	// 1~3. 确定性识别（精确名 / 已知拼写变体 / 去掉日期版本后缀）
 	if pricing := s.lookupIdentifiedModelPricingLocked(lookupCandidates); pricing != nil {
 		return pricing
+	}
+
+	if isClaudeFable52Model(lookupCandidates[0]) {
+		return fable52Pricing()
 	}
 
 	// 4. 基于模型系列匹配（Claude）
