@@ -57,6 +57,16 @@ func IsHaiku55(model string) bool {
 	return normalizeEffortModelID(model) == "claude-haiku-5-5"
 }
 
+// IsFable52 identifies Fable 5.2 after provider/local suffix normalization.
+func IsFable52(model string) bool {
+	return normalizeEffortModelID(model) == "claude-fable-5-2"
+}
+
+// IsMythos52 identifies Mythos 5.2 after provider/local suffix normalization.
+func IsMythos52(model string) bool {
+	return normalizeEffortModelID(model) == "claude-mythos-5-2"
+}
+
 func normalizeEffortModelID(model string) string {
 	id := strings.ToLower(strings.TrimSpace(model))
 	id = strings.TrimPrefix(id, "models/")
@@ -70,6 +80,9 @@ func normalizeEffortModelID(model string) string {
 	id = strings.TrimSuffix(id, "-thinking")
 	// OpenRouter uses dotted minor versions for some models. Normalize them
 	// before effort, thinking, and billing family lookups.
+	if id == "claude-fable-5.2" {
+		id = "claude-fable-5-2"
+	}
 	if id == "claude-opus-5.5" {
 		id = "claude-opus-5-5"
 	}
